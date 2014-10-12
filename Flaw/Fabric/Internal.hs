@@ -1,12 +1,12 @@
 {-|
-Module: Flaw.FabricInternal
+Module: Flaw.Fabric.Internal
 Description: Internal methods for serializing objects into graph.
 License: MIT
 -}
 
 {-# LANGUAGE TemplateHaskell, TypeFamilies #-}
 
-module Flaw.FabricInternal
+module Flaw.Fabric.Internal
 	( Hash(..)
 	, hash
 	, hashBinary

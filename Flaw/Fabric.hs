@@ -16,7 +16,7 @@ module Flaw.Fabric
 	, genFabricable
 	) where
 
-import Flaw.FabricInternal
+import Flaw.Fabric.Internal
 import Control.Monad
 import Data.Binary
 import Data.Int

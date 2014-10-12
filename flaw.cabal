@@ -18,7 +18,7 @@ source-repository head
 
 library
   exposed-modules:     Flaw.Math, Flaw.Fabric
-  other-modules:       Flaw.MathTH
+  other-modules:       Flaw.Math.Internal, Flaw.Fabric.Internal
   -- other-extensions:    
   build-depends:       base >=4.7 && <4.8, template-haskell, conduit, conduit-extra, resourcet, binary, bytestring, text, cryptohash, base64-bytestring
   -- hs-source-dirs:      

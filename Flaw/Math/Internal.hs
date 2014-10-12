@@ -1,12 +1,12 @@
 {-|
-Module: Flaw.Math.TH
+Module: Flaw.Math.Internal
 Description: Template-Haskell generating math types and functions.
 License: MIT
 -}
 
 {-# LANGUAGE TemplateHaskell, MultiParamTypeClasses, FunctionalDependencies #-}
 
-module Flaw.MathTH
+module Flaw.Math.Internal
 	( maxVecDimension
 	, vecComponents
 	, Vec(..)

@@ -31,7 +31,7 @@ module Flaw.Math
 	, Quaternion(..)
 	) where
 
-import Flaw.MathTH
+import Flaw.Math.Internal
 import Language.Haskell.TH
 
 genVecClasses
