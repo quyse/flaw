@@ -7,7 +7,13 @@ License: MIT
 {-# LANGUAGE TemplateHaskell, GADTs, TypeFamilies #-}
 
 module Flaw.Brick
-	( Brickable(..)
+	( Hash(..)
+	, hash
+	, hashBinary
+	, HashedBrick(..)
+	, Brickable(..)
+	, genPrimBrickable
+	, genBrickable
 	) where
 
 import Flaw.BrickInternal
