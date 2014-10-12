@@ -17,7 +17,7 @@ source-repository head
   location: https://github.com/quyse/flaw.git
 
 library
-  exposed-modules:     Flaw.Math, Flaw.Brick
+  exposed-modules:     Flaw.Math, Flaw.Fabric
   other-modules:       Flaw.MathTH
   -- other-extensions:    
   build-depends:       base >=4.7 && <4.8, template-haskell, conduit, conduit-extra, resourcet, binary, bytestring, text, cryptohash, base64-bytestring

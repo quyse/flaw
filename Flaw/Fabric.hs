@@ -1,22 +1,22 @@
 {-|
-Module: Flaw.Brick
+Module: Flaw.Fabric
 Description: Provides methods for serializing objects into graph.
 License: MIT
 -}
 
 {-# LANGUAGE TemplateHaskell, GADTs, TypeFamilies #-}
 
-module Flaw.Brick
+module Flaw.Fabric
 	( Hash(..)
 	, hash
 	, hashBinary
-	, HashedBrick(..)
-	, Brickable(..)
-	, genPrimBrickable
-	, genBrickable
+	, HashedFabric(..)
+	, Fabricable(..)
+	, genPrimFabricable
+	, genFabricable
 	) where
 
-import Flaw.BrickInternal
+import Flaw.FabricInternal
 import Control.Monad
 import Data.Binary
 import Data.Int
@@ -29,8 +29,8 @@ instance Binary T.Text where
 	put = put . T.unpack
 	get = liftM T.pack get
 
--- Generate Brickable instance for some 'primitive' types.
-liftM concat $ mapM genPrimBrickable
+-- Generate Fabricable instance for some 'primitive' types.
+liftM concat $ mapM genPrimFabricable
 	[ ''Bool
 	, ''Char
 	, ''Double
