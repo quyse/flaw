@@ -20,6 +20,6 @@ library
   exposed-modules:     Flaw.Math, Flaw.Fabric
   other-modules:       Flaw.Math.Internal, Flaw.Fabric.Internal
   -- other-extensions:    
-  build-depends:       base >=4.7 && <4.8, template-haskell, conduit, conduit-extra, resourcet, binary, bytestring, text, cryptohash, base64-bytestring
+  build-depends:       base >=4.7 && <4.8, template-haskell, binary, bytestring, base64-bytestring, text, containers, unordered-containers, cryptohash
   -- hs-source-dirs:      
   default-language:    Haskell2010

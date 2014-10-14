@@ -61,22 +61,6 @@ hashBinaryE = VarE 'hashBinary
 hashedFabricE :: Exp
 hashedFabricE = ConE 'HashedFabric
 
--- Instance for list.
-instance Fabricable a => Fabricable [a] where
-	data Fabric [a] = List_Fabric [HashedFabric a]
-	fabric xs = HashedFabric h $ List_Fabric bs where
-		bs = map fabric xs
-		hs = [h | HashedFabric h _ <- bs]
-		h = hashBinary ("[]", hs)
-
--- Instances for tuples.
-instance (Fabricable a, Fabricable b) => Fabricable (a, b) where
-	data Fabric (a, b) = Tuple2_Fabric (HashedFabric a) (HashedFabric b)
-	fabric (a, b) = HashedFabric h $ Tuple2_Fabric ba bb where
-		ba @ (HashedFabric ha _) = fabric a
-		bb @ (HashedFabric hb _) = fabric b
-		h = hashBinary ("(,)", ha, hb)
-
 -- | Generate Fabricable instance for a given primitive type.
 -- Type should instance Binary class.
 genPrimFabricable :: Name -> Q [Dec]
