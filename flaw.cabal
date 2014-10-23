@@ -17,9 +17,23 @@ source-repository head
   location: https://github.com/quyse/flaw.git
 
 library
-  exposed-modules:     Flaw.Math, Flaw.Fabric
-  other-modules:       Flaw.Math.Internal, Flaw.Fabric.Internal
+  exposed-modules:
+    Flaw.Math
+    Flaw.Fabric
+    Flaw.Window
+  if os(windows)
+    exposed-modules:
+      Flaw.Window.Win32
+  other-modules:
+    Flaw.Math.Internal
+    Flaw.Fabric.Internal
+    Flaw.Window.Internal
   -- other-extensions:    
   build-depends:       base >=4.7 && <4.8, template-haskell, binary, bytestring, base64-bytestring, text, containers, unordered-containers, cryptohash
   -- hs-source-dirs:      
   default-language:    Haskell2010
+  include-dirs:        include
+  if os(windows)
+    includes:          "flaw_windows.h"
+    c-sources:
+      cbits/win32_window_system.c
