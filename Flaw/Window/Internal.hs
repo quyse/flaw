@@ -1,9 +1,8 @@
-{-# LANGUAGE GADTs, DeriveDataTypeable #-}
+{-# LANGUAGE GADTs, TypeFamilies, DeriveDataTypeable #-}
 
 module Flaw.Window.Internal
 	( WindowSystem(..)
 	, Window(..)
-	, WindowHandle(..)
 	, CannotCreateWindowException(..)
 	) where
 
@@ -11,21 +10,22 @@ import Control.Exception
 import qualified Data.Text as T
 import Data.Typeable
 
-data WindowHandle where
-	WindowHandle :: Window w => w -> WindowHandle
-
 -- | Class of window system.
 class WindowSystem ws where
+	type WindowSystemWindow ws :: *
 	-- | Initialize window system.
 	initWindowSystem :: IO ws
 	-- | Shutdown window system.
 	shutdownWindowSystem :: ws -> IO ()
 	-- | Create window.
-	createWindow :: ws -> T.Text -> Int -> Int -> Int -> Int -> IO WindowHandle
+	createWindow :: ws -> T.Text -> Int -> Int -> Int -> Int -> IO (WindowSystemWindow ws)
 
 -- | Class of window.
 class Window w where
-	windowSetTitle :: w -> T.Text -> IO ()
+	-- | Set title of the window.
+	setWindowTitle :: w -> T.Text -> IO ()
+	-- | Close window.
+	closeWindow :: w -> IO ()
 
 data CannotCreateWindowException = CannotCreateWindowException
 	deriving (Typeable, Show)

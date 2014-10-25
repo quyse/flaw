@@ -1,4 +1,4 @@
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE GADTs, TypeFamilies #-}
 
 module Flaw.Window.Win32
 	( Win32WindowSystem()
@@ -31,11 +31,14 @@ data Win32Window = Win32Window
 	}
 
 instance Window Win32Window where
-	windowSetTitle Win32Window { wWindowSystem = ws, wHandle = hwnd } title = invoke_ ws $ do
+	setWindowTitle Win32Window { wWindowSystem = ws, wHandle = hwnd } title = invoke_ ws $ do
 		withCWString (T.unpack title) $ \titleCString ->
 			c_setWin32WindowTitle hwnd titleCString
+	closeWindow Win32Window { wWindowSystem = ws, wHandle = hwnd } = invoke_ ws $ c_closeWin32Window hwnd
 
 instance WindowSystem Win32WindowSystem where
+	type WindowSystemWindow Win32WindowSystem = Win32Window
+
 	initWindowSystem = do
 		threadHandleVar <- newEmptyMVar
 		shutdownVar <- newEmptyMVar
@@ -73,7 +76,7 @@ instance WindowSystem Win32WindowSystem where
 		if hwnd == nullPtr then
 			throwIO CannotCreateWindowException
 		else
-			return $ WindowHandle Win32Window
+			return $ Win32Window
 				{ wWindowSystem = ws
 				, wHandle = hwnd
 				}
@@ -133,6 +136,7 @@ foreign import ccall unsafe "createWin32Window" c_createWin32Window
 	-> Int -> Int -- width height
 	-> IO HWND -- HWND
 foreign import ccall unsafe "setWin32WindowTitle" c_setWin32WindowTitle :: HWND -> LPTSTR -> IO ()
+foreign import ccall unsafe "closeWin32Window" c_closeWin32Window :: HWND -> IO ()
 foreign import ccall unsafe "stopWin32WindowSystem" c_stopWin32WindowSystem :: IO ()
 foreign import ccall unsafe "freeWin32WindowSystem" c_freeWin32WindowSystem :: HANDLE -> IO ()
 foreign import ccall unsafe "invokeWin32WindowSystem" c_invokeWin32WindowSystem :: HANDLE -> Ptr () -> IO ()
