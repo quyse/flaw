@@ -29,7 +29,7 @@ library
     Flaw.Fabric.Internal
     Flaw.Window.Internal
   -- other-extensions:    
-  build-depends:       base >=4.7 && <4.8, template-haskell, binary, bytestring, base64-bytestring, text, containers, unordered-containers, cryptohash
+  build-depends:       base >=4.7 && <4.8, template-haskell, binary, bytestring, base64-bytestring, text, containers, unordered-containers, cryptohash, cairo
   -- hs-source-dirs:      
   default-language:    Haskell2010
   include-dirs:        include
@@ -37,3 +37,6 @@ library
     includes:          "flaw_windows.h"
     c-sources:
       cbits/win32_window_system.c
+    extra-libraries:
+      gdi32
+  cc-options:          -std=c99

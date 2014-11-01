@@ -2,32 +2,40 @@
 
 module Flaw.Window.Win32
 	( Win32WindowSystem()
+	, Win32Window()
+	, createWin32Window
+	, createLayeredWin32Window
+	, updateLayeredWin32Window
+	, createWin32WindowCairoSurface
 	) where
 
 import Control.Concurrent
 import Control.Concurrent.MVar
 import Control.Exception
+import Control.Monad.Fix
 import Data.IORef
 import qualified Data.Text as T
+import Data.Word
 import Foreign.C.String
+import Foreign.C.Types
 import Foreign.Marshal.Alloc
 import Foreign.Ptr
 import Foreign.Storable
-import qualified Data.Map.Strict as Map
+import qualified Graphics.Rendering.Cairo as Cairo
 import System.IO.Unsafe
 
 import Flaw.Window.Internal
 
 data Win32WindowSystem = Win32WindowSystem
-	{ wsThreadId :: ThreadId
+	{ wsHandle :: Ptr () -- ^ Opaque handle for C side.
+	, wsThreadId :: ThreadId
 	, wsShutdownVar :: MVar ()
-	-- | Win32 thread handle.
-	, wsThreadHandle :: HANDLE
 	}
 
 data Win32Window = Win32Window
 	{ wWindowSystem :: Win32WindowSystem
 	, wHandle :: Ptr ()
+	, wCallback :: FunPtr WindowCallback
 	}
 
 instance Window Win32Window where
@@ -37,55 +45,93 @@ instance Window Win32Window where
 	closeWindow Win32Window { wWindowSystem = ws, wHandle = hwnd } = invoke_ ws $ c_closeWin32Window hwnd
 
 instance WindowSystem Win32WindowSystem where
-	type WindowSystemWindow Win32WindowSystem = Win32Window
-
 	initWindowSystem = do
-		threadHandleVar <- newEmptyMVar
+		-- create vars
+		handleVar <- newEmptyMVar
 		shutdownVar <- newEmptyMVar
+
+		-- create OS thread for window loop
 		threadId <- forkOS $ do
 			-- initialize window system, get a thread handle
-			threadHandle <- alloca $ \threadHandlePtr -> do
-				c_initWin32WindowSystem threadHandlePtr
-				peek threadHandlePtr
-			-- send thread handle to the original thread
-			putMVar threadHandleVar threadHandle
+			handle <- c_initWin32WindowSystem
+			-- send handles to the original thread
+			putMVar handleVar handle
 			-- run window system
-			c_runWin32WindowSystem
+			c_runWin32WindowSystem handle
 			-- notify that window system quit
 			putMVar shutdownVar ()
-		-- wait for thread handle
-		threadHandle <- readMVar threadHandleVar
+		-- wait for handle
+		handle <- readMVar handleVar
 		-- return window system
 		return Win32WindowSystem
-			{ wsThreadId = threadId
+			{ wsHandle = handle
+			, wsThreadId = threadId
 			, wsShutdownVar = shutdownVar
-			, wsThreadHandle = threadHandle
 			}
 
-	shutdownWindowSystem ws@Win32WindowSystem { wsThreadHandle = threadHandle } = do
+	shutdownWindowSystem ws = do
 		-- send a message to stop window loop
-		invoke_ ws c_stopWin32WindowSystem
+		invoke_ ws $ c_stopWin32WindowSystem
 		-- wait for actual completion
 		readMVar $ wsShutdownVar ws
-		-- free window resources
-		c_freeWin32WindowSystem threadHandle
+		-- free resources
+		c_shutdownWin32WindowSystem $ wsHandle ws
 
-	createWindow ws title x y width height = invoke ws $ do
-		hwnd <- withCWString (T.unpack title) $ \titleCString ->
-			c_createWin32Window titleCString x y width height
-		if hwnd == nullPtr then
-			throwIO CannotCreateWindowException
-		else
-			return $ Win32Window
-				{ wWindowSystem = ws
-				, wHandle = hwnd
-				}
+createWin32Window :: Win32WindowSystem -> T.Text -> Int -> Int -> Int -> Int -> IO Win32Window
+createWin32Window ws title left top width height = internalCreateWin32Window ws title left top width height False
+
+createLayeredWin32Window :: Win32WindowSystem -> T.Text -> Int -> Int -> Int -> Int -> IO Win32Window
+createLayeredWin32Window ws title left top width height = internalCreateWin32Window ws title left top width height True
+
+internalCreateWin32Window :: Win32WindowSystem -> T.Text -> Int -> Int -> Int -> Int -> Bool -> IO Win32Window
+internalCreateWin32Window ws title left top width height layered = invoke ws $ mfix $ \w -> do
+	-- create callback
+	callback <- wrapWindowCallback $ \msg wParam lParam -> case msg of
+		0x0002 -> do -- WM_DESTROY
+			-- free callback
+			freeHaskellFunPtr $ wCallback w
+		_ -> return ()
+	-- create window
+	hwnd <- withCWString (T.unpack title) $ \titleCString ->
+		c_createWin32Window (wsHandle ws) titleCString left top width height callback (if layered then 1 else 0)
+	if hwnd == nullPtr then
+		error "cannot create Win32Window"
+	else
+		return $ Win32Window
+			{ wWindowSystem = ws
+			, wHandle = hwnd
+			, wCallback = callback
+			}
+
+updateLayeredWin32Window :: Win32Window -> IO ()
+updateLayeredWin32Window w = invoke_ (wWindowSystem w) $ c_updateLayeredWin32Window $ wHandle w
+
+createWin32WindowCairoSurface :: Win32Window -> IO Cairo.Surface
+createWin32WindowCairoSurface w = do
+	alloca $ \bitmapDataPtr -> do
+		alloca $ \widthPtr -> do
+			alloca $ \heightPtr -> do
+				alloca $ \pitchPtr -> do
+					invoke (wWindowSystem w) $ c_getLayeredWin32WindowBitmapData (wHandle w) bitmapDataPtr widthPtr heightPtr pitchPtr
+					bitmapData <- peek bitmapDataPtr
+					width <- peek widthPtr
+					height <- peek heightPtr
+					pitch <- peek pitchPtr
+					Cairo.createImageSurfaceForData bitmapData Cairo.FormatARGB32 width height pitch
 
 invokeWithMaybeResultVar :: Maybe (MVar a) -> Win32WindowSystem -> IO a -> IO ()
-invokeWithMaybeResultVar maybeResultVar Win32WindowSystem { wsThreadHandle = threadHandle } io = do
-	messageId <- modifyMVar invokeMessagesVar $ \(nextMessageId, messages) ->
-		return ((nextMessageId + 1, Map.insert nextMessageId (Message io maybeResultVar) messages), nextMessageId)
-	c_invokeWin32WindowSystem threadHandle $ intPtrToPtr messageId
+invokeWithMaybeResultVar maybeResultVar ws io = do
+	-- create callback
+	invokeCallback <- mfix $ \invokeCallback -> wrapInvokeCallback $ do
+		-- TODO: propagate exceptions
+		result <- io
+		case maybeResultVar of
+			Just resultVar -> putMVar resultVar result
+			Nothing -> return ()
+		-- free fun ptr
+		freeHaskellFunPtr invokeCallback
+	-- do invoke
+	c_invokeWin32WindowSystem (wsHandle ws) invokeCallback
 
 -- | Invoke function in window system thread.
 -- Do not wait for the result.
@@ -100,47 +146,42 @@ invoke ws io = do
 	invokeWithMaybeResultVar (Just resultVar) ws io
 	takeMVar resultVar
 
--- | Function which called from C.
-invokeCallback :: Ptr () -> IO ()
-invokeCallback messageIdAsPtr = do
-	let messageId = ptrToIntPtr messageIdAsPtr
-	maybeMessage <- modifyMVar invokeMessagesVar $ \(nextMessageId, messages) -> do
-		return ((nextMessageId, Map.delete messageId messages), Map.lookup messageId messages)
-	case maybeMessage of
-		Just (Message io maybeResultVar) -> do
-			-- TODO: propagate exceptions
-			result <- io
-			case maybeResultVar of
-				Just resultVar -> putMVar resultVar result
-				Nothing -> return ()
-		Nothing -> return ()
-
+-- | Message to invoke.
 data Message where
 	Message :: IO a -> Maybe (MVar a) -> Message
 
--- | Global table of pending messages.
-invokeMessagesVar :: MVar (IntPtr, Map.Map IntPtr Message)
-invokeMessagesVar = unsafePerformIO $ newMVar (0, Map.empty)
-
--- foreign imports
+-- foreign types
 
 type HANDLE = Ptr ()
 type LPTSTR = CWString
 type HWND = Ptr ()
+type WPARAM = CUIntPtr
+type LPARAM = CIntPtr
 
-foreign import ccall unsafe "initWin32WindowSystem" c_initWin32WindowSystem :: Ptr HANDLE -> IO ()
-foreign import ccall safe "runWin32WindowSystem" c_runWin32WindowSystem :: IO ()
+-- foreign imports
+
+foreign import ccall unsafe "initWin32WindowSystem" c_initWin32WindowSystem :: IO (Ptr ())
+foreign import ccall safe "runWin32WindowSystem" c_runWin32WindowSystem :: Ptr () -> IO ()
+foreign import ccall unsafe "shutdownWin32WindowSystem" c_shutdownWin32WindowSystem :: Ptr () -> IO ()
+foreign import ccall unsafe "stopWin32WindowSystem" c_stopWin32WindowSystem :: IO ()
+foreign import ccall unsafe "invokeWin32WindowSystem" c_invokeWin32WindowSystem :: Ptr () -> FunPtr InvokeCallback -> IO ()
 foreign import ccall unsafe "createWin32Window" c_createWin32Window
-	:: LPTSTR -- title
+	:: Ptr () -- window system handle
+	-> LPTSTR -- title
 	-> Int -> Int -- x y
 	-> Int -> Int -- width height
+	-> FunPtr WindowCallback -- callback
+	-> Int -- layered
 	-> IO HWND -- HWND
 foreign import ccall unsafe "setWin32WindowTitle" c_setWin32WindowTitle :: HWND -> LPTSTR -> IO ()
 foreign import ccall unsafe "closeWin32Window" c_closeWin32Window :: HWND -> IO ()
-foreign import ccall unsafe "stopWin32WindowSystem" c_stopWin32WindowSystem :: IO ()
-foreign import ccall unsafe "freeWin32WindowSystem" c_freeWin32WindowSystem :: HANDLE -> IO ()
-foreign import ccall unsafe "invokeWin32WindowSystem" c_invokeWin32WindowSystem :: HANDLE -> Ptr () -> IO ()
+foreign import ccall unsafe "updateLayeredWin32Window" c_updateLayeredWin32Window :: HWND -> IO ()
+foreign import ccall unsafe "getLayeredWin32WindowBitmapData" c_getLayeredWin32WindowBitmapData :: HWND -> Ptr (Ptr CUChar) -> Ptr Int -> Ptr Int -> Ptr Int -> IO ()
 
--- foreign exports
+-- wrappers
 
-foreign export ccall "hs_win32InvokeCallback" invokeCallback :: Ptr () -> IO ()
+type InvokeCallback = IO ()
+foreign import ccall "wrapper" wrapInvokeCallback :: InvokeCallback -> IO (FunPtr InvokeCallback)
+
+type WindowCallback = Word -> WPARAM -> LPARAM -> IO ()
+foreign import ccall "wrapper" wrapWindowCallback :: WindowCallback -> IO (FunPtr WindowCallback)
