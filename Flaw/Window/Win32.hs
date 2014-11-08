@@ -119,12 +119,12 @@ createWin32WindowCairoSurface w = do
 					pitch <- peek pitchPtr
 					Cairo.createImageSurfaceForData bitmapData Cairo.FormatARGB32 width height pitch
 
-invokeWithMaybeResultVar :: Maybe (MVar a) -> Win32WindowSystem -> IO a -> IO ()
+invokeWithMaybeResultVar :: Maybe (MVar (Either SomeException a)) -> Win32WindowSystem -> IO a -> IO ()
 invokeWithMaybeResultVar maybeResultVar ws io = do
 	-- create callback
 	invokeCallback <- mfix $ \invokeCallback -> wrapInvokeCallback $ do
-		-- TODO: propagate exceptions
-		result <- io
+		-- run IO with exception propagation
+		result <- try io
 		case maybeResultVar of
 			Just resultVar -> putMVar resultVar result
 			Nothing -> return ()
@@ -144,7 +144,10 @@ invoke :: Win32WindowSystem -> IO a -> IO a
 invoke ws io = do
 	resultVar <- newEmptyMVar
 	invokeWithMaybeResultVar (Just resultVar) ws io
-	takeMVar resultVar
+	result <- takeMVar resultVar
+	case result of
+		Left e -> throw e
+		Right r -> return r
 
 -- | Message to invoke.
 data Message where
