@@ -236,7 +236,7 @@ void setWin32WindowTitle(HWND hWnd, LPCTSTR title)
 	SetWindowText(hWnd, title);
 }
 
-void closeWin32Window(HWND hWnd)
+void destroyWin32Window(HWND hWnd)
 {
 	DestroyWindow(hWnd);
 }

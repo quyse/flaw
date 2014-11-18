@@ -1,8 +1,15 @@
+{-|
+Module: Flaw.Window.Win32
+Description: Win32 window framework.
+License: MIT
+-}
+
 {-# LANGUAGE GADTs, TypeFamilies #-}
 
 module Flaw.Window.Win32
 	( Win32WindowSystem()
 	, Win32Window()
+	, initWin32WindowSystem
 	, createWin32Window
 	, createLayeredWin32Window
 	, updateLayeredWin32Window
@@ -13,6 +20,7 @@ import Control.Concurrent
 import Control.Concurrent.MVar
 import Control.Exception
 import Control.Monad.Fix
+import Control.Monad.Trans.Resource
 import Data.IORef
 import qualified Data.Text as T
 import Data.Word
@@ -42,10 +50,10 @@ instance Window Win32Window where
 	setWindowTitle Win32Window { wWindowSystem = ws, wHandle = hwnd } title = invoke_ ws $ do
 		withCWString (T.unpack title) $ \titleCString ->
 			c_setWin32WindowTitle hwnd titleCString
-	closeWindow Win32Window { wWindowSystem = ws, wHandle = hwnd } = invoke_ ws $ c_closeWin32Window hwnd
 
-instance WindowSystem Win32WindowSystem where
-	initWindowSystem = do
+initWin32WindowSystem :: MonadResource m => m (ReleaseKey, Win32WindowSystem)
+initWin32WindowSystem = allocate init shutdown where
+	init = do
 		-- create vars
 		handleVar <- newEmptyMVar
 		shutdownVar <- newEmptyMVar
@@ -68,8 +76,7 @@ instance WindowSystem Win32WindowSystem where
 			, wsThreadId = threadId
 			, wsShutdownVar = shutdownVar
 			}
-
-	shutdownWindowSystem ws = do
+	shutdown ws = do
 		-- send a message to stop window loop
 		invoke_ ws $ c_stopWin32WindowSystem
 		-- wait for actual completion
@@ -77,31 +84,33 @@ instance WindowSystem Win32WindowSystem where
 		-- free resources
 		c_shutdownWin32WindowSystem $ wsHandle ws
 
-createWin32Window :: Win32WindowSystem -> T.Text -> Int -> Int -> Int -> Int -> IO Win32Window
+createWin32Window :: MonadResource m => Win32WindowSystem -> T.Text -> Int -> Int -> Int -> Int -> m (ReleaseKey, Win32Window)
 createWin32Window ws title left top width height = internalCreateWin32Window ws title left top width height False
 
-createLayeredWin32Window :: Win32WindowSystem -> T.Text -> Int -> Int -> Int -> Int -> IO Win32Window
+createLayeredWin32Window :: MonadResource m => Win32WindowSystem -> T.Text -> Int -> Int -> Int -> Int -> m (ReleaseKey, Win32Window)
 createLayeredWin32Window ws title left top width height = internalCreateWin32Window ws title left top width height True
 
-internalCreateWin32Window :: Win32WindowSystem -> T.Text -> Int -> Int -> Int -> Int -> Bool -> IO Win32Window
-internalCreateWin32Window ws title left top width height layered = invoke ws $ mfix $ \w -> do
-	-- create callback
-	callback <- wrapWindowCallback $ \msg wParam lParam -> case msg of
-		0x0002 -> do -- WM_DESTROY
-			-- free callback
-			freeHaskellFunPtr $ wCallback w
-		_ -> return ()
-	-- create window
-	hwnd <- withCWString (T.unpack title) $ \titleCString ->
-		c_createWin32Window (wsHandle ws) titleCString left top width height callback (if layered then 1 else 0)
-	if hwnd == nullPtr then
-		error "cannot create Win32Window"
-	else
-		return $ Win32Window
-			{ wWindowSystem = ws
-			, wHandle = hwnd
-			, wCallback = callback
-			}
+internalCreateWin32Window :: MonadResource m => Win32WindowSystem -> T.Text -> Int -> Int -> Int -> Int -> Bool -> m (ReleaseKey, Win32Window)
+internalCreateWin32Window ws title left top width height layered = allocate create destroy where
+	create = invoke ws $ mfix $ \w -> do
+		-- create callback
+		callback <- wrapWindowCallback $ \msg wParam lParam -> case msg of
+			0x0002 -> do -- WM_DESTROY
+				-- free callback
+				freeHaskellFunPtr $ wCallback w
+			_ -> return ()
+		-- create window
+		hwnd <- withCWString (T.unpack title) $ \titleCString ->
+			c_createWin32Window (wsHandle ws) titleCString left top width height callback (if layered then 1 else 0)
+		if hwnd == nullPtr then
+			error "cannot create Win32Window"
+		else
+			return $ Win32Window
+				{ wWindowSystem = ws
+				, wHandle = hwnd
+				, wCallback = callback
+				}
+	destroy Win32Window { wWindowSystem = ws, wHandle = hwnd } = invoke_ ws $ c_destroyWin32Window hwnd
 
 updateLayeredWin32Window :: Win32Window -> IO ()
 updateLayeredWin32Window w = invoke_ (wWindowSystem w) $ c_updateLayeredWin32Window $ wHandle w
@@ -177,7 +186,7 @@ foreign import ccall unsafe "createWin32Window" c_createWin32Window
 	-> Int -- layered
 	-> IO HWND -- HWND
 foreign import ccall unsafe "setWin32WindowTitle" c_setWin32WindowTitle :: HWND -> LPTSTR -> IO ()
-foreign import ccall unsafe "closeWin32Window" c_closeWin32Window :: HWND -> IO ()
+foreign import ccall unsafe "destroyWin32Window" c_destroyWin32Window :: HWND -> IO ()
 foreign import ccall unsafe "updateLayeredWin32Window" c_updateLayeredWin32Window :: HWND -> IO ()
 foreign import ccall unsafe "getLayeredWin32WindowBitmapData" c_getLayeredWin32WindowBitmapData :: HWND -> Ptr (Ptr CUChar) -> Ptr Int -> Ptr Int -> Ptr Int -> IO ()
 

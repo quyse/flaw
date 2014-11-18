@@ -1,6 +1,11 @@
+{-|
+Module: Flaw.Window
+Description: General Window framework.
+License: MIT
+-}
+
 module Flaw.Window
-	( WindowSystem(..)
-	, Window(..)
+	( Window(..)
 	) where
 
 import Flaw.Window.Internal
