@@ -12,6 +12,7 @@ module Flaw.FFI
 	) where
 
 import Control.Monad
+import Foreign.Marshal.Array
 import Foreign.Ptr
 import Foreign.Storable
 import Language.Haskell.TH
@@ -47,8 +48,8 @@ data Field = Field
 	, fieldDecs :: [DecQ]
 	}
 
-processField :: String -> TypeQ -> String -> ExpQ -> Q Field
-processField typeName ft fn prevEndExp = do
+processField :: String -> TypeQ -> String -> Int -> ExpQ -> Q Field
+processField typeName ft fn fc prevEndExp = do
 	let baseName = typeName ++ "_" ++ fn
 	let name = mkName $ "f_" ++ baseName
 	let sizeOfName = mkName $ "field_sizeOf_" ++ baseName
@@ -58,24 +59,43 @@ processField typeName ft fn prevEndExp = do
 	let peekName = mkName $ "field_peek_" ++ baseName
 	let pokeName = mkName $ "field_poke_" ++ baseName
 	addrParam <- newName "addr"
+	let rft = if fc == 0 then ft else [t| [ $ft ] |]
 	let decs =
 		[ sigD sizeOfName [t| Int |]
-		, valD (varP sizeOfName) (normalB [| sizeOf (undefined :: $(ft)) |]) []
+		, valD (varP sizeOfName)
+			( normalB $
+				if fc == 0 then
+					[| sizeOf (undefined :: $(ft)) |]
+				else
+					[| $(litE $ integerL $ fromIntegral fc) * sizeOf (undefined :: $(ft)) |]
+			) []
 		, sigD alignmentName [t| Int |]
 		, valD (varP alignmentName) (normalB [| alignment (undefined :: $(ft)) |]) []
 		, sigD offsetName [t| Int |]
 		, valD (varP offsetName) (normalB [| (($(prevEndExp) + $(varE alignmentName) - 1) `div` $(varE alignmentName)) * $(varE alignmentName) |]) []
 		, sigD addrName [t| Ptr $(conT $ mkName typeName) -> Ptr $(ft) |]
 		, funD addrName [clause [varP addrParam] (normalB [| plusPtr (castPtr $(varE addrParam)) $(varE offsetName) |]) []]
-		, sigD peekName [t| Ptr $(conT $ mkName typeName) -> IO $(ft) |]
-		, funD peekName [clause [varP addrParam] (normalB [| peek ($(varE addrName) $(varE addrParam)) |]) []]
-		, sigD pokeName [t| Ptr $(conT $ mkName typeName) -> $(ft) -> IO () |]
-		, funD pokeName [clause [varP addrParam] (normalB [| poke ($(varE addrName) $(varE addrParam)) |]) []]
+		, sigD peekName [t| Ptr $(conT $ mkName typeName) -> IO $(rft) |]
+		, funD peekName [clause [varP addrParam]
+			( normalB $
+				if fc == 0 then
+					[| peek ($(varE addrName) $(varE addrParam)) |]
+				else
+					[| peekArray $(litE $ integerL $ fromIntegral fc) ($(varE addrName) $(varE addrParam)) |]
+			) []]
+		, sigD pokeName [t| Ptr $(conT $ mkName typeName) -> $(rft) -> IO () |]
+		, funD pokeName [clause [varP addrParam]
+			( normalB $
+				if fc == 0 then
+					[| poke ($(varE addrName) $(varE addrParam)) |]
+				else
+					[| pokeArray ($(varE addrName) $(varE addrParam)) |]
+			) []]
 		]
 	return Field
 		{ fieldNameStr = fn
 		, fieldName = name
-		, fieldType = ft
+		, fieldType = rft
 		, fieldSizeOf = varE sizeOfName
 		, fieldAlignment = varE alignmentName
 		, fieldOffset = varE offsetName
@@ -85,16 +105,16 @@ processField typeName ft fn prevEndExp = do
 		, fieldDecs = decs
 		}
 
-processFields :: String -> [(TypeQ, String)] -> Q [Field]
+processFields :: String -> [(TypeQ, String, Int)] -> Q [Field]
 processFields typeName fs = pf [| 0 |] fs where
-	pf prevEndExp ((ft, fn) : nfs) = do
-		f <- processField typeName ft fn prevEndExp
+	pf prevEndExp ((ft, fn, fc) : nfs) = do
+		f <- processField typeName ft fn fc prevEndExp
 		nextFields <- pf (fieldEnd f) nfs
 		return $ f : nextFields
 	pf _ [] = return []
 
 -- | Generate struct data type.
-genStruct :: String -> [(TypeQ, String)] -> Q [Dec]
+genStruct :: String -> [(TypeQ, String, Int)] -> Q [Dec]
 genStruct typeName fs = do
 	fields <- processFields typeName fs
 	let dataFieldDec field = do
