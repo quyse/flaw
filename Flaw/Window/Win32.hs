@@ -16,19 +16,14 @@ module Flaw.Window.Win32
 	) where
 
 import Control.Concurrent
-import Control.Concurrent.MVar
 import Control.Exception
 import Control.Monad.Fix
 import Control.Monad.Trans.Resource
-import Data.IORef
 import qualified Data.Text as T
 import Data.Word
 import Foreign.C.String
 import Foreign.C.Types
-import Foreign.Marshal.Alloc
 import Foreign.Ptr
-import Foreign.Storable
-import System.IO.Unsafe
 
 import Flaw.Window.Internal
 
@@ -50,8 +45,8 @@ instance Window Win32Window where
 			c_setWin32WindowTitle hwnd titleCString
 
 initWin32WindowSystem :: MonadResource m => m (ReleaseKey, Win32WindowSystem)
-initWin32WindowSystem = allocate init shutdown where
-	init = do
+initWin32WindowSystem = allocate initialize shutdown where
+	initialize = do
 		-- create vars
 		handleVar <- newEmptyMVar
 		shutdownVar <- newEmptyMVar
@@ -59,18 +54,18 @@ initWin32WindowSystem = allocate init shutdown where
 		-- create OS thread for window loop
 		threadId <- forkOS $ do
 			-- initialize window system, get a thread handle
-			handle <- c_initWin32WindowSystem
+			h <- c_initWin32WindowSystem
 			-- send handles to the original thread
-			putMVar handleVar handle
+			putMVar handleVar h
 			-- run window system
-			c_runWin32WindowSystem handle
+			c_runWin32WindowSystem h
 			-- notify that window system quit
 			putMVar shutdownVar ()
 		-- wait for handle
-		handle <- readMVar handleVar
+		h <- readMVar handleVar
 		-- return window system
 		return Win32WindowSystem
-			{ wsHandle = handle
+			{ wsHandle = h
 			, wsThreadId = threadId
 			, wsShutdownVar = shutdownVar
 			}
@@ -149,7 +144,6 @@ data Message where
 
 -- foreign types
 
-type HANDLE = Ptr ()
 type LPTSTR = CWString
 type HWND = Ptr ()
 type WPARAM = CUIntPtr

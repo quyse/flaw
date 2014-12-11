@@ -32,7 +32,6 @@ module Flaw.Math
 	) where
 
 import Flaw.Math.Internal
-import Language.Haskell.TH
 
 genVecClasses
 genVecDatas

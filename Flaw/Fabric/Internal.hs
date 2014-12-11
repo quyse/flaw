@@ -75,8 +75,7 @@ genPrimFabricable name = do
 		paramName <- newName "a"
 		let hashE = AppE hashBinaryE $ VarE paramName
 		let body = NormalB $ AppE (AppE hashedFabricE hashE) $ AppE (ConE fName) $ VarE paramName
-		let clause = Clause [VarP paramName] body []
-		return $ FunD 'fabric [clause]
+		return $ FunD 'fabric [Clause [VarP paramName] body []]
 	-- unite all declarations
 	let decs = [fabricDataDec, fabricDec]
 	-- return instance
@@ -187,8 +186,7 @@ genFabricable name = reify name >>= genFabricableFromInfo where
 				let matchBody = NormalB $ fabricConFabricExp bc
 				return $ Match (fabricConOriginalPat bc) matchBody []
 			matches <- mapM match fabricCons
-			let clause = Clause [VarP paramName] (NormalB $ CaseE (VarE paramName) matches) []
-			return $ FunD 'fabric [clause]
+			return $ FunD 'fabric [Clause [VarP paramName] (NormalB $ CaseE (VarE paramName) matches) []]
 		-- unite all declarations
 		let decs = [fabricDataDec, fabricDec]
 		-- return instance

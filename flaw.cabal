@@ -25,6 +25,8 @@ library
     exposed-modules:
       Flaw.FFI.COM
       Flaw.FFI.COM.IUnknown
+      Flaw.FFI.Win32
+      Flaw.Graphics.Dxgi
       Flaw.Window.Win32
   other-modules:
     Flaw.Fabric.Internal
