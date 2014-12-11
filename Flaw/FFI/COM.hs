@@ -7,11 +7,14 @@ License: MIT
 {-# LANGUAGE TemplateHaskell #-}
 
 module Flaw.FFI.COM
-	( COMInterface(getIID)
-	, getCOMObject
+	( COMInterface(getIID, pokeCOMObject)
+	, peekCOMObject
 	, HRESULT
 	, hresultSucceeded
 	, hresultFailed
+	, IID
+	, REFGUID
+	, REFIID
 	, genCOMInterface
 	) where
 
@@ -22,26 +25,31 @@ import Foreign.Ptr
 import Foreign.Storable
 import Language.Haskell.TH
 
+import Flaw.FFI.Win32
+
 type HRESULT = Int32
 
 -- | Size of pointer on target architecture.
 ptrSize :: Int
 ptrSize = sizeOf (undefined :: Ptr ())
 
+-- | Class of COM interface.
 class COMInterface i where
 	-- | Get IID of COM interface. Argument is not used.
-	getIID :: i -> UUID.UUID
+	getIID :: i -> IID
 	-- | Get size of virtual table. Argument is not used.
 	sizeOfCOMVirtualTable :: i -> Int
+	-- | Get native pointer to object.
+	pokeCOMObject :: i -> Ptr i
 	-- | Internal method to parse table of virtual methods.
 	peekCOMVirtualTable
-		:: Ptr () -- ^ 'this' pointer
+		:: Ptr i -- ^ 'this' pointer
 		-> Ptr () -- ^ pointer to table of virtual methods
 		-> IO i
 
--- | Public interface for getting COM object from any pointer.
-getCOMObject :: COMInterface i => Ptr a -> IO i
-getCOMObject this = peek ((castPtr this) :: Ptr (Ptr ())) >>= peekCOMVirtualTable (castPtr this)
+-- | Get COM object from pointer.
+peekCOMObject :: COMInterface a => Ptr a -> IO a
+peekCOMObject this = peek ((castPtr this) :: Ptr (Ptr ())) >>= peekCOMVirtualTable (castPtr this)
 
 -- | If HRESULT value represents success.
 hresultSucceeded :: HRESULT -> Bool
@@ -50,6 +58,10 @@ hresultSucceeded hr = hr >= 0
 -- | If HRESULT value represents failure.
 hresultFailed :: HRESULT -> Bool
 hresultFailed hr = hr < 0
+
+type IID = GUID
+type REFGUID = Ptr GUID
+type REFIID = Ptr IID
 
 -- | Internal info about method.
 data Method = Method
@@ -78,7 +90,7 @@ processMethod interfaceName mt mn prevEndExp = do
 		[ sigD offsetName [t| Int |]
 		, valD (varP offsetName) (normalB prevEndExp) []
 		, tySynD functionTypeName [] mt
-		, tySynD foreignFunctionTypeName [] [t| Ptr () -> $(conT functionTypeName) |]
+		, tySynD foreignFunctionTypeName [] [t| Ptr $(conT $ mkName interfaceName) -> $(conT functionTypeName) |]
 		, forImpD stdCall safe "dynamic" makeName [t| FunPtr $(conT foreignFunctionTypeName) -> $(conT foreignFunctionTypeName) |]
 		]
 	let classDecs = \paramName comGetExp ->
@@ -120,8 +132,9 @@ genCOMInterface interfaceNameStr iid maybeParentInterfaceName ms = do
 	let iidName = mkName $ "iid_" ++ interfaceNameStr
 	let endName = mkName $ "ie_" ++ interfaceNameStr
 	let parentFieldName = mkName $ "pd_" ++ interfaceNameStr
-	thisName <- newName "this"
-	vtName <- newName "vt"
+	let thisName = mkName $ "it_" ++ interfaceNameStr
+	thisParamName <- newName "this"
+	vtParamName <- newName "vt"
 	(beginExp, parentFields, peekParentBinds, parentFieldsConstr, parentInstanceDecs) <- case maybeParentInterfaceName of
 		Just parentInterfaceNameStr -> do
 			let parentInterfaceName = mkName parentInterfaceNameStr
@@ -134,27 +147,28 @@ genCOMInterface interfaceNameStr iid maybeParentInterfaceName ms = do
 			return
 				( [| sizeOfCOMVirtualTable (undefined :: $(conT $ mkName parentInterfaceNameStr)) |]
 				, [return (parentFieldName, NotStrict, ConT parentInterfaceName)]
-				, [ bindS (varP parentParamName) [| peekCOMVirtualTable $(varE thisName) $(varE vtName) |]
+				, [ bindS (varP parentParamName) [| peekCOMVirtualTable (castPtr $(varE thisParamName)) $(varE vtParamName) |]
 					]
 				, [return (parentFieldName, VarE parentParamName)]
 				, [parentInstanceDec]
 				)
 		Nothing -> return ([| 0 |], [], [], [], [])
 	methods <- processMethods interfaceNameStr beginExp ms
-	dataDec <- dataD (return []) interfaceName [] [recC interfaceName $ parentFields ++ map methodField methods] []
+	dataDec <- dataD (return []) interfaceName [] [recC interfaceName $ return (thisName, NotStrict, AppT (ConT ''Ptr) $ ConT interfaceName) : parentFields ++ map methodField methods] []
 	-- instance COMInterface IInterface
 	let mp1 method = do
 		p <- newName $ "p_" ++ methodNameStr method
-		let binding = bindS (varP p) [| peek (plusPtr $(varE vtName) $(methodOffset method)) |]
-		makeExp <- [| $(methodMake method) (castPtrToFunPtr $(varE p)) $(varE thisName) |]
+		let binding = bindS (varP p) [| peek (plusPtr $(varE vtParamName) $(methodOffset method)) |]
+		makeExp <- [| $(methodMake method) (castPtrToFunPtr $(varE p)) $(varE thisParamName) |]
 		let field = (methodFieldName method, makeExp)
 		return (binding, field)
 	mp1s <- mapM mp1 methods
-	let peekCOMVirtualTableDec = funD 'peekCOMVirtualTable [clause [varP thisName, varP vtName] body []] where
-		body = normalB $ doE $ peekParentBinds ++ (map fst mp1s) ++ [noBindS $ appE (varE 'return) $ recConE interfaceName $ parentFieldsConstr ++ map (return . snd) mp1s]
+	let peekCOMVirtualTableDec = funD 'peekCOMVirtualTable [clause [varP thisParamName, varP vtParamName] body []] where
+		body = normalB $ doE $ peekParentBinds ++ (map fst mp1s) ++ [noBindS $ appE (varE 'return) $ recConE interfaceName $ return (thisName, VarE thisParamName) : parentFieldsConstr ++ map (return . snd) mp1s]
 	comInterfaceInstanceDec <- instanceD (return []) [t| COMInterface $(conT interfaceName) |]
 		[ funD 'getIID [clause [wildP] (normalB $ varE iidName) []]
 		, funD 'sizeOfCOMVirtualTable [clause [wildP] (normalB $ varE endName) []]
+		, funD 'pokeCOMObject [clause [recP interfaceName [return (thisName, VarP thisParamName)]] (normalB $ varE thisParamName) []]
 		, peekCOMVirtualTableDec
 		]
 	let className = mkName $ interfaceNameStr ++ "_Class"
@@ -169,7 +183,7 @@ genCOMInterface interfaceNameStr iid maybeParentInterfaceName ms = do
 		]
 	endSigDec <- sigD endName [t| Int |]
 	endValDec <- valD (varP endName) (normalB [| $beginExp + $(litE $ integerL $ fromIntegral $ length methods) * ptrSize |]) []
-	iidSigDec <- sigD iidName [t| UUID.UUID |]
+	iidSigDec <- sigD iidName [t| IID |]
 	iidValDec <- valD (varP iidName) (normalB [| fromJust (UUID.fromString $(litE $ stringL iid)) |]) []
 	methodsTopDecs <- mapM methodTopDecs methods
 	return $ dataDec : comInterfaceInstanceDec : classDec : instanceDec : endSigDec : endValDec : iidSigDec : iidValDec : (concat methodsTopDecs) ++ parentInstanceDecs

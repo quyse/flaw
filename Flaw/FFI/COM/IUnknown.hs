@@ -14,17 +14,17 @@ module Flaw.FFI.COM.IUnknown
 
 import Control.Monad
 import Data.UUID
-import Data.Word
 import Foreign.Marshal.Alloc
 import Foreign.Ptr
 import Foreign.Storable
 
 import Flaw.FFI.COM
+import Flaw.FFI.Win32
 
 genCOMInterface "IUnknown" "00000000-0000-0000-C000-000000000046" Nothing
 	[ ([t| Ptr UUID -> Ptr (Ptr ()) -> IO HRESULT |], "QueryInterface")
-	, ([t| IO Word |], "AddRef")
-	, ([t| IO Word |], "Release")
+	, ([t| IO ULONG |], "AddRef")
+	, ([t| IO ULONG |], "Release")
 	]
 
 -- | Strictly typed QueryInterface.
@@ -32,6 +32,6 @@ comQueryInterface :: forall a b. (IUnknown_Class a, COMInterface b) => a -> IO (
 comQueryInterface this = alloca $ \out -> do
 	hr <- alloca $ \iid -> do
 		poke iid $ getIID (undefined :: b)
-		m_IUnknown_QueryInterface this iid (out :: Ptr (Ptr ()))
+		m_IUnknown_QueryInterface this iid out
 	if hresultFailed hr then return Nothing
-	else liftM Just $ getCOMObject =<< peek out
+	else liftM Just $ peekCOMObject . castPtr =<< peek out
