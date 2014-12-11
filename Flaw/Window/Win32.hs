@@ -13,7 +13,6 @@ module Flaw.Window.Win32
 	, createWin32Window
 	, createLayeredWin32Window
 	, updateLayeredWin32Window
-	, createWin32WindowCairoSurface
 	) where
 
 import Control.Concurrent
@@ -29,7 +28,6 @@ import Foreign.C.Types
 import Foreign.Marshal.Alloc
 import Foreign.Ptr
 import Foreign.Storable
-import qualified Graphics.Rendering.Cairo as Cairo
 import System.IO.Unsafe
 
 import Flaw.Window.Internal
@@ -114,19 +112,6 @@ internalCreateWin32Window ws title left top width height layered = allocate crea
 
 updateLayeredWin32Window :: Win32Window -> IO ()
 updateLayeredWin32Window w = invoke_ (wWindowSystem w) $ c_updateLayeredWin32Window $ wHandle w
-
-createWin32WindowCairoSurface :: Win32Window -> IO Cairo.Surface
-createWin32WindowCairoSurface w = do
-	alloca $ \bitmapDataPtr -> do
-		alloca $ \widthPtr -> do
-			alloca $ \heightPtr -> do
-				alloca $ \pitchPtr -> do
-					invoke (wWindowSystem w) $ c_getLayeredWin32WindowBitmapData (wHandle w) bitmapDataPtr widthPtr heightPtr pitchPtr
-					bitmapData <- peek bitmapDataPtr
-					width <- peek widthPtr
-					height <- peek heightPtr
-					pitch <- peek pitchPtr
-					Cairo.createImageSurfaceForData bitmapData Cairo.FormatARGB32 width height pitch
 
 invokeWithMaybeResultVar :: Maybe (MVar (Either SomeException a)) -> Win32WindowSystem -> IO a -> IO ()
 invokeWithMaybeResultVar maybeResultVar ws io = do
