@@ -1,6 +1,12 @@
+{-|
+Module: Flaw.FFI
+Description: Generating declarations for C++ types.
+License: MIT
+-}
+
 {-# LANGUAGE TemplateHaskell #-}
 
-module Flaw.TH
+module Flaw.FFI
 	( genEnum
 	, genStruct
 	) where
@@ -11,7 +17,7 @@ import Foreign.Storable
 import Language.Haskell.TH
 
 -- | Generate enum data type based on names and numbers.
-genEnum :: Q Type -> String -> [(String, Int)] -> Q [Dec]
+genEnum :: TypeQ -> String -> [(String, Int)] -> Q [Dec]
 genEnum underlyingType typeName es = do
 	let dataCons = [NormalC (mkName eName) [] |  (eName, _) <- es]
 	let dataDec = DataD [] (mkName typeName) [] dataCons [''Show]
@@ -42,7 +48,7 @@ data Field = Field
 	}
 
 processField :: String -> TypeQ -> String -> ExpQ -> Q Field
-processField typeName ft fn prevOffsetExp = do
+processField typeName ft fn prevEndExp = do
 	let baseName = typeName ++ "_" ++ fn
 	let name = mkName $ "f_" ++ baseName
 	let sizeOfName = mkName $ "field_sizeOf_" ++ baseName
@@ -58,7 +64,7 @@ processField typeName ft fn prevOffsetExp = do
 		, sigD alignmentName [t| Int |]
 		, valD (varP alignmentName) (normalB [| alignment (undefined :: $(ft)) |]) []
 		, sigD offsetName [t| Int |]
-		, valD (varP offsetName) (normalB [| (($(prevOffsetExp) + $(varE alignmentName) - 1) `div` $(varE alignmentName)) * $(varE alignmentName) |]) []
+		, valD (varP offsetName) (normalB [| (($(prevEndExp) + $(varE alignmentName) - 1) `div` $(varE alignmentName)) * $(varE alignmentName) |]) []
 		, sigD addrName [t| Ptr $(conT $ mkName typeName) -> Ptr $(ft) |]
 		, funD addrName [clause [varP addrParam] (normalB [| plusPtr (castPtr $(varE addrParam)) $(varE offsetName) |]) []]
 		, sigD peekName [t| Ptr $(conT $ mkName typeName) -> IO $(ft) |]
@@ -81,14 +87,14 @@ processField typeName ft fn prevOffsetExp = do
 
 processFields :: String -> [(TypeQ, String)] -> Q [Field]
 processFields typeName fs = pf [| 0 |] fs where
-	pf prevOffsetExp ((ft, fn) : nfs) = do
-		f <- processField typeName ft fn prevOffsetExp
+	pf prevEndExp ((ft, fn) : nfs) = do
+		f <- processField typeName ft fn prevEndExp
 		nextFields <- pf (fieldEnd f) nfs
 		return $ f : nextFields
 	pf _ [] = return []
 
 -- | Generate struct data type.
-genStruct :: String -> [(Q Type, String)] -> Q [Dec]
+genStruct :: String -> [(TypeQ, String)] -> Q [Dec]
 genStruct typeName fs = do
 	fields <- processFields typeName fs
 	let dataFieldDec field = do
