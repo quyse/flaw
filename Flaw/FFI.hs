@@ -7,7 +7,10 @@ License: MIT
 {-# LANGUAGE TemplateHaskell #-}
 
 module Flaw.FFI
-	( genEnum
+	( EnumWrapper(..)
+	, wrapEnum
+	, unwrapEnum
+	, genEnum
 	, genStruct
 	) where
 
@@ -16,6 +19,16 @@ import Foreign.Marshal.Array
 import Foreign.Ptr
 import Foreign.Storable
 import Language.Haskell.TH
+
+-- | Foreign-marshallable wrapper for enum types.
+newtype EnumWrapper enumType = EnumWrapper Int
+
+-- | Wrap enum value into wrapper.
+wrapEnum :: Enum a => a -> EnumWrapper a
+wrapEnum a = EnumWrapper $ fromEnum a
+-- | Unwrap enum value from wrapper.
+unwrapEnum :: Enum a => EnumWrapper a -> a
+unwrapEnum (EnumWrapper a) = toEnum a
 
 -- | Generate enum data type based on names and numbers.
 genEnum :: TypeQ -> String -> [(String, Int)] -> Q [Dec]
