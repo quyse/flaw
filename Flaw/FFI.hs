@@ -61,6 +61,19 @@ data Field = Field
 	, fieldDecs :: [DecQ]
 	}
 
+-- | Check if list is no more that specified limit.
+listNoLongerThan :: [a] -> Int -> Bool
+listNoLongerThan (_:xs) len = if len <= 0 then False else listNoLongerThan xs $ len - 1
+listNoLongerThan [] _ = True
+
+-- | Poke array with length limit.
+pokeArrayWithLength :: Storable a => Int -> Ptr a -> [a] -> IO ()
+pokeArrayWithLength len ptr lst = do
+	if listNoLongerThan lst len then
+		pokeArray ptr lst
+	else
+		fail "list too big to poke into array"
+
 processField :: String -> TypeQ -> String -> Int -> ExpQ -> Q Field
 processField typeName ft fn fc prevEndExp = do
 	let baseName = typeName ++ "_" ++ fn
@@ -102,7 +115,7 @@ processField typeName ft fn fc prevEndExp = do
 				if fc == 0 then
 					[| poke ($(varE addrName) $(varE addrParam)) |]
 				else
-					[| pokeArray ($(varE addrName) $(varE addrParam)) |]
+					[| pokeArrayWithLength $(litE $ integerL $ fromIntegral fc) ($(varE addrName) $(varE addrParam)) |]
 			) []]
 		]
 	return Field
