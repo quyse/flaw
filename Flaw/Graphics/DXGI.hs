@@ -380,17 +380,13 @@ genCOMInterface "IDXGIFactory" "7b7166ec-21c7-44ae-b21a-c9ae321ae369" (Just "IDX
 -- | Wrapper for CreateDXGIFactory
 createDXGIFactory :: IO IDXGIFactory
 createDXGIFactory = do
-	dll <- loadLibrary "dxgi.dll"
-	if dll == nullPtr then fail "no dxgi.dll"
-	else do
-		proc <- getProcAddress dll "CreateDXGIFactory"
-		if proc == nullPtr then fail "wrong dxgi.dll"
-		else alloca $ \factoryPtr -> do
-			hr <- alloca $ \iidPtr -> do
-				poke iidPtr (getIID (undefined :: IDXGIFactory))
-				mkCreateDXGIFactory (castPtrToFunPtr proc) iidPtr factoryPtr
-			if hresultFailed hr then fail "cannot create DXGI factory"
-			else peekCOMObject . castPtr =<< peek factoryPtr
+	proc <- loadLibraryAndGetProcAddress "dxgi.dll" "CreateDXGIFactory"
+	alloca $ \factoryPtr -> do
+		hr <- alloca $ \iidPtr -> do
+			poke iidPtr (getIID (undefined :: IDXGIFactory))
+			mkCreateDXGIFactory proc iidPtr factoryPtr
+		if hresultFailed hr then fail "cannot create DXGI factory"
+		else peekCOMObject . castPtr =<< peek factoryPtr
 
 type CreateDXGIFactoryProc = REFIID -> Ptr (Ptr ()) -> IO HRESULT
 foreign import stdcall safe "dynamic" mkCreateDXGIFactory :: FunPtr CreateDXGIFactoryProc -> CreateDXGIFactoryProc

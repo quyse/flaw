@@ -19,6 +19,8 @@ module Flaw.FFI.Win32
 	, DWORD
 	, SIZE_T
 	, LARGE_INTEGER
+	, LPSTR
+	, LPWSTR
 	, RECT(..)
 	, GUID
 	, HANDLE
@@ -27,6 +29,7 @@ module Flaw.FFI.Win32
 	, HWND
 	, loadLibrary
 	, getProcAddress
+	, loadLibraryAndGetProcAddress
 	, winUTF16toText
 	) where
 
@@ -57,6 +60,9 @@ type DWORD = Word32
 type SIZE_T = Word
 type LARGE_INTEGER = Int64
 
+type LPSTR = CString
+type LPWSTR = CWString
+
 genStruct "RECT"
 	[ ([t|LONG|], "left", 0)
 	, ([t|LONG|], "top", 0)
@@ -78,10 +84,19 @@ loadLibrary name = withCWString name winapi_loadLibraryW
 
 foreign import stdcall safe "LoadLibraryW" winapi_loadLibraryW :: CWString -> IO HMODULE
 
-getProcAddress :: HMODULE -> String -> IO (Ptr a)
-getProcAddress hmodule functionName = liftM castPtr $ withCString functionName $ winapi_getProcAddress hmodule
+getProcAddress :: HMODULE -> String -> IO (FunPtr a)
+getProcAddress hmodule functionName = liftM castPtrToFunPtr $ withCString functionName $ winapi_getProcAddress hmodule
 
 foreign import stdcall safe "GetProcAddress" winapi_getProcAddress :: HMODULE -> CString -> IO (Ptr ())
+
+loadLibraryAndGetProcAddress :: String -> String -> IO (FunPtr a)
+loadLibraryAndGetProcAddress libraryName procName = do
+	dll <- loadLibrary libraryName
+	if dll == nullPtr then fail $ "no " ++ libraryName
+	else do
+		proc <- getProcAddress dll procName
+		if proc == nullFunPtr then fail $ "no " ++ procName ++ " in " ++ libraryName
+		else return proc
 
 -- | Convert LPWSTR to Text.
 winUTF16toText :: [WCHAR] -> T.Text
