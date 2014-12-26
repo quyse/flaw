@@ -32,6 +32,7 @@ library
       Flaw.FFI.COM
       Flaw.FFI.COM.TH
       Flaw.FFI.Win32
+      Flaw.Graphics.DirectX11
       Flaw.Graphics.DXGI
       Flaw.Window.Win32
     other-modules:
