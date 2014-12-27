@@ -78,26 +78,34 @@ processMethods interfaceName firstOffsetExp ms = pm firstOffsetExp ms where
 	pm _ [] = return []
 
 -- | Create list of interface names with all parents.
-getInterfaceChain :: String -> Q [String]
-getInterfaceChain nameStr = do
+getInterfaceChain :: [String] -> Q [String]
+getInterfaceChain [] = return []
+getInterfaceChain [nameStr] = do
 	maybeParentFieldName <- lookupValueName $ "pd_" ++ nameStr
 	case maybeParentFieldName of
 		Just parentFieldName -> do
 			VarI _ (AppT (AppT ArrowT _) (ConT parentName)) _ _ <- reify parentFieldName
-			parents <- getInterfaceChain $ nameBase parentName
+			parents <- getInterfaceChain [nameBase parentName]
 			return $ nameStr : parents
 		Nothing -> return [nameStr]
+getInterfaceChain (n:ns) = do
+	rns <- getInterfaceChain ns
+	return $ n:rns
 
 -- | Generate necessary things for COM interface.
 -- In order to appropriately export interface, let say, (genCOMInterface "IMyInterface" ...),
 -- you need to export: MyModule (IMyInterface(..), IMyInterface_Classes(..)).
+-- List of parent interfaces may be not full (like contain only immediate parent),
+-- the method will try to find all parents by reification. The possibility to
+-- manually specify all interfaces is useful when stage restriction is in place
+-- (i.e. reify doesn't work).
 genCOMInterface
 	:: String -- ^ Name of the interface.
 	-> String -- ^ String representation of IID (interface GUID).
-	-> Maybe String -- ^ Optional name of parent interface.
+	-> [String] -- ^ Names of parent interfaces, from immediate to root.
 	-> [(TypeQ, String)] -- ^ List of methods. Type of method should be without 'this' argument.
 	-> Q [Dec]
-genCOMInterface interfaceNameStr iid maybeParentInterfaceName ms = do
+genCOMInterface interfaceNameStr iid parentInterfaceNames ms = do
 	let interfaceName = mkName interfaceNameStr
 	let iidName = mkName $ "iid_" ++ interfaceNameStr
 	let endName = mkName $ "ie_" ++ interfaceNameStr
@@ -105,15 +113,15 @@ genCOMInterface interfaceNameStr iid maybeParentInterfaceName ms = do
 	let thisName = mkName $ "it_" ++ interfaceNameStr
 	thisParamName <- newName "this"
 	vtParamName <- newName "vt"
-	(beginExp, parentFields, peekParentBinds, parentFieldsConstr, parentInstanceDecs) <- case maybeParentInterfaceName of
-		Just firstParentInterfaceNameStr -> do
+	(beginExp, parentFields, peekParentBinds, parentFieldsConstr, parentInstanceDecs) <- case parentInterfaceNames of
+		(firstParentInterfaceNameStr:_) -> do
 			parentParamName <- newName "parent"
 			let parentDec parentInterfaceNameStr = do
 				let parentInterfaceClassName = mkName $ parentInterfaceNameStr ++ "_Class"
 				let comGetParent = mkName $ "com_get_" ++ parentInterfaceNameStr
 				instanceD (return []) [t| $(conT parentInterfaceClassName) $(conT interfaceName) |]
 					[funD comGetParent [clause [recP interfaceName [return (parentFieldName, VarP parentParamName)]] (normalB [| $(varE comGetParent) $(varE parentParamName) |]) []]]
-			parentDecs <- mapM parentDec =<< getInterfaceChain firstParentInterfaceNameStr
+			parentDecs <- mapM parentDec =<< getInterfaceChain parentInterfaceNames
 			return
 				( [| sizeOfCOMVirtualTable (undefined :: $(conT $ mkName firstParentInterfaceNameStr)) |]
 				, [return (parentFieldName, NotStrict, ConT $ mkName firstParentInterfaceNameStr)]
@@ -121,7 +129,7 @@ genCOMInterface interfaceNameStr iid maybeParentInterfaceName ms = do
 				, [return (parentFieldName, VarE parentParamName)]
 				, parentDecs
 				)
-		Nothing -> return ([| 0 |], [], [], [], [])
+		[] -> return ([| 0 |], [], [], [], [])
 	methods <- processMethods interfaceNameStr beginExp ms
 	dataDec <- dataD (return []) interfaceName [] [recC interfaceName $ return (thisName, NotStrict, AppT (ConT ''Ptr) $ ConT interfaceName) : parentFields ++ map methodField methods] []
 	-- instance COMInterface IInterface

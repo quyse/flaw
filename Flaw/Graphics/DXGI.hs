@@ -313,7 +313,7 @@ genStructWithArrays "DXGI_ADAPTER_DESC"
 	]
 
 -- | IDXGIObject
-genCOMInterface "IDXGIObject" "aec22fb8-76f3-4639-9be0-28eb43a67a2e" (Just "IUnknown")
+genCOMInterface "IDXGIObject" "aec22fb8-76f3-4639-9be0-28eb43a67a2e" ["IUnknown"]
 	[ ([t| REFGUID -> UINT -> Ptr () -> IO HRESULT |], "SetPrivateData")
 	, ([t| REFGUID -> Ptr () -> IO HRESULT |], "SetPrivateDataInterface")
 	, ([t| REFGUID -> Ptr UINT -> Ptr () -> IO HRESULT |], "GetPrivateData")
@@ -321,19 +321,19 @@ genCOMInterface "IDXGIObject" "aec22fb8-76f3-4639-9be0-28eb43a67a2e" (Just "IUnk
 	]
 
 -- | IDXGIDeviceSubObject
-genCOMInterface "IDXGIDeviceSubObject" "3d3e0379-f9de-4d58-bb6c-18d62992f1a6" (Just "IDXGIObject")
+genCOMInterface "IDXGIDeviceSubObject" "3d3e0379-f9de-4d58-bb6c-18d62992f1a6" ["IDXGIObject"]
 	[ ([t| REFIID -> Ptr (Ptr ()) -> IO HRESULT |], "GetDevice")
 	]
 
 -- | IDXGISurface
-genCOMInterface "IDXGISurface" "cafcb56c-6ac3-4889-bf47-9e23bbd260ec" (Just "IDXGIDeviceSubObject")
+genCOMInterface "IDXGISurface" "cafcb56c-6ac3-4889-bf47-9e23bbd260ec" ["IDXGIDeviceSubObject"]
 	[ ([t| Ptr DXGI_SURFACE_DESC -> IO HRESULT |], "GetDesc")
 	, ([t| Ptr DXGI_MAPPED_RECT -> UINT -> IO HRESULT |], "Map")
 	, ([t| IO HRESULT |], "Unmap")
 	]
 
 -- | IDXGIOutput
-genCOMInterface "IDXGIOutput" "ae02eedb-c735-4690-8d52-5a8dc20213aa" (Just "IDXGIObject")
+genCOMInterface "IDXGIOutput" "ae02eedb-c735-4690-8d52-5a8dc20213aa" ["IDXGIObject"]
 	[ ([t| Ptr DXGI_OUTPUT_DESC -> IO HRESULT |], "GetDesc")
 	, ([t| EnumWrapper DXGI_FORMAT -> UINT -> Ptr UINT -> Ptr DXGI_MODE_DESC -> IO HRESULT |], "GetDisplayModeList")
 	, ([t| Ptr DXGI_MODE_DESC -> Ptr DXGI_MODE_DESC -> Ptr IUnknown -> IO HRESULT |], "FindClosestMatchingMode")
@@ -349,7 +349,7 @@ genCOMInterface "IDXGIOutput" "ae02eedb-c735-4690-8d52-5a8dc20213aa" (Just "IDXG
 	]
 
 -- | IDXGISwapChain
-genCOMInterface "IDXGISwapChain" "310d36a0-d2e7-4c0a-aa04-6a9d23b8886a" (Just "IDXGIDeviceSubObject")
+genCOMInterface "IDXGISwapChain" "310d36a0-d2e7-4c0a-aa04-6a9d23b8886a" ["IDXGIDeviceSubObject"]
 	[ ([t| UINT -> UINT -> IO HRESULT |], "Present")
 	, ([t| UINT -> REFIID -> Ptr (Ptr ()) -> IO HRESULT |], "GetBuffer")
 	, ([t| BOOL -> Ptr IDXGIOutput -> IO HRESULT |], "SetFullscreenState")
@@ -363,14 +363,14 @@ genCOMInterface "IDXGISwapChain" "310d36a0-d2e7-4c0a-aa04-6a9d23b8886a" (Just "I
 	]
 
 -- | IDXGIAdapter
-genCOMInterface "IDXGIAdapter" "2411e7e1-12ac-4ccf-bd14-9798e8534dc0" (Just "IDXGIObject")
+genCOMInterface "IDXGIAdapter" "2411e7e1-12ac-4ccf-bd14-9798e8534dc0" ["IDXGIObject"]
 	[ ([t| UINT -> Ptr (Ptr IDXGIOutput) -> IO HRESULT |], "EnumOutputs")
 	, ([t| Ptr DXGI_ADAPTER_DESC -> IO HRESULT |], "GetDesc")
 	, ([t| Ptr GUID -> Ptr LARGE_INTEGER -> IO HRESULT |], "CheckInterfaceSupport")
 	]
 
 -- | IDXGIFactory
-genCOMInterface "IDXGIFactory" "7b7166ec-21c7-44ae-b21a-c9ae321ae369" (Just "IDXGIObject")
+genCOMInterface "IDXGIFactory" "7b7166ec-21c7-44ae-b21a-c9ae321ae369" ["IDXGIObject"]
 	[ ([t| UINT -> Ptr (Ptr IDXGIAdapter) -> IO HRESULT |], "EnumAdapters")
 	, ([t| HWND -> UINT -> IO HRESULT |], "MakeWindowAssociation")
 	, ([t| Ptr HWND -> IO HRESULT |], "GetWindowAssociation")

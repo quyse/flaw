@@ -37,7 +37,7 @@ import Flaw.FFI.COM.Internal
 import Flaw.FFI.COM.TH
 import Flaw.FFI.Win32
 
-genCOMInterface "IUnknown" "00000000-0000-0000-C000-000000000046" Nothing
+genCOMInterface "IUnknown" "00000000-0000-0000-C000-000000000046" []
 	[ ([t| Ptr UUID -> Ptr (Ptr ()) -> IO HRESULT |], "QueryInterface")
 	, ([t| IO ULONG |], "AddRef")
 	, ([t| IO ULONG |], "Release")
