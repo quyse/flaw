@@ -506,6 +506,18 @@ genStruct "D3D11_COUNTER_INFO"
 	, ([t|UINT8|], "NumDetectableParallelUnits")
 	]
 
+-- | D3D11_CLASS_INSTANCE_DESC
+genStruct "D3D11_CLASS_INSTANCE_DESC"
+	[ ([t|UINT|], "InstanceId")
+	, ([t|UINT|], "InstanceIndex")
+	, ([t|UINT|], "TypeId")
+	, ([t|UINT|], "ConstantBuffer")
+	, ([t|UINT|], "BaseConstantBufferOffset")
+	, ([t|UINT|], "BaseTexture")
+	, ([t|UINT|], "BaseSampler")
+	, ([t|BOOL|], "Created")
+	]
+
 -- | D3D11_TEXTURE1D_DESC
 genStruct "D3D11_TEXTURE1D_DESC"
 	[ ([t|UINT|], "Width")
@@ -829,11 +841,133 @@ genStructWithEndUnion "D3D11_UNORDERED_ACCESS_VIEW_DESC"
 ------- Interfaces
 
 liftM concat $ sequence
+	-- | ID3D11DeviceChild
+	[ genCOMInterface "ID3D11DeviceChild" "1841e5c8-16b0-489b-bcc8-44cfb0d5deae" (Just "IUnknown")
+		[ ([t| Ptr (Ptr $(forwardRef "ID3D11Device")) -> IO () |], "GetDevice")
+		, ([t| REFGUID -> Ptr UINT -> Ptr () -> IO HRESULT |], "GetPrivateData")
+		, ([t| REFGUID -> UINT -> Ptr () -> IO HRESULT |], "SetPrivateData")
+		, ([t| REFGUID -> Ptr IUnknown -> IO HRESULT |], "SetPrivateDataInterface")
+		]
+
+	-- | ID3D11Asynchronous
+	, genCOMInterface "ID3D11Asynchronous" "4b35d0cd-1e15-4258-9c98-1b1333f6dd3b" (Just "ID3D11DeviceChild")
+		[ ([t| IO UINT |], "GetDataSize")
+		]
+
+	-- | ID3D11Counter
+	, genCOMInterface "ID3D11Counter" "6e8c49fb-a371-4770-b440-29086022b741" (Just "ID3D11Asynchronous")
+		[ ([t| Ptr D3D11_COUNTER_DESC -> IO () |], "GetDesc")
+		]
+
+	-- | ID3D11Query
+	, genCOMInterface "ID3D11Query" "d6c00747-87b7-425e-b84d-44d108560afd" (Just "ID3D11Asynchronous")
+		[ ([t| Ptr D3D11_QUERY_DESC -> IO () |], "GetDesc")
+		]
+
+	-- | ID3D11Predicate
+	, genCOMInterface "ID3D11Predicate" "9eb576dd-9f77-4d86-81aa-8bab5fe490e2" (Just "ID3D11Query")
+		[
+		]
+
+	-- | ID3D11SamplerState
+	, genCOMInterface "ID3D11SamplerState" "da6fea51-564c-4487-9810-f0d0f9b4e3a5" (Just "ID3D11DeviceChild")
+		[ ([t| Ptr D3D11_SAMPLER_DESC -> IO () |], "GetDesc")
+		]
+
+	-- | ID3D11RasterizerState
+	, genCOMInterface "ID3D11RasterizerState" "9bb4ab81-ab1a-4d8f-b506-fc04200b6ee7" (Just "ID3D11DeviceChild")
+		[ ([t| Ptr D3D11_RASTERIZER_DESC -> IO () |], "GetDesc")
+		]
+
+	-- | ID3D11DepthStencilState
+	, genCOMInterface "ID3D11DepthStencilState" "03823efb-8d8f-4e1c-9aa2-f64bb2cbfdf1" (Just "ID3D11DeviceChild")
+		[ ([t| Ptr D3D11_DEPTH_STENCIL_DESC -> IO () |], "GetDesc")
+		]
+
+	-- | ID3D11BlendState
+	, genCOMInterface "ID3D11BlendState" "75b68faa-347d-4159-8f45-a0640f01cd9a" (Just "ID3D11DeviceChild")
+		[ ([t| Ptr D3D11_BLEND_DESC -> IO () |], "GetDesc")
+		]
+
+	-- | ID3D11ClassLinkage
+	, genCOMInterface "ID3D11ClassLinkage" "ddf57cba-9543-46e4-a12b-f207a0fe7fed" (Just "ID3D11DeviceChild")
+		[ ([t| LPSTR -> UINT -> Ptr (Ptr $(forwardRef "ID3D11ClassInstance")) -> IO HRESULT |], "GetClassInstance")
+		, ([t| LPSTR -> UINT -> UINT -> UINT -> UINT -> Ptr (Ptr $(forwardRef "ID3D11ClassInstance")) -> IO HRESULT |], "CreateClassInstance")
+		]
+
+	-- | ID3D11ClassInstance
+	, genCOMInterface "ID3D11ClassInstance" "a6cd7faa-b0b7-4a2f-9436-8662a65797cb" (Just "ID3D11DeviceChild")
+		[ ([t| Ptr (Ptr $(forwardRef "ID3D11ClassLinkage")) -> IO () |], "GetClassLinkage")
+		, ([t| Ptr D3D11_CLASS_INSTANCE_DESC -> IO () |], "GetDesc")
+		, ([t| LPSTR -> Ptr SIZE_T -> IO () |], "GetInstanceName")
+		, ([t| LPSTR -> Ptr SIZE_T -> IO () |], "GetTypeName")
+		]
+
+	-- | ID3D11InputLayout
+	, genCOMInterface "ID3D11InputLayout" "e4819ddc-4cf0-4025-bd26-5de82a3e07b7" (Just "ID3D11DeviceChild")
+		[
+		]
+
+	-- | ID3D11VertexShader
+	, genCOMInterface "ID3D11VertexShader" "3b301d64-d678-4289-8897-22f8928b72f3" (Just "ID3D11DeviceChild")
+		[
+		]
+
+	-- | ID3D11PixelShader
+	, genCOMInterface "ID3D11PixelShader" "ea82e40d-51dc-4f33-93d4-db7c9125ae8c" (Just "ID3D11DeviceChild")
+		[
+		]
+
+	-- | ID3D11GeometryShader
+	, genCOMInterface "ID3D11GeometryShader" "38325b96-effb-4022-ba02-2e795b70275c" (Just "ID3D11DeviceChild")
+		[
+		]
+
+	-- | ID3D11HullShader
+	, genCOMInterface "ID3D11HullShader" "8e5c6061-628a-4c8e-8264-bbe45cb3d5dd" (Just "ID3D11DeviceChild")
+		[
+		]
+
+	-- | ID3D11DomainShader
+	, genCOMInterface "ID3D11DomainShader" "f582c508-0f36-490c-9977-31eece268cfa" (Just "ID3D11DeviceChild")
+		[
+		]
+
+	-- | ID3D11ComputeShader
+	, genCOMInterface "ID3D11ComputeShader" "4f5b196e-c2bd-495e-bd01-1fded38e4969" (Just "ID3D11DeviceChild")
+		[
+		]
+
+	-- | ID3D11CommandList
+	, genCOMInterface "ID3D11CommandList" "a24bc4d1-769e-43f7-8013-98ff566c18e2" (Just "ID3D11DeviceChild")
+		[ ([t| IO UINT |], "GetContextFlags")
+		]
+
 	-- | ID3D11Resource
-	[ genCOMInterface "ID3D11Resource" "dc8e63f3-d12b-4952-b47b-5e45026a862d" (Just "ID3D11DeviceChild")
+	, genCOMInterface "ID3D11Resource" "dc8e63f3-d12b-4952-b47b-5e45026a862d" (Just "ID3D11DeviceChild")
 		[ ([t| Ptr D3D11_RESOURCE_DIMENSION -> IO () |], "GetType")
 		, ([t| UINT -> IO () |], "SetEvictionPriority")
 		, ([t| IO UINT |], "GetEvictionPriority")
+		]
+
+	-- | ID3D11Buffer
+	, genCOMInterface "ID3D11Buffer" "48570b85-d1ee-4fcd-a250-eb350722b037" (Just "ID3D11Resource")
+		[ ([t| Ptr D3D11_BUFFER_DESC -> IO () |], "GetDesc")
+		]
+
+	-- | ID3D11Texture1D
+	, genCOMInterface "ID3D11Texture1D" "f8fb5c27-c6b3-4f75-a4c8-439af2ef564c" (Just "ID3D11Resource")
+		[ ([t| Ptr D3D11_TEXTURE1D_DESC -> IO () |], "GetDesc")
+		]
+
+	-- | ID3D11Texture2D
+	, genCOMInterface "ID3D11Texture2D" "6f15aaf2-d208-4e89-9ab4-489535d34f9c" (Just "ID3D11Resource")
+		[ ([t| Ptr D3D11_TEXTURE2D_DESC -> IO () |], "GetDesc")
+		]
+
+	-- | ID3D11Texture3D
+	, genCOMInterface "ID3D11Texture3D" "037e866e-f56d-4357-a8af-9dabbe6e250e" (Just "ID3D11Resource")
+		[ ([t| Ptr D3D11_TEXTURE3D_DESC -> IO () |], "GetDesc")
 		]
 
 	-- | ID3D11View
@@ -870,17 +1004,17 @@ liftM concat $ sequence
 		, ([t| Ptr $(forwardRef "ID3D11VertexShader") -> Ptr (Ptr $(forwardRef "ID3D11ClassInstance")) -> UINT -> IO () |], "VSSetShader")
 		, ([t| UINT -> UINT -> INT -> IO () |], "DrawIndexed")
 		, ([t| UINT -> UINT -> IO () |], "Draw")
-		, ([t| Ptr $(forwardRef "ID3D11Resource") -> UINT -> D3D11_MAP -> UINT -> Ptr D3D11_MAPPED_SUBRESOURCE -> IO HRESULT |], "Map")
+		, ([t| Ptr $(forwardRef "ID3D11Resource") -> UINT -> EnumWrapper D3D11_MAP -> UINT -> Ptr D3D11_MAPPED_SUBRESOURCE -> IO HRESULT |], "Map")
 		, ([t| Ptr $(forwardRef "ID3D11Resource") -> UINT -> IO () |], "Unmap")
 		, ([t| UINT -> UINT -> Ptr (Ptr $(forwardRef "ID3D11Buffer")) -> IO () |], "PSSetConstantBuffers")
 		, ([t| Ptr $(forwardRef "ID3D11InputLayout") -> IO () |], "IASetInputLayout")
 		, ([t| UINT -> UINT -> Ptr (Ptr $(forwardRef "ID3D11Buffer")) -> Ptr UINT -> Ptr UINT -> IO () |], "IASetVertexBuffers")
-		, ([t| Ptr $(forwardRef "ID3D11Buffer") -> DXGI_FORMAT -> UINT -> IO () |], "IASetIndexBuffer")
+		, ([t| Ptr $(forwardRef "ID3D11Buffer") -> EnumWrapper DXGI_FORMAT -> UINT -> IO () |], "IASetIndexBuffer")
 		, ([t| UINT -> UINT -> UINT -> INT -> UINT -> IO () |], "DrawIndexedInstanced")
 		, ([t| UINT -> UINT -> UINT -> UINT -> IO () |], "DrawInstanced")
 		, ([t| UINT -> UINT -> Ptr (Ptr $(forwardRef "ID3D11Buffer")) -> IO () |], "GSSetConstantBuffers")
 		, ([t| Ptr $(forwardRef "ID3D11GeometryShader") -> Ptr (Ptr $(forwardRef "ID3D11ClassInstance")) -> UINT -> IO () |], "GSSetShader")
-		, ([t| D3D11_PRIMITIVE_TOPOLOGY -> IO () |], "IASetPrimitiveTopology")
+		, ([t| EnumWrapper D3D11_PRIMITIVE_TOPOLOGY -> IO () |], "IASetPrimitiveTopology")
 		, ([t| UINT -> UINT -> Ptr (Ptr $(forwardRef "ID3D11ShaderResourceView")) -> IO () |], "VSSetShaderResources")
 		, ([t| UINT -> UINT -> Ptr (Ptr $(forwardRef "ID3D11SamplerState")) -> IO () |], "VSSetSamplers")
 		, ([t| Ptr $(forwardRef "ID3D11Asynchronous") -> IO () |], "Begin")
@@ -913,7 +1047,7 @@ liftM concat $ sequence
 		, ([t| Ptr $(forwardRef "ID3D11ShaderResourceView") -> IO () |], "GenerateMips")
 		, ([t| Ptr $(forwardRef "ID3D11Resource") -> FLOAT -> IO () |], "SetResourceMinLOD")
 		, ([t| Ptr $(forwardRef "ID3D11Resource") -> IO FLOAT |], "GetResourceMinLOD")
-		, ([t| Ptr $(forwardRef "ID3D11Resource") -> UINT -> Ptr $(forwardRef "ID3D11Resource") -> UINT -> DXGI_FORMAT -> IO () |], "ResolveSubresource")
+		, ([t| Ptr $(forwardRef "ID3D11Resource") -> UINT -> Ptr $(forwardRef "ID3D11Resource") -> UINT -> EnumWrapper DXGI_FORMAT -> IO () |], "ResolveSubresource")
 		, ([t| Ptr $(forwardRef "ID3D11CommandList") -> BOOL -> IO () |], "ExecuteCommandList")
 		, ([t| UINT -> UINT -> Ptr (Ptr $(forwardRef "ID3D11ShaderResourceView")) -> IO () |], "HSSetShaderResources")
 		, ([t| Ptr $(forwardRef "ID3D11HullShader") -> Ptr (Ptr $(forwardRef "ID3D11ClassInstance")) -> UINT -> IO () |], "HSSetShader")
@@ -968,7 +1102,7 @@ liftM concat $ sequence
 		, ([t| UINT -> UINT -> Ptr (Ptr $(forwardRef "ID3D11Buffer")) -> IO () |], "CSGetConstantBuffers")
 		, ([t| IO () |], "ClearState")
 		, ([t| IO () |], "Flush")
-		, ([t| IO D3D11_DEVICE_CONTEXT_TYPE |], "GetType")
+		, ([t| IO (EnumWrapper D3D11_DEVICE_CONTEXT_TYPE) |], "GetType")
 		, ([t| IO UINT |], "GetContextFlags")
 		, ([t| BOOL -> Ptr (Ptr $(forwardRef "ID3D11CommandList")) -> IO HRESULT |], "FinishCommandList")
 		]
@@ -1001,39 +1135,31 @@ liftM concat $ sequence
 		, ([t| Ptr D3D11_COUNTER_DESC -> Ptr (Ptr $(forwardRef "ID3D11Counter")) -> IO HRESULT |], "CreateCounter")
 		, ([t| UINT -> Ptr (Ptr $(forwardRef "ID3D11DeviceContext")) -> IO HRESULT |], "CreateDeferredContext")
 		, ([t| HANDLE -> REFIID -> Ptr (Ptr ()) -> IO HRESULT |], "OpenSharedResource")
-		, ([t| DXGI_FORMAT -> Ptr UINT -> IO HRESULT |], "CheckFormatSupport")
-		, ([t| DXGI_FORMAT -> UINT -> Ptr UINT -> IO HRESULT |], "CheckMultisampleQualityLevels")
+		, ([t| EnumWrapper DXGI_FORMAT -> Ptr UINT -> IO HRESULT |], "CheckFormatSupport")
+		, ([t| EnumWrapper DXGI_FORMAT -> UINT -> Ptr UINT -> IO HRESULT |], "CheckMultisampleQualityLevels")
 		, ([t| Ptr D3D11_COUNTER_INFO -> IO () |], "CheckCounterInfo")
 		, ([t| Ptr D3D11_COUNTER_DESC -> Ptr D3D11_COUNTER_TYPE -> Ptr UINT -> LPSTR -> Ptr UINT -> LPSTR -> Ptr UINT -> LPSTR -> Ptr UINT -> IO HRESULT |], "CheckCounter")
-		, ([t| D3D11_FEATURE -> Ptr () -> UINT -> IO HRESULT |], "CheckFeatureSupport")
+		, ([t| EnumWrapper D3D11_FEATURE -> Ptr () -> UINT -> IO HRESULT |], "CheckFeatureSupport")
 		, ([t| REFGUID -> Ptr UINT -> Ptr () -> IO HRESULT |], "GetPrivateData")
 		, ([t| REFGUID -> UINT -> UINT -> Ptr () -> IO HRESULT |], "SetPrivateData")
 		, ([t| REFGUID -> Ptr IUnknown -> IO HRESULT |], "SetPrivateDataInterface")
-		, ([t| IO D3D_FEATURE_LEVEL |], "GetFeatureLevel")
+		, ([t| IO (EnumWrapper D3D_FEATURE_LEVEL) |], "GetFeatureLevel")
 		, ([t| IO UINT |], "GetCreationFlags")
 		, ([t| IO HRESULT |], "GetDeviceRemovedReason")
 		, ([t| Ptr (Ptr $(forwardRef "ID3D11DeviceContext")) -> IO () |], "GetImmediateContext")
 		, ([t| UINT -> IO HRESULT |], "SetExceptionMode")
 		, ([t| IO UINT |], "GetExceptionMode")
 		]
-
-	-- | ID3D11DeviceChild
-	, genCOMInterface "ID3D11DeviceChild" "1841e5c8-16b0-489b-bcc8-44cfb0d5deae" (Just "IUnknown")
-		[ ([t| Ptr (Ptr $(forwardRef "ID3D11Device")) -> IO () |], "GetDevice")
-		, ([t| REFGUID -> Ptr UINT -> Ptr () -> IO HRESULT |], "GetPrivateData")
-		, ([t| REFGUID -> UINT -> Ptr () -> IO HRESULT |], "SetPrivateData")
-		, ([t| REFGUID -> Ptr IUnknown -> IO HRESULT |], "SetPrivateDataInterface")
-		]
 	]
 
 -- | Wrapper for D3D11CreateDevice
 d3d11CreateDevice :: D3D11CreateDeviceProc
-d3d11CreateDevice a b c d e f g h i j = do
+d3d11CreateDevice a b c d e f g h i = do
 	proc <- loadLibraryAndGetProcAddress "d3d11.dll" "D3D11CreateDevice"
-	mkD3D11CreateDeviceProc proc a b c d e f g h i j
+	mkD3D11CreateDeviceProc proc a b c d e f g h i
 
 type D3D11CreateDeviceProc = Ptr IDXGIAdapter
-	-> D3D_DRIVER_TYPE
+	-> EnumWrapper D3D_DRIVER_TYPE
 	-> HMODULE
 	-> UINT
 	-> Ptr D3D_FEATURE_LEVEL
