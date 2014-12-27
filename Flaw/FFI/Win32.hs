@@ -33,7 +33,7 @@ module Flaw.FFI.Win32
 	, loadLibrary
 	, getProcAddress
 	, loadLibraryAndGetProcAddress
-	, winUTF16toText
+	, winUTF16ToText
 	) where
 
 import Control.Monad
@@ -105,7 +105,7 @@ loadLibraryAndGetProcAddress libraryName procName = do
 		else return proc
 
 -- | Convert LPWSTR to Text.
-winUTF16toText :: [WCHAR] -> T.Text
-winUTF16toText s = T.decodeUtf16LE $ BL.toStrict $ BSB.toLazyByteString $ upToZero s where
+winUTF16ToText :: [WCHAR] -> T.Text
+winUTF16ToText s = T.decodeUtf16LE $ BL.toStrict $ BSB.toLazyByteString $ upToZero s where
 	upToZero (x:xs) = if x == 0 then mempty else mappend (BSB.word16LE x) $ upToZero xs
 	upToZero [] = mempty

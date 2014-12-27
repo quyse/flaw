@@ -25,6 +25,7 @@ library
   other-modules:
     Flaw.Fabric.Internal
     Flaw.FFI
+    Flaw.Graphics.Internal
     Flaw.Math.Internal
     Flaw.Window.Internal
   if os(windows)
@@ -37,8 +38,9 @@ library
       Flaw.Window.Win32
     other-modules:
       Flaw.FFI.COM.Internal
+      Flaw.Graphics.DirectX11.FFI
   -- other-extensions:    
-  build-depends:       base >=4.7 && <4.8, base64-bytestring, binary, bytestring, containers, cryptohash, mtl, resourcet, template-haskell, text, unordered-containers, uuid
+  build-depends:       base >=4.7 && <4.8, base64-bytestring, binary, bytestring, containers, cryptohash, lifted-base, mtl, resourcet, template-haskell, text, transformers, unordered-containers, uuid
   -- hs-source-dirs:      
   default-language:    Haskell2010
   ghc-options:         -O2 -threaded -with-rtsopts=-N -Wall -fno-warn-unsupported-calling-conventions -funbox-strict-fields

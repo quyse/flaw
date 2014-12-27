@@ -4,17 +4,23 @@ Description: Internal things for integration with Windows COM.
 License: MIT
 -}
 
+{-# LANGUAGE DeriveDataTypeable #-}
+
 module Flaw.FFI.COM.Internal
 	( HRESULT
 	, IID
 	, REFGUID
 	, REFIID
-	, hresultSucceeded
-	, hresultFailed
 	, COMInterface(..)
 	, peekCOMObject
+	, hresultSucceeded
+	, hresultFailed
+	, FailedHRESULT(..)
+	, hresultCheck
 	) where
 
+import Control.Exception
+import Data.Typeable
 import Foreign.Ptr
 import Foreign.Storable
 
@@ -50,3 +56,12 @@ hresultSucceeded hr = hr >= 0
 -- | If HRESULT value represents failure.
 hresultFailed :: HRESULT -> Bool
 hresultFailed hr = hr < 0
+
+-- | Exception as a result of failed HRESULT.
+newtype FailedHRESULT = FailedHRESULT HRESULT deriving (Show, Typeable)
+
+instance Exception FailedHRESULT
+
+-- | Throw exception if HRESULT is failed.
+hresultCheck :: HRESULT -> IO ()
+hresultCheck hr = if hresultFailed hr then throwIO $ FailedHRESULT hr else return ()

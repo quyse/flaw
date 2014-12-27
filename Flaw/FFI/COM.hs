@@ -11,10 +11,12 @@ module Flaw.FFI.COM
 	, IID
 	, REFGUID
 	, REFIID
-	, hresultSucceeded
-	, hresultFailed
 	, COMInterface(getIID, pokeCOMObject)
 	, peekCOMObject
+	, hresultSucceeded
+	, hresultFailed
+	, FailedHRESULT(..)
+	, hresultCheck
 	, IUnknown(..)
 	, IUnknown_Class(..)
 	, comInitialize
@@ -23,11 +25,12 @@ module Flaw.FFI.COM
 	, withCOMObject
 	, createCOMValueViaPtr
 	, createCOMObjectViaPtr
+	, allocateCOMObject
 	) where
 
 import Control.Exception
 import Control.Monad
-import qualified Data.Traversable as Traversable
+import Control.Monad.Trans.Resource
 import Data.UUID
 import Foreign.Marshal.Alloc
 import Foreign.Ptr
@@ -72,12 +75,18 @@ withCOMObject :: IUnknown_Class a => IO a -> (a -> IO b) -> IO b
 withCOMObject create work = bracket create m_IUnknown_Release work
 
 -- | Get value from computation working with pointer.
-createCOMValueViaPtr :: Storable a => (Ptr a -> IO HRESULT) -> IO (Either HRESULT a)
+createCOMValueViaPtr :: Storable a => (Ptr a -> IO HRESULT) -> IO a
 createCOMValueViaPtr create = alloca $ \p -> do
 	hr <- create p
-	if hresultFailed hr then return $ Left hr
-	else liftM Right $ peek p
+	if hresultFailed hr then throwIO $ FailedHRESULT hr
+	else peek p
 
 -- | Get COM object from computation working with pointer.
-createCOMObjectViaPtr :: COMInterface a => (Ptr (Ptr a) -> IO HRESULT) -> IO (Either HRESULT a)
-createCOMObjectViaPtr create = Traversable.mapM peekCOMObject =<< createCOMValueViaPtr create
+createCOMObjectViaPtr :: COMInterface a => (Ptr (Ptr a) -> IO HRESULT) -> IO a
+createCOMObjectViaPtr create = peekCOMObject =<< createCOMValueViaPtr create
+
+-- | Allocate COM object in ResourceT.
+allocateCOMObject :: (MonadResource m, IUnknown_Class a) => IO a -> m (ReleaseKey, a)
+allocateCOMObject create = allocate create $ \o -> do
+	_ <- m_IUnknown_Release o
+	return ()
