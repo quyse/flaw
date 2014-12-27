@@ -7,9 +7,120 @@ License: MIT
 {-# LANGUAGE TemplateHaskell #-}
 
 module Flaw.Graphics.DirectX11
-	( D3D_DRIVER_TYPE
-	, D3D_FEATURE_LEVEL
+	( D3D_DRIVER_TYPE(..)
+	, D3D_FEATURE_LEVEL(..)
+	, D3D11_USAGE(..)
+	, D3D11_SRV_DIMENSION(..)
+	, D3D11_RTV_DIMENSION(..)
+	, D3D11_DSV_DIMENSION(..)
+	, D3D11_UAV_DIMENSION(..)
+	, D3D11_RESOURCE_DIMENSION(..)
+	, D3D11_MAP(..)
+	, D3D11_PRIMITIVE_TOPOLOGY(..)
+	, D3D11_DEVICE_CONTEXT_TYPE(..)
+	, D3D11_INPUT_CLASSIFICATION(..)
+	, D3D11_COMPARISON_FUNC(..)
+	, D3D11_DEPTH_WRITE_MASK(..)
+	, D3D11_STENCIL_OP(..)
+	, D3D11_BLEND(..)
+	, D3D11_BLEND_OP(..)
+	, D3D11_FILL_MODE(..)
+	, D3D11_CULL_MODE(..)
+	, D3D11_FILTER(..)
+	, D3D11_TEXTURE_ADDRESS_MODE(..)
+	, D3D11_COUNTER(..)
+	, D3D11_COUNTER_TYPE(..)
+	, D3D11_QUERY(..)
+	, D3D11_FEATURE(..)
+	, D3D11_INPUT_ELEMENT_DESC(..)
+	, D3D11_SO_DECLARATION_ENTRY(..)
+	, D3D11_BUFFER_DESC(..)
+	, D3D11_SUBRESOURCE_DATA(..)
+	, D3D11_MAPPED_SUBRESOURCE(..)
+	, D3D11_VIEWPORT(..)
+	, D3D11_RECT
+	, D3D11_BOX(..)
+	, D3D11_RENDER_TARGET_BLEND_DESC(..)
+	, D3D11_BLEND_DESC(..)
+	, D3D11_DEPTH_STENCILOP_DESC(..)
+	, D3D11_DEPTH_STENCIL_DESC(..)
+	, D3D11_RASTERIZER_DESC(..)
+	, D3D11_SAMPLER_DESC(..)
+	, D3D11_QUERY_DESC(..)
+	, D3D11_COUNTER_DESC(..)
+	, D3D11_COUNTER_INFO(..)
+	, D3D11_CLASS_INSTANCE_DESC(..)
+	, D3D11_TEXTURE1D_DESC(..)
+	, D3D11_TEXTURE2D_DESC(..)
+	, D3D11_TEXTURE3D_DESC(..)
+	, D3D11_BUFFER_SRV(..)
+	, D3D11_TEX1D_SRV(..)
+	, D3D11_TEX1D_ARRAY_SRV(..)
+	, D3D11_TEX2D_SRV(..)
+	, D3D11_TEX2D_ARRAY_SRV(..)
+	, D3D11_TEX2DMS_SRV(..)
+	, D3D11_TEX2DMS_ARRAY_SRV(..)
+	, D3D11_TEX3D_SRV(..)
+	, D3D11_TEXCUBE_SRV(..)
+	, D3D11_TEXCUBE_ARRAY_SRV(..)
+	, D3D11_BUFFEREX_SRV(..)
+	, D3D11_SHADER_RESOURCE_VIEW_DESC(..)
+	, D3D11_BUFFER_RTV(..)
+	, D3D11_TEX1D_RTV(..)
+	, D3D11_TEX1D_ARRAY_RTV(..)
+	, D3D11_TEX2D_RTV(..)
+	, D3D11_TEX2DMS_RTV(..)
+	, D3D11_TEX2D_ARRAY_RTV(..)
+	, D3D11_TEX2DMS_ARRAY_RTV(..)
+	, D3D11_TEX3D_RTV(..)
+	, D3D11_RENDER_TARGET_VIEW_DESC(..)
+	, D3D11_TEX1D_DSV(..)
+	, D3D11_TEX1D_ARRAY_DSV(..)
+	, D3D11_TEX2D_DSV(..)
+	, D3D11_TEX2D_ARRAY_DSV(..)
+	, D3D11_TEX2DMS_DSV(..)
+	, D3D11_TEX2DMS_ARRAY_DSV(..)
+	, D3D11_DEPTH_STENCIL_VIEW_DESC(..)
+	, D3D11_BUFFER_UAV(..)
+	, D3D11_TEX1D_UAV(..)
+	, D3D11_TEX1D_ARRAY_UAV(..)
+	, D3D11_TEX2D_UAV(..)
+	, D3D11_TEX2D_ARRAY_UAV(..)
+	, D3D11_TEX3D_UAV(..)
+	, D3D11_UNORDERED_ACCESS_VIEW_DESC(..)
+	, ID3D11DeviceChild(..), ID3D11DeviceChild_Class(..)
+	, ID3D11Asynchronous(..), ID3D11Asynchronous_Class(..)
+	, ID3D11Counter(..), ID3D11Counter_Class(..)
+	, ID3D11Query(..), ID3D11Query_Class(..)
+	, ID3D11Predicate(..), ID3D11Predicate_Class(..)
+	, ID3D11SamplerState(..), ID3D11SamplerState_Class(..)
+	, ID3D11RasterizerState(..), ID3D11RasterizerState_Class(..)
+	, ID3D11DepthStencilState(..), ID3D11DepthStencilState_Class(..)
+	, ID3D11BlendState(..), ID3D11BlendState_Class(..)
+	, ID3D11ClassLinkage(..), ID3D11ClassLinkage_Class(..)
+	, ID3D11ClassInstance(..), ID3D11ClassInstance_Class(..)
+	, ID3D11InputLayout(..), ID3D11InputLayout_Class(..)
+	, ID3D11VertexShader(..), ID3D11VertexShader_Class(..)
+	, ID3D11PixelShader(..), ID3D11PixelShader_Class(..)
+	, ID3D11GeometryShader(..), ID3D11GeometryShader_Class(..)
+	, ID3D11HullShader(..), ID3D11HullShader_Class(..)
+	, ID3D11DomainShader(..), ID3D11DomainShader_Class(..)
+	, ID3D11ComputeShader(..), ID3D11ComputeShader_Class(..)
+	, ID3D11CommandList(..), ID3D11CommandList_Class(..)
+	, ID3D11Resource(..), ID3D11Resource_Class(..)
+	, ID3D11Buffer(..), ID3D11Buffer_Class(..)
+	, ID3D11Texture1D(..), ID3D11Texture1D_Class(..)
+	, ID3D11Texture2D(..), ID3D11Texture2D_Class(..)
+	, ID3D11Texture3D(..), ID3D11Texture3D_Class(..)
+	, ID3D11View(..), ID3D11View_Class(..)
+	, ID3D11ShaderResourceView(..), ID3D11ShaderResourceView_Class(..)
+	, ID3D11RenderTargetView(..), ID3D11RenderTargetView_Class(..)
+	, ID3D11DepthStencilView(..), ID3D11DepthStencilView_Class(..)
+	, ID3D11UnorderedAccessView(..), ID3D11UnorderedAccessView_Class(..)
+	, ID3D11DeviceContext(..), ID3D11DeviceContext_Class(..)
+	, ID3D11Device(..), ID3D11Device_Class(..)
 	, d3d11CreateDevice
+	, d3d11SdkVersion
 	) where
 
 import Control.Monad
@@ -20,8 +131,9 @@ import Flaw.FFI
 import Flaw.FFI.COM
 import Flaw.FFI.COM.TH
 import Flaw.FFI.Win32
-import Flaw.Graphics.Internal
 import Flaw.Graphics.DXGI
+
+------- Enums
 
 -- | D3D_DRIVER_TYPE
 genEnum [t|Word32|] "D3D_DRIVER_TYPE"
@@ -352,6 +464,8 @@ genEnum [t|Word32|] "D3D11_FEATURE"
 	, ("D3D11_FEATURE_D3D9_OPTIONS1", 13)
 	]
 
+------- Structs
+
 -- | D3D11_INPUT_ELEMENT_DESC
 genStruct "D3D11_INPUT_ELEMENT_DESC"
 	[ ([t|LPSTR|], "SemanticName")
@@ -634,8 +748,8 @@ genStructWithEndUnion "D3D11_SHADER_RESOURCE_VIEW_DESC"
 	[ ([t|DXGI_FORMAT|], "Format", 0)
 	, ([t|D3D11_SRV_DIMENSION|], "ViewDimension", 0)
 	] 1
-	--[ ("D3D11_SRV_DIMENSION_UNKNOWN", [t|()|], "Unknown")
-	[ ("D3D11_SRV_DIMENSION_BUFFER", [t|D3D11_BUFFER_SRV|], "Buffer")
+	[ ("D3D11_SRV_DIMENSION_UNKNOWN", [t|Int|], "Unknown")
+	, ("D3D11_SRV_DIMENSION_BUFFER", [t|D3D11_BUFFER_SRV|], "Buffer")
 	, ("D3D11_SRV_DIMENSION_TEXTURE1D", [t|D3D11_TEX1D_SRV|], "Texture1D")
 	, ("D3D11_SRV_DIMENSION_TEXTURE1DARRAY", [t|D3D11_TEX1D_ARRAY_SRV|], "Texture1DArray")
 	, ("D3D11_SRV_DIMENSION_TEXTURE2D", [t|D3D11_TEX2D_SRV|], "Texture2D")
@@ -701,7 +815,8 @@ genStructWithEndUnion "D3D11_RENDER_TARGET_VIEW_DESC"
 	[ ([t|DXGI_FORMAT|], "Format", 0)
 	, ([t|D3D11_RTV_DIMENSION|], "ViewDimension", 0)
 	] 1
-	[ ("D3D11_RTV_DIMENSION_BUFFER", [t|D3D11_BUFFER_RTV|], "Buffer")
+	[ ("D3D11_RTV_DIMENSION_UNKNOWN", [t|Int|], "Unknown")
+	, ("D3D11_RTV_DIMENSION_BUFFER", [t|D3D11_BUFFER_RTV|], "Buffer")
 	, ("D3D11_RTV_DIMENSION_TEXTURE1D", [t|D3D11_TEX1D_RTV|], "Texture1D")
 	, ("D3D11_RTV_DIMENSION_TEXTURE1DARRAY", [t|D3D11_TEX1D_ARRAY_RTV|], "Texture1DArray")
 	, ("D3D11_RTV_DIMENSION_TEXTURE2D", [t|D3D11_TEX2D_RTV|], "Texture2D")
@@ -752,7 +867,8 @@ genStructWithEndUnion "D3D11_DEPTH_STENCIL_VIEW_DESC"
 	, ([t|D3D11_DSV_DIMENSION|], "ViewDimension", 0)
 	, ([t|UINT|], "Flags", 0)
 	] 1
-	[ ("D3D11_DSV_DIMENSION_TEXTURE1D", [t|D3D11_TEX1D_DSV|], "Texture1D")
+	[ ("D3D11_DSV_DIMENSION_UNKNOWN", [t|Int|], "Unknown")
+	, ("D3D11_DSV_DIMENSION_TEXTURE1D", [t|D3D11_TEX1D_DSV|], "Texture1D")
 	, ("D3D11_DSV_DIMENSION_TEXTURE1DARRAY", [t|D3D11_TEX1D_ARRAY_DSV|], "Texture1DArray")
 	, ("D3D11_DSV_DIMENSION_TEXTURE2D", [t|D3D11_TEX2D_DSV|], "Texture2D")
 	, ("D3D11_DSV_DIMENSION_TEXTURE2DARRAY", [t|D3D11_TEX2D_ARRAY_DSV|], "Texture2DArray")
@@ -803,7 +919,8 @@ genStructWithEndUnion "D3D11_UNORDERED_ACCESS_VIEW_DESC"
 	[ ([t|DXGI_FORMAT|], "Format", 0)
 	, ([t|D3D11_UAV_DIMENSION|], "ViewDimension", 0)
 	] 1
-	[ ("D3D11_UAV_DIMENSION_BUFFER", [t|D3D11_BUFFER_UAV|], "Buffer")
+	[ ("D3D11_UAV_DIMENSION_UNKNOWN", [t|Int|], "Unknown")
+	, ("D3D11_UAV_DIMENSION_BUFFER", [t|D3D11_BUFFER_UAV|], "Buffer")
 	, ("D3D11_UAV_DIMENSION_TEXTURE1D", [t|D3D11_TEX1D_UAV|], "Texture1D")
 	, ("D3D11_UAV_DIMENSION_TEXTURE1DARRAY", [t|D3D11_TEX1D_ARRAY_UAV|], "Texture1DArray")
 	, ("D3D11_UAV_DIMENSION_TEXTURE2D", [t|D3D11_TEX2D_UAV|], "Texture2D")
@@ -811,192 +928,165 @@ genStructWithEndUnion "D3D11_UNORDERED_ACCESS_VIEW_DESC"
 	, ("D3D11_UAV_DIMENSION_TEXTURE3D", [t|D3D11_TEX3D_UAV|], "Texture3D")
 	]
 
--- | D3D11_INPUT_ELEMENT_DESC
--- | ID3D11InputLayout
--- | ID3D11ClassLinkage
--- | ID3D11VertexShader
--- | ID3D11GeometryShader
--- | D3D11_SO_DECLARATION_ENTRY
--- | ID3D11PixelShader
--- | ID3D11HullShader
--- | ID3D11DomainShader
--- | CreateComputeShader
--- | D3D11_BLEND_DESC
--- | ID3D11BlendState
--- | D3D11_DEPTH_STENCIL_DESC
--- | ID3D11DepthStencilState
--- | D3D11_RASTERIZER_DESC
--- | ID3D11RasterizerState
--- | D3D11_SAMPLER_DESC
--- | ID3D11SamplerState
--- | D3D11_QUERY_DESC
--- | ID3D11Query
--- | D3D11_QUERY_DESC
--- | ID3D11Predicate
--- | D3D11_COUNTER_DESC
--- | ID3D11Counter
--- | D3D11_COUNTER_INFO
--- | D3D11_COUNTER_TYPE
-
 ------- Interfaces
 
 liftM concat $ sequence
-	-- | ID3D11DeviceChild
-	[ genCOMInterface "ID3D11DeviceChild" "1841e5c8-16b0-489b-bcc8-44cfb0d5deae" (Just "IUnknown")
+	-- ID3D11DeviceChild
+	[ genCOMInterface "ID3D11DeviceChild" "1841e5c8-16b0-489b-bcc8-44cfb0d5deae" ["IUnknown"]
 		[ ([t| Ptr (Ptr $(forwardRef "ID3D11Device")) -> IO () |], "GetDevice")
 		, ([t| REFGUID -> Ptr UINT -> Ptr () -> IO HRESULT |], "GetPrivateData")
 		, ([t| REFGUID -> UINT -> Ptr () -> IO HRESULT |], "SetPrivateData")
 		, ([t| REFGUID -> Ptr IUnknown -> IO HRESULT |], "SetPrivateDataInterface")
 		]
 
-	-- | ID3D11Asynchronous
-	, genCOMInterface "ID3D11Asynchronous" "4b35d0cd-1e15-4258-9c98-1b1333f6dd3b" (Just "ID3D11DeviceChild")
+	-- ID3D11Asynchronous
+	, genCOMInterface "ID3D11Asynchronous" "4b35d0cd-1e15-4258-9c98-1b1333f6dd3b" ["ID3D11DeviceChild", "IUnknown"]
 		[ ([t| IO UINT |], "GetDataSize")
 		]
 
-	-- | ID3D11Counter
-	, genCOMInterface "ID3D11Counter" "6e8c49fb-a371-4770-b440-29086022b741" (Just "ID3D11Asynchronous")
+	-- ID3D11Counter
+	, genCOMInterface "ID3D11Counter" "6e8c49fb-a371-4770-b440-29086022b741" ["ID3D11Asynchronous", "ID3D11DeviceChild", "IUnknown"]
 		[ ([t| Ptr D3D11_COUNTER_DESC -> IO () |], "GetDesc")
 		]
 
-	-- | ID3D11Query
-	, genCOMInterface "ID3D11Query" "d6c00747-87b7-425e-b84d-44d108560afd" (Just "ID3D11Asynchronous")
+	-- ID3D11Query
+	, genCOMInterface "ID3D11Query" "d6c00747-87b7-425e-b84d-44d108560afd" ["ID3D11Asynchronous", "ID3D11DeviceChild", "IUnknown"]
 		[ ([t| Ptr D3D11_QUERY_DESC -> IO () |], "GetDesc")
 		]
 
-	-- | ID3D11Predicate
-	, genCOMInterface "ID3D11Predicate" "9eb576dd-9f77-4d86-81aa-8bab5fe490e2" (Just "ID3D11Query")
+	-- ID3D11Predicate
+	, genCOMInterface "ID3D11Predicate" "9eb576dd-9f77-4d86-81aa-8bab5fe490e2" ["ID3D11Query", "ID3D11Asynchronous", "ID3D11DeviceChild", "IUnknown"]
 		[
 		]
 
-	-- | ID3D11SamplerState
-	, genCOMInterface "ID3D11SamplerState" "da6fea51-564c-4487-9810-f0d0f9b4e3a5" (Just "ID3D11DeviceChild")
+	-- ID3D11SamplerState
+	, genCOMInterface "ID3D11SamplerState" "da6fea51-564c-4487-9810-f0d0f9b4e3a5" ["ID3D11DeviceChild", "IUnknown"]
 		[ ([t| Ptr D3D11_SAMPLER_DESC -> IO () |], "GetDesc")
 		]
 
-	-- | ID3D11RasterizerState
-	, genCOMInterface "ID3D11RasterizerState" "9bb4ab81-ab1a-4d8f-b506-fc04200b6ee7" (Just "ID3D11DeviceChild")
+	-- ID3D11RasterizerState
+	, genCOMInterface "ID3D11RasterizerState" "9bb4ab81-ab1a-4d8f-b506-fc04200b6ee7" ["ID3D11DeviceChild", "IUnknown"]
 		[ ([t| Ptr D3D11_RASTERIZER_DESC -> IO () |], "GetDesc")
 		]
 
-	-- | ID3D11DepthStencilState
-	, genCOMInterface "ID3D11DepthStencilState" "03823efb-8d8f-4e1c-9aa2-f64bb2cbfdf1" (Just "ID3D11DeviceChild")
+	-- ID3D11DepthStencilState
+	, genCOMInterface "ID3D11DepthStencilState" "03823efb-8d8f-4e1c-9aa2-f64bb2cbfdf1" ["ID3D11DeviceChild", "IUnknown"]
 		[ ([t| Ptr D3D11_DEPTH_STENCIL_DESC -> IO () |], "GetDesc")
 		]
 
-	-- | ID3D11BlendState
-	, genCOMInterface "ID3D11BlendState" "75b68faa-347d-4159-8f45-a0640f01cd9a" (Just "ID3D11DeviceChild")
+	-- ID3D11BlendState
+	, genCOMInterface "ID3D11BlendState" "75b68faa-347d-4159-8f45-a0640f01cd9a" ["ID3D11DeviceChild", "IUnknown"]
 		[ ([t| Ptr D3D11_BLEND_DESC -> IO () |], "GetDesc")
 		]
 
-	-- | ID3D11ClassLinkage
-	, genCOMInterface "ID3D11ClassLinkage" "ddf57cba-9543-46e4-a12b-f207a0fe7fed" (Just "ID3D11DeviceChild")
+	-- ID3D11ClassLinkage
+	, genCOMInterface "ID3D11ClassLinkage" "ddf57cba-9543-46e4-a12b-f207a0fe7fed" ["ID3D11DeviceChild", "IUnknown"]
 		[ ([t| LPSTR -> UINT -> Ptr (Ptr $(forwardRef "ID3D11ClassInstance")) -> IO HRESULT |], "GetClassInstance")
 		, ([t| LPSTR -> UINT -> UINT -> UINT -> UINT -> Ptr (Ptr $(forwardRef "ID3D11ClassInstance")) -> IO HRESULT |], "CreateClassInstance")
 		]
 
-	-- | ID3D11ClassInstance
-	, genCOMInterface "ID3D11ClassInstance" "a6cd7faa-b0b7-4a2f-9436-8662a65797cb" (Just "ID3D11DeviceChild")
+	-- ID3D11ClassInstance
+	, genCOMInterface "ID3D11ClassInstance" "a6cd7faa-b0b7-4a2f-9436-8662a65797cb" ["ID3D11DeviceChild", "IUnknown"]
 		[ ([t| Ptr (Ptr $(forwardRef "ID3D11ClassLinkage")) -> IO () |], "GetClassLinkage")
 		, ([t| Ptr D3D11_CLASS_INSTANCE_DESC -> IO () |], "GetDesc")
 		, ([t| LPSTR -> Ptr SIZE_T -> IO () |], "GetInstanceName")
 		, ([t| LPSTR -> Ptr SIZE_T -> IO () |], "GetTypeName")
 		]
 
-	-- | ID3D11InputLayout
-	, genCOMInterface "ID3D11InputLayout" "e4819ddc-4cf0-4025-bd26-5de82a3e07b7" (Just "ID3D11DeviceChild")
+	-- ID3D11InputLayout
+	, genCOMInterface "ID3D11InputLayout" "e4819ddc-4cf0-4025-bd26-5de82a3e07b7" ["ID3D11DeviceChild", "IUnknown"]
 		[
 		]
 
-	-- | ID3D11VertexShader
-	, genCOMInterface "ID3D11VertexShader" "3b301d64-d678-4289-8897-22f8928b72f3" (Just "ID3D11DeviceChild")
+	-- ID3D11VertexShader
+	, genCOMInterface "ID3D11VertexShader" "3b301d64-d678-4289-8897-22f8928b72f3" ["ID3D11DeviceChild", "IUnknown"]
 		[
 		]
 
-	-- | ID3D11PixelShader
-	, genCOMInterface "ID3D11PixelShader" "ea82e40d-51dc-4f33-93d4-db7c9125ae8c" (Just "ID3D11DeviceChild")
+	-- ID3D11PixelShader
+	, genCOMInterface "ID3D11PixelShader" "ea82e40d-51dc-4f33-93d4-db7c9125ae8c" ["ID3D11DeviceChild", "IUnknown"]
 		[
 		]
 
-	-- | ID3D11GeometryShader
-	, genCOMInterface "ID3D11GeometryShader" "38325b96-effb-4022-ba02-2e795b70275c" (Just "ID3D11DeviceChild")
+	-- ID3D11GeometryShader
+	, genCOMInterface "ID3D11GeometryShader" "38325b96-effb-4022-ba02-2e795b70275c" ["ID3D11DeviceChild", "IUnknown"]
 		[
 		]
 
-	-- | ID3D11HullShader
-	, genCOMInterface "ID3D11HullShader" "8e5c6061-628a-4c8e-8264-bbe45cb3d5dd" (Just "ID3D11DeviceChild")
+	-- ID3D11HullShader
+	, genCOMInterface "ID3D11HullShader" "8e5c6061-628a-4c8e-8264-bbe45cb3d5dd" ["ID3D11DeviceChild", "IUnknown"]
 		[
 		]
 
-	-- | ID3D11DomainShader
-	, genCOMInterface "ID3D11DomainShader" "f582c508-0f36-490c-9977-31eece268cfa" (Just "ID3D11DeviceChild")
+	-- ID3D11DomainShader
+	, genCOMInterface "ID3D11DomainShader" "f582c508-0f36-490c-9977-31eece268cfa" ["ID3D11DeviceChild", "IUnknown"]
 		[
 		]
 
-	-- | ID3D11ComputeShader
-	, genCOMInterface "ID3D11ComputeShader" "4f5b196e-c2bd-495e-bd01-1fded38e4969" (Just "ID3D11DeviceChild")
+	-- ID3D11ComputeShader
+	, genCOMInterface "ID3D11ComputeShader" "4f5b196e-c2bd-495e-bd01-1fded38e4969" ["ID3D11DeviceChild", "IUnknown"]
 		[
 		]
 
-	-- | ID3D11CommandList
-	, genCOMInterface "ID3D11CommandList" "a24bc4d1-769e-43f7-8013-98ff566c18e2" (Just "ID3D11DeviceChild")
+	-- ID3D11CommandList
+	, genCOMInterface "ID3D11CommandList" "a24bc4d1-769e-43f7-8013-98ff566c18e2" ["ID3D11DeviceChild", "IUnknown"]
 		[ ([t| IO UINT |], "GetContextFlags")
 		]
 
-	-- | ID3D11Resource
-	, genCOMInterface "ID3D11Resource" "dc8e63f3-d12b-4952-b47b-5e45026a862d" (Just "ID3D11DeviceChild")
+	-- ID3D11Resource
+	, genCOMInterface "ID3D11Resource" "dc8e63f3-d12b-4952-b47b-5e45026a862d" ["ID3D11DeviceChild", "IUnknown"]
 		[ ([t| Ptr D3D11_RESOURCE_DIMENSION -> IO () |], "GetType")
 		, ([t| UINT -> IO () |], "SetEvictionPriority")
 		, ([t| IO UINT |], "GetEvictionPriority")
 		]
 
-	-- | ID3D11Buffer
-	, genCOMInterface "ID3D11Buffer" "48570b85-d1ee-4fcd-a250-eb350722b037" (Just "ID3D11Resource")
+	-- ID3D11Buffer
+	, genCOMInterface "ID3D11Buffer" "48570b85-d1ee-4fcd-a250-eb350722b037" ["ID3D11Resource", "ID3D11DeviceChild", "IUnknown"]
 		[ ([t| Ptr D3D11_BUFFER_DESC -> IO () |], "GetDesc")
 		]
 
-	-- | ID3D11Texture1D
-	, genCOMInterface "ID3D11Texture1D" "f8fb5c27-c6b3-4f75-a4c8-439af2ef564c" (Just "ID3D11Resource")
+	-- ID3D11Texture1D
+	, genCOMInterface "ID3D11Texture1D" "f8fb5c27-c6b3-4f75-a4c8-439af2ef564c" ["ID3D11Resource", "ID3D11DeviceChild", "IUnknown"]
 		[ ([t| Ptr D3D11_TEXTURE1D_DESC -> IO () |], "GetDesc")
 		]
 
-	-- | ID3D11Texture2D
-	, genCOMInterface "ID3D11Texture2D" "6f15aaf2-d208-4e89-9ab4-489535d34f9c" (Just "ID3D11Resource")
+	-- ID3D11Texture2D
+	, genCOMInterface "ID3D11Texture2D" "6f15aaf2-d208-4e89-9ab4-489535d34f9c" ["ID3D11Resource", "ID3D11DeviceChild", "IUnknown"]
 		[ ([t| Ptr D3D11_TEXTURE2D_DESC -> IO () |], "GetDesc")
 		]
 
-	-- | ID3D11Texture3D
-	, genCOMInterface "ID3D11Texture3D" "037e866e-f56d-4357-a8af-9dabbe6e250e" (Just "ID3D11Resource")
+	-- ID3D11Texture3D
+	, genCOMInterface "ID3D11Texture3D" "037e866e-f56d-4357-a8af-9dabbe6e250e" ["ID3D11Resource", "ID3D11DeviceChild", "IUnknown"]
 		[ ([t| Ptr D3D11_TEXTURE3D_DESC -> IO () |], "GetDesc")
 		]
 
-	-- | ID3D11View
-	, genCOMInterface "ID3D11View" "839d1216-bb2e-412b-b7f4-a9dbebe08ed1" (Just "ID3D11DeviceChild")
+	-- ID3D11View
+	, genCOMInterface "ID3D11View" "839d1216-bb2e-412b-b7f4-a9dbebe08ed1" ["ID3D11DeviceChild", "IUnknown"]
 		[ ([t| Ptr (Ptr $(forwardRef "ID3D11Resource")) -> IO () |], "GetResource")
 		]
 
-	-- | ID3D11ShaderResourceView
-	, genCOMInterface "ID3D11ShaderResourceView" "b0e06fe0-8192-4e1a-b1ca-36d7414710b2" (Just "ID3D11View")
+	-- ID3D11ShaderResourceView
+	, genCOMInterface "ID3D11ShaderResourceView" "b0e06fe0-8192-4e1a-b1ca-36d7414710b2" ["ID3D11View", "ID3D11DeviceChild", "IUnknown"]
 		[ ([t| Ptr D3D11_SHADER_RESOURCE_VIEW_DESC -> IO () |], "GetDesc")
 		]
 
-	-- | ID3D11RenderTargetView
-	, genCOMInterface "ID3D11RenderTargetView" "dfdba067-0b8d-4865-875b-d7b4516cc164" (Just "ID3D11View")
+	-- ID3D11RenderTargetView
+	, genCOMInterface "ID3D11RenderTargetView" "dfdba067-0b8d-4865-875b-d7b4516cc164" ["ID3D11View", "ID3D11DeviceChild", "IUnknown"]
 		[ ([t| Ptr D3D11_RENDER_TARGET_VIEW_DESC -> IO () |], "GetDesc")
 		]
 
-	-- | ID3D11DepthStencilView
-	, genCOMInterface "ID3D11DepthStencilView" "9fdac92a-1876-48c3-afad-25b94f84a9b6" (Just "ID3D11View")
+	-- ID3D11DepthStencilView
+	, genCOMInterface "ID3D11DepthStencilView" "9fdac92a-1876-48c3-afad-25b94f84a9b6" ["ID3D11View", "ID3D11DeviceChild", "IUnknown"]
 		[ ([t| Ptr D3D11_DEPTH_STENCIL_VIEW_DESC -> IO () |], "GetDesc")
 		]
 
-	-- | ID3D11UnorderedAccessView
-	, genCOMInterface "ID3D11UnorderedAccessView" "28acf509-7f5c-48f6-8611-f316010a6380" (Just "ID3D11View")
+	-- ID3D11UnorderedAccessView
+	, genCOMInterface "ID3D11UnorderedAccessView" "28acf509-7f5c-48f6-8611-f316010a6380" ["ID3D11View", "ID3D11DeviceChild", "IUnknown"]
 		[ ([t| Ptr D3D11_UNORDERED_ACCESS_VIEW_DESC -> IO () |], "GetDesc")
 		]
 
-	-- | ID3D11DeviceContext
-	, genCOMInterface "ID3D11DeviceContext" "c0bfa96c-e089-44fb-8eaf-26f8796190da" (Just "ID3D11DeviceChild")
+	-- ID3D11DeviceContext
+	, genCOMInterface "ID3D11DeviceContext" "c0bfa96c-e089-44fb-8eaf-26f8796190da" ["ID3D11DeviceChild", "IUnknown"]
 		[ ([t| UINT -> UINT -> Ptr (Ptr $(forwardRef "ID3D11Buffer")) -> IO () |], "VSSetConstantBuffers")
 		, ([t| UINT -> UINT -> Ptr (Ptr $(forwardRef "ID3D11ShaderResourceView")) -> IO () |], "PSSetShaderResources")
 		, ([t| Ptr $(forwardRef "ID3D11PixelShader") -> Ptr (Ptr $(forwardRef "ID3D11ClassInstance")) -> UINT -> IO () |], "PSSetShader")
@@ -1107,8 +1197,8 @@ liftM concat $ sequence
 		, ([t| BOOL -> Ptr (Ptr $(forwardRef "ID3D11CommandList")) -> IO HRESULT |], "FinishCommandList")
 		]
 
-	-- | ID3D11Device
-	, genCOMInterface "ID3D11Device" "db6f6ddb-ac77-4e88-8253-819df9bbf140" (Just "IUnknown")
+	-- ID3D11Device
+	, genCOMInterface "ID3D11Device" "db6f6ddb-ac77-4e88-8253-819df9bbf140" ["IUnknown"]
 		[ ([t| Ptr D3D11_BUFFER_DESC -> Ptr D3D11_SUBRESOURCE_DATA -> Ptr (Ptr $(forwardRef "ID3D11Buffer")) -> IO HRESULT |], "CreateBuffer")
 		, ([t| Ptr D3D11_TEXTURE1D_DESC -> Ptr D3D11_SUBRESOURCE_DATA -> Ptr (Ptr $(forwardRef "ID3D11Texture1D")) -> IO HRESULT |], "CreateTexture1D")
 		, ([t| Ptr D3D11_TEXTURE2D_DESC -> Ptr D3D11_SUBRESOURCE_DATA -> Ptr (Ptr $(forwardRef "ID3D11Texture2D")) -> IO HRESULT |], "CreateTexture2D")
@@ -1154,11 +1244,12 @@ liftM concat $ sequence
 
 -- | Wrapper for D3D11CreateDevice
 d3d11CreateDevice :: D3D11CreateDeviceProc
-d3d11CreateDevice a b c d e f g h i = do
+d3d11CreateDevice a b c d e f g h i j = do
 	proc <- loadLibraryAndGetProcAddress "d3d11.dll" "D3D11CreateDevice"
-	mkD3D11CreateDeviceProc proc a b c d e f g h i
+	mkD3D11CreateDeviceProc proc a b c d e f g h i j
 
-type D3D11CreateDeviceProc = Ptr IDXGIAdapter
+type D3D11CreateDeviceProc
+	=  Ptr IDXGIAdapter
 	-> EnumWrapper D3D_DRIVER_TYPE
 	-> HMODULE
 	-> UINT
@@ -1166,7 +1257,12 @@ type D3D11CreateDeviceProc = Ptr IDXGIAdapter
 	-> UINT
 	-> UINT
 	-> Ptr (Ptr ID3D11Device)
+	-> Ptr D3D_FEATURE_LEVEL
 	-> Ptr (Ptr ID3D11DeviceContext)
 	-> IO HRESULT
 
 foreign import stdcall safe "dynamic" mkD3D11CreateDeviceProc :: FunPtr D3D11CreateDeviceProc -> D3D11CreateDeviceProc
+
+-- | SDK Version from Windows 8 SDK.
+d3d11SdkVersion :: UINT
+d3d11SdkVersion = 7
