@@ -9,6 +9,7 @@ License: MIT
 module Flaw.FFI.Win32
 	( BOOL
 	, BYTE
+	, UINT8
 	, CHAR
 	, WCHAR
 	, INT
@@ -19,6 +20,8 @@ module Flaw.FFI.Win32
 	, DWORD
 	, SIZE_T
 	, LARGE_INTEGER
+	, FLOAT
+	, DOUBLE
 	, LPSTR
 	, LPWSTR
 	, RECT(..)
@@ -49,6 +52,7 @@ import Flaw.FFI
 
 type BOOL = Bool
 type BYTE = Word8
+type UINT8 = Word8
 type CHAR = Word8
 type WCHAR = Word16
 type INT = Int32
@@ -59,15 +63,17 @@ type WORD = Word16
 type DWORD = Word32
 type SIZE_T = Word
 type LARGE_INTEGER = Int64
+type FLOAT = Float
+type DOUBLE = Double
 
 type LPSTR = CString
 type LPWSTR = CWString
 
 genStruct "RECT"
-	[ ([t|LONG|], "left", 0)
-	, ([t|LONG|], "top", 0)
-	, ([t|LONG|], "right", 0)
-	, ([t|LONG|], "bottom", 0)
+	[ ([t|LONG|], "left")
+	, ([t|LONG|], "top")
+	, ([t|LONG|], "right")
+	, ([t|LONG|], "bottom")
 	]
 
 type GUID = UUID

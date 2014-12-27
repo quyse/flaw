@@ -12,7 +12,9 @@ module Flaw.FFI
 	, unwrapEnum
 	, genEnum
 	, genStruct
+	, genStructWithArrays
 	, genStructWithEndUnion
+	, forwardRef
 	) where
 
 import Control.Monad
@@ -148,8 +150,12 @@ dataFieldDec field = do
 	return (fieldName field, NotStrict, ft)
 
 -- | Generate struct data type.
-genStruct :: String -> [(TypeQ, String, Int)] -> Q [Dec]
-genStruct typeName fs = do
+genStruct :: String -> [(TypeQ, String)] -> Q [Dec]
+genStruct typeName fs = genStructWithArrays typeName [(t, n, 0) | (t, n) <- fs]
+
+-- | Generate struct data type with support of array fields.
+genStructWithArrays :: String -> [(TypeQ, String, Int)] -> Q [Dec]
+genStructWithArrays typeName fs = do
 	(fields, endExp) <- processFields typeName fs
 	dataDec <- dataD (return []) (mkName typeName) [] [recC (mkName typeName) $ map dataFieldDec fields] [''Show]
 	fieldsDecs <- liftM concat $ sequence $ map (sequence . fieldDecs) fields
@@ -224,3 +230,7 @@ genStructWithEndUnion typeName hfs selectorIndex ufs = do
 		|]
 
 	return $ dataDec : headerFieldsDecs ++ unionFieldsDecs ++ structDecs ++ instanceDecs
+
+-- | Make a reference to forward declaration for a type.
+forwardRef :: String -> TypeQ
+forwardRef name = conT $ mkName name

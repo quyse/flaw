@@ -7,14 +7,14 @@ License: MIT
 {-# LANGUAGE TemplateHaskell #-}
 
 module Flaw.Graphics.DXGI
-	( LUID(..)
-	, DXGI_FORMAT(..)
+	( DXGI_FORMAT(..)
 	, DXGI_MODE_SCANLINE_ORDER(..)
 	, DXGI_MODE_SCALING(..)
 	, DXGI_MODE_ROTATION(..)
 	, DXGI_SWAP_EFFECT(..)
 	, DXGI_CPU_ACCESS(..)
 	, DXGI_USAGE(..)
+	, LUID(..)
 	, DXGI_RATIONAL(..)
 	, DXGI_RGB(..)
 	, DXGI_GAMMA_CONTROL_CAPABILITIES(..)
@@ -48,11 +48,6 @@ import Flaw.FFI.COM.TH
 import Flaw.FFI.Win32
 
 type HMONITOR = HANDLE
-
-genStruct "LUID"
-	[ ([t|DWORD|], "LowPart", 0)
-	, ([t|LONG|], "HighPart", 0)
-	]
 
 -- | DXGI_FORMAT
 genEnum [t|Word32|] "DXGI_FORMAT"
@@ -209,30 +204,36 @@ genEnum [t|Word32|] "DXGI_USAGE"
 	, ("DXGI_USAGE_UNORDERED_ACCESS", 1024)
 	]
 
+-- | LUID
+genStruct "LUID"
+	[ ([t|DWORD|], "LowPart")
+	, ([t|LONG|], "HighPart")
+	]
+
 -- | DXGI_RATIONAL
 genStruct "DXGI_RATIONAL"
-	[ ([t|UINT|], "Numerator", 0)
-	, ([t|UINT|], "Denominator", 0)
+	[ ([t|UINT|], "Numerator")
+	, ([t|UINT|], "Denominator")
 	]
 
 -- | DXGI_RGB
 genStruct "DXGI_RGB"
-	[ ([t|Float|], "Red", 0)
-	, ([t|Float|], "Green", 0)
-	, ([t|Float|], "Blue", 0)
+	[ ([t|Float|], "Red")
+	, ([t|Float|], "Green")
+	, ([t|Float|], "Blue")
 	]
 
 -- | DXGI_GAMMA_CONTROL_CAPABILITIES
 genStruct "DXGI_GAMMA_CONTROL_CAPABILITIES"
-	[ ([t|BOOL|], "ScaleAndOffsetSupported", 0)
-	, ([t|Float|], "MaxConvertedValue", 0)
-	, ([t|Float|], "MinConvertedValue", 0)
-	, ([t|UINT|], "NumGammaControlPoints", 0)
-	, ([t|Float|], "ControlPointPositions", 0)
+	[ ([t|BOOL|], "ScaleAndOffsetSupported")
+	, ([t|Float|], "MaxConvertedValue")
+	, ([t|Float|], "MinConvertedValue")
+	, ([t|UINT|], "NumGammaControlPoints")
+	, ([t|Float|], "ControlPointPositions")
 	]
 
 -- | DXGI_GAMMA_CONTROL
-genStruct "DXGI_GAMMA_CONTROL"
+genStructWithArrays "DXGI_GAMMA_CONTROL"
 	[ ([t|DXGI_RGB|], "Scale", 0)
 	, ([t|DXGI_RGB|], "Offset", 0)
 	, ([t|DXGI_RGB|], "GammaCurve", 1025)
@@ -240,45 +241,45 @@ genStruct "DXGI_GAMMA_CONTROL"
 
 -- | DXGI_FRAME_STATISTICS
 genStruct "DXGI_FRAME_STATISTICS"
-	[ ([t|UINT|], "PresentCount", 0)
-	, ([t|UINT|], "PresentRefreshCount", 0)
-	, ([t|UINT|], "SyncRefreshCount", 0)
-	, ([t|LARGE_INTEGER|], "SyncQPCTime", 0)
-	, ([t|LARGE_INTEGER|], "SyncGPUTime", 0)
+	[ ([t|UINT|], "PresentCount")
+	, ([t|UINT|], "PresentRefreshCount")
+	, ([t|UINT|], "SyncRefreshCount")
+	, ([t|LARGE_INTEGER|], "SyncQPCTime")
+	, ([t|LARGE_INTEGER|], "SyncGPUTime")
 	]
 
 -- | DXGI_SAMPLE_DESC
 genStruct "DXGI_SAMPLE_DESC"
-	[ ([t|UINT|], "Count", 0)
-	, ([t|UINT|], "Quality", 0)
+	[ ([t|UINT|], "Count")
+	, ([t|UINT|], "Quality")
 	]
 
 -- | DXGI_MAPPED_RECT
 genStruct "DXGI_MAPPED_RECT"
-	[ ([t|INT|], "Pitch", 0)
-	, ([t|Ptr BYTE|], "pBits", 0)
+	[ ([t|INT|], "Pitch")
+	, ([t|Ptr BYTE|], "pBits")
 	]
 
 -- | DXGI_SURFACE_DESC
 genStruct "DXGI_SURFACE_DESC"
-	[ ([t|UINT|], "Width", 0)
-	, ([t|UINT|], "Height", 0)
-	, ([t|DXGI_FORMAT|], "Format", 0)
-	, ([t|DXGI_SAMPLE_DESC|], "SampleDesc", 0)
+	[ ([t|UINT|], "Width")
+	, ([t|UINT|], "Height")
+	, ([t|DXGI_FORMAT|], "Format")
+	, ([t|DXGI_SAMPLE_DESC|], "SampleDesc")
 	]
 
 -- | DXGI_MODE_DESC
 genStruct "DXGI_MODE_DESC"
-	[ ([t|UINT|], "Width", 0)
-	, ([t|UINT|], "Height", 0)
-	, ([t|DXGI_RATIONAL|], "RefreshRate", 0)
-	, ([t|DXGI_FORMAT|], "Format", 0)
-	, ([t|DXGI_MODE_SCANLINE_ORDER|], "ScanlineOrdering", 0)
-	, ([t|DXGI_MODE_SCALING|], "Scaling", 0)
+	[ ([t|UINT|], "Width")
+	, ([t|UINT|], "Height")
+	, ([t|DXGI_RATIONAL|], "RefreshRate")
+	, ([t|DXGI_FORMAT|], "Format")
+	, ([t|DXGI_MODE_SCANLINE_ORDER|], "ScanlineOrdering")
+	, ([t|DXGI_MODE_SCALING|], "Scaling")
 	]
 
 -- | DXGI_OUTPUT_DESC
-genStruct "DXGI_OUTPUT_DESC"
+genStructWithArrays "DXGI_OUTPUT_DESC"
 	[ ([t|WCHAR|], "DeviceName", 32)
 	, ([t|RECT|], "DesktopCoordinates", 0)
 	, ([t|BOOL|], "AttachedToDesktop", 0)
@@ -288,18 +289,18 @@ genStruct "DXGI_OUTPUT_DESC"
 
 -- | DXGI_SWAP_CHAIN_DESC
 genStruct "DXGI_SWAP_CHAIN_DESC"
-	[ ([t|DXGI_MODE_DESC|], "BufferDesc", 0)
-	, ([t|DXGI_SAMPLE_DESC|], "SampleDesc", 0)
-	, ([t|DXGI_USAGE|], "BufferUsage", 0)
-	, ([t|UINT|], "BufferCount", 0)
-	, ([t|HWND|], "OutputWindow", 0)
-	, ([t|BOOL|], "Windowed", 0)
-	, ([t|DXGI_SWAP_EFFECT|], "SwapEffect", 0)
-	, ([t|UINT|], "Flags", 0)
+	[ ([t|DXGI_MODE_DESC|], "BufferDesc")
+	, ([t|DXGI_SAMPLE_DESC|], "SampleDesc")
+	, ([t|DXGI_USAGE|], "BufferUsage")
+	, ([t|UINT|], "BufferCount")
+	, ([t|HWND|], "OutputWindow")
+	, ([t|BOOL|], "Windowed")
+	, ([t|DXGI_SWAP_EFFECT|], "SwapEffect")
+	, ([t|UINT|], "Flags")
 	]
 
 -- | DXGI_ADAPTER_DESC
-genStruct "DXGI_ADAPTER_DESC"
+genStructWithArrays "DXGI_ADAPTER_DESC"
 	[ ([t|WCHAR|], "Description", 128)
 	, ([t|UINT|], "VendorId", 0)
 	, ([t|UINT|], "DeviceId", 0)
