@@ -19,12 +19,12 @@ source-repository head
 library
   exposed-modules:
     Flaw.Fabric
+    Flaw.FFI
     Flaw.Graphics
     Flaw.Math
     Flaw.Window
   other-modules:
     Flaw.Fabric.Internal
-    Flaw.FFI
     Flaw.Graphics.Internal
     Flaw.Math.Internal
     Flaw.Window.Internal
@@ -34,11 +34,11 @@ library
       Flaw.FFI.COM.TH
       Flaw.FFI.Win32
       Flaw.Graphics.DirectX11
+      Flaw.Graphics.DirectX11.FFI
       Flaw.Graphics.DXGI
       Flaw.Window.Win32
     other-modules:
       Flaw.FFI.COM.Internal
-      Flaw.Graphics.DirectX11.FFI
   -- other-extensions:    
   build-depends:       base >=4.7 && <4.8, base64-bytestring, binary, bytestring, containers, cryptohash, lifted-base, mtl, resourcet, template-haskell, text, transformers, unordered-containers, uuid
   -- hs-source-dirs:      
