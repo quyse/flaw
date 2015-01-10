@@ -1,0 +1,41 @@
+name:                flaw-window
+version:             0.1.0.0
+-- synopsis:            
+-- description:         
+license:             MIT
+license-file:        ../LICENSE
+author:              Alexander Bich
+maintainer:          quyse0@gmail.com
+-- copyright:           
+category:            Game
+build-type:          Simple
+-- extra-source-files:  
+cabal-version:       >=1.10
+
+source-repository head
+  type: git
+  location: https://github.com/quyse/flaw.git
+  subdir: flaw-window
+
+library
+  exposed-modules:
+    Flaw.Window
+  other-modules:
+    Flaw.Window.Internal
+  if os(windows)
+    exposed-modules:
+      Flaw.Window.Win32
+  -- other-extensions:    
+  build-depends:       base >=4.7 && <4.8, resourcet, text
+  -- hs-source-dirs:      
+  default-language:    Haskell2010
+  ghc-options:         -O2 -threaded -with-rtsopts=-N -Wall -fno-warn-unsupported-calling-conventions -funbox-strict-fields
+  include-dirs:        include
+  if os(windows)
+    includes:          "flaw_windows.h"
+    c-sources:
+      cbits/win32_window_system.c
+    extra-libraries:
+      gdi32
+      ole32
+  cc-options:          -std=c99
