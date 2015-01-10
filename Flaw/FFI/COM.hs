@@ -77,9 +77,8 @@ withCOMObject create work = bracket create m_IUnknown_Release work
 -- | Get value from computation working with pointer.
 createCOMValueViaPtr :: Storable a => (Ptr a -> IO HRESULT) -> IO a
 createCOMValueViaPtr create = alloca $ \p -> do
-	hr <- create p
-	if hresultFailed hr then throwIO $ FailedHRESULT hr
-	else peek p
+	hresultCheck =<< create p
+	peek p
 
 -- | Get COM object from computation working with pointer.
 createCOMObjectViaPtr :: COMInterface a => (Ptr (Ptr a) -> IO HRESULT) -> IO a
