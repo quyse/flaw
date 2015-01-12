@@ -5,8 +5,11 @@ License: MIT
 -}
 
 module Flaw.Graphics
-	( Device(..)
+	( System(..)
+	, Device(..)
 	, Context(..)
+	, Presenter(..)
+	, Render(..)
 	, DeviceInfo(..)
 	, DisplayInfo(..)
 	, DisplayModeInfo(..)
