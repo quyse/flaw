@@ -28,8 +28,10 @@ library
       Flaw.Graphics.DirectX11
       Flaw.Graphics.DirectX11.FFI
       Flaw.Graphics.DXGI
+      Flaw.Graphics.DXGI.FFI
     other-modules:
       Flaw.Graphics.DirectX11.Internal
+      Flaw.Graphics.DXGI.Internal
   -- other-extensions:    
   build-depends:       base >=4.7 && <4.8, bytestring, flaw-base, flaw-ffi, lifted-base, monad-control, resourcet, text, transformers, transformers-base
   -- hs-source-dirs:      

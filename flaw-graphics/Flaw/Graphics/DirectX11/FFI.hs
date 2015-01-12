@@ -10,6 +10,7 @@ module Flaw.Graphics.DirectX11.FFI
 	( D3D_DRIVER_TYPE(..)
 	, D3D_FEATURE_LEVEL(..)
 	, D3D11_USAGE(..)
+	, D3D11_BIND_FLAG(..)
 	, D3D11_SRV_DIMENSION(..)
 	, D3D11_RTV_DIMENSION(..)
 	, D3D11_DSV_DIMENSION(..)
@@ -131,7 +132,7 @@ import Flaw.FFI
 import Flaw.FFI.COM
 import Flaw.FFI.COM.TH
 import Flaw.FFI.Win32
-import Flaw.Graphics.DXGI
+import Flaw.Graphics.DXGI.FFI
 
 ------- Enums
 
@@ -162,6 +163,20 @@ genEnum [t|Word32|] "D3D11_USAGE"
 	, ("D3D11_USAGE_IMMUTABLE", 1)
 	, ("D3D11_USAGE_DYNAMIC", 2)
 	, ("D3D11_USAGE_STAGING", 3)
+	]
+
+-- | D3D11_BIND_FLAG
+genEnum [t|Word32|] "D3D11_BIND_FLAG"
+	[ ("D3D11_BIND_VERTEX_BUFFER", 1)
+	, ("D3D11_BIND_INDEX_BUFFER", 2)
+	, ("D3D11_BIND_CONSTANT_BUFFER", 4)
+	, ("D3D11_BIND_SHADER_RESOURCE", 8)
+	, ("D3D11_BIND_STREAM_OUTPUT", 16)
+	, ("D3D11_BIND_RENDER_TARGET", 32)
+	, ("D3D11_BIND_DEPTH_STENCIL", 64)
+	, ("D3D11_BIND_UNORDERED_ACCESS", 128)
+	, ("D3D11_BIND_DECODER", 256)
+	, ("D3D11_BIND_VIDEO_ENCODER", 512)
 	]
 
 -- | D3D11_SRV_DIMENSION
@@ -1203,8 +1218,8 @@ liftM concat $ sequence
 		, ([t| Ptr D3D11_TEXTURE1D_DESC -> Ptr D3D11_SUBRESOURCE_DATA -> Ptr (Ptr $(forwardRef "ID3D11Texture1D")) -> IO HRESULT |], "CreateTexture1D")
 		, ([t| Ptr D3D11_TEXTURE2D_DESC -> Ptr D3D11_SUBRESOURCE_DATA -> Ptr (Ptr $(forwardRef "ID3D11Texture2D")) -> IO HRESULT |], "CreateTexture2D")
 		, ([t| Ptr D3D11_TEXTURE3D_DESC -> Ptr D3D11_SUBRESOURCE_DATA -> Ptr (Ptr $(forwardRef "ID3D11Texture3D")) -> IO HRESULT |], "CreateTexture3D")
-		, ([t| Ptr $(forwardRef "ID3D11Resource") -> Ptr D3D11_SHADER_RESOURCE_VIEW_DESC -> Ptr $(forwardRef "ID3D11ShaderResourceView") -> IO HRESULT |], "CreateShaderResourceView")
-		, ([t| Ptr $(forwardRef "ID3D11Resource") -> Ptr D3D11_UNORDERED_ACCESS_VIEW_DESC -> Ptr $(forwardRef "ID3D11UnorderedAccessView") -> IO HRESULT |], "CreateUnorderedAccessView")
+		, ([t| Ptr $(forwardRef "ID3D11Resource") -> Ptr D3D11_SHADER_RESOURCE_VIEW_DESC -> Ptr (Ptr $(forwardRef "ID3D11ShaderResourceView")) -> IO HRESULT |], "CreateShaderResourceView")
+		, ([t| Ptr $(forwardRef "ID3D11Resource") -> Ptr D3D11_UNORDERED_ACCESS_VIEW_DESC -> Ptr (Ptr $(forwardRef "ID3D11UnorderedAccessView")) -> IO HRESULT |], "CreateUnorderedAccessView")
 		, ([t| Ptr $(forwardRef "ID3D11Resource") -> Ptr D3D11_RENDER_TARGET_VIEW_DESC -> Ptr (Ptr $(forwardRef "ID3D11RenderTargetView")) -> IO HRESULT |], "CreateRenderTargetView")
 		, ([t| Ptr $(forwardRef "ID3D11Resource") -> Ptr D3D11_DEPTH_STENCIL_VIEW_DESC -> Ptr (Ptr $(forwardRef "ID3D11DepthStencilView")) -> IO HRESULT |], "CreateDepthStencilView")
 		, ([t| Ptr D3D11_INPUT_ELEMENT_DESC -> UINT -> Ptr () -> SIZE_T -> Ptr (Ptr $(forwardRef "ID3D11InputLayout")) -> IO HRESULT |], "CreateInputLayout")

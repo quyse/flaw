@@ -6,7 +6,7 @@ License: MIT
 
 module Flaw.Graphics.DirectX11
 	( Dx11Device
-	, Dx11DeviceContext
+	, createDx11Device
 	) where
 
 import Flaw.Graphics.DirectX11.Internal
