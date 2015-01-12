@@ -18,12 +18,13 @@ import Data.Typeable
 
 -- | Exception data wrapping exception with textual description.
 data DescribeException where
-	DescribeException :: String -> SomeException -> DescribeException
+	DescribeFirstException :: Show a => a -> DescribeException
+	DescribeException :: Show a => a -> SomeException -> DescribeException
 deriving instance Show DescribeException
 deriving instance Typeable DescribeException
 
 instance Exception DescribeException
 
 -- | Wrap possible exceptions with textual description.
-describeException :: MonadBaseControl IO m => String -> m a -> m a
+describeException :: (MonadBaseControl IO m, Show msg) => msg -> m a -> m a
 describeException message work = Lifted.catch work $ \e -> Lifted.throwIO $ DescribeException message e
