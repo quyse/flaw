@@ -35,6 +35,8 @@ type REFIID = Ptr IID
 class COMInterface i where
 	-- | Get IID of COM interface. Argument is not used.
 	getIID :: i -> IID
+	-- | Get name of COM interface. Argument is not used.
+	getCOMInterfaceName :: i -> String
 	-- | Get size of virtual table. Argument is not used.
 	sizeOfCOMVirtualTable :: i -> Int
 	-- | Get native pointer to object.

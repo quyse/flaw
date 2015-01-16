@@ -144,6 +144,7 @@ genCOMInterface interfaceNameStr iid parentInterfaceNames ms = do
 		body = normalB $ doE $ peekParentBinds ++ (map fst mp1s) ++ [noBindS $ appE (varE 'return) $ recConE interfaceName $ return (thisName, VarE thisParamName) : parentFieldsConstr ++ map (return . snd) mp1s]
 	comInterfaceInstanceDec <- instanceD (return []) [t| COMInterface $(conT interfaceName) |]
 		[ funD 'getIID [clause [wildP] (normalB $ varE iidName) []]
+		, funD 'getCOMInterfaceName [clause [wildP] (normalB $ litE $ StringL interfaceNameStr) []]
 		, funD 'sizeOfCOMVirtualTable [clause [wildP] (normalB $ varE endName) []]
 		, funD 'pokeCOMObject [clause [recP interfaceName [return (thisName, VarP thisParamName)]] (normalB $ varE thisParamName) []]
 		, peekCOMVirtualTableDec
@@ -152,7 +153,7 @@ genCOMInterface interfaceNameStr iid parentInterfaceNames ms = do
 	let comGetName = mkName $ "com_get_" ++ interfaceNameStr
 	paramName <- newName "a"
 	-- class IInterface_Class a
-	classDec <- classD (return []) className [PlainTV paramName] []
+	classDec <- classD (return [ClassP ''COMInterface [VarT paramName]]) className [PlainTV paramName] []
 		((sigD comGetName [t| $(varT paramName) -> $(conT interfaceName) |]) : (concat $ map (\method -> methodClassDecs method paramName $ varE comGetName) methods))
 	-- instance IInterface_Class IInterface
 	instanceDec <- instanceD (return []) [t| $(conT className) $(conT interfaceName) |]
