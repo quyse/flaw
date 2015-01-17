@@ -30,8 +30,8 @@ import Flaw.Exception
 import Flaw.FFI
 import Flaw.FFI.COM
 import Flaw.FFI.Win32
+import Flaw.Graphics
 import Flaw.Graphics.DXGI.FFI
-import Flaw.Graphics.Internal
 import Flaw.Graphics.Texture
 
 -- | DXGI graphics system.

@@ -29,11 +29,11 @@ import Foreign.Storable
 import Flaw.Exception
 import Flaw.FFI
 import Flaw.FFI.COM
+import Flaw.Graphics
 import Flaw.Graphics.Abstract
 import Flaw.Graphics.DirectX11.FFI
 import Flaw.Graphics.DXGI.FFI
 import Flaw.Graphics.DXGI.Internal
-import Flaw.Graphics.Internal
 import Flaw.Graphics.Texture
 
 -- | DirectX11 graphics device.
