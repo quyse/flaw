@@ -58,56 +58,85 @@ class Device d where
 	data TextureId d :: *
 	-- | Type for render target id.
 	data RenderTargetId d :: *
+	-- | Type for depth stencil target id.
+	data DepthStencilTargetId d :: *
+	-- | Type for framebuffer id.
+	data FrameBufferId d :: *
 	-- | Type for vertex layout id.
 	data VertexLayoutId d :: *
 	-- | Type for vertex buffer id.
 	data VertexBufferId d :: *
+	-- | Type for index buffer id.
+	data IndexBufferId d :: *
+	-- | Type for vertex shader id.
+	data VertexShaderId d :: *
+	-- | Type for pixel shader id.
+	data PixelShaderId d :: *
+	-- | Type for program id.
+	data ProgramId d :: *
 	-- | Create deferred context.
-	createDeferredContext :: (MonadResource m, MonadBaseControl IO m, Context (DeferredContext d)) => d -> m (ReleaseKey, DeferredContext d)
+	createDeferredContext :: (MonadResource m, MonadBaseControl IO m, Context (DeferredContext d) d) => d -> m (ReleaseKey, DeferredContext d)
 	-- | Create static texture.
 	createStaticTexture :: (MonadResource m, MonadBaseControl IO m) => d -> TextureInfo -> BS.ByteString -> m (ReleaseKey, TextureId d)
-	-- | Create render target.
-	createRenderTarget :: (MonadResource m, MonadBaseControl IO m) => d -> TextureInfo -> m (ReleaseKey, RenderTargetId d)
+	-- | Create readable render target.
+	createReadableRenderTarget :: (MonadResource m, MonadBaseControl IO m) => d -> Int -> Int -> TextureFormat -> m (ReleaseKey, RenderTargetId d, TextureId d)
+	-- | Create depth stencil target.
+	createDepthStencilTarget :: (MonadResource m, MonadBaseControl IO m) => d -> Int -> Int -> m (ReleaseKey, DepthStencilTargetId d)
+	-- | Create readable depth stencil target.
+	createReadableDepthStencilTarget :: (MonadResource m, MonadBaseControl IO m) => d -> Int -> Int -> m (ReleaseKey, DepthStencilTargetId d, TextureId d)
 	-- | Create vertex layout.
 	createVertexLayout :: (MonadResource m, MonadBaseControl IO m) => d -> VertexLayoutInfo -> m (ReleaseKey, VertexLayoutId d)
 	-- | Create vertex buffer.
 	createVertexBuffer :: (MonadResource m, MonadBaseControl IO m) => d -> VertexLayoutId d -> BS.ByteString -> m (ReleaseKey, VertexBufferId d)
+	-- | Create vertex shader.
+	createVertexShader :: (MonadResource m, MonadBaseControl IO m) => d -> BS.ByteString -> m (ReleaseKey, VertexShaderId d)
+	-- | Create pixel shader.
+	createPixelShader :: (MonadResource m, MonadBaseControl IO m) => d -> BS.ByteString -> m (ReleaseKey, PixelShaderId d)
+	-- | Create program.
+	createProgram :: (MonadResource m, MonadBaseControl IO m) => d -> VertexShaderId d -> PixelShaderId d -> m (ReleaseKey, ProgramId d)
 
 -- | Class of graphics context.
 -- Performs actual render operations.
-class Context c where
+class Device d => Context c d | c -> d where
 	-- | Render something.
-	render :: c -> Render c a -> IO a
+	render :: c -> Render c d a -> IO a
 	-- | Replay deferred context on this context.
-	playContext :: Context dc => c -> dc -> IO ()
+	-- Probably will work only with immediate context!
+	playContext :: Context dc d => c -> dc -> IO ()
+	-- | Set current framebuffer.
+	setContextFrameBuffer :: c -> FrameBufferId d -> IO ()
+	-- | Set current program.
+	setContextProgram :: c -> ProgramId d -> IO ()
+	-- | Draw something.
+	draw :: c -> IO ()
 
 -- | Presenter class.
-class Context c => Presenter p c | p -> c where
+class Context c d => Presenter p c d | p -> c d where
 	-- | Present whatever needed.
-	present :: c -> p -> Render c ()
+	present :: p -> c -> Render c d ()
 
 -- | Rendering monad.
-newtype Render c a = Render (c -> IO a)
+newtype Render c d a = Render (c -> IO a)
 
-instance Functor (Render c) where
+instance Functor (Render c d) where
 	fmap f (Render h) = Render $ \c -> liftM f $ h c
 
-instance Applicative (Render c) where
+instance Applicative (Render c d) where
 	pure a = Render $ \_c -> return a
 	(Render f) <*> (Render h) = Render $ \c -> f c <*> h c
 
-instance Monad (Render c) where
+instance Monad (Render c d) where
 	return a = Render $ \_c -> return a
 	(Render h) >>= f = Render $ \c -> do
 		r <- h c
 		let Render q = f r
 		q c
 
-instance MonadBase IO (Render c) where
+instance MonadBase IO (Render c d) where
 	liftBase io = Render $ \_ -> io
 
-instance Context c => MonadBaseControl IO (Render c) where
-	type StM (Render c) a = c -> IO a
+instance Context c d => MonadBaseControl IO (Render c d) where
+	type StM (Render c d) a = c -> IO a
 	liftBaseWith f = Render $ \_c -> f $ \(Render q) -> return q
 	restoreM = Render
 

@@ -41,7 +41,7 @@ instance System DXGISystem where
 	newtype DeviceId DXGISystem = DXGIDeviceId IDXGIAdapter
 	newtype DisplayId DXGISystem = DXGIDisplayId IDXGIOutput
 	newtype DisplayModeId DXGISystem = DXGIDisplayModeId DXGI_MODE_DESC
-	getInstalledDevices = do
+	getInstalledDevices = describeException "failed to get installed DirectX11 devices" $ do
 		-- create DXGI factory
 		(dxgiFactoryReleaseKey, dxgiFactory) <- allocateCOMObject createDXGIFactory
 		-- enumerate adapters with release keys

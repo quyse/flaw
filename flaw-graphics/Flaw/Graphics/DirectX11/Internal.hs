@@ -18,6 +18,7 @@ module Flaw.Graphics.DirectX11.Internal
 import qualified Control.Exception.Lifted as Lifted
 import Control.Monad
 import Control.Monad.Trans.Resource
+import Data.Bits
 import qualified Data.ByteString.Unsafe as BS
 import Foreign.Marshal.Alloc
 import Foreign.Marshal.Array
@@ -45,24 +46,32 @@ instance Device Dx11Device where
 	type DeferredContext Dx11Device = Dx11DeferredContext
 	newtype TextureId Dx11Device = Dx11TextureId ID3D11ShaderResourceView
 	newtype RenderTargetId Dx11Device = Dx11RenderTargetId ID3D11RenderTargetView
+	newtype DepthStencilTargetId Dx11Device = Dx11DepthStencilTargetId ID3D11DepthStencilView
+	data FrameBufferId Dx11Device = Dx11FrameBufferId [RenderTargetId Dx11Device] (Maybe (DepthStencilTargetId Dx11Device))
 	newtype VertexLayoutId Dx11Device = Dx11VertexLayoutId VertexLayoutInfo
 	newtype VertexBufferId Dx11Device = Dx11VertexBufferId ID3D11Buffer
+	newtype IndexBufferId Dx11Device = Dx11IndexBufferId ID3D11Buffer
+	newtype VertexShaderId Dx11Device = Dx11VertexShaderId ID3D11VertexShader
+	newtype PixelShaderId Dx11Device = Dx11PixelShaderId ID3D11PixelShader
+	data ProgramId Dx11Device = Dx11ProgramId ID3D11VertexShader ID3D11PixelShader
 
-	createDeferredContext device = describeException "failed to create DirectX11 deferred context" $ do
-		(releaseKey, deviceContext) <- allocateCOMObject $ createCOMObjectViaPtr $ m_ID3D11Device_CreateDeferredContext (dx11DeviceInterface device) 0
+	createDeferredContext Dx11Device
+		{ dx11DeviceInterface = deviceInterface
+		} = describeException "failed to create DirectX11 deferred context" $ do
+		(releaseKey, deviceContext) <- allocateCOMObject $ createCOMObjectViaPtr $ m_ID3D11Device_CreateDeferredContext deviceInterface 0
 		return (releaseKey, Dx11DeferredContext deviceContext)
 
 	createStaticTexture Dx11Device
 		{ dx11DeviceInterface = deviceInterface
-		} textureInfo bytes = describeException ("failed to create DirectX11 static texture", textureInfo) $ do
-		let TextureInfo
-			{ textureWidth = width
-			, textureHeight = height
-			, textureDepth = depth
-			, textureMips = mips
-			, textureCount = count
-			} = textureInfo
-		let format = getDXGIFormat $ textureFormat textureInfo
+		} textureInfo@TextureInfo
+		{ textureWidth = width
+		, textureHeight = height
+		, textureDepth = depth
+		, textureMips = mips
+		, textureFormat = format
+		, textureCount = count
+		} bytes = describeException ("failed to create DirectX11 static texture", textureInfo) $ do
+		let dxgiFormat = getDXGIFormat format
 		let realCount = if count > 0 then count else 1
 		let TextureMetrics
 			{ textureImageSize = imageSize
@@ -95,7 +104,7 @@ instance Device Dx11Device where
 					, f_D3D11_TEXTURE3D_DESC_Height = fromIntegral height
 					, f_D3D11_TEXTURE3D_DESC_Depth = fromIntegral depth
 					, f_D3D11_TEXTURE3D_DESC_MipLevels = fromIntegral mips
-					, f_D3D11_TEXTURE3D_DESC_Format = format
+					, f_D3D11_TEXTURE3D_DESC_Format = dxgiFormat
 					, f_D3D11_TEXTURE3D_DESC_Usage = D3D11_USAGE_IMMUTABLE
 					, f_D3D11_TEXTURE3D_DESC_BindFlags = fromIntegral $ fromEnum D3D11_BIND_SHADER_RESOURCE
 					, f_D3D11_TEXTURE3D_DESC_CPUAccessFlags = 0
@@ -106,7 +115,7 @@ instance Device Dx11Device where
 					liftM com_get_ID3D11Resource $ createCOMObjectViaPtr $ m_ID3D11Device_CreateTexture3D deviceInterface descPtr subresourceDescsPtr
 				-- SRV desc
 				let srvDesc = D3D11_SHADER_RESOURCE_VIEW_DESC_Texture3D
-					{ f_D3D11_SHADER_RESOURCE_VIEW_DESC_Format = format
+					{ f_D3D11_SHADER_RESOURCE_VIEW_DESC_Format = dxgiFormat
 					, f_D3D11_SHADER_RESOURCE_VIEW_DESC_ViewDimension = D3D11_SRV_DIMENSION_TEXTURE3D
 					, f_D3D11_SHADER_RESOURCE_VIEW_DESC_Texture3D = D3D11_TEX3D_SRV
 						{ f_D3D11_TEX3D_SRV_MostDetailedMip = 0
@@ -122,7 +131,7 @@ instance Device Dx11Device where
 					, f_D3D11_TEXTURE2D_DESC_Height = fromIntegral height
 					, f_D3D11_TEXTURE2D_DESC_MipLevels = fromIntegral mips
 					, f_D3D11_TEXTURE2D_DESC_ArraySize = fromIntegral realCount
-					, f_D3D11_TEXTURE2D_DESC_Format = format
+					, f_D3D11_TEXTURE2D_DESC_Format = dxgiFormat
 					, f_D3D11_TEXTURE2D_DESC_SampleDesc = DXGI_SAMPLE_DESC
 						{ f_DXGI_SAMPLE_DESC_Count = 1
 						, f_DXGI_SAMPLE_DESC_Quality = 0
@@ -138,7 +147,7 @@ instance Device Dx11Device where
 				-- SRV desc
 				let srvDesc =
 					if count > 0 then D3D11_SHADER_RESOURCE_VIEW_DESC_Texture2DArray
-						{ f_D3D11_SHADER_RESOURCE_VIEW_DESC_Format = format
+						{ f_D3D11_SHADER_RESOURCE_VIEW_DESC_Format = dxgiFormat
 						, f_D3D11_SHADER_RESOURCE_VIEW_DESC_ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2DARRAY
 						, f_D3D11_SHADER_RESOURCE_VIEW_DESC_Texture2DArray = D3D11_TEX2D_ARRAY_SRV
 							{ f_D3D11_TEX2D_ARRAY_SRV_MostDetailedMip = 0
@@ -148,7 +157,7 @@ instance Device Dx11Device where
 							}
 						}
 					else D3D11_SHADER_RESOURCE_VIEW_DESC_Texture2D
-						{ f_D3D11_SHADER_RESOURCE_VIEW_DESC_Format = format
+						{ f_D3D11_SHADER_RESOURCE_VIEW_DESC_Format = dxgiFormat
 						, f_D3D11_SHADER_RESOURCE_VIEW_DESC_ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D
 						, f_D3D11_SHADER_RESOURCE_VIEW_DESC_Texture2D = D3D11_TEX2D_SRV
 							{ f_D3D11_TEX2D_SRV_MostDetailedMip = 0
@@ -163,7 +172,7 @@ instance Device Dx11Device where
 					{ f_D3D11_TEXTURE1D_DESC_Width = fromIntegral width
 					, f_D3D11_TEXTURE1D_DESC_MipLevels = fromIntegral mips
 					, f_D3D11_TEXTURE1D_DESC_ArraySize = fromIntegral realCount
-					, f_D3D11_TEXTURE1D_DESC_Format = format
+					, f_D3D11_TEXTURE1D_DESC_Format = dxgiFormat
 					, f_D3D11_TEXTURE1D_DESC_Usage = D3D11_USAGE_IMMUTABLE
 					, f_D3D11_TEXTURE1D_DESC_BindFlags = fromIntegral $ fromEnum D3D11_BIND_SHADER_RESOURCE
 					, f_D3D11_TEXTURE1D_DESC_CPUAccessFlags = 0
@@ -175,7 +184,7 @@ instance Device Dx11Device where
 				-- SRV desc
 				let srvDesc =
 					if count > 0 then D3D11_SHADER_RESOURCE_VIEW_DESC_Texture1DArray
-						{ f_D3D11_SHADER_RESOURCE_VIEW_DESC_Format = format
+						{ f_D3D11_SHADER_RESOURCE_VIEW_DESC_Format = dxgiFormat
 						, f_D3D11_SHADER_RESOURCE_VIEW_DESC_ViewDimension = D3D11_SRV_DIMENSION_TEXTURE1DARRAY
 						, f_D3D11_SHADER_RESOURCE_VIEW_DESC_Texture1DArray = D3D11_TEX1D_ARRAY_SRV
 							{ f_D3D11_TEX1D_ARRAY_SRV_MostDetailedMip = 0
@@ -185,7 +194,7 @@ instance Device Dx11Device where
 							}
 						}
 					else D3D11_SHADER_RESOURCE_VIEW_DESC_Texture1D
-						{ f_D3D11_SHADER_RESOURCE_VIEW_DESC_Format = format
+						{ f_D3D11_SHADER_RESOURCE_VIEW_DESC_Format = dxgiFormat
 						, f_D3D11_SHADER_RESOURCE_VIEW_DESC_ViewDimension = D3D11_SRV_DIMENSION_TEXTURE1D
 						, f_D3D11_SHADER_RESOURCE_VIEW_DESC_Texture1D = D3D11_TEX1D_SRV
 							{ f_D3D11_TEX1D_SRV_MostDetailedMip = 0
@@ -203,6 +212,150 @@ instance Device Dx11Device where
 		release resourceReleaseKey
 
 		return (srvReleaseKey, Dx11TextureId srvInterface)
+
+	createReadableRenderTarget Dx11Device
+		{ dx11DeviceInterface = deviceInterface
+		} width height format = describeException ("failed to create DirectX11 readable render target", width, height, format) $ do
+
+		let dxgiFormat = getDXGIFormat format
+
+		-- resource desc
+		let desc = D3D11_TEXTURE2D_DESC
+			{ f_D3D11_TEXTURE2D_DESC_Width = fromIntegral width
+			, f_D3D11_TEXTURE2D_DESC_Height = fromIntegral height
+			, f_D3D11_TEXTURE2D_DESC_MipLevels = 1
+			, f_D3D11_TEXTURE2D_DESC_ArraySize = 1
+			, f_D3D11_TEXTURE2D_DESC_Format = dxgiFormat
+			, f_D3D11_TEXTURE2D_DESC_SampleDesc = DXGI_SAMPLE_DESC
+				{ f_DXGI_SAMPLE_DESC_Count = 1
+				, f_DXGI_SAMPLE_DESC_Quality = 0
+				}
+			, f_D3D11_TEXTURE2D_DESC_Usage = D3D11_USAGE_DEFAULT
+			, f_D3D11_TEXTURE2D_DESC_BindFlags = fromIntegral ((fromEnum D3D11_BIND_RENDER_TARGET) .|. (fromEnum D3D11_BIND_SHADER_RESOURCE))
+			, f_D3D11_TEXTURE2D_DESC_CPUAccessFlags = 0
+			, f_D3D11_TEXTURE2D_DESC_MiscFlags = 0
+			}
+		-- create resource
+		(resourceReleaseKey, resourceInterface) <- allocateCOMObject $ with desc $ \descPtr -> do
+			liftM com_get_ID3D11Resource $ createCOMObjectViaPtr $ m_ID3D11Device_CreateTexture2D deviceInterface descPtr nullPtr
+
+		-- create render target view
+		(rtvReleaseKey, rtvInterface) <- allocateCOMObject $ createCOMObjectViaPtr $ m_ID3D11Device_CreateRenderTargetView deviceInterface (pokeCOMObject resourceInterface) nullPtr
+
+		-- create shader resource view
+		(srvReleaseKey, srvInterface) <- allocateCOMObject $ createCOMObjectViaPtr $ m_ID3D11Device_CreateShaderResourceView deviceInterface (pokeCOMObject resourceInterface) nullPtr
+
+		-- release resource interface
+		release resourceReleaseKey
+
+		-- make combine release key
+		releaseKey <- register $ do
+			release rtvReleaseKey
+			release srvReleaseKey
+
+		return (releaseKey, Dx11RenderTargetId rtvInterface, Dx11TextureId srvInterface)
+
+	createDepthStencilTarget Dx11Device
+		{ dx11DeviceInterface = deviceInterface
+		} width height = describeException ("failed to create DirectX11 depth stencil target", width, height) $ do
+
+		-- resource desc
+		let desc = D3D11_TEXTURE2D_DESC
+			{ f_D3D11_TEXTURE2D_DESC_Width = fromIntegral width
+			, f_D3D11_TEXTURE2D_DESC_Height = fromIntegral height
+			, f_D3D11_TEXTURE2D_DESC_MipLevels = 1
+			, f_D3D11_TEXTURE2D_DESC_ArraySize = 1
+			, f_D3D11_TEXTURE2D_DESC_Format = DXGI_FORMAT_R24G8_TYPELESS
+			, f_D3D11_TEXTURE2D_DESC_SampleDesc = DXGI_SAMPLE_DESC
+				{ f_DXGI_SAMPLE_DESC_Count = 1
+				, f_DXGI_SAMPLE_DESC_Quality = 0
+				}
+			, f_D3D11_TEXTURE2D_DESC_Usage = D3D11_USAGE_DEFAULT
+			, f_D3D11_TEXTURE2D_DESC_BindFlags = fromIntegral $ fromEnum D3D11_BIND_RENDER_TARGET
+			, f_D3D11_TEXTURE2D_DESC_CPUAccessFlags = 0
+			, f_D3D11_TEXTURE2D_DESC_MiscFlags = 0
+			}
+		-- create resource
+		(resourceReleaseKey, resourceInterface) <- allocateCOMObject $ with desc $ \descPtr -> do
+			liftM com_get_ID3D11Resource $ createCOMObjectViaPtr $ m_ID3D11Device_CreateTexture2D deviceInterface descPtr nullPtr
+
+		-- DSV desc
+		let dsvDesc = D3D11_DEPTH_STENCIL_VIEW_DESC_Texture2D
+			{ f_D3D11_DEPTH_STENCIL_VIEW_DESC_Format = DXGI_FORMAT_D24_UNORM_S8_UINT
+			, f_D3D11_DEPTH_STENCIL_VIEW_DESC_ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D
+			, f_D3D11_DEPTH_STENCIL_VIEW_DESC_Flags = 0
+			, f_D3D11_DEPTH_STENCIL_VIEW_DESC_Texture2D = D3D11_TEX2D_DSV
+				{ f_D3D11_TEX2D_DSV_MipSlice = 0
+				}
+			}
+		-- create depth stencil view
+		(dsvReleaseKey, dsvInterface) <- allocateCOMObject $ with dsvDesc $ \dsvDescPtr -> do
+			createCOMObjectViaPtr $ m_ID3D11Device_CreateDepthStencilView deviceInterface (pokeCOMObject resourceInterface) dsvDescPtr
+
+		-- release resource interface
+		release resourceReleaseKey
+
+		return (dsvReleaseKey, Dx11DepthStencilTargetId dsvInterface)
+
+	createReadableDepthStencilTarget Dx11Device
+		{ dx11DeviceInterface = deviceInterface
+		} width height = describeException ("failed to create DirectX11 readable depth stencil target", width, height) $ do
+
+		-- resource desc
+		let desc = D3D11_TEXTURE2D_DESC
+			{ f_D3D11_TEXTURE2D_DESC_Width = fromIntegral width
+			, f_D3D11_TEXTURE2D_DESC_Height = fromIntegral height
+			, f_D3D11_TEXTURE2D_DESC_MipLevels = 1
+			, f_D3D11_TEXTURE2D_DESC_ArraySize = 1
+			, f_D3D11_TEXTURE2D_DESC_Format = DXGI_FORMAT_R24G8_TYPELESS
+			, f_D3D11_TEXTURE2D_DESC_SampleDesc = DXGI_SAMPLE_DESC
+				{ f_DXGI_SAMPLE_DESC_Count = 1
+				, f_DXGI_SAMPLE_DESC_Quality = 0
+				}
+			, f_D3D11_TEXTURE2D_DESC_Usage = D3D11_USAGE_DEFAULT
+			, f_D3D11_TEXTURE2D_DESC_BindFlags = fromIntegral ((fromEnum D3D11_BIND_RENDER_TARGET) .|. (fromEnum D3D11_BIND_SHADER_RESOURCE))
+			, f_D3D11_TEXTURE2D_DESC_CPUAccessFlags = 0
+			, f_D3D11_TEXTURE2D_DESC_MiscFlags = 0
+			}
+		-- create resource
+		(resourceReleaseKey, resourceInterface) <- allocateCOMObject $ with desc $ \descPtr -> do
+			liftM com_get_ID3D11Resource $ createCOMObjectViaPtr $ m_ID3D11Device_CreateTexture2D deviceInterface descPtr nullPtr
+
+		-- DSV desc
+		let dsvDesc = D3D11_DEPTH_STENCIL_VIEW_DESC_Texture2D
+			{ f_D3D11_DEPTH_STENCIL_VIEW_DESC_Format = DXGI_FORMAT_D24_UNORM_S8_UINT
+			, f_D3D11_DEPTH_STENCIL_VIEW_DESC_ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D
+			, f_D3D11_DEPTH_STENCIL_VIEW_DESC_Flags = 0
+			, f_D3D11_DEPTH_STENCIL_VIEW_DESC_Texture2D = D3D11_TEX2D_DSV
+				{ f_D3D11_TEX2D_DSV_MipSlice = 0
+				}
+			}
+		-- create depth stencil view
+		(dsvReleaseKey, dsvInterface) <- allocateCOMObject $ with dsvDesc $ \dsvDescPtr -> do
+			createCOMObjectViaPtr $ m_ID3D11Device_CreateDepthStencilView deviceInterface (pokeCOMObject resourceInterface) dsvDescPtr
+
+		-- SRV desc
+		let srvDesc = D3D11_SHADER_RESOURCE_VIEW_DESC_Texture2D
+			{ f_D3D11_SHADER_RESOURCE_VIEW_DESC_Format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS
+			, f_D3D11_SHADER_RESOURCE_VIEW_DESC_ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D
+			, f_D3D11_SHADER_RESOURCE_VIEW_DESC_Texture2D = D3D11_TEX2D_SRV
+				{ f_D3D11_TEX2D_SRV_MostDetailedMip = 0
+				, f_D3D11_TEX2D_SRV_MipLevels = 1
+				}
+			}
+		-- create shader resource view
+		(srvReleaseKey, srvInterface) <- allocateCOMObject $ with srvDesc $ \srvDescPtr -> do
+			createCOMObjectViaPtr $ m_ID3D11Device_CreateShaderResourceView deviceInterface (pokeCOMObject resourceInterface) srvDescPtr
+
+		-- release resource interface
+		release resourceReleaseKey
+
+		-- make combined release key
+		releaseKey <- register $ do
+			release dsvReleaseKey
+			release srvReleaseKey
+
+		return (releaseKey, Dx11DepthStencilTargetId dsvInterface, Dx11TextureId srvInterface)
 
 -- | Create DirectX11 device.
 createDx11Device :: (MonadResource m, MonadBaseControl IO m) => DeviceId DXGISystem -> m (ReleaseKey, Dx11Device)
