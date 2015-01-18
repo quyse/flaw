@@ -40,6 +40,8 @@ mathTypeNamesWithChar = [(''Float, 'f'), (''Double, 'd')]
 class Vec v e | v -> e where
 	-- | Get number of components in vector.
 	vecLength :: v -> Int -- v is unused
+	-- | Convert vector to list.
+	vecToList :: v -> [e]
 
 -- | Class for dot operation.
 class Dot v e | v -> e where
@@ -88,6 +90,7 @@ instance VecX (Vec4 a) a where
 
 instance Vec (Vec4 a) a where
 	vecLength _ = 4
+	vecToList (Vec4 x y z w) = [x, y, z, w]
 
 instance Num a => Vec4 a where
 
@@ -102,10 +105,9 @@ genVecDatas = liftM concat $ mapM genVecData [1..maxVecDimension] where
 		-- name of type parameter
 		tvA <- newName "a"
 		let tyVarBinds = [PlainTV tvA]
-		let dataCon = ConT dataName
+		let dataCon = conT dataName
 		-- type declaration
-		let typeDec = do
-			return $ DataD [] dataName tyVarBinds [NormalC dataName (replicate dim (IsStrict, VarT tvA))] [mkName $ "Show"]
+		let typeDec = dataD (return []) dataName tyVarBinds [normalC dataName (replicate dim (return (IsStrict, VarT tvA)))] [''Show]
 
 		---- instance declarations
 
@@ -117,34 +119,38 @@ genVecDatas = liftM concat $ mapM genVecData [1..maxVecDimension] where
 			let className = mkName $ "Vec" ++ [toUpper component]
 			let funName = mkName [component, '_']
 			varName <- newName [component]
-			let clause = Clause [ConP dataName [if c == component then (VarP varName) else WildP | c <- components]] (NormalB (VarE varName)) []
-			let funDecl = FunD funName [clause]
+			let funDecl = funD funName [clause [conP dataName [if c == component then (varP varName) else wildP | c <- components]] (normalB (varE varName)) []]
 			let specialiseDecl mathType = do
-				let funType = AppT (AppT ArrowT (AppT dataCon mathType)) mathType
-				return $ PragmaD $ SpecialiseP funName funType (Just Inline) AllPhases
-			specialiseDecls <- mapM (specialiseDecl . ConT) mathTypeNames
+				pragSpecInlD funName (appT (appT arrowT (appT dataCon mathType)) mathType) Inline AllPhases
+			let specialiseDecls = map (specialiseDecl . conT) mathTypeNames
 			let decls = funDecl : specialiseDecls
 			componentParamName <- newName "a"
-			return $ InstanceD [] (AppT (AppT (ConT className) (AppT dataCon (VarT componentParamName))) (VarT componentParamName)) decls
+			instanceD (return []) (appT (appT (conT className) (appT dataCon (varT componentParamName))) (varT componentParamName)) decls
 
 		-- instance for Vec class
-		let genVecInstance = do
-			let className = mkName "Vec"
+		let vecInstance = do
 			-- vecLength
-			let vecLengthDecls = do
-				let funName = mkName "vecLength"
-				let clause = Clause [WildP] (NormalB $ LitE $ IntegerL $ toInteger dim) []
-				let funDecl = FunD funName [clause]
+			vecLengthDecls <- do
+				let funDecl = funD 'vecLength [clause [wildP] (normalB $ litE $ integerL $ fromIntegral dim) []]
 				let specialiseDecl mathType = do
-					let funType = AppT (AppT ArrowT (AppT dataCon mathType)) (ConT ''Int)
-					return $ PragmaD $ SpecialiseP funName funType (Just Inline) AllPhases
-				specialiseDecls <- mapM (specialiseDecl . ConT) mathTypeNames
+					let funType = appT (appT arrowT (appT dataCon mathType)) (conT ''Int)
+					pragSpecInlD 'vecLength funType Inline AllPhases
+				let specialiseDecls = map (specialiseDecl . conT) mathTypeNames
 				return $ funDecl : specialiseDecls
-			decls <- vecLengthDecls
+			-- vecToList
+			vecToListDecls <- do
+				componentParams <- mapM (\c -> newName [c]) components
+				let funDecl = funD 'vecToList [clause [conP dataName $ map varP componentParams] (normalB $ listE $ map varE componentParams) []]
+				let specialiseDecl mathType = do
+					let funType = appT (appT arrowT (appT dataCon mathType)) (appT listT mathType)
+					pragSpecInlD 'vecToList funType Inline AllPhases
+				let specialiseDecls = map (specialiseDecl . conT) mathTypeNames
+				return $ funDecl : specialiseDecls
+			let decls = vecLengthDecls ++ vecToListDecls
 			componentParamName <- newName "a"
-			return $ InstanceD [] (AppT (AppT (ConT className) (AppT dataCon (VarT componentParamName))) (VarT componentParamName)) decls
+			instanceD (return []) (appT (appT (conT ''Vec) (appT dataCon (varT componentParamName))) (varT componentParamName)) decls
 
-		sequence $ typeDec : genVecInstance : (map genVecComponentInstance components)
+		sequence $ typeDec : vecInstance : (map genVecComponentInstance components)
 
 -- | Generate matrix datatypes.
 genMatDatas :: Q [Dec]
