@@ -8,18 +8,18 @@ License: MIT
 
 module Flaw.Graphics.DirectX11.Internal
 	( Dx11Device(..)
-	, TextureId(..)
-	, RenderTargetId(..)
-	, VertexLayoutId(..)
-	, VertexBufferId(..)
 	, createDx11Device
 	) where
 
+import Control.Concurrent.MVar
 import qualified Control.Exception.Lifted as Lifted
 import Control.Monad
+import Control.Monad.IO.Class
 import Control.Monad.Trans.Resource
 import Data.Bits
+import qualified Data.ByteString as BS
 import qualified Data.ByteString.Unsafe as BS
+import qualified Data.HashMap.Strict as HM
 import Foreign.Marshal.Alloc
 import Foreign.Marshal.Array
 import Foreign.Marshal.Utils
@@ -34,26 +34,36 @@ import Flaw.Graphics.Abstract
 import Flaw.Graphics.DirectX11.FFI
 import Flaw.Graphics.DXGI.FFI
 import Flaw.Graphics.DXGI.Internal
+import Flaw.Graphics.Sampler
 import Flaw.Graphics.Texture
+import Flaw.Math
 
 -- | DirectX11 graphics device.
 data Dx11Device = Dx11Device
-	{ dx11DeviceInterface :: ID3D11Device
+	{
+	-- | Main device interface.
+	  dx11DeviceInterface :: ID3D11Device
+	-- | Device's immediate context.
 	, dx11DeviceImmediateContext :: ID3D11DeviceContext
+	-- | Next index of vertex layout.
+	, dx11DeviceNextVertexLayoutIndex :: MVar Int
+	-- | Cache of input layouts.
+	, dx11DeviceInputLayoutCache :: MVar (HM.HashMap (VertexShaderId Dx11Device, VertexLayoutId Dx11Device) ID3D11InputLayout)
 	}
 
 instance Device Dx11Device where
 	type DeferredContext Dx11Device = Dx11DeferredContext
 	newtype TextureId Dx11Device = Dx11TextureId ID3D11ShaderResourceView
+	newtype SamplerId Dx11Device = Dx11SamplerId ID3D11SamplerState
 	newtype RenderTargetId Dx11Device = Dx11RenderTargetId ID3D11RenderTargetView
 	newtype DepthStencilTargetId Dx11Device = Dx11DepthStencilTargetId ID3D11DepthStencilView
 	data FrameBufferId Dx11Device = Dx11FrameBufferId [RenderTargetId Dx11Device] (Maybe (DepthStencilTargetId Dx11Device))
-	newtype VertexLayoutId Dx11Device = Dx11VertexLayoutId VertexLayoutInfo
+	data VertexLayoutId Dx11Device = Dx11VertexLayoutId Int VertexLayoutInfo
 	newtype VertexBufferId Dx11Device = Dx11VertexBufferId ID3D11Buffer
 	newtype IndexBufferId Dx11Device = Dx11IndexBufferId ID3D11Buffer
 	newtype VertexShaderId Dx11Device = Dx11VertexShaderId ID3D11VertexShader
 	newtype PixelShaderId Dx11Device = Dx11PixelShaderId ID3D11PixelShader
-	data ProgramId Dx11Device = Dx11ProgramId ID3D11VertexShader ID3D11PixelShader
+	data ProgramId Dx11Device = Dx11VertexPixelProgramId (VertexShaderId Dx11Device) (PixelShaderId Dx11Device)
 
 	createDeferredContext Dx11Device
 		{ dx11DeviceInterface = deviceInterface
@@ -213,6 +223,61 @@ instance Device Dx11Device where
 
 		return (srvReleaseKey, Dx11TextureId srvInterface)
 
+	createSampler Dx11Device
+		{ dx11DeviceInterface = deviceInterface
+		} samplerStateInfo@SamplerInfo
+		{ samplerMinFilter = minFilter
+		, samplerMipFilter = mipFilter
+		, samplerMagFilter = magFilter
+		, samplerMipMapping = mipMapping
+		, samplerWrapU = wrapU
+		, samplerWrapV = wrapV
+		, samplerWrapW = wrapW
+		, samplerMinLOD = minLOD
+		, samplerMaxLOD = maxLOD
+		, samplerBorderColor = borderColor
+		} = describeException ("failed to create DirectX11 sampler state", samplerStateInfo) $ do
+		-- conversion function
+		let convertWrap wrap = case wrap of
+			SamplerWrapRepeat -> D3D11_TEXTURE_ADDRESS_WRAP
+			SamplerWrapRepeatMirror -> D3D11_TEXTURE_ADDRESS_MIRROR
+			SamplerWrapClamp -> D3D11_TEXTURE_ADDRESS_CLAMP
+			SamplerWrapBorder -> D3D11_TEXTURE_ADDRESS_BORDER
+
+		-- desc
+		let desc = D3D11_SAMPLER_DESC
+			{ f_D3D11_SAMPLER_DESC_Filter = case minFilter of
+				SamplerPointFilter -> case magFilter of
+					SamplerPointFilter -> case mipFilter of
+						SamplerPointFilter -> D3D11_FILTER_MIN_MAG_MIP_POINT
+						SamplerLinearFilter -> D3D11_FILTER_MIN_MAG_POINT_MIP_LINEAR
+					SamplerLinearFilter -> case mipFilter of
+						SamplerPointFilter -> D3D11_FILTER_MIN_POINT_MAG_LINEAR_MIP_POINT
+						SamplerLinearFilter -> D3D11_FILTER_MIN_POINT_MAG_MIP_LINEAR
+				SamplerLinearFilter -> case magFilter of
+					SamplerPointFilter -> case mipFilter of
+						SamplerPointFilter -> D3D11_FILTER_MIN_LINEAR_MAG_MIP_POINT
+						SamplerLinearFilter -> D3D11_FILTER_MIN_LINEAR_MAG_POINT_MIP_LINEAR
+					SamplerLinearFilter -> case mipFilter of
+						SamplerPointFilter -> D3D11_FILTER_MIN_MAG_LINEAR_MIP_POINT
+						SamplerLinearFilter -> D3D11_FILTER_MIN_MAG_MIP_LINEAR
+			, f_D3D11_SAMPLER_DESC_AddressU = convertWrap wrapU
+			, f_D3D11_SAMPLER_DESC_AddressV = convertWrap wrapV
+			, f_D3D11_SAMPLER_DESC_AddressW = convertWrap wrapW
+			, f_D3D11_SAMPLER_DESC_MipLODBias = 0
+			, f_D3D11_SAMPLER_DESC_MaxAnisotropy = 16
+			, f_D3D11_SAMPLER_DESC_ComparisonFunc = D3D11_COMPARISON_NEVER
+			, f_D3D11_SAMPLER_DESC_BorderColor = vecToList borderColor
+			, f_D3D11_SAMPLER_DESC_MinLOD = minLOD
+			, f_D3D11_SAMPLER_DESC_MaxLOD = maxLOD
+			}
+
+		-- create
+		(releaseKey, ssInterface) <- allocateCOMObject $ with desc $ \descPtr -> do
+			createCOMObjectViaPtr $ m_ID3D11Device_CreateSamplerState deviceInterface descPtr
+
+		return (releaseKey, Dx11SamplerId ssInterface)
+
 	createReadableRenderTarget Dx11Device
 		{ dx11DeviceInterface = deviceInterface
 		} width height format = describeException ("failed to create DirectX11 readable render target", width, height, format) $ do
@@ -357,9 +422,90 @@ instance Device Dx11Device where
 
 		return (releaseKey, Dx11DepthStencilTargetId dsvInterface, Dx11TextureId srvInterface)
 
+	createFrameBuffer _device renderTargets maybeDepthStencilTarget = do
+		releaseKey <- register $ return ()
+		return (releaseKey, Dx11FrameBufferId renderTargets maybeDepthStencilTarget)
+
+	createVertexLayout Dx11Device
+		{ dx11DeviceNextVertexLayoutIndex = nextVertexLayoutIndex
+		} vertexLayoutInfo = do
+		liftIO $ modifyMVar nextVertexLayoutIndex $ \vertexLayoutIndex -> do
+			return (vertexLayoutIndex + 1, Dx11VertexLayoutId vertexLayoutIndex vertexLayoutInfo)
+
+	createStaticVertexBuffer Dx11Device
+		{ dx11DeviceInterface = deviceInterface
+		} bytes = describeException "failed to create DirectX11 vertex buffer" $ do
+		-- desc
+		let desc = D3D11_BUFFER_DESC
+			{ f_D3D11_BUFFER_DESC_ByteWidth = fromIntegral $ BS.length bytes
+			, f_D3D11_BUFFER_DESC_Usage = D3D11_USAGE_IMMUTABLE
+			, f_D3D11_BUFFER_DESC_BindFlags = fromIntegral $ fromEnum D3D11_BIND_VERTEX_BUFFER
+			, f_D3D11_BUFFER_DESC_CPUAccessFlags = 0
+			, f_D3D11_BUFFER_DESC_MiscFlags = 0
+			, f_D3D11_BUFFER_DESC_StructureByteStride = 0
+			}
+		-- data
+		let subresourceData bytesPtr = D3D11_SUBRESOURCE_DATA
+			{ f_D3D11_SUBRESOURCE_DATA_pSysMem = bytesPtr
+			, f_D3D11_SUBRESOURCE_DATA_SysMemPitch = 0
+			, f_D3D11_SUBRESOURCE_DATA_SysMemSlicePitch = 0
+			}
+		-- create
+		(releaseKey, bufferInterface) <- allocateCOMObject $ with desc $ \descPtr -> do
+			BS.unsafeUseAsCString bytes $ \bytesPtr -> do
+				with (subresourceData $ castPtr bytesPtr) $ \subresourceDataPtr -> do
+					createCOMObjectViaPtr $ m_ID3D11Device_CreateBuffer deviceInterface descPtr subresourceDataPtr
+
+		return (releaseKey, Dx11VertexBufferId bufferInterface)
+
+	createStaticIndexBuffer Dx11Device
+		{ dx11DeviceInterface = deviceInterface
+		} bytes = describeException "failed to create DirectX11 index buffer" $ do
+		-- desc
+		let desc = D3D11_BUFFER_DESC
+			{ f_D3D11_BUFFER_DESC_ByteWidth = fromIntegral $ BS.length bytes
+			, f_D3D11_BUFFER_DESC_Usage = D3D11_USAGE_IMMUTABLE
+			, f_D3D11_BUFFER_DESC_BindFlags = fromIntegral $ fromEnum D3D11_BIND_INDEX_BUFFER
+			, f_D3D11_BUFFER_DESC_CPUAccessFlags = 0
+			, f_D3D11_BUFFER_DESC_MiscFlags = 0
+			, f_D3D11_BUFFER_DESC_StructureByteStride = 0
+			}
+		-- data
+		let subresourceData bytesPtr = D3D11_SUBRESOURCE_DATA
+			{ f_D3D11_SUBRESOURCE_DATA_pSysMem = bytesPtr
+			, f_D3D11_SUBRESOURCE_DATA_SysMemPitch = 0
+			, f_D3D11_SUBRESOURCE_DATA_SysMemSlicePitch = 0
+			}
+		-- create
+		(releaseKey, bufferInterface) <- allocateCOMObject $ with desc $ \descPtr -> do
+			BS.unsafeUseAsCString bytes $ \bytesPtr -> do
+				with (subresourceData $ castPtr bytesPtr) $ \subresourceDataPtr -> do
+					createCOMObjectViaPtr $ m_ID3D11Device_CreateBuffer deviceInterface descPtr subresourceDataPtr
+
+		return (releaseKey, Dx11IndexBufferId bufferInterface)
+
+	createVertexShader Dx11Device
+		{ dx11DeviceInterface = deviceInterface
+		} bytes = describeException "failed to create DirectX11 vertex shader" $ do
+		(releaseKey, vsInterface) <- allocateCOMObject $ BS.unsafeUseAsCString bytes $ \bytesPtr -> do
+			createCOMObjectViaPtr $ m_ID3D11Device_CreateVertexShader deviceInterface (castPtr bytesPtr) (fromIntegral $ BS.length bytes) nullPtr
+		return (releaseKey, Dx11VertexShaderId vsInterface)
+
+	createPixelShader Dx11Device
+		{ dx11DeviceInterface = deviceInterface
+		} bytes = describeException "failed to create DirectX11 pixel shader" $ do
+		(releaseKey, psInterface) <- allocateCOMObject $ BS.unsafeUseAsCString bytes $ \bytesPtr -> do
+			createCOMObjectViaPtr $ m_ID3D11Device_CreatePixelShader deviceInterface (castPtr bytesPtr) (fromIntegral $ BS.length bytes) nullPtr
+		return (releaseKey, Dx11PixelShaderId psInterface)
+
+	createProgram _device vertexShaderId pixelShaderId = do
+		releaseKey <- register $ return ()
+		return (releaseKey, Dx11VertexPixelProgramId vertexShaderId pixelShaderId)
+
 -- | Create DirectX11 device.
 createDx11Device :: (MonadResource m, MonadBaseControl IO m) => DeviceId DXGISystem -> m (ReleaseKey, Dx11Device)
 createDx11Device (DXGIDeviceId adapter) = describeException "failed to create DirectX11 graphics device" $ do
+	-- create function
 	let create = alloca $ \devicePtr -> alloca $ \deviceContextPtr -> do
 		let featureLevels = [D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_1, D3D_FEATURE_LEVEL_10_0]
 		withArray featureLevels $ \featureLevelsPtr -> alloca $ \realFeatureLevelPtr -> do
@@ -367,14 +513,24 @@ createDx11Device (DXGIDeviceId adapter) = describeException "failed to create Di
 		device <- peekCOMObject =<< peek devicePtr
 		deviceContext <- peekCOMObject =<< peek deviceContextPtr
 		return (device, deviceContext)
+	-- destroy function
 	let destroy (device, deviceContext) = do
 		_ <- m_IUnknown_Release device
 		_ <- m_IUnknown_Release deviceContext
 		return ()
+
+	-- perform creation
 	(releaseKey, (device, deviceContext)) <- allocate create destroy
+
+	-- create helper things
+	nextVertexLayoutIndex <- liftIO $ newMVar 0
+	inputLayoutCache <- liftIO $ newMVar HM.empty
+
 	return (releaseKey, Dx11Device
 		{ dx11DeviceInterface = device
 		, dx11DeviceImmediateContext = deviceContext
+		, dx11DeviceNextVertexLayoutIndex = nextVertexLayoutIndex
+		, dx11DeviceInputLayoutCache = inputLayoutCache
 		})
 
 newtype Dx11DeferredContext = Dx11DeferredContext ID3D11DeviceContext
