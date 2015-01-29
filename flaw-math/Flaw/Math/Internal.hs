@@ -10,6 +10,8 @@ module Flaw.Math.Internal
 	( maxVecDimension
 	, vecComponents
 	, Vec(..)
+	, Dot(..)
+	, Cross(..)
 	, Mat(..)
 	, Mul(..)
 	, genVecClasses
@@ -34,7 +36,7 @@ vecComponents = "xyzw"
 mathTypeNames :: [Name]
 mathTypeNames = map fst mathTypeNamesWithChar
 mathTypeNamesWithChar :: [(Name, Char)]
-mathTypeNamesWithChar = [(''Float, 'f'), (''Double, 'd')]
+mathTypeNamesWithChar = [(''Float, 'f'), (''Double, 'd'), (''Int, 'i')]
 
 -- | General vector class.
 class Vec v e | v -> e where
