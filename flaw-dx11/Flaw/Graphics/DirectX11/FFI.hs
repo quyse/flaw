@@ -11,12 +11,14 @@ module Flaw.Graphics.DirectX11.FFI
 	, D3D_FEATURE_LEVEL(..)
 	, D3D11_USAGE(..)
 	, D3D11_BIND_FLAG(..)
+	, D3D11_CPU_ACCESS_FLAG(..)
 	, D3D11_SRV_DIMENSION(..)
 	, D3D11_RTV_DIMENSION(..)
 	, D3D11_DSV_DIMENSION(..)
 	, D3D11_UAV_DIMENSION(..)
 	, D3D11_RESOURCE_DIMENSION(..)
 	, D3D11_MAP(..)
+	, D3D11_CLEAR_FLAG(..)
 	, D3D11_PRIMITIVE_TOPOLOGY(..)
 	, D3D11_DEVICE_CONTEXT_TYPE(..)
 	, D3D11_INPUT_CLASSIFICATION(..)
@@ -179,6 +181,12 @@ genEnum [t|Word32|] "D3D11_BIND_FLAG"
 	, ("D3D11_BIND_VIDEO_ENCODER", 512)
 	]
 
+-- | D3D11_CPU_ACCESS_FLAG
+genEnum [t|Word32|] "D3D11_CPU_ACCESS_FLAG"
+	[ ("D3D11_CPU_ACCESS_WRITE", 0x10000)
+	, ("D3D11_CPU_ACCESS_READ", 0x20000)
+	]
+
 -- | D3D11_SRV_DIMENSION
 genEnum [t|Word32|] "D3D11_SRV_DIMENSION"
 	[ ("D3D11_SRV_DIMENSION_UNKNOWN", 0)
@@ -246,6 +254,12 @@ genEnum [t|Word32|] "D3D11_MAP"
 	, ("D3D11_MAP_READ_WRITE", 3)
 	, ("D3D11_MAP_WRITE_DISCARD", 4)
 	, ("D3D11_MAP_WRITE_NO_OVERWRITE", 5)
+	]
+
+-- | D3D11_CLEAR_FLAG
+genEnum [t|Word32|] "D3D11_CLEAR_FLAG"
+	[ ("D3D11_CLEAR_DEPTH", 1)
+	, ("D3D11_CLEAR_STENCIL", 2)
 	]
 
 -- | D3D11_PRIMITIVE_TOPOLOGY
@@ -1148,7 +1162,7 @@ liftM concat $ sequence
 		, ([t| Ptr $(forwardRef "ID3D11RenderTargetView") -> Ptr FLOAT -> IO () |], "ClearRenderTargetView")
 		, ([t| Ptr $(forwardRef "ID3D11UnorderedAccessView") -> Ptr UINT -> IO () |], "ClearUnorderedAccessViewUint")
 		, ([t| Ptr $(forwardRef "ID3D11UnorderedAccessView") -> Ptr FLOAT -> IO () |], "ClearUnorderedAccessViewFloat")
-		, ([t| Ptr $(forwardRef "ID3D11DepthStencilView") -> UINT -> FLOAT -> UINT8 -> IO () |], "CreateDepthStencilView")
+		, ([t| Ptr $(forwardRef "ID3D11DepthStencilView") -> UINT -> FLOAT -> UINT8 -> IO () |], "ClearDepthStencilView")
 		, ([t| Ptr $(forwardRef "ID3D11ShaderResourceView") -> IO () |], "GenerateMips")
 		, ([t| Ptr $(forwardRef "ID3D11Resource") -> FLOAT -> IO () |], "SetResourceMinLOD")
 		, ([t| Ptr $(forwardRef "ID3D11Resource") -> IO FLOAT |], "GetResourceMinLOD")
