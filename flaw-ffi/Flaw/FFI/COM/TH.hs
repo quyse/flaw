@@ -132,6 +132,7 @@ genCOMInterface interfaceNameStr iid parentInterfaceNames ms = do
 		[] -> return ([| 0 |], [], [], [], [])
 	methods <- processMethods interfaceNameStr beginExp ms
 	dataDec <- dataD (return []) interfaceName [] [recC interfaceName $ return (thisName, NotStrict, AppT (ConT ''Ptr) $ ConT interfaceName) : parentFields ++ map methodField methods] []
+
 	-- instance COMInterface IInterface
 	let mp1 method = do
 		p <- newName $ "p_" ++ methodNameStr method
@@ -149,6 +150,14 @@ genCOMInterface interfaceNameStr iid parentInterfaceNames ms = do
 		, funD 'pokeCOMObject [clause [recP interfaceName [return (thisName, VarP thisParamName)]] (normalB $ varE thisParamName) []]
 		, peekCOMVirtualTableDec
 		]
+
+	-- instance Eq IInterface
+	aParam <- newName "a"
+	bParam <- newName "b"
+	eqInterfaceInstanceDec <- instanceD (return []) [t| Eq $(conT interfaceName) |]
+		[ funD (mkName "==") [clause [recP interfaceName [return (thisName, VarP aParam)], recP interfaceName [return (thisName, VarP bParam)]] (normalB [| $(varE aParam) == $(varE bParam) |]) []]
+		]
+
 	let className = mkName $ interfaceNameStr ++ "_Class"
 	let comGetName = mkName $ "com_get_" ++ interfaceNameStr
 	paramName <- newName "a"
@@ -164,4 +173,4 @@ genCOMInterface interfaceNameStr iid parentInterfaceNames ms = do
 	iidSigDec <- sigD iidName [t| IID |]
 	iidValDec <- valD (varP iidName) (normalB [| fromJust (UUID.fromString $(litE $ stringL iid)) |]) []
 	methodsTopDecs <- mapM methodTopDecs methods
-	return $ dataDec : comInterfaceInstanceDec : classDec : instanceDec : endSigDec : endValDec : iidSigDec : iidValDec : (concat methodsTopDecs) ++ parentInstanceDecs
+	return $ dataDec : comInterfaceInstanceDec : eqInterfaceInstanceDec : classDec : instanceDec : endSigDec : endValDec : iidSigDec : iidValDec : (concat methodsTopDecs) ++ parentInstanceDecs
