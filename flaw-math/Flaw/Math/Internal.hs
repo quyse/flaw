@@ -138,31 +138,34 @@ genVecDatas = liftM concat $ mapM genVecData [1..maxVecDimension] where
 			let decls = vecLengthDecl : vecToListDecls
 			instanceD (return []) [t| Vec $(conT dataName) |] decls
 
-		-- instance for Num class
-		let numInstance = do
-			paramName <- newName "a"
-			aParams <- mapM (\c -> newName $ ['a', c]) components
-			bParams <- mapM (\c -> newName $ ['b', c]) components
-			let binaryOp opName = let
-				funDecl = funD opName [clause
-					[ conP dataName $ map varP aParams
-					, conP dataName $ map varP bParams
-					]
-					(normalB $ foldl appE (conE dataName) $ map (\(a, b) -> [| $(varE opName) $(varE a) $(varE b) |]) $ zip aParams bParams)
-					[]]
-				specialiseDecl mathType = do
-					pragSpecInlD opName [t| $(conT dataName) $mathType -> $(conT dataName) $mathType -> $(conT dataName) $mathType |] Inline AllPhases
-				in funDecl : map (specialiseDecl . conT) mathTypeNames
-			let unaryOp opName = let
-				funDecl = funD opName [clause
-					[ conP dataName $ map varP aParams
-					]
-					(normalB $ foldl appE (conE dataName) $ map (\a -> [| $(varE opName) $(varE a) |]) aParams)
-					[]]
-				specialiseDecl mathType = do
-					pragSpecInlD opName [t| $(conT dataName) $mathType -> $(conT dataName) $mathType |] Inline AllPhases
-				in funDecl : map (specialiseDecl . conT) mathTypeNames
+		paramName <- newName "a"
+		aParams <- mapM (\c -> newName $ ['a', c]) components
+		bParams <- mapM (\c -> newName $ ['b', c]) components
+		let supportedMathTypeNames className = do
+			filterM (\mathTypeName -> isInstance className [ConT mathTypeName]) mathTypeNames
+		let binaryOp opName mtn = let
+			funDecl = funD opName [clause
+				[ conP dataName $ map varP aParams
+				, conP dataName $ map varP bParams
+				]
+				(normalB $ foldl appE (conE dataName) $ map (\(a, b) -> [| $(varE opName) $(varE a) $(varE b) |]) $ zip aParams bParams)
+				[]]
+			specialiseDecl mathType = do
+				pragSpecInlD opName [t| $(conT dataName) $mathType -> $(conT dataName) $mathType -> $(conT dataName) $mathType |] Inline AllPhases
+			in funDecl : map (specialiseDecl . conT) mtn
+		let unaryOp opName mtn = let
+			funDecl = funD opName [clause
+				[ conP dataName $ map varP aParams
+				]
+				(normalB $ foldl appE (conE dataName) $ map (\a -> [| $(varE opName) $(varE a) |]) aParams)
+				[]]
+			specialiseDecl mathType = do
+				pragSpecInlD opName [t| $(conT dataName) $mathType -> $(conT dataName) $mathType |] Inline AllPhases
+			in funDecl : map (specialiseDecl . conT) mtn
 
+		-- instance for Num class
+		mtnNum <- supportedMathTypeNames ''Num
+		let numInstance = do
 			let fromIntegerDecl = do
 				iParam <- newName "i"
 				fiParam <- newName "fi"
@@ -170,17 +173,33 @@ genVecDatas = liftM concat $ mapM genVecData [1..maxVecDimension] where
 					(normalB $ foldl appE (conE dataName) $ replicate dim $ varE fiParam)
 					[valD (varP fiParam) (normalB [| fromInteger $(varE iParam) |]) []]]
 
-			instanceD (return [ClassP ''Num [VarT paramName]]) [t| Num ($(conT dataName) $(varT paramName)) |] (concat
-				[ binaryOp '(+)
-				, binaryOp '(*)
-				, binaryOp '(-)
-				, unaryOp 'negate
-				, unaryOp 'abs
-				, unaryOp 'signum
+			let funcs = concat
+				[ binaryOp '(+) mtnNum
+				, binaryOp '(*) mtnNum
+				, binaryOp '(-) mtnNum
+				, unaryOp 'negate mtnNum
+				, unaryOp 'abs mtnNum
+				, unaryOp 'signum mtnNum
 				, [fromIntegerDecl]
+				]
+			instanceD (return [ClassP ''Num [VarT paramName]]) [t| Num ($(conT dataName) $(varT paramName)) |] funcs
+
+		-- instance for Fractional class
+		mtnFractional <- supportedMathTypeNames ''Fractional
+		let fractionalInstance = do
+			let fromRationalDecl = do
+				rParam <- newName "r"
+				frParam <- newName "fr"
+				funD 'fromRational [clause [varP rParam]
+					(normalB $ foldl appE (conE dataName) $ replicate dim $ varE frParam)
+					[valD (varP frParam) (normalB [| fromRational $(varE rParam) |]) []]]
+			instanceD (return [ClassP ''Fractional [VarT paramName]]) [t| Fractional ($(conT dataName) $(varT paramName)) |] (concat
+				[ binaryOp '(/) mtnFractional
+				, unaryOp 'recip mtnFractional
+				, [fromRationalDecl]
 				])
 
-		sequence $ dataDec : vecInstance : numInstance : (map genVecComponentInstance components)
+		sequence $ dataDec : vecInstance : numInstance : fractionalInstance : (map genVecComponentInstance components)
 
 -- | Generate matrix datatypes.
 genMatDatas :: Q [Dec]
