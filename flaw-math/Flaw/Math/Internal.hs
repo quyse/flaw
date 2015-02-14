@@ -162,6 +162,13 @@ genVecDatas = liftM concat $ mapM genVecData [1..maxVecDimension] where
 			specialiseDecl mathType = do
 				pragSpecInlD opName [t| $(conT dataName) $mathType -> $(conT dataName) $mathType |] Inline AllPhases
 			in funDecl : map (specialiseDecl . conT) mtn
+		let nullaryOp opName mtn = let
+			funDecl = funD opName [clause []
+				(normalB $ foldl appE (conE dataName) $ map (\_ -> varE opName) aParams)
+				[]]
+			specialiseDecl mathType = do
+				pragSpecInlD opName [t| $(conT dataName) $mathType |] Inline AllPhases
+			in funDecl : map (specialiseDecl . conT) mtn
 
 		-- instance for Num class
 		mtnNum <- supportedMathTypeNames ''Num
@@ -199,7 +206,35 @@ genVecDatas = liftM concat $ mapM genVecData [1..maxVecDimension] where
 				, [fromRationalDecl]
 				])
 
-		sequence $ dataDec : vecInstance : numInstance : fractionalInstance : (map genVecComponentInstance components)
+		-- instance for Floating class
+		mtnFloating <- supportedMathTypeNames ''Floating
+		let floatingInstance = do
+			instanceD (return [ClassP ''Floating [VarT paramName]]) [t| Floating ($(conT dataName) $(varT paramName)) |] (concat $ concat
+				[ [nullaryOp 'pi mtnFloating]
+				, map (\op -> binaryOp op mtnFloating)
+					[ '(**)
+					, 'logBase
+					]
+				, map (\op -> unaryOp op mtnFloating)
+					[ 'exp
+					, 'sqrt
+					, 'log
+					, 'sin
+					, 'tan
+					, 'cos
+					, 'asin
+					, 'atan
+					, 'acos
+					, 'sinh
+					, 'tanh
+					, 'cosh
+					, 'asinh
+					, 'atanh
+					, 'acosh
+					]
+				])
+
+		sequence $ dataDec : vecInstance : numInstance : fractionalInstance : floatingInstance : (map genVecComponentInstance components)
 
 -- | Generate matrix datatypes.
 genMatDatas :: Q [Dec]
