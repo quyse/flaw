@@ -39,24 +39,24 @@ mathTypeNamesWithChar :: [(Name, Char)]
 mathTypeNamesWithChar = [(''Float, 'f'), (''Double, 'd'), (''Int, 'i')]
 
 -- | General vector class.
-class Vec v where
+class Vec v e where
 	-- | Get number of components in vector.
-	vecLength :: v e -> Int -- v is unused
+	vecLength :: v -> Int -- v is unused
 	-- | Convert vector to list.
-	vecToList :: v e -> [e]
+	vecToList :: v -> [e]
 
 -- | Class for dot operation.
-class Dot v where
-	dot :: Num e => v e -> v e -> e
+class Dot v e where
+	dot :: Num e => v -> v -> e
 
 -- | Class for cross operation.
 class Cross v where
-	cross :: Num e => v e -> v e -> v e
+	cross :: v -> v -> v
 
 -- | General matrix class.
-class Mat m where
+class Mat m e where
 	-- | Get matrix size.
-	matSize :: m e -> (Int, Int) -- m is unused
+	matSize :: m -> (Int, Int) -- m is unused
 
 -- | Class for general multiplication.
 class Mul a b c | a b -> c where
@@ -64,8 +64,8 @@ class Mul a b c | a b -> c where
 
 -- | Generates classes VecX..VecW with only method to access components.
 {- Example:
-class Vec v => VecX v where
-	x_ :: v e -> e
+class Vec v e => VecX v e where
+	x_ :: v -> e
 -}
 genVecClasses :: Q [Dec]
 genVecClasses = mapM genVecClass vecComponents where
@@ -73,23 +73,24 @@ genVecClasses = mapM genVecClass vecComponents where
 		let className = mkName $ "Vec" ++ [toUpper c]
 		let methodName = mkName $ [c, '_']
 		tvV <- newName "v"
-		classD (return [ClassP (mkName "Vec") [VarT tvV]]) className [PlainTV tvV] []
-			[ sigD methodName [t| forall e. $(varT tvV) e -> e |]
+		tvE <- newName "e"
+		classD (return [ClassP (mkName "Vec") [VarT tvV, VarT tvE]]) className [PlainTV tvV, PlainTV tvE] []
+			[ sigD methodName [t| $(varT tvV) -> $(varT tvE) |]
 			]
 
 -- | Generate actual vector data with instances.
 {- Example:
 
 data Vec4 a = Vec4 a a a a deriving Show
-instance VecX Vec4 where
+instance VecX (Vec4 a) where
 	x_ (Vec4 x _ _ _) = x
 -- VecY, ...
 
-instance Vec Vec4 where
+instance Vec (Vec4 a) where
 	vecLength _ = 4
 	vecToList (Vec4 x y z w) = [x, y, z, w]
 
-instance Num a => Vec4 a where
+instance Num a => Num (Vec4 a) where
 	...
 -}
 genVecDatas :: Q [Dec]
@@ -121,7 +122,7 @@ genVecDatas = liftM concat $ mapM genVecData [1..maxVecDimension] where
 				pragSpecInlD funName [t| $(conT dataName) $mathType -> $mathType |] Inline AllPhases
 			let specialiseDecls = map (specialiseDecl . conT) mathTypeNames
 			let decls = funDecl : specialiseDecls
-			instanceD (return []) [t| $(conT className) $(conT dataName) |] decls
+			instanceD (return []) [t| $(conT className) ($(conT dataName) $(varT tvA)) $(varT tvA) |] decls
 
 		-- instance for Vec class
 		let vecInstance = do
@@ -136,7 +137,7 @@ genVecDatas = liftM concat $ mapM genVecData [1..maxVecDimension] where
 				let specialiseDecls = map (specialiseDecl . conT) mathTypeNames
 				return $ funDecl : specialiseDecls
 			let decls = vecLengthDecl : vecToListDecls
-			instanceD (return []) [t| Vec $(conT dataName) |] decls
+			instanceD (return []) [t| Vec ($(conT dataName) $(varT tvA)) $(varT tvA) |] decls
 
 		paramName <- newName "a"
 		aParams <- mapM (\c -> newName $ ['a', c]) components
@@ -251,7 +252,7 @@ genMatDatas = liftM concat $ mapM genMatData [(i, j) | i <- dimensions, j <- dim
 			] [''Eq, ''Ord, ''Show]
 
 		-- instance for Mat class
-		let matInstance = instanceD (return []) [t| Mat $(conT dataName) |]
+		let matInstance = instanceD (return []) [t| Mat ($(conT dataName) $(varT tvA)) $(varT tvA) |]
 			[ funD 'matSize [clause [wildP] (normalB [| ($(litE $ integerL $ toInteger n), $(litE $ integerL $ toInteger m)) |]) []]
 			]
 
