@@ -15,9 +15,13 @@ module Flaw.Graphics
 	, Render(..)
 	, renderScope
 	, renderFrameBuffer
+	, renderViewport
 	, renderVertexBuffers
 	, renderIndexBuffer
+	, renderUniformBuffers
+	, renderSamplers
 	, renderProgram
+	, renderReset
 	, renderClearColor
 	, renderClearDepth
 	, renderClearStencil

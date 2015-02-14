@@ -18,9 +18,13 @@ module Flaw.Graphics.Internal
 	, RenderState(..)
 	, renderScope
 	, renderFrameBuffer
+	, renderViewport
 	, renderVertexBuffers
 	, renderIndexBuffer
+	, renderUniformBuffers
+	, renderSamplers
 	, renderProgram
+	, renderReset
 	, renderClearColor
 	, renderClearDepth
 	, renderClearStencil
@@ -30,13 +34,12 @@ module Flaw.Graphics.Internal
 	) where
 
 import Control.Applicative
-import Control.Monad.IO.Class
 import Control.Monad.Trans.Control
 import Control.Monad.Trans.Resource
 import qualified Data.ByteString as BS
 import qualified Data.Text as T
 
-import Flaw.Graphics.Abstract
+import Flaw.Graphics.Program
 import Flaw.Graphics.Sampler
 import Flaw.Graphics.Texture
 import Flaw.Math
@@ -67,34 +70,42 @@ class System s where
 class Device d where
 	-- | Type for deferred contexts.
 	type DeferredContext d :: *
+	-- | Type for program generator.
+	type DeviceProgramGenerator d :: *
 	-- | Type for texture id.
 	data TextureId d :: *
-	-- | Type for sampler id.
-	data SamplerId d :: *
+	-- | Type for sampler state id.
+	data SamplerStateId d :: *
 	-- | Type for render target id.
 	data RenderTargetId d :: *
 	-- | Type for depth stencil target id.
 	data DepthStencilTargetId d :: *
 	-- | Type for framebuffer id.
 	data FrameBufferId d :: *
-	-- | Type for vertex layout id.
-	data VertexLayoutId d :: *
 	-- | Type for vertex buffer id.
 	data VertexBufferId d :: *
 	-- | Type for index buffer id.
 	data IndexBufferId d :: *
-	-- | Type for vertex shader id.
-	data VertexShaderId d :: *
-	-- | Type for pixel shader id.
-	data PixelShaderId d :: *
 	-- | Type for program id.
 	data ProgramId d :: *
+	-- | Type for uniform buffer id.
+	data UniformBufferId d :: *
+
+	-- | Null texture.
+	nullTexture :: TextureId d
+	-- | Null depth stencil target.
+	nullDepthStencilTarget :: DepthStencilTargetId d
+	-- | Null index buffer.
+	nullIndexBuffer :: IndexBufferId d
+	-- | Null uniform buffer.
+	nullUniformBuffer :: UniformBufferId d
+
 	-- | Create deferred context.
 	createDeferredContext :: (MonadResource m, MonadBaseControl IO m, Context (DeferredContext d) d) => d -> m (ReleaseKey, DeferredContext d)
 	-- | Create static texture.
 	createStaticTexture :: (MonadResource m, MonadBaseControl IO m) => d -> TextureInfo -> BS.ByteString -> m (ReleaseKey, TextureId d)
-	-- | Create sampler.
-	createSampler :: (MonadResource m, MonadBaseControl IO m) => d -> SamplerInfo -> m (ReleaseKey, SamplerId d)
+	-- | Create sampler state.
+	createSamplerState :: (MonadResource m, MonadBaseControl IO m) => d -> SamplerStateInfo -> m (ReleaseKey, SamplerStateId d)
 	-- | Create readable render target.
 	createReadableRenderTarget :: (MonadResource m, MonadBaseControl IO m) => d -> Int -> Int -> TextureFormat -> m (ReleaseKey, RenderTargetId d, TextureId d)
 	-- | Create depth stencil target.
@@ -102,23 +113,28 @@ class Device d where
 	-- | Create readable depth stencil target.
 	createReadableDepthStencilTarget :: (MonadResource m, MonadBaseControl IO m) => d -> Int -> Int -> m (ReleaseKey, DepthStencilTargetId d, TextureId d)
 	-- | Create framebuffer.
-	createFrameBuffer :: (MonadResource m, MonadBaseControl IO m) => d -> [RenderTargetId d] -> Maybe (DepthStencilTargetId d) -> m (ReleaseKey, FrameBufferId d)
-	-- | Create vertex layout.
-	createVertexLayout :: MonadIO m => d -> VertexLayoutInfo -> m (VertexLayoutId d)
+	createFrameBuffer :: (MonadResource m, MonadBaseControl IO m) => d -> [RenderTargetId d] -> DepthStencilTargetId d -> m (ReleaseKey, FrameBufferId d)
 	-- | Create vertex buffer.
-	createStaticVertexBuffer :: (MonadResource m, MonadBaseControl IO m) => d -> BS.ByteString -> m (ReleaseKey, VertexBufferId d)
+	createStaticVertexBuffer :: (MonadResource m, MonadBaseControl IO m)
+		=> d -- ^ Device.
+		-> BS.ByteString -- ^ Buffer
+		-> Int -- ^ Stride in bytes.
+		-> m (ReleaseKey, VertexBufferId d)
 	-- | Create index buffer.
 	createStaticIndexBuffer :: (MonadResource m, MonadBaseControl IO m) => d -> BS.ByteString -> m (ReleaseKey, IndexBufferId d)
-	-- | Create vertex shader.
-	createVertexShader :: (MonadResource m, MonadBaseControl IO m) => d -> BS.ByteString -> m (ReleaseKey, VertexShaderId d)
-	-- | Create pixel shader.
-	createPixelShader :: (MonadResource m, MonadBaseControl IO m) => d -> BS.ByteString -> m (ReleaseKey, PixelShaderId d)
 	-- | Create program.
-	createProgram :: (MonadResource m, MonadBaseControl IO m) => d -> VertexShaderId d -> PixelShaderId d -> m (ReleaseKey, ProgramId d)
+	createProgram :: (MonadResource m, MonadBaseControl IO m)
+		=> d -- ^ Device.
+		-> ProgramM (DeviceProgramGenerator d) () -- ^ Program contents.
+		-> m (ReleaseKey, ProgramId d)
+	-- | Create uniform buffer.
+	createUniformBuffer :: (MonadResource m, MonadBaseControl IO m) => d -> Int -> m (ReleaseKey, UniformBufferId d)
 
 -- | Class of graphics context.
 -- Performs actual render operations.
 class Device d => Context c d | c -> d where
+	-- | Reset context to some "default" state, and return that state.
+	contextReset :: c -> IO (RenderState d)
 	-- | Clear render target.
 	contextClearColor :: c -> RenderState d -> Int -> Vec4f -> IO ()
 	-- | Clear depth.
@@ -127,8 +143,8 @@ class Device d => Context c d | c -> d where
 	contextClearStencil :: c -> RenderState d -> Int -> IO ()
 	-- | Clear depth and stencil.
 	contextClearDepthStencil :: c -> RenderState d -> Float -> Int -> IO ()
-	-- | Draw something.
-	contextDraw :: c -> RenderState d -> IO ()
+	-- | Draw.
+	contextDraw :: c -> RenderState d -> Int -> IO ()
 	-- | Replay deferred context on immediate context.
 	contextPlay :: Context dc d => c -> RenderState d -> dc -> IO (RenderState d)
 
@@ -181,9 +197,11 @@ instance Monad (Render c d) where
 
 data RenderState d = RenderState
 	{ renderStateFrameBuffer :: FrameBufferId d
+	, renderStateViewport :: (Int, Int)
 	, renderStateVertexBuffers :: [VertexBufferId d]
 	, renderStateIndexBuffer :: IndexBufferId d
-	, renderStateSamplers :: [(TextureId d, SamplerId d)]
+	, renderStateUniformBuffers :: [UniformBufferId d]
+	, renderStateSamplers :: [(TextureId d, SamplerStateId d)]
 	, renderStateProgram :: ProgramId d
 	}
 
@@ -203,6 +221,11 @@ renderFrameBuffer frameBuffer = renderDesire $ \s -> s
 	{ renderStateFrameBuffer = frameBuffer
 	}
 
+renderViewport :: Int -> Int -> Render c d ()
+renderViewport width height = renderDesire $ \s -> s
+	{ renderStateViewport = (width, height)
+	}
+
 -- | Set current vertex buffers.
 renderVertexBuffers :: [VertexBufferId d] -> Render c d ()
 renderVertexBuffers vertexBuffers = renderDesire $ \s -> s
@@ -215,11 +238,28 @@ renderIndexBuffer indexBuffer = renderDesire $ \s -> s
 	{ renderStateIndexBuffer = indexBuffer
 	}
 
+-- | Set uniform buffers.
+renderUniformBuffers :: [UniformBufferId d] -> Render c d ()
+renderUniformBuffers uniformBuffers = renderDesire $ \s -> s
+	{ renderStateUniformBuffers = uniformBuffers
+	}
+
+-- | Set samplers.
+renderSamplers :: [(TextureId d, SamplerStateId d)] -> Render c d ()
+renderSamplers samplers = renderDesire $ \s -> s
+	{ renderStateSamplers = samplers
+	}
+
 -- | Set current program.
 renderProgram :: ProgramId d -> Render c d ()
 renderProgram program = renderDesire $ \s -> s
 	{ renderStateProgram = program
 	}
+
+renderReset :: Context c d => Render c d ()
+renderReset = Render $ \context _renderState -> do
+	newRenderState <- contextReset context
+	return (newRenderState, ())
 
 -- | Clear render target.
 renderClearColor :: Context c d => Int -> Vec4f -> Render c d ()
@@ -248,7 +288,7 @@ renderClearDepthStencil depth stencil = Render $ \context renderState -> do
 -- | Draw.
 renderDraw :: Context c d => Int -> Render c d ()
 renderDraw indicesCount = Render $ \context renderState -> do
-	contextDraw context renderState
+	contextDraw context renderState indicesCount
 	return (renderState, ())
 
 -- | Play deferred context on immediate context.

@@ -21,11 +21,9 @@ library
   exposed-modules:
     Flaw.Graphics
     Flaw.Graphics.Internal
+    Flaw.Graphics.Program
     Flaw.Graphics.Sampler
-    Flaw.Graphics.Shading
     Flaw.Graphics.Texture
-  other-modules:
-    Flaw.Graphics.Shading.Internal
   -- other-extensions:    
   build-depends:       base >=4.7 && <4.8, bytestring, flaw-math, monad-control, resourcet, text, template-haskell, transformers
   -- hs-source-dirs:      

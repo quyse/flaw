@@ -7,8 +7,8 @@ License: MIT
 module Flaw.Graphics.Sampler
 	( SamplerWrap(..)
 	, SamplerFilter(..)
-	, SamplerInfo(..)
-	, defaultSamplerInfo
+	, SamplerStateInfo(..)
+	, defaultSamplerStateInfo
 	) where
 
 import Flaw.Math
@@ -28,11 +28,10 @@ data SamplerFilter
 	deriving Show
 
 -- | Sampler settings.
-data SamplerInfo = SamplerInfo
+data SamplerStateInfo = SamplerStateInfo
 	{ samplerMinFilter :: SamplerFilter
 	, samplerMipFilter :: SamplerFilter
 	, samplerMagFilter :: SamplerFilter
-	, samplerMipMapping :: Bool
 	, samplerWrapU :: SamplerWrap
 	, samplerWrapV :: SamplerWrap
 	, samplerWrapW :: SamplerWrap
@@ -41,12 +40,11 @@ data SamplerInfo = SamplerInfo
 	, samplerBorderColor :: Vec4f
 	} deriving Show
 
-defaultSamplerInfo :: SamplerInfo
-defaultSamplerInfo = SamplerInfo
+defaultSamplerStateInfo :: SamplerStateInfo
+defaultSamplerStateInfo = SamplerStateInfo
 	{ samplerMinFilter = SamplerPointFilter
 	, samplerMipFilter = SamplerPointFilter
 	, samplerMagFilter = SamplerPointFilter
-	, samplerMipMapping = False
 	, samplerWrapU = SamplerWrapRepeat
 	, samplerWrapV = SamplerWrapRepeat
 	, samplerWrapW = SamplerWrapRepeat
