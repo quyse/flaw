@@ -26,4 +26,3 @@ library
   build-depends:       base >=4.7 && <4.8, template-haskell
   -- hs-source-dirs:      
   default-language:    Haskell2010
-  ghc-options:         

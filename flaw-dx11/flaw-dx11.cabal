@@ -30,4 +30,3 @@ library
   build-depends:       base >=4.7 && <4.8, bytestring, flaw-base, flaw-ffi, flaw-graphics, flaw-math, lifted-base, monad-control, resourcet, text, transformers, transformers-base, unordered-containers
   -- hs-source-dirs:      
   default-language:    Haskell2010
-  ghc-options:         
