@@ -29,7 +29,7 @@ library
   build-depends:       base >=4.7 && <4.8, resourcet, text
   -- hs-source-dirs:      
   default-language:    Haskell2010
-  ghc-options:         -O2 -threaded -with-rtsopts=-N -Wall -fno-warn-unsupported-calling-conventions -funbox-strict-fields
+  ghc-options:         
   include-dirs:        include
   if os(windows)
     includes:          "flaw_windows.h"
