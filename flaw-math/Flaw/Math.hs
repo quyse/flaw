@@ -11,7 +11,10 @@ module Flaw.Math
 	, vecComponents
 	, Vec(..)
 	, VecX(..), VecY(..), VecZ(..), VecW(..)
-	, SwizzleVec1(..), SwizzleVec2(..), SwizzleVec3(..), SwizzleVec4(..)
+	, SwizzleVecX1(..), SwizzleVecX2(..), SwizzleVecX3(..), SwizzleVecX4(..)
+	, SwizzleVecY1(..), SwizzleVecY2(..), SwizzleVecY3(..), SwizzleVecY4(..)
+	, SwizzleVecZ1(..), SwizzleVecZ2(..), SwizzleVecZ3(..), SwizzleVecZ4(..)
+	, SwizzleVecW1(..), SwizzleVecW2(..), SwizzleVecW3(..), SwizzleVecW4(..)
 	, Vec1(..), Vec2(..), Vec3(..), Vec4(..)
 	, Vec1f, Vec2f, Vec3f, Vec4f
 	, Vec1d, Vec2d, Vec3d, Vec4d
