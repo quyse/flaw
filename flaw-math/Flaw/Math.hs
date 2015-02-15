@@ -11,6 +11,7 @@ module Flaw.Math
 	, vecComponents
 	, Vec(..)
 	, VecX(..), VecY(..), VecZ(..), VecW(..)
+	, SwizzleVec1(..), SwizzleVec2(..), SwizzleVec3(..), SwizzleVec4(..)
 	, Vec1(..), Vec2(..), Vec3(..), Vec4(..)
 	, Vec1f, Vec2f, Vec3f, Vec4f
 	, Vec1d, Vec2d, Vec3d, Vec4d
@@ -41,6 +42,7 @@ module Flaw.Math
 import Flaw.Math.Internal
 
 genVecClasses
+genSwizzleVecClasses
 genVecDatas
 genMatDatas
 genMuls
@@ -48,3 +50,10 @@ genSynonyms
 
 -- | Quaternion type.
 newtype Quaternion a = Quaternion (Vec4 a)
+
+-- | Cross.
+instance Num a => Cross (Vec3 a) where
+	cross (Vec3 ax ay az) (Vec3 bx by bz) = Vec3
+		(ay * bz - by * az)
+		(az * bx - ax * bz)
+		(ax * by - ay * bx)

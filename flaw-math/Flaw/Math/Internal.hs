@@ -15,6 +15,7 @@ module Flaw.Math.Internal
 	, Mat(..)
 	, Mul(..)
 	, genVecClasses
+	, genSwizzleVecClasses
 	, genVecDatas
 	, genMatDatas
 	, genMuls
@@ -78,6 +79,32 @@ genVecClasses = mapM genVecClass vecComponents where
 			[ sigD methodName [t| $(varT tvV) -> $(varT tvE) |]
 			]
 
+-- | Generates classes SwizzleVec1..SwizzleVec4.
+{- Example:
+class Vec a e => SwizzleVec2 a e where
+	xx__ :: VecX v e => v -> a
+	xy__ :: (VecX v e, VecY v e) => v -> a
+	xz__ :: (VecX v e, VecZ v e) => v -> a
+	xw__ :: (VecX v e, VecW v e) => v -> a
+	...
+-}
+genSwizzleVecClasses :: Q [Dec]
+genSwizzleVecClasses = mapM genSwizzleVecClass [1..4] where
+	genSwizzleVecClass len = do
+		let className = mkName $ "SwizzleVec" ++ [intToDigit len]
+		tvA <- newName "a"
+		tvE <- newName "e"
+		tvV <- newName "v"
+		let genSig variant = do
+			let context = return $ concat [if elem c variant then [ClassP (mkName $ "Vec" ++ [toUpper c]) [VarT tvV, VarT tvE]] else [] | c <- vecComponents]
+			sigD (mkName $ variant ++ "__") $ forallT [PlainTV tvV] context [t| $(varT tvV) -> $(varT tvA) |]
+		classD (return [ClassP (mkName "Vec") [VarT tvA, VarT tvE]]) className [PlainTV tvA, PlainTV tvE] [] $ map genSig $ genSwizzleVariants len
+
+-- | Return list of swizzle variants for a given length.
+genSwizzleVariants :: Int -> [String]
+genSwizzleVariants 0 = [""]
+genSwizzleVariants len = [c : v | c <- vecComponents, v <- genSwizzleVariants $ len - 1]
+
 -- | Generate actual vector data with instances.
 {- Example:
 
@@ -138,6 +165,15 @@ genVecDatas = liftM concat $ mapM genVecData [1..maxVecDimension] where
 				return $ funDecl : specialiseDecls
 			let decls = vecLengthDecl : vecToListDecls
 			instanceD (return []) [t| Vec ($(conT dataName) $(varT tvA)) $(varT tvA) |] decls
+
+		-- instance for SwizzleVec{dim} class
+		let swizzleVecInstance = do
+			let instanceName = mkName $ "SwizzleVec" ++ [intToDigit dim]
+			tvV <- newName "v"
+			let funDecl variant = do
+				let expr = foldl (\v c -> appE v [| $(varE (mkName $ [c, '_'])) $(varE tvV) |]) (conE dataName) variant
+				funD (mkName $ variant ++ "__") [clause [varP tvV] (normalB $ expr) []]
+			instanceD (return []) [t| $(conT instanceName) ($(conT dataName) $(varT tvA)) $(varT tvA) |] $ map funDecl $ genSwizzleVariants dim
 
 		paramName <- newName "a"
 		aParams <- mapM (\c -> newName $ ['a', c]) components
@@ -235,7 +271,7 @@ genVecDatas = liftM concat $ mapM genVecData [1..maxVecDimension] where
 					]
 				])
 
-		sequence $ dataDec : vecInstance : numInstance : fractionalInstance : floatingInstance : (map genVecComponentInstance components)
+		sequence $ dataDec : vecInstance : swizzleVecInstance : numInstance : fractionalInstance : floatingInstance : (map genVecComponentInstance components)
 
 -- | Generate matrix datatypes.
 genMatDatas :: Q [Dec]
