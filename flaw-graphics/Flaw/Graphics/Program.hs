@@ -4,7 +4,7 @@ Description: Shader program support.
 License: MIT
 -}
 
-{-# LANGUAGE GADTs, MultiParamTypeClasses, ScopedTypeVariables, TemplateHaskell, TypeFamilies, UndecidableInstances #-}
+{-# LANGUAGE GADTs, FlexibleInstances, MultiParamTypeClasses, ScopedTypeVariables, TemplateHaskell, TypeFamilies, UndecidableInstances #-}
 
 module Flaw.Graphics.Program
 	( ProgramScalarType(..)
@@ -207,26 +207,8 @@ class ProgramGenerator g where
 	programNodeMul :: (Mul a b c, ProgramStage s) => ProgramNode g s a -> ProgramNode g s b -> ProgramNode g s c
 	programNodeDot :: (ProgrammableScalarType a, ProgrammableVectorType v, Dot v a, ProgramStage s) => ProgramNode g s v -> ProgramNode g s v -> ProgramNode g s a
 	programNodeInstanceID :: ProgramNode g VertexStage Word
-	programNodeX :: (ProgrammableScalarType a, ProgrammableVectorType v, VecX v a, ProgramStage s) => ProgramNode g s v -> ProgramNode g s a
-	programNodeY :: (ProgrammableScalarType a, ProgrammableVectorType v, VecY v a, ProgramStage s) => ProgramNode g s v -> ProgramNode g s a
-	programNodeZ :: (ProgrammableScalarType a, ProgrammableVectorType v, VecZ v a, ProgramStage s) => ProgramNode g s v -> ProgramNode g s a
-	programNodeW :: (ProgrammableScalarType a, ProgrammableVectorType v, VecW v a, ProgramStage s) => ProgramNode g s v -> ProgramNode g s a
-	programNodeSwizzleX1 :: (ProgrammableScalarType a, ProgrammableVectorType v1, ProgrammableVectorType v2, SwizzleVecX1 v1 v2 a, ProgramStage s) => ProgramNode g s v1 -> ProgramNode g s v2
-	programNodeSwizzleX2 :: (ProgrammableScalarType a, ProgrammableVectorType v1, ProgrammableVectorType v2, SwizzleVecX2 v1 v2 a, ProgramStage s) => ProgramNode g s v1 -> ProgramNode g s v2
-	programNodeSwizzleX3 :: (ProgrammableScalarType a, ProgrammableVectorType v1, ProgrammableVectorType v2, SwizzleVecX3 v1 v2 a, ProgramStage s) => ProgramNode g s v1 -> ProgramNode g s v2
-	programNodeSwizzleX4 :: (ProgrammableScalarType a, ProgrammableVectorType v1, ProgrammableVectorType v2, SwizzleVecX4 v1 v2 a, ProgramStage s) => ProgramNode g s v1 -> ProgramNode g s v2
-	programNodeSwizzleY1 :: (ProgrammableScalarType a, ProgrammableVectorType v1, ProgrammableVectorType v2, SwizzleVecY1 v1 v2 a, ProgramStage s) => ProgramNode g s v1 -> ProgramNode g s v2
-	programNodeSwizzleY2 :: (ProgrammableScalarType a, ProgrammableVectorType v1, ProgrammableVectorType v2, SwizzleVecY2 v1 v2 a, ProgramStage s) => ProgramNode g s v1 -> ProgramNode g s v2
-	programNodeSwizzleY3 :: (ProgrammableScalarType a, ProgrammableVectorType v1, ProgrammableVectorType v2, SwizzleVecY3 v1 v2 a, ProgramStage s) => ProgramNode g s v1 -> ProgramNode g s v2
-	programNodeSwizzleY4 :: (ProgrammableScalarType a, ProgrammableVectorType v1, ProgrammableVectorType v2, SwizzleVecY4 v1 v2 a, ProgramStage s) => ProgramNode g s v1 -> ProgramNode g s v2
-	programNodeSwizzleZ1 :: (ProgrammableScalarType a, ProgrammableVectorType v1, ProgrammableVectorType v2, SwizzleVecZ1 v1 v2 a, ProgramStage s) => ProgramNode g s v1 -> ProgramNode g s v2
-	programNodeSwizzleZ2 :: (ProgrammableScalarType a, ProgrammableVectorType v1, ProgrammableVectorType v2, SwizzleVecZ2 v1 v2 a, ProgramStage s) => ProgramNode g s v1 -> ProgramNode g s v2
-	programNodeSwizzleZ3 :: (ProgrammableScalarType a, ProgrammableVectorType v1, ProgrammableVectorType v2, SwizzleVecZ3 v1 v2 a, ProgramStage s) => ProgramNode g s v1 -> ProgramNode g s v2
-	programNodeSwizzleZ4 :: (ProgrammableScalarType a, ProgrammableVectorType v1, ProgrammableVectorType v2, SwizzleVecZ4 v1 v2 a, ProgramStage s) => ProgramNode g s v1 -> ProgramNode g s v2
-	programNodeSwizzleW1 :: (ProgrammableScalarType a, ProgrammableVectorType v1, ProgrammableVectorType v2, SwizzleVecW1 v1 v2 a, ProgramStage s) => ProgramNode g s v1 -> ProgramNode g s v2
-	programNodeSwizzleW2 :: (ProgrammableScalarType a, ProgrammableVectorType v1, ProgrammableVectorType v2, SwizzleVecW2 v1 v2 a, ProgramStage s) => ProgramNode g s v1 -> ProgramNode g s v2
-	programNodeSwizzleW3 :: (ProgrammableScalarType a, ProgrammableVectorType v1, ProgrammableVectorType v2, SwizzleVecW3 v1 v2 a, ProgramStage s) => ProgramNode g s v1 -> ProgramNode g s v2
-	programNodeSwizzleW4 :: (ProgrammableScalarType a, ProgrammableVectorType v1, ProgrammableVectorType v2, SwizzleVecW4 v1 v2 a, ProgramStage s) => ProgramNode g s v1 -> ProgramNode g s v2
+	programNodeComponent :: (ProgrammableVectorType v, ProgrammableScalarType a, ProgramStage s) => Char -> ProgramNode g s v -> ProgramNode g s a
+	programNodeSwizzle :: (ProgrammableVectorType v1, ProgrammableVectorType v2, ProgramStage s) => String -> ProgramNode g s v1 -> ProgramNode g s v2
 
 instance (Vec v e, ProgrammableVectorType v, ProgrammableScalarType e, ProgramStage s) => Vec (ProgramNode g s v) (ProgramNode g s e) where
 	vecLength _ = vecLength (undefined :: v)
@@ -293,8 +275,42 @@ forM "xyzw" $ \c -> do
 		, ClassP ''ProgrammableVectorType [VarT v]
 		, ClassP vc [VarT v, VarT a]
 		]) [t| $(conT vc) (ProgramNode $(varT g) $(varT s) $(varT v)) (ProgramNode $(varT g) $(varT s) $(varT a)) |]
-		[ funD (mkName $ [c, '_']) [clause [] (normalB $ varE $ mkName $ "programNode" ++ [toUpper c]) []]
+		[ funD (mkName $ [c, '_']) [clause [] (normalB [| programNodeComponent $(litE $ charL c) |]) []]
 		]
+
+{- instance
+	( ProgramGenerator g
+	, ProgramStage s
+	, ProgrammableScalarType a
+	, ProgrammableVectorType v1
+	, ProgrammableVectorType v2
+	, SwizzleVec{X..W}{1..4} v1 v2 a
+	) => SwizzleVec{X..W}{1..4} (ProgramNode g s v1) (ProgramNode g s v2) (ProgramNode g s a)
+-}
+forM [(maxComp, dim) | maxComp <- [1..4], dim <- [1..4]] $ \(maxComp, dim) -> do
+	g <- newName "g"
+	s <- newName "s"
+	a <- newName "a"
+	v1 <- newName "v1"
+	v2 <- newName "v2"
+	let components = take maxComp "xyzw"
+	let sv = mkName $ "SwizzleVec" ++ [toUpper $ last components, intToDigit dim]
+	let variants = filter variantFilter $ genVariants dim where
+		genVariants 0 = [""]
+		genVariants len = [c : cs | c <- components, cs <- genVariants $ len - 1]
+		variantFilter variant = all (\c -> elem c components) variant && elem (last components) variant
+	let funDecl variant = do
+		funD (mkName $ variant ++ "__") [clause [] (normalB [| programNodeSwizzle $(litE $ stringL variant) |]) []]
+	instanceD (return $
+		[ ClassP ''ProgramGenerator [VarT g]
+		, ClassP ''ProgramStage [VarT s]
+		, ClassP ''ProgrammableScalarType [VarT a]
+		, ClassP ''ProgrammableVectorType [VarT v1]
+		, ClassP ''ProgrammableVectorType [VarT v2]
+		, ClassP sv [VarT v1, VarT v2, VarT a]
+		])
+		[t| $(conT sv) (ProgramNode $(varT g) $(varT s) $(varT v1)) (ProgramNode $(varT g) $(varT s) $(varT v2)) (ProgramNode $(varT g) $(varT s) $(varT a)) |] $
+		map funDecl variants
 
 cnst :: (ProgramGenerator g, ProgramStage s, ProgrammableType a) => a -> ProgramNode g s a
 cnst = programNodeConst
