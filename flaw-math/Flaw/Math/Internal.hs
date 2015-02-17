@@ -14,6 +14,7 @@ module Flaw.Math.Internal
 	, Cross(..)
 	, Mat(..)
 	, Mul(..)
+	, CombineVec(..)
 	, genVecClasses
 	, genSwizzleVecClasses
 	, genVecDatas
@@ -62,6 +63,10 @@ class Mat m e | m -> e where
 -- | Class for general multiplication.
 class Mul a b c | a b -> c where
 	mul :: a -> b -> c
+
+-- | Class for combining scalars and vectors into single vector.
+class CombineVec a b where
+	combineVec :: a -> b
 
 -- | Generates classes VecX..VecW with only method to access components.
 {- Example:
@@ -175,14 +180,31 @@ genVecDatas = liftM concat $ mapM genVecData [1..maxVecDimension] where
 		-- instance for SwizzleVec{maxComp}{dim} class
 		let swizzleVecInstances = map swizzleVecInstance [(srcDim, maxComp) | srcDim <- [1..4], maxComp <- [1..srcDim]] where
 			swizzleVecInstance (srcDim, maxComp) = do
-				let components = take maxComp vecComponents
-				let instanceName = mkName $ "SwizzleVec" ++ [toUpper $ last components, intToDigit dim]
+				let swizzleComponents = take maxComp vecComponents
+				let instanceName = mkName $ "SwizzleVec" ++ [toUpper $ last swizzleComponents, intToDigit dim]
 				tvV <- newName "v"
-				let variants = filter (swizzleVariantFilter components) $ genSwizzleVariants dim
+				let variants = filter (swizzleVariantFilter swizzleComponents) $ genSwizzleVariants dim
 				let funDecl variant = do
 					let expr = foldl (\v c -> appE v [| $(varE (mkName $ [c, '_'])) $(varE tvV) |]) (conE dataName) variant
-					funD (mkName $ variant ++ "__") [clause [varP tvV] (normalB $ expr) []]
+					funD (mkName $ variant ++ "__") [clause [varP tvV] (normalB expr) []]
 				instanceD (return []) [t| $(conT instanceName) ($(conT $ mkName $ "Vec" ++ [intToDigit srcDim]) $(varT tvA)) ($(conT dataName) $(varT tvA)) $(varT tvA) |] $ map funDecl variants
+
+		-- instances for CombineVec class
+		let combineVecInstances = map combineVecInstance (genVariants dim) where
+			genVariants :: Int -> [[Int]]
+			genVariants 0 = [[]]
+			genVariants n = [a : as | a <- [1..(if n == dim then n - 1 else n)], as <- genVariants (n - a)]
+			combineVecInstance variant = do
+				pes <- forM variant $ \c -> do
+					p <- newName "p"
+					let es = if c > 1 then map (\q -> appE (varE $ mkName [q, '_']) $ varE p) $ take c vecComponents else [varE p]
+					return (varP p, es)
+				a <- newName "a"
+				let instanceType = foldl appT (tupleT $ length variant) $ map (\c -> if c > 1 then [t| $(conT $ mkName $ "Vec" ++ [intToDigit c]) $(varT a) |] else varT a) variant
+				let expr = foldl appE (conE dataName) $ concat $ map snd pes
+				instanceD (return []) [t| CombineVec $instanceType ($(conT dataName) $(varT a)) |]
+					[ funD 'combineVec [clause [tupP $ map fst pes] (normalB expr) []]
+					]
 
 		paramName <- newName "a"
 		aParams <- mapM (\c -> newName $ ['a', c]) components
@@ -280,7 +302,7 @@ genVecDatas = liftM concat $ mapM genVecData [1..maxVecDimension] where
 					]
 				])
 
-		sequence $ dataDec : vecInstance : numInstance : fractionalInstance : floatingInstance : (map genVecComponentInstance components) ++ swizzleVecInstances
+		sequence $ dataDec : vecInstance : numInstance : fractionalInstance : floatingInstance : (map genVecComponentInstance components) ++ swizzleVecInstances ++ combineVecInstances
 
 -- | Generate matrix datatypes.
 genMatDatas :: Q [Dec]
