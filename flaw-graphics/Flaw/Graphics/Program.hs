@@ -4,7 +4,7 @@ Description: Shader program support.
 License: MIT
 -}
 
-{-# LANGUAGE GADTs, FlexibleInstances, MultiParamTypeClasses, ScopedTypeVariables, TemplateHaskell, TypeFamilies, UndecidableInstances #-}
+{-# LANGUAGE GADTs, FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, ScopedTypeVariables, TemplateHaskell, TypeFamilies, UndecidableInstances #-}
 
 module Flaw.Graphics.Program
 	( ProgramScalarType(..)
@@ -18,17 +18,6 @@ module Flaw.Graphics.Program
 	, ProgramGenerator(..)
 	, ProgramM
 	, cnst
-	, vec11
-	, vec111
-	, vec12
-	, vec21
-	, vec1111
-	, vec112
-	, vec121
-	, vec13
-	, vec211
-	, vec22
-	, vec31
 	, attribute
 	, uniform
 	, calc
@@ -124,31 +113,36 @@ liftM concat $ forM [(x, y) | x <- ['1'..'4'], y <- ['1'..'4']] $ \(cx, cy) -> l
 
 -- | Class of types which can be used in vertex attribute.
 class ProgrammableType a => ProgramAttributableType a where
-	data ProgramAttributeType a :: *
 
-instance ProgramAttributableType Float where
-	data ProgramAttributeType Float
-		= ProgramAttributeFloat32
-instance ProgramAttributableType Int where
-	data ProgramAttributeType Int
-		= ProgramAttributeInt32
-		| ProgramAttributeInt16
-		| ProgramAttributeInt8
-instance ProgramAttributableType Word where
-	data ProgramAttributeType Word
-		= ProgramAttributeUint32
-		| ProgramAttributeUint16
-		| ProgramAttributeUint8
+-- | Types of attributes.
+data ProgramAttributeType
+	= ProgramAttributeFloat32
+	| ProgramAttributeInt32
+	| ProgramAttributeInt16
+	| ProgramAttributeInt8
+	| ProgramAttributeUint32
+	| ProgramAttributeUint16
+	| ProgramAttributeUint8
+	| ProgramAttributeVec1 ProgramAttributeType
+	| ProgramAttributeVec2 ProgramAttributeType
+	| ProgramAttributeVec3 ProgramAttributeType
+	| ProgramAttributeVec4 ProgramAttributeType
 
 -- instance (ProgrammableScalarType a, ProgramAttributableType a) => ProgramAttributableType (Vec{1..4} a)
 forM ['1'..'4'] $ \c -> do
 	let v = mkName $ "Vec" ++ [c]
 	a <- newName "a"
-	instanceD (return [ClassP ''ProgrammableScalarType [VarT a], ClassP ''ProgramAttributableType [VarT a]]) (appT (conT ''ProgramAttributableType) $ appT (conT v) $ varT a)
-		[ dataInstD (return []) ''ProgramAttributeType [appT (conT v) (varT a)]
-			[ normalC (mkName $ "ProgramAttributeVec" ++ [c]) [return (NotStrict, AppT (ConT ''ProgramAttributeType) $ VarT a)]
-			] []
-		]
+	instanceD (return [ClassP ''ProgrammableScalarType [VarT a], ClassP ''ProgramAttributableType [VarT a]]) (appT (conT ''ProgramAttributableType) $ appT (conT v) $ varT a) []
+
+class ProgrammableTuple a where
+	type MapTuple a (b :: * -> *) :: *
+
+instance ProgrammableTuple (a, b) where
+	type MapTuple (a, b) f = (f a, f a)
+instance ProgrammableTuple (a, b, c) where
+	type MapTuple (a, b, c) f = (f a, f b, f c)
+instance ProgrammableTuple (a, b, c, d) where
+	type MapTuple (a, b, c, d) f = (f a, f b, f c, f d)
 
 -- | Program stage class.
 class ProgramStage s
@@ -162,53 +156,138 @@ instance ProgramStage PixelStage
 -- | Class of program generator.
 class ProgramGenerator g where
 	data ProgramNode g :: * -> * -> *
-	programRegisterAttribute :: ProgramAttributableType a => g -> ProgramAttributeType a -> Int -> IO (ProgramNode g VertexStage a)
-	programRegisterUniform :: (ProgrammableType a, ProgramStage s) => g -> Int -> Int -> IO (ProgramNode g s a)
-	programRegisterValue :: (ProgrammableType a, ProgramStage s) => g -> ProgramNode g s a -> IO (ProgramNode g s a)
-	programInterpolate :: ProgrammableType a => g -> ProgramNode g VertexStage a -> IO (ProgramNode g PixelStage a)
-	programNodeConst :: (ProgrammableType a, ProgramStage s) => a -> ProgramNode g s a
-	programNodeVec11 :: (ProgrammableScalarType a, ProgramStage s) => ProgramNode g s a -> ProgramNode g s a -> ProgramNode g s (Vec2 a)
-	programNodeVec111 :: (ProgrammableScalarType a, ProgramStage s) => ProgramNode g s a -> ProgramNode g s a -> ProgramNode g s a -> ProgramNode g s (Vec3 a)
-	programNodeVec12 :: (ProgrammableScalarType a, ProgramStage s) => ProgramNode g s a -> ProgramNode g s (Vec2 a) -> ProgramNode g s (Vec3 a)
-	programNodeVec21 :: (ProgrammableScalarType a, ProgramStage s) => ProgramNode g s (Vec2 a) -> ProgramNode g s a -> ProgramNode g s (Vec3 a)
-	programNodeVec1111 :: (ProgrammableScalarType a, ProgramStage s) => ProgramNode g s a -> ProgramNode g s a -> ProgramNode g s a -> ProgramNode g s a -> ProgramNode g s (Vec4 a)
-	programNodeVec112 :: (ProgrammableScalarType a, ProgramStage s) => ProgramNode g s a -> ProgramNode g s a -> ProgramNode g s (Vec2 a) -> ProgramNode g s (Vec4 a)
-	programNodeVec121 :: (ProgrammableScalarType a, ProgramStage s) => ProgramNode g s a -> ProgramNode g s (Vec2 a) -> ProgramNode g s a -> ProgramNode g s (Vec4 a)
-	programNodeVec13 :: (ProgrammableScalarType a, ProgramStage s) => ProgramNode g s a -> ProgramNode g s (Vec3 a) -> ProgramNode g s (Vec4 a)
-	programNodeVec211 :: (ProgrammableScalarType a, ProgramStage s) => ProgramNode g s (Vec2 a) -> ProgramNode g s a -> ProgramNode g s a -> ProgramNode g s (Vec4 a)
-	programNodeVec22 :: (ProgrammableScalarType a, ProgramStage s) => ProgramNode g s (Vec2 a) -> ProgramNode g s (Vec2 a) -> ProgramNode g s (Vec4 a)
-	programNodeVec31 :: (ProgrammableScalarType a, ProgramStage s) => ProgramNode g s (Vec3 a) -> ProgramNode g s a -> ProgramNode g s (Vec4 a)
-	programNodeAdd :: (ProgrammableType a, Num a, ProgramStage s) => ProgramNode g s a -> ProgramNode g s a -> ProgramNode g s a
-	programNodeSubtract :: (ProgrammableType a, Num a, ProgramStage s) => ProgramNode g s a -> ProgramNode g s a -> ProgramNode g s a
-	programNodeMultiply :: (ProgrammableType a, Num a, ProgramStage s) => ProgramNode g s a -> ProgramNode g s a -> ProgramNode g s a
-	programNodeDivide :: (ProgrammableType a, Fractional a, ProgramStage s) => ProgramNode g s a -> ProgramNode g s a -> ProgramNode g s a
-	programNodeRecip :: (ProgrammableType a, Fractional a, ProgramStage s) => ProgramNode g s a -> ProgramNode g s a
-	programNodeNegate :: (ProgrammableType a, Num a, ProgramStage s) => ProgramNode g s a -> ProgramNode g s a
-	programNodeAbs :: (ProgrammableType a, Num a, ProgramStage s) => ProgramNode g s a -> ProgramNode g s a
-	programNodeSignum :: (ProgrammableType a, Num a, ProgramStage s) => ProgramNode g s a -> ProgramNode g s a
-	programNodePi :: (ProgrammableType a, ProgramStage s) => ProgramNode g s a
-	programNodeExp :: (ProgrammableType a, ProgramStage s) => ProgramNode g s a -> ProgramNode g s a
-	programNodeSqrt :: (ProgrammableType a, ProgramStage s) => ProgramNode g s a -> ProgramNode g s a
-	programNodeLog :: (ProgrammableType a, ProgramStage s) => ProgramNode g s a -> ProgramNode g s a
-	programNodePow :: (ProgrammableType a, ProgramStage s) => ProgramNode g s a -> ProgramNode g s a -> ProgramNode g s a
-	programNodeLogBase :: (ProgrammableType a, ProgramStage s) => ProgramNode g s a -> ProgramNode g s a -> ProgramNode g s a
-	programNodeSin :: (ProgrammableType a, ProgramStage s) => ProgramNode g s a -> ProgramNode g s a
-	programNodeTan :: (ProgrammableType a, ProgramStage s) => ProgramNode g s a -> ProgramNode g s a
-	programNodeCos :: (ProgrammableType a, ProgramStage s) => ProgramNode g s a -> ProgramNode g s a
-	programNodeAsin :: (ProgrammableType a, ProgramStage s) => ProgramNode g s a -> ProgramNode g s a
-	programNodeAtan :: (ProgrammableType a, ProgramStage s) => ProgramNode g s a -> ProgramNode g s a
-	programNodeAcos :: (ProgrammableType a, ProgramStage s) => ProgramNode g s a -> ProgramNode g s a
-	programNodeSinh :: (ProgrammableType a, ProgramStage s) => ProgramNode g s a -> ProgramNode g s a
-	programNodeTanh :: (ProgrammableType a, ProgramStage s) => ProgramNode g s a -> ProgramNode g s a
-	programNodeCosh :: (ProgrammableType a, ProgramStage s) => ProgramNode g s a -> ProgramNode g s a
-	programNodeAsinh :: (ProgrammableType a, ProgramStage s) => ProgramNode g s a -> ProgramNode g s a
-	programNodeAtanh :: (ProgrammableType a, ProgramStage s) => ProgramNode g s a -> ProgramNode g s a
-	programNodeAcosh :: (ProgrammableType a, ProgramStage s) => ProgramNode g s a -> ProgramNode g s a
-	programNodeMul :: (Mul a b c, ProgramStage s) => ProgramNode g s a -> ProgramNode g s b -> ProgramNode g s c
-	programNodeDot :: (ProgrammableScalarType a, ProgrammableVectorType v, Dot v a, ProgramStage s) => ProgramNode g s v -> ProgramNode g s v -> ProgramNode g s a
+	programRegisterAttribute :: ProgramAttributableType a => g
+		-> ProgramAttributeType
+		-> Int
+		-> IO (ProgramNode g VertexStage a)
+	programRegisterUniform :: (ProgrammableType a, ProgramStage s) => g
+		-> Int
+		-> Int
+		-> IO (ProgramNode g s a)
+	-- | Register temporary variable.
+	programRegisterValue :: (ProgrammableType a, ProgramStage s) => g
+		-> ProgramNode g s a
+		-> IO (ProgramNode g s a)
+	programInterpolate :: ProgrammableType a => g
+		-> ProgramNode g VertexStage a
+		-> IO (ProgramNode g PixelStage a)
+	programNodeConst :: (ProgrammableType a, ProgramStage s) => a
+		-> ProgramNode g s a
+	programNodeCombineVec2 :: (ProgrammableType a, ProgrammableType b, ProgrammableVectorType q, CombineVec (a, b) q, ProgramStage s)
+		=> ProgramNode g s a
+		-> ProgramNode g s b
+		-> ProgramNode g s q
+	programNodeCombineVec3 :: (ProgrammableType a, ProgrammableType b, ProgrammableType c, ProgrammableVectorType q, CombineVec (a, b, c) q, ProgramStage s)
+		=> ProgramNode g s a
+		-> ProgramNode g s b
+		-> ProgramNode g s c
+		-> ProgramNode g s q
+	programNodeCombineVec4 :: (ProgrammableType a, ProgrammableType b, ProgrammableType c, ProgrammableType d, ProgrammableVectorType q, CombineVec (a, b, c, d) q, ProgramStage s)
+		=> ProgramNode g s a
+		-> ProgramNode g s b
+		-> ProgramNode g s c
+		-> ProgramNode g s d
+		-> ProgramNode g s q
+	programNodeAdd :: (ProgrammableType a, Num a, ProgramStage s)
+		=> ProgramNode g s a
+		-> ProgramNode g s a
+		-> ProgramNode g s a
+	programNodeSubtract :: (ProgrammableType a, Num a, ProgramStage s)
+		=> ProgramNode g s a
+		-> ProgramNode g s a
+		-> ProgramNode g s a
+	programNodeMultiply :: (ProgrammableType a, Num a, ProgramStage s)
+		=> ProgramNode g s a
+		-> ProgramNode g s a
+		-> ProgramNode g s a
+	programNodeDivide :: (ProgrammableType a, Fractional a, ProgramStage s)
+		=> ProgramNode g s a
+		-> ProgramNode g s a
+		-> ProgramNode g s a
+	programNodeRecip :: (ProgrammableType a, Fractional a, ProgramStage s)
+		=> ProgramNode g s a
+		-> ProgramNode g s a
+	programNodeNegate :: (ProgrammableType a, Num a, ProgramStage s)
+		=> ProgramNode g s a
+		-> ProgramNode g s a
+	programNodeAbs :: (ProgrammableType a, Num a, ProgramStage s)
+		=> ProgramNode g s a
+		-> ProgramNode g s a
+	programNodeSignum :: (ProgrammableType a, Num a, ProgramStage s)
+		=> ProgramNode g s a
+		-> ProgramNode g s a
+	programNodePi :: (ProgrammableType a, ProgramStage s)
+		=> ProgramNode g s a
+	programNodeExp :: (ProgrammableType a, ProgramStage s)
+		=> ProgramNode g s a
+		-> ProgramNode g s a
+	programNodeSqrt :: (ProgrammableType a, ProgramStage s)
+		=> ProgramNode g s a
+		-> ProgramNode g s a
+	programNodeLog :: (ProgrammableType a, ProgramStage s)
+		=> ProgramNode g s a
+		-> ProgramNode g s a
+	programNodePow :: (ProgrammableType a, ProgramStage s)
+		=> ProgramNode g s a
+		-> ProgramNode g s a
+		-> ProgramNode g s a
+	programNodeLogBase :: (ProgrammableType a, ProgramStage s)
+		=> ProgramNode g s a
+		-> ProgramNode g s a
+		-> ProgramNode g s a
+	programNodeSin :: (ProgrammableType a, ProgramStage s)
+		=> ProgramNode g s a
+		-> ProgramNode g s a
+	programNodeTan :: (ProgrammableType a, ProgramStage s)
+		=> ProgramNode g s a
+		-> ProgramNode g s a
+	programNodeCos :: (ProgrammableType a, ProgramStage s)
+		=> ProgramNode g s a
+		-> ProgramNode g s a
+	programNodeAsin :: (ProgrammableType a, ProgramStage s)
+		=> ProgramNode g s a
+		-> ProgramNode g s a
+	programNodeAtan :: (ProgrammableType a, ProgramStage s)
+		=> ProgramNode g s a
+		-> ProgramNode g s a
+	programNodeAcos :: (ProgrammableType a, ProgramStage s)
+		=> ProgramNode g s a
+		-> ProgramNode g s a
+	programNodeSinh :: (ProgrammableType a, ProgramStage s)
+		=> ProgramNode g s a
+		-> ProgramNode g s a
+	programNodeTanh :: (ProgrammableType a, ProgramStage s)
+		=> ProgramNode g s a
+		-> ProgramNode g s a
+	programNodeCosh :: (ProgrammableType a, ProgramStage s)
+		=> ProgramNode g s a
+		-> ProgramNode g s a
+	programNodeAsinh :: (ProgrammableType a, ProgramStage s)
+		=> ProgramNode g s a
+		-> ProgramNode g s a
+	programNodeAtanh :: (ProgrammableType a, ProgramStage s)
+		=> ProgramNode g s a
+		-> ProgramNode g s a
+	programNodeAcosh :: (ProgrammableType a, ProgramStage s)
+		=> ProgramNode g s a
+		-> ProgramNode g s a
+	programNodeMul :: (Mul a b c, ProgramStage s)
+		=> ProgramNode g s a
+		-> ProgramNode g s b
+		-> ProgramNode g s c
+	programNodeDot :: (ProgrammableScalarType a, ProgrammableVectorType v, Dot v a, ProgramStage s)
+		=> ProgramNode g s v
+		-> ProgramNode g s v
+		-> ProgramNode g s a
 	programNodeInstanceID :: ProgramNode g VertexStage Word
-	programNodeComponent :: (ProgrammableVectorType v, ProgrammableScalarType a, ProgramStage s) => Char -> ProgramNode g s v -> ProgramNode g s a
-	programNodeSwizzle :: (ProgrammableVectorType v1, ProgrammableVectorType v2, ProgramStage s) => String -> ProgramNode g s v1 -> ProgramNode g s v2
+	programNodeComponent :: (ProgrammableVectorType v, ProgrammableScalarType a, ProgramStage s)
+		=> Char
+		-> ProgramNode g s v
+		-> ProgramNode g s a
+	programNodeSwizzle :: (ProgrammableVectorType v1, ProgrammableVectorType v2, ProgramStage s)
+		=> String
+		-> ProgramNode g s v1
+		-> ProgramNode g s v2
 
 instance (Vec v e, ProgrammableVectorType v, ProgrammableScalarType e, ProgramStage s) => Vec (ProgramNode g s v) (ProgramNode g s e) where
 	vecLength _ = vecLength (undefined :: v)
@@ -312,36 +391,22 @@ forM [(maxComp, dim) | maxComp <- [1..4], dim <- [1..4]] $ \(maxComp, dim) -> do
 		[t| $(conT sv) (ProgramNode $(varT g) $(varT s) $(varT v1)) (ProgramNode $(varT g) $(varT s) $(varT v2)) (ProgramNode $(varT g) $(varT s) $(varT a)) |] $
 		map funDecl variants
 
+---- CombineVec instances.
+instance (ProgrammableType a, ProgrammableType b, ProgrammableVectorType q, ProgramGenerator g, ProgramStage s, CombineVec (a, b) q) => CombineVec (ProgramNode g s a, ProgramNode g s b) (ProgramNode g s q) where
+	combineVec (a, b) = programNodeCombineVec2 a b
+instance (ProgrammableType a, ProgrammableType b, ProgrammableType c, ProgrammableVectorType q, ProgramGenerator g, ProgramStage s, CombineVec (a, b, c) q) => CombineVec (ProgramNode g s a, ProgramNode g s b, ProgramNode g s c) (ProgramNode g s q) where
+	combineVec (a, b, c) = programNodeCombineVec3 a b c
+instance (ProgrammableType a, ProgrammableType b, ProgrammableType c, ProgrammableType d, ProgrammableVectorType q, ProgramGenerator g, ProgramStage s, CombineVec (a, b, c, d) q) => CombineVec (ProgramNode g s a, ProgramNode g s b, ProgramNode g s c, ProgramNode g s d) (ProgramNode g s q) where
+	combineVec (a, b, c, d) = programNodeCombineVec4 a b c d
+
 cnst :: (ProgramGenerator g, ProgramStage s, ProgrammableType a) => a -> ProgramNode g s a
 cnst = programNodeConst
-vec11 :: (ProgramGenerator g, ProgrammableScalarType a, ProgramStage s) => ProgramNode g s a -> ProgramNode g s a -> ProgramNode g s (Vec2 a)
-vec11 = programNodeVec11
-vec111 :: (ProgramGenerator g, ProgrammableScalarType a, ProgramStage s) => ProgramNode g s a -> ProgramNode g s a -> ProgramNode g s a -> ProgramNode g s (Vec3 a)
-vec111 = programNodeVec111
-vec12 :: (ProgramGenerator g, ProgrammableScalarType a, ProgramStage s) => ProgramNode g s a -> ProgramNode g s (Vec2 a) -> ProgramNode g s (Vec3 a)
-vec12 = programNodeVec12
-vec21 :: (ProgramGenerator g, ProgrammableScalarType a, ProgramStage s) => ProgramNode g s (Vec2 a) -> ProgramNode g s a -> ProgramNode g s (Vec3 a)
-vec21 = programNodeVec21
-vec1111 :: (ProgramGenerator g, ProgrammableScalarType a, ProgramStage s) => ProgramNode g s a -> ProgramNode g s a -> ProgramNode g s a -> ProgramNode g s a -> ProgramNode g s (Vec4 a)
-vec1111 = programNodeVec1111
-vec112 :: (ProgramGenerator g, ProgrammableScalarType a, ProgramStage s) => ProgramNode g s a -> ProgramNode g s a -> ProgramNode g s (Vec2 a) -> ProgramNode g s (Vec4 a)
-vec112 = programNodeVec112
-vec121 :: (ProgramGenerator g, ProgrammableScalarType a, ProgramStage s) => ProgramNode g s a -> ProgramNode g s (Vec2 a) -> ProgramNode g s a -> ProgramNode g s (Vec4 a)
-vec121 = programNodeVec121
-vec13 :: (ProgramGenerator g, ProgrammableScalarType a, ProgramStage s) => ProgramNode g s a -> ProgramNode g s (Vec3 a) -> ProgramNode g s (Vec4 a)
-vec13 = programNodeVec13
-vec211 :: (ProgramGenerator g, ProgrammableScalarType a, ProgramStage s) => ProgramNode g s (Vec2 a) -> ProgramNode g s a -> ProgramNode g s a -> ProgramNode g s (Vec4 a)
-vec211 = programNodeVec211
-vec22 :: (ProgramGenerator g, ProgrammableScalarType a, ProgramStage s) => ProgramNode g s (Vec2 a) -> ProgramNode g s (Vec2 a) -> ProgramNode g s (Vec4 a)
-vec22 = programNodeVec22
-vec31 :: (ProgramGenerator g, ProgrammableScalarType a, ProgramStage s) => ProgramNode g s (Vec3 a) -> ProgramNode g s a -> ProgramNode g s (Vec4 a)
-vec31 = programNodeVec31
 
 -- | Program monad.
 type ProgramM g a = ReaderT g IO a
 
 -- | Create attribute.
-attribute :: (ProgramGenerator g, ProgramAttributableType a) => ProgramAttributeType a -> Int -> ProgramM g (ProgramNode g VertexStage a)
+attribute :: (ProgramGenerator g, ProgramAttributableType a) => ProgramAttributeType -> Int -> ProgramM g (ProgramNode g VertexStage a)
 attribute dataType offset = ReaderT $ \g -> programRegisterAttribute g dataType offset
 
 -- | Create uniform variable.
