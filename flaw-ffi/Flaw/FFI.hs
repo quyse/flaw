@@ -37,7 +37,7 @@ unwrapEnum (EnumWrapper a) = toEnum a
 genEnum :: TypeQ -> String -> [(String, Int)] -> Q [Dec]
 genEnum underlyingType typeName es = do
 	let dataCons = [NormalC (mkName eName) [] |  (eName, _) <- es]
-	let dataDec = DataD [] (mkName typeName) [] dataCons [''Show]
+	let dataDec = DataD [] (mkName typeName) [] dataCons [''Show, ''Eq, ''Ord]
 	p <- newName "p"
 	let fromEnumDec = FunD 'fromEnum [Clause [VarP p] (NormalB $ CaseE (VarE p) [Match (ConP (mkName eName) []) (NormalB $ LitE $ IntegerL $ fromIntegral eNum) [] | (eName, eNum) <- es]) []]
 	let toEnumDec = FunD 'toEnum [Clause [VarP p] (NormalB $ CaseE (VarE p) $ [Match (LitP $ IntegerL $ fromIntegral eNum) (NormalB $ ConE (mkName eName)) [] | (eName, eNum) <- es] ++ [Match WildP (NormalB $ ConE $ mkName $ fst $ head es) []]) []]
