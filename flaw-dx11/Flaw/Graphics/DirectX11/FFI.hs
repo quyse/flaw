@@ -35,6 +35,7 @@ module Flaw.Graphics.DirectX11.FFI
 	, D3D11_COUNTER_TYPE(..)
 	, D3D11_QUERY(..)
 	, D3D11_FEATURE(..)
+	, D3DCOMPILE_FLAGS(..)
 	, D3D11_INPUT_ELEMENT_DESC(..)
 	, D3D11_SO_DECLARATION_ENTRY(..)
 	, D3D11_BUFFER_DESC(..)
@@ -91,6 +92,7 @@ module Flaw.Graphics.DirectX11.FFI
 	, D3D11_TEX2D_ARRAY_UAV(..)
 	, D3D11_TEX3D_UAV(..)
 	, D3D11_UNORDERED_ACCESS_VIEW_DESC(..)
+	, ID3DBlob(..), ID3DBlob_Class(..)
 	, ID3D11DeviceChild(..), ID3D11DeviceChild_Class(..)
 	, ID3D11Asynchronous(..), ID3D11Asynchronous_Class(..)
 	, ID3D11Counter(..), ID3D11Counter_Class(..)
@@ -124,9 +126,11 @@ module Flaw.Graphics.DirectX11.FFI
 	, ID3D11Device(..), ID3D11Device_Class(..)
 	, d3d11CreateDevice
 	, d3d11SdkVersion
+	, d3dCompile
 	) where
 
 import Control.Monad
+import Data.Bits
 import Data.Word
 import Foreign.Ptr
 
@@ -491,6 +495,32 @@ genEnum [t|Word32|] "D3D11_FEATURE"
 	, ("D3D11_FEATURE_D3D9_SIMPLE_INSTANCING_SUPPORT", 11)
 	, ("D3D11_FEATURE_MARKER_SUPPORT", 12)
 	, ("D3D11_FEATURE_D3D9_OPTIONS1", 13)
+	]
+
+-- | D3DCOMPILE_FLAGS
+genEnum [t|Word32|] "D3DCOMPILE_FLAGS"
+	[ ("D3DCOMPILE_DEBUG", (1 `shiftL` 0))
+	, ("D3DCOMPILE_SKIP_VALIDATION", (1 `shiftL` 1))
+	, ("D3DCOMPILE_SKIP_OPTIMIZATION", (1 `shiftL` 2))
+	, ("D3DCOMPILE_PACK_MATRIX_ROW_MAJOR", (1 `shiftL` 3))
+	, ("D3DCOMPILE_PACK_MATRIX_COLUMN_MAJOR", (1 `shiftL` 4))
+	, ("D3DCOMPILE_PARTIAL_PRECISION", (1 `shiftL` 5))
+	, ("D3DCOMPILE_FORCE_VS_SOFTWARE_NO_OPT", (1 `shiftL` 6))
+	, ("D3DCOMPILE_FORCE_PS_SOFTWARE_NO_OPT", (1 `shiftL` 7))
+	, ("D3DCOMPILE_NO_PRESHADER", (1 `shiftL` 8))
+	, ("D3DCOMPILE_AVOID_FLOW_CONTROL", (1 `shiftL` 9))
+	, ("D3DCOMPILE_PREFER_FLOW_CONTROL", (1 `shiftL` 10))
+	, ("D3DCOMPILE_ENABLE_STRICTNESS", (1 `shiftL` 11))
+	, ("D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY", (1 `shiftL` 12))
+	, ("D3DCOMPILE_IEEE_STRICTNESS", (1 `shiftL` 13))
+	, ("D3DCOMPILE_OPTIMIZATION_LEVEL0", (1 `shiftL` 14))
+	, ("D3DCOMPILE_OPTIMIZATION_LEVEL1", 0)
+	, ("D3DCOMPILE_OPTIMIZATION_LEVEL2", ((1 `shiftL` 14) .|. (1 `shiftL` 15)))
+	, ("D3DCOMPILE_OPTIMIZATION_LEVEL3", (1 `shiftL` 15))
+	, ("D3DCOMPILE_RESERVED16", (1 `shiftL` 16))
+	, ("D3DCOMPILE_RESERVED17", (1 `shiftL` 17))
+	, ("D3DCOMPILE_WARNINGS_ARE_ERRORS", (1 `shiftL` 18))
+	, ("D3DCOMPILE_RESOURCES_MAY_ALIAS", (1 `shiftL` 19))
 	]
 
 ------- Structs
@@ -960,8 +990,14 @@ genStructWithEndUnion "D3D11_UNORDERED_ACCESS_VIEW_DESC"
 ------- Interfaces
 
 liftM concat $ sequence
+	-- ID3DBlob (actually ID3D10Blob)
+	[ genCOMInterface "ID3DBlob" "8BA5FB08-5195-40e2-AC58-0D989C3A0102" ["IUnknown"]
+		[ ([t| IO (Ptr ()) |], "GetBufferPointer")
+		, ([t| IO SIZE_T |], "GetBufferSize")
+		]
+
 	-- ID3D11DeviceChild
-	[ genCOMInterface "ID3D11DeviceChild" "1841e5c8-16b0-489b-bcc8-44cfb0d5deae" ["IUnknown"]
+	, genCOMInterface "ID3D11DeviceChild" "1841e5c8-16b0-489b-bcc8-44cfb0d5deae" ["IUnknown"]
 		[ ([t| Ptr (Ptr $(forwardRef "ID3D11Device")) -> IO () |], "GetDevice")
 		, ([t| REFGUID -> Ptr UINT -> Ptr () -> IO HRESULT |], "GetPrivateData")
 		, ([t| REFGUID -> UINT -> Ptr () -> IO HRESULT |], "SetPrivateData")
@@ -1295,3 +1331,18 @@ foreign import stdcall safe "dynamic" mkD3D11CreateDeviceProc :: FunPtr D3D11Cre
 -- | SDK Version from Windows 8 SDK.
 d3d11SdkVersion :: UINT
 d3d11SdkVersion = 7
+
+-- | D3DCompile.
+foreign import stdcall safe "D3DCompile" d3dCompile
+	:: Ptr () -- pSrcData
+	-> SIZE_T -- SrcDataSize
+	-> LPSTR -- pSourceName
+	-> Ptr () -- pDefines
+	-> Ptr () -- pInclude
+	-> LPSTR -- pEntrypoint
+	-> LPSTR -- pTarget
+	-> UINT -- Flags1
+	-> UINT -- Flags2
+	-> Ptr (Ptr ID3DBlob) -- ppCode
+	-> Ptr (Ptr ID3DBlob) -- ppErrorMsgs
+	-> IO HRESULT
