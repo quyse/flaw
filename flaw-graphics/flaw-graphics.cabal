@@ -22,6 +22,7 @@ library
     Flaw.Graphics
     Flaw.Graphics.Internal
     Flaw.Graphics.Program
+    Flaw.Graphics.Program.Internal
     Flaw.Graphics.Sampler
     Flaw.Graphics.Texture
   -- other-extensions:    
