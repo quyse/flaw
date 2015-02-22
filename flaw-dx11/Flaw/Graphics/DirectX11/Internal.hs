@@ -542,46 +542,46 @@ instance Device Dx11Device where
 				withArray descs $ \descsPtr -> do
 					createCOMObjectViaPtr $ m_ID3D11Device_CreateInputLayout deviceInterface descsPtr (fromIntegral $ length descs) (castPtr byteCodePtr) (fromIntegral byteCodeSize)
 			convertFormat atype = case atype of
-				ProgramAttributeFloat32 -> DXGI_FORMAT_R32_FLOAT
-				ProgramAttributeFloat16 -> DXGI_FORMAT_R16_FLOAT
-				ProgramAttributeInt32 ProgramAttributeNonNormalized -> DXGI_FORMAT_R32_SINT
-				ProgramAttributeInt16 ProgramAttributeNonNormalized -> DXGI_FORMAT_R16_SINT
-				ProgramAttributeInt16 ProgramAttributeNormalized -> DXGI_FORMAT_R16_SNORM
-				ProgramAttributeInt8 ProgramAttributeNonNormalized -> DXGI_FORMAT_R8_SINT
-				ProgramAttributeInt8 ProgramAttributeNormalized -> DXGI_FORMAT_R8_SNORM
-				ProgramAttributeUint32 ProgramAttributeNonNormalized -> DXGI_FORMAT_R32_UINT
-				ProgramAttributeUint16 ProgramAttributeNonNormalized -> DXGI_FORMAT_R16_UINT
-				ProgramAttributeUint16 ProgramAttributeNormalized -> DXGI_FORMAT_R16_UNORM
-				ProgramAttributeUint8 ProgramAttributeNonNormalized -> DXGI_FORMAT_R8_UINT
-				ProgramAttributeUint8 ProgramAttributeNormalized -> DXGI_FORMAT_R8_UNORM
-				ProgramAttributeVec1 a -> convertFormat a
-				ProgramAttributeVec2 ProgramAttributeFloat32 -> DXGI_FORMAT_R32G32_FLOAT
-				ProgramAttributeVec2 ProgramAttributeFloat16 -> DXGI_FORMAT_R16G16_FLOAT
-				ProgramAttributeVec2 (ProgramAttributeInt32 ProgramAttributeNonNormalized) -> DXGI_FORMAT_R32G32_SINT
-				ProgramAttributeVec2 (ProgramAttributeInt16 ProgramAttributeNonNormalized) -> DXGI_FORMAT_R16G16_SINT
-				ProgramAttributeVec2 (ProgramAttributeInt16 ProgramAttributeNormalized) -> DXGI_FORMAT_R16G16_SNORM
-				ProgramAttributeVec2 (ProgramAttributeInt8 ProgramAttributeNonNormalized) -> DXGI_FORMAT_R8G8_SINT
-				ProgramAttributeVec2 (ProgramAttributeInt8 ProgramAttributeNormalized) -> DXGI_FORMAT_R8G8_SNORM
-				ProgramAttributeVec2 (ProgramAttributeUint32 ProgramAttributeNonNormalized) -> DXGI_FORMAT_R32G32_UINT
-				ProgramAttributeVec2 (ProgramAttributeUint16 ProgramAttributeNonNormalized) -> DXGI_FORMAT_R16G16_UINT
-				ProgramAttributeVec2 (ProgramAttributeUint16 ProgramAttributeNormalized) -> DXGI_FORMAT_R16G16_UNORM
-				ProgramAttributeVec2 (ProgramAttributeUint8 ProgramAttributeNonNormalized) -> DXGI_FORMAT_R8G8_UINT
-				ProgramAttributeVec2 (ProgramAttributeUint8 ProgramAttributeNormalized) -> DXGI_FORMAT_R8G8_UNORM
-				ProgramAttributeVec3 ProgramAttributeFloat32 -> DXGI_FORMAT_R32G32B32_FLOAT
-				ProgramAttributeVec3 (ProgramAttributeInt32 ProgramAttributeNonNormalized) -> DXGI_FORMAT_R32G32B32_SINT
-				ProgramAttributeVec3 (ProgramAttributeUint32 ProgramAttributeNonNormalized) -> DXGI_FORMAT_R32G32B32_UINT
-				ProgramAttributeVec4 ProgramAttributeFloat32 -> DXGI_FORMAT_R32G32B32A32_FLOAT
-				ProgramAttributeVec4 ProgramAttributeFloat16 -> DXGI_FORMAT_R16G16B16A16_FLOAT
-				ProgramAttributeVec4 (ProgramAttributeInt32 ProgramAttributeNonNormalized) -> DXGI_FORMAT_R32G32B32A32_SINT
-				ProgramAttributeVec4 (ProgramAttributeInt16 ProgramAttributeNonNormalized) -> DXGI_FORMAT_R16G16B16A16_SINT
-				ProgramAttributeVec4 (ProgramAttributeInt16 ProgramAttributeNormalized) -> DXGI_FORMAT_R16G16B16A16_SNORM
-				ProgramAttributeVec4 (ProgramAttributeInt8 ProgramAttributeNonNormalized) -> DXGI_FORMAT_R8G8B8A8_SINT
-				ProgramAttributeVec4 (ProgramAttributeInt8 ProgramAttributeNormalized) -> DXGI_FORMAT_R8G8B8A8_SNORM
-				ProgramAttributeVec4 (ProgramAttributeUint32 ProgramAttributeNonNormalized) -> DXGI_FORMAT_R32G32B32A32_UINT
-				ProgramAttributeVec4 (ProgramAttributeUint16 ProgramAttributeNonNormalized) -> DXGI_FORMAT_R16G16B16A16_UINT
-				ProgramAttributeVec4 (ProgramAttributeUint16 ProgramAttributeNormalized) -> DXGI_FORMAT_R16G16B16A16_UNORM
-				ProgramAttributeVec4 (ProgramAttributeUint8 ProgramAttributeNonNormalized) -> DXGI_FORMAT_R8G8B8A8_UINT
-				ProgramAttributeVec4 (ProgramAttributeUint8 ProgramAttributeNormalized) -> DXGI_FORMAT_R8G8B8A8_UNORM
+				ATFloat32 -> DXGI_FORMAT_R32_FLOAT
+				ATFloat16 -> DXGI_FORMAT_R16_FLOAT
+				ATInt32 AttributeNonNormalized -> DXGI_FORMAT_R32_SINT
+				ATInt16 AttributeNonNormalized -> DXGI_FORMAT_R16_SINT
+				ATInt16 AttributeNormalized -> DXGI_FORMAT_R16_SNORM
+				ATInt8 AttributeNonNormalized -> DXGI_FORMAT_R8_SINT
+				ATInt8 AttributeNormalized -> DXGI_FORMAT_R8_SNORM
+				ATUint32 AttributeNonNormalized -> DXGI_FORMAT_R32_UINT
+				ATUint16 AttributeNonNormalized -> DXGI_FORMAT_R16_UINT
+				ATUint16 AttributeNormalized -> DXGI_FORMAT_R16_UNORM
+				ATUint8 AttributeNonNormalized -> DXGI_FORMAT_R8_UINT
+				ATUint8 AttributeNormalized -> DXGI_FORMAT_R8_UNORM
+				ATVec1 a -> convertFormat a
+				ATVec2 ATFloat32 -> DXGI_FORMAT_R32G32_FLOAT
+				ATVec2 ATFloat16 -> DXGI_FORMAT_R16G16_FLOAT
+				ATVec2 (ATInt32 AttributeNonNormalized) -> DXGI_FORMAT_R32G32_SINT
+				ATVec2 (ATInt16 AttributeNonNormalized) -> DXGI_FORMAT_R16G16_SINT
+				ATVec2 (ATInt16 AttributeNormalized) -> DXGI_FORMAT_R16G16_SNORM
+				ATVec2 (ATInt8 AttributeNonNormalized) -> DXGI_FORMAT_R8G8_SINT
+				ATVec2 (ATInt8 AttributeNormalized) -> DXGI_FORMAT_R8G8_SNORM
+				ATVec2 (ATUint32 AttributeNonNormalized) -> DXGI_FORMAT_R32G32_UINT
+				ATVec2 (ATUint16 AttributeNonNormalized) -> DXGI_FORMAT_R16G16_UINT
+				ATVec2 (ATUint16 AttributeNormalized) -> DXGI_FORMAT_R16G16_UNORM
+				ATVec2 (ATUint8 AttributeNonNormalized) -> DXGI_FORMAT_R8G8_UINT
+				ATVec2 (ATUint8 AttributeNormalized) -> DXGI_FORMAT_R8G8_UNORM
+				ATVec3 ATFloat32 -> DXGI_FORMAT_R32G32B32_FLOAT
+				ATVec3 (ATInt32 AttributeNonNormalized) -> DXGI_FORMAT_R32G32B32_SINT
+				ATVec3 (ATUint32 AttributeNonNormalized) -> DXGI_FORMAT_R32G32B32_UINT
+				ATVec4 ATFloat32 -> DXGI_FORMAT_R32G32B32A32_FLOAT
+				ATVec4 ATFloat16 -> DXGI_FORMAT_R16G16B16A16_FLOAT
+				ATVec4 (ATInt32 AttributeNonNormalized) -> DXGI_FORMAT_R32G32B32A32_SINT
+				ATVec4 (ATInt16 AttributeNonNormalized) -> DXGI_FORMAT_R16G16B16A16_SINT
+				ATVec4 (ATInt16 AttributeNormalized) -> DXGI_FORMAT_R16G16B16A16_SNORM
+				ATVec4 (ATInt8 AttributeNonNormalized) -> DXGI_FORMAT_R8G8B8A8_SINT
+				ATVec4 (ATInt8 AttributeNormalized) -> DXGI_FORMAT_R8G8B8A8_SNORM
+				ATVec4 (ATUint32 AttributeNonNormalized) -> DXGI_FORMAT_R32G32B32A32_UINT
+				ATVec4 (ATUint16 AttributeNonNormalized) -> DXGI_FORMAT_R16G16B16A16_UINT
+				ATVec4 (ATUint16 AttributeNormalized) -> DXGI_FORMAT_R16G16B16A16_UNORM
+				ATVec4 (ATUint8 AttributeNonNormalized) -> DXGI_FORMAT_R8G8B8A8_UINT
+				ATVec4 (ATUint8 AttributeNormalized) -> DXGI_FORMAT_R8G8B8A8_UNORM
 				_ -> DXGI_FORMAT_UNKNOWN
 			in inputElementDescs attributes []
 
