@@ -42,11 +42,11 @@ advancedAttribute :: (ProgramGenerator g, AttributableType a) => Int -> Int -> I
 advancedAttribute slot offset divisor format = ReaderT $ \g -> programRegisterAttribute g slot offset divisor $ attributeType format
 
 -- | Create uniform variable.
-uniform :: (ProgramGenerator g, ProgramStage s, ProgrammableType a) => Int -> Int -> AttributeFormat a -> ProgramM g (ProgramNode g s a)
-uniform slot offset _format = uniformArray slot offset 0
+uniform :: (ProgramGenerator g, ProgramStage s, UniformableType a) => Int -> Int -> UniformFormat a -> ProgramM g (ProgramNode g s a)
+uniform slot offset format = uniformArray slot offset 0 format
 -- | Create unform array variable.
-uniformArray :: (ProgramGenerator g, ProgramStage s, ProgrammableType a) => Int -> Int -> Int -> ProgramM g (ProgramNode g s a)
-uniformArray slot offset size = ReaderT $ \g -> programRegisterUniform g slot offset size
+uniformArray :: (ProgramGenerator g, ProgramStage s, UniformableType a) => Int -> Int -> Int -> UniformFormat a -> ProgramM g (ProgramNode g s a)
+uniformArray slot offset size format = ReaderT $ \g -> programRegisterUniform g slot offset size $ uniformType format
 
 -- | Create 1D sampler.
 sampler1D :: (ProgramGenerator g, ProgramStage s, ProgrammableType a) => Int -> ProgramM g (ProgramSamplerNode g s a Float)

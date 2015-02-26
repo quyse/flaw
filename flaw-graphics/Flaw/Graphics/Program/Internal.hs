@@ -17,6 +17,9 @@ module Flaw.Graphics.Program.Internal
 	, AttributeFormat(..)
 	, AttributeType(..)
 	, AttributeNormalization(..)
+	, UniformableType(..)
+	, UniformFormat(..)
+	, UniformType(..)
 	, ProgrammableTuple(..)
 	, ProgramSamplerDimension(..)
 	, ProgramStage
@@ -208,6 +211,77 @@ forM [(ci, cj) | ci <- ['1'..'4'], cj <- ['1'..'4']] $ \(ci, cj) -> do
 		, funD 'attributeType [clause [conP conName [varP b]] (normalB [| $(conE $ mkName $ "ATMat" ++ [ci, 'x', cj]) (attributeType $(varE b)) |]) []]
 		]
 
+-- | Class of types which can be used in uniform.
+class ProgrammableType a => UniformableType a where
+	data UniformFormat a :: *
+	uniformType :: UniformFormat a -> UniformType
+
+data UniformType
+	= UTFloat
+	| UTHalf
+	| UTInt
+	| UTUint
+	| UTVec1 UniformType
+	| UTVec2 UniformType
+	| UTVec3 UniformType
+	| UTVec4 UniformType
+	| UTMat1x1 UniformType
+	| UTMat1x2 UniformType
+	| UTMat1x3 UniformType
+	| UTMat1x4 UniformType
+	| UTMat2x1 UniformType
+	| UTMat2x2 UniformType
+	| UTMat2x3 UniformType
+	| UTMat2x4 UniformType
+	| UTMat3x1 UniformType
+	| UTMat3x2 UniformType
+	| UTMat3x3 UniformType
+	| UTMat3x4 UniformType
+	| UTMat4x1 UniformType
+	| UTMat4x2 UniformType
+	| UTMat4x3 UniformType
+	| UTMat4x4 UniformType
+
+instance UniformableType Float where
+	data UniformFormat Float = UniformFloat | UniformHalf
+	uniformType f = case f of
+		UniformFloat -> UTFloat
+		UniformHalf -> UTHalf
+
+instance UniformableType Int where
+	data UniformFormat Int = UniformInt
+	uniformType _ = UTInt
+
+instance UniformableType Word where
+	data UniformFormat Word = UniformUint
+	uniformType _ = UTUint
+
+-- instance (ProgrammableScalarType a, UniformableType a) => UniformableType (Vec{1..4} a)
+forM ['1'..'4'] $ \c -> do
+	let v = mkName $ "Vec" ++ [c]
+	a <- newName "a"
+	let conName = mkName $ "UniformVec" ++ [c]
+	b <- newName "b"
+	instanceD (return [ClassP ''ProgrammableScalarType [VarT a], ClassP ''UniformableType [VarT a]]) (appT (conT ''UniformableType) $ appT (conT v) $ varT a)
+		[ dataInstD (return []) ''UniformFormat [appT (conT v) $ varT a]
+			[ normalC conName [return (NotStrict, AppT (ConT ''UniformFormat) $ VarT a)]
+			] []
+		, funD 'uniformType [clause [conP conName [varP b]] (normalB [| $(conE $ mkName $ "UTVec" ++ [c]) (uniformType $(varE b)) |]) []]
+		]
+
+-- instance (ProgrammableScalarType a, UniformableType a) => UniformableType (Mat{1..4}x{1..4} a)
+forM [(ci, cj) | ci <- ['1'..'4'], cj <- ['1'..'4']] $ \(ci, cj) -> do
+	let v = mkName $ "Mat" ++ [ci, 'x', cj]
+	a <- newName "a"
+	let conName = mkName $ "UniformMat" ++ [ci, 'x', cj]
+	b <- newName "b"
+	instanceD (return [ClassP ''ProgrammableScalarType [VarT a], ClassP ''UniformableType [VarT a]]) (appT (conT ''UniformableType) $ appT (conT v) $ varT a)
+		[ dataInstD (return []) ''UniformFormat [appT (conT v) $ varT a]
+			[ normalC conName [return (NotStrict, AppT (ConT ''UniformFormat) $ VarT a)]
+			] []
+		, funD 'uniformType [clause [conP conName [varP b]] (normalB [| $(conE $ mkName $ "UTMat" ++ [ci, 'x', cj]) (uniformType $(varE b)) |]) []]
+		]
+
 class ProgrammableTuple a where
 	type MapTuple a (b :: * -> *) :: *
 
@@ -250,10 +324,11 @@ class ProgramGenerator g where
 		-> Int -- ^ Divisor.
 		-> AttributeType
 		-> IO (ProgramNode g VertexStage a)
-	programRegisterUniform :: (ProgrammableType a, ProgramStage s) => g
+	programRegisterUniform :: (UniformableType a, ProgramStage s) => g
 		-> Int -- ^ Buffer slot.
 		-> Int -- ^ Offset in buffer.
 		-> Int -- ^ Array size (0 for scalar).
+		-> UniformType
 		-> IO (ProgramNode g s a)
 	programRegisterSampler :: (ProgrammableType a, ProgrammableType b, ProgramStage s) => g
 		-> Int
