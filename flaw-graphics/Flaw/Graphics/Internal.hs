@@ -125,7 +125,7 @@ class Device d where
 	-- | Create program.
 	createProgram :: (MonadResource m, MonadBaseControl IO m)
 		=> d -- ^ Device.
-		-> ProgramM (DeviceProgramGenerator d) () -- ^ Program contents.
+		-> Program () -- ^ Program contents.
 		-> m (ReleaseKey, ProgramId d)
 	-- | Create uniform buffer.
 	createUniformBuffer :: (MonadResource m, MonadBaseControl IO m) => d -> Int -> m (ReleaseKey, UniformBufferId d)

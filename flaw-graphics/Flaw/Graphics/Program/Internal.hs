@@ -4,133 +4,147 @@ Description: Internals for shader program support.
 License: MIT
 -}
 
-{-# LANGUAGE FlexibleContexts, MultiParamTypeClasses, ScopedTypeVariables, TemplateHaskell, TypeFamilies #-}
+{-# LANGUAGE GADTs, FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, RankNTypes, ScopedTypeVariables, TemplateHaskell, TypeFamilies, UndecidableInstances #-}
 
 module Flaw.Graphics.Program.Internal
-	( ProgramScalarType(..)
-	, ProgramDimension(..)
-	, ProgramType(..)
-	, ProgrammableScalarType(..)
-	, ProgrammableVectorType
-	, ProgrammableType(..)
-	, AttributableType(..)
+	( ScalarType(..)
+	, Dimension(..)
+	, ValueType(..)
+	, OfScalarType(..)
+	, OfVectorType
+	, OfValueType(..)
+	, OfAttributeType(..)
 	, AttributeFormat(..)
 	, AttributeType(..)
-	, AttributeNormalization(..)
-	, UniformableType(..)
+	, Normalization(..)
+	, OfUniformType(..)
 	, UniformFormat(..)
 	, UniformType(..)
 	, ProgrammableTuple(..)
-	, ProgramSamplerDimension(..)
-	, ProgramStage
-	, VertexStage
-	, PixelStage
-	, ProgramGenerator(..)
+	, State(..)
+	, Attribute(..)
+	, Uniform(..)
+	, Sampler(..)
+	, SamplerDimension(..)
+	, Temp(..)
+	, Node(..)
+	, SamplerNode(..)
+	, Program
+	, runProgram
+	, attribute
+	, uniform
+	, sampler
+	, temp
 	) where
 
 import Control.Monad
+import Control.Monad.Reader
 import Data.Char
+import Data.IORef
 import Data.Word
 import Language.Haskell.TH
 
 import Flaw.Math
 
 -- | Supported scalar types in programs.
-data ProgramScalarType
-	= ProgramScalarFloat
-	| ProgramScalarDouble
-	| ProgramScalarInt
-	| ProgramScalarUint
-	| ProgramScalarBool
+data ScalarType
+	= ScalarFloat
+	| ScalarDouble
+	| ScalarInt
+	| ScalarUint
+	| ScalarBool
+	deriving (Eq, Ord)
 
 -- | Supported dimensions in programs.
-data ProgramDimension
-	= ProgramDimension1
-	| ProgramDimension2
-	| ProgramDimension3
-	| ProgramDimension4
+data Dimension
+	= Dimension1
+	| Dimension2
+	| Dimension3
+	| Dimension4
+	deriving (Eq, Ord)
 
 -- | Supported types in programs.
-data ProgramType
-	= ProgramScalar ProgramScalarType
-	| ProgramVector ProgramDimension ProgramScalarType
-	| ProgramMatrix ProgramDimension ProgramDimension ProgramScalarType
+data ValueType
+	= ScalarValueType ScalarType
+	| VectorValueType Dimension ScalarType
+	| MatrixValueType Dimension Dimension ScalarType
+	deriving (Eq, Ord)
 
 -- | Class of scalar types which can be used in program.
-class ProgrammableType a => ProgrammableScalarType a where
+class OfValueType a => OfScalarType a where
 	-- | Get program scalar type.
 	-- Argument is not used.
-	programScalarType :: a -> ProgramScalarType
+	scalarType :: a -> ScalarType
 
-instance ProgrammableScalarType Float where
-	programScalarType _ = ProgramScalarFloat
-instance ProgrammableScalarType Double where
-	programScalarType _ = ProgramScalarDouble
-instance ProgrammableScalarType Int where
-	programScalarType _ = ProgramScalarInt
-instance ProgrammableScalarType Word where
-	programScalarType _ = ProgramScalarUint
-instance ProgrammableScalarType Bool where
-	programScalarType _ = ProgramScalarBool
+instance OfScalarType Float where
+	scalarType _ = ScalarFloat
+instance OfScalarType Double where
+	scalarType _ = ScalarDouble
+instance OfScalarType Int where
+	scalarType _ = ScalarInt
+instance OfScalarType Word where
+	scalarType _ = ScalarUint
+instance OfScalarType Bool where
+	scalarType _ = ScalarBool
 
 -- | Class of vector types which can be used in program.
-class ProgrammableType a => ProgrammableVectorType a
+class (OfValueType a, Vec a, OfScalarType (VecElement a)) => OfVectorType a
 
-instance ProgrammableScalarType a => ProgrammableVectorType (Vec1 a)
-instance ProgrammableScalarType a => ProgrammableVectorType (Vec2 a)
-instance ProgrammableScalarType a => ProgrammableVectorType (Vec3 a)
-instance ProgrammableScalarType a => ProgrammableVectorType (Vec4 a)
+instance OfScalarType a => OfVectorType (Vec1 a)
+instance OfScalarType a => OfVectorType (Vec2 a)
+instance OfScalarType a => OfVectorType (Vec3 a)
+instance OfScalarType a => OfVectorType (Vec4 a)
 
 -- | Class of types which can be used in program.
-class ProgrammableType a where
-	programType :: a -> ProgramType
+class OfValueType a where
+	valueType :: a -> ValueType
 
-instance ProgrammableType Float where
-	programType _ = ProgramScalar ProgramScalarFloat
-instance ProgrammableType Double where
-	programType _ = ProgramScalar ProgramScalarDouble
-instance ProgrammableType Int where
-	programType _ = ProgramScalar ProgramScalarInt
-instance ProgrammableType Word where
-	programType _ = ProgramScalar ProgramScalarUint
-instance ProgrammableType Bool where
-	programType _ = ProgramScalar ProgramScalarBool
+instance OfValueType Float where
+	valueType _ = ScalarValueType ScalarFloat
+instance OfValueType Double where
+	valueType _ = ScalarValueType ScalarDouble
+instance OfValueType Int where
+	valueType _ = ScalarValueType ScalarInt
+instance OfValueType Word where
+	valueType _ = ScalarValueType ScalarUint
+instance OfValueType Bool where
+	valueType _ = ScalarValueType ScalarBool
 
--- instance ProgrammableScalarType a => ProgrammableType (Vec{1..4} a)
+-- instance OfScalarType a => OfValueType (Vec{1..4} a)
 liftM concat $ forM ['1'..'4'] $ \c -> do
 	let t = conT $ mkName $ "Vec" ++ [c]
-	let d = conE $ mkName $ "ProgramDimension" ++ [c]
+	let d = conE $ mkName $ "Dimension" ++ [c]
 	[d|
-		instance ProgrammableScalarType a => ProgrammableType ($t a) where
-			programType _ = ProgramVector $d $ programScalarType (undefined :: a)
+		instance OfScalarType a => OfValueType ($t a) where
+			valueType _ = VectorValueType $d $ scalarType (undefined :: a)
 		|]
 
--- instance ProgrammableScalarType a => ProgrammableType (Mat{1..4}x{1..4} a)
+-- instance OfScalarType a => OfValueType (Mat{1..4}x{1..4} a)
 liftM concat $ forM [(x, y) | x <- ['1'..'4'], y <- ['1'..'4']] $ \(cx, cy) -> let
 	t = conT $ mkName $ "Mat" ++ [cx, 'x', cy]
-	dx = conE $ mkName $ "ProgramDimension" ++ [cx]
-	dy = conE $ mkName $ "ProgramDimension" ++ [cy]
+	dx = conE $ mkName $ "Dimension" ++ [cx]
+	dy = conE $ mkName $ "Dimension" ++ [cy]
 	in [d|
-		instance ProgrammableScalarType a => ProgrammableType ($t a) where
-			programType _ = ProgramMatrix $dx $dy $ programScalarType (undefined :: a)
+		instance OfScalarType a => OfValueType ($t a) where
+			valueType _ = MatrixValueType $dx $dy $ scalarType (undefined :: a)
 		|]
 
 -- | Class of types which can be used in vertex attribute.
-class ProgrammableType a => AttributableType a where
+class OfValueType a => OfAttributeType a where
 	-- | Typed attibute format.
 	data AttributeFormat a :: *
-	attributeType :: AttributeFormat a -> AttributeType
+	attributeFormatToType :: AttributeFormat a -> AttributeType
 
 -- | Attribute format ids.
 data AttributeType
 	= ATFloat32
 	| ATFloat16
-	| ATInt32 AttributeNormalization
-	| ATInt16 AttributeNormalization
-	| ATInt8 AttributeNormalization
-	| ATUint32 AttributeNormalization
-	| ATUint16 AttributeNormalization
-	| ATUint8 AttributeNormalization
+	| ATInt32 Normalization
+	| ATInt16 Normalization
+	| ATInt8 Normalization
+	| ATUint32 Normalization
+	| ATUint16 Normalization
+	| ATUint8 Normalization
 	| ATVec1 AttributeType
 	| ATVec2 AttributeType
 	| ATVec3 AttributeType
@@ -151,70 +165,72 @@ data AttributeType
 	| ATMat4x2 AttributeType
 	| ATMat4x3 AttributeType
 	| ATMat4x4 AttributeType
+	deriving (Eq, Ord)
 
--- | Normalization mode for integer attribute.
-data AttributeNormalization
-	= AttributeNonNormalized
-	| AttributeNormalized
+-- | Normalization mode.
+data Normalization
+	= NonNormalized
+	| Normalized
+	deriving (Eq, Ord)
 
-instance AttributableType Float where
+instance OfAttributeType Float where
 	data AttributeFormat Float
 		= AttributeFloat32
 		| AttributeFloat16
-	attributeType f = case f of
+	attributeFormatToType f = case f of
 		AttributeFloat32 -> ATFloat32
 		AttributeFloat16 -> ATFloat16
 
-instance AttributableType Int where
+instance OfAttributeType Int where
 	data AttributeFormat Int
-		= AttributeInt32 AttributeNormalization
-		| AttributeInt16 AttributeNormalization
-		| AttributeInt8 AttributeNormalization
-	attributeType f = case f of
+		= AttributeInt32 Normalization
+		| AttributeInt16 Normalization
+		| AttributeInt8 Normalization
+	attributeFormatToType f = case f of
 		AttributeInt32 n -> ATInt32 n
 		AttributeInt16 n -> ATInt16 n
 		AttributeInt8 n -> ATInt8 n
 
-instance AttributableType Word where
+instance OfAttributeType Word where
 	data AttributeFormat Word
-		= AttributeUint32 AttributeNormalization
-		| AttributeUint16 AttributeNormalization
-		| AttributeUint8 AttributeNormalization
-	attributeType f = case f of
+		= AttributeUint32 Normalization
+		| AttributeUint16 Normalization
+		| AttributeUint8 Normalization
+	attributeFormatToType f = case f of
 		AttributeUint32 n -> ATUint32 n
 		AttributeUint16 n -> ATUint16 n
 		AttributeUint8 n -> ATUint8 n
 
--- instance (ProgrammableScalarType a, AttributableType a) => AttributableType (Vec{1..4} a)
+-- instance (OfScalarType a, OfAttributeType a) => OfAttributeType (Vec{1..4} a)
 forM ['1'..'4'] $ \c -> do
 	let v = mkName $ "Vec" ++ [c]
 	a <- newName "a"
 	let conName = mkName $ "AttributeVec" ++ [c]
 	b <- newName "b"
-	instanceD (return [ClassP ''ProgrammableScalarType [VarT a], ClassP ''AttributableType [VarT a]]) (appT (conT ''AttributableType) $ appT (conT v) $ varT a)
+	instanceD (return [ClassP ''OfScalarType [VarT a], ClassP ''OfAttributeType [VarT a]]) (appT (conT ''OfAttributeType) $ appT (conT v) $ varT a)
 		[ dataInstD (return []) ''AttributeFormat [appT (conT v) $ varT a]
 			[ normalC conName [return (NotStrict, AppT (ConT ''AttributeFormat) $ VarT a)]
 			] []
-		, funD 'attributeType [clause [conP conName [varP b]] (normalB [| $(conE $ mkName $ "ATVec" ++ [c]) (attributeType $(varE b)) |]) []]
+		, funD 'attributeFormatToType [clause [conP conName [varP b]] (normalB [| $(conE $ mkName $ "ATVec" ++ [c]) (attributeFormatToType $(varE b)) |]) []]
 		]
 
--- instance (ProgrammableScalarType a, AttributableType a) => AttributableType (Mat{1..4}x{1..4} a)
+-- instance (OfScalarType a, OfAttributeType a) => OfAttributeType (Mat{1..4}x{1..4} a)
 forM [(ci, cj) | ci <- ['1'..'4'], cj <- ['1'..'4']] $ \(ci, cj) -> do
 	let v = mkName $ "Mat" ++ [ci, 'x', cj]
 	a <- newName "a"
 	let conName = mkName $ "AttributeMat" ++ [ci, 'x', cj]
 	b <- newName "b"
-	instanceD (return [ClassP ''ProgrammableScalarType [VarT a], ClassP ''AttributableType [VarT a]]) (appT (conT ''AttributableType) $ appT (conT v) $ varT a)
+	instanceD (return [ClassP ''OfScalarType [VarT a], ClassP ''OfAttributeType [VarT a]]) (appT (conT ''OfAttributeType) $ appT (conT v) $ varT a)
 		[ dataInstD (return []) ''AttributeFormat [appT (conT v) $ varT a]
 			[ normalC conName [return (NotStrict, AppT (ConT ''AttributeFormat) $ VarT a)]
 			] []
-		, funD 'attributeType [clause [conP conName [varP b]] (normalB [| $(conE $ mkName $ "ATMat" ++ [ci, 'x', cj]) (attributeType $(varE b)) |]) []]
+		, funD 'attributeFormatToType [clause [conP conName [varP b]] (normalB [| $(conE $ mkName $ "ATMat" ++ [ci, 'x', cj]) (attributeFormatToType $(varE b)) |]) []]
 		]
 
 -- | Class of types which can be used in uniform.
-class ProgrammableType a => UniformableType a where
+class OfValueType a => OfUniformType a where
 	data UniformFormat a :: *
-	uniformType :: UniformFormat a -> UniformType
+	uniformFormatToType :: UniformFormat a -> UniformType
 
 data UniformType
 	= UTFloat
@@ -241,45 +257,46 @@ data UniformType
 	| UTMat4x2 UniformType
 	| UTMat4x3 UniformType
 	| UTMat4x4 UniformType
+	deriving (Eq, Ord)
 
-instance UniformableType Float where
+instance OfUniformType Float where
 	data UniformFormat Float = UniformFloat | UniformHalf
-	uniformType f = case f of
+	uniformFormatToType f = case f of
 		UniformFloat -> UTFloat
 		UniformHalf -> UTHalf
 
-instance UniformableType Int where
+instance OfUniformType Int where
 	data UniformFormat Int = UniformInt
-	uniformType _ = UTInt
+	uniformFormatToType _ = UTInt
 
-instance UniformableType Word where
+instance OfUniformType Word where
 	data UniformFormat Word = UniformUint
-	uniformType _ = UTUint
+	uniformFormatToType _ = UTUint
 
--- instance (ProgrammableScalarType a, UniformableType a) => UniformableType (Vec{1..4} a)
+-- instance (OfScalarType a, OfUniformType a) => OfUniformType (Vec{1..4} a)
 forM ['1'..'4'] $ \c -> do
 	let v = mkName $ "Vec" ++ [c]
 	a <- newName "a"
 	let conName = mkName $ "UniformVec" ++ [c]
 	b <- newName "b"
-	instanceD (return [ClassP ''ProgrammableScalarType [VarT a], ClassP ''UniformableType [VarT a]]) (appT (conT ''UniformableType) $ appT (conT v) $ varT a)
+	instanceD (return [ClassP ''OfScalarType [VarT a], ClassP ''OfUniformType [VarT a]]) (appT (conT ''OfUniformType) $ appT (conT v) $ varT a)
 		[ dataInstD (return []) ''UniformFormat [appT (conT v) $ varT a]
 			[ normalC conName [return (NotStrict, AppT (ConT ''UniformFormat) $ VarT a)]
 			] []
-		, funD 'uniformType [clause [conP conName [varP b]] (normalB [| $(conE $ mkName $ "UTVec" ++ [c]) (uniformType $(varE b)) |]) []]
+		, funD 'uniformFormatToType [clause [conP conName [varP b]] (normalB [| $(conE $ mkName $ "UTVec" ++ [c]) (uniformFormatToType $(varE b)) |]) []]
 		]
 
--- instance (ProgrammableScalarType a, UniformableType a) => UniformableType (Mat{1..4}x{1..4} a)
+-- instance (OfScalarType a, OfUniformType a) => OfUniformType (Mat{1..4}x{1..4} a)
 forM [(ci, cj) | ci <- ['1'..'4'], cj <- ['1'..'4']] $ \(ci, cj) -> do
 	let v = mkName $ "Mat" ++ [ci, 'x', cj]
 	a <- newName "a"
 	let conName = mkName $ "UniformMat" ++ [ci, 'x', cj]
 	b <- newName "b"
-	instanceD (return [ClassP ''ProgrammableScalarType [VarT a], ClassP ''UniformableType [VarT a]]) (appT (conT ''UniformableType) $ appT (conT v) $ varT a)
+	instanceD (return [ClassP ''OfScalarType [VarT a], ClassP ''OfUniformType [VarT a]]) (appT (conT ''OfUniformType) $ appT (conT v) $ varT a)
 		[ dataInstD (return []) ''UniformFormat [appT (conT v) $ varT a]
 			[ normalC conName [return (NotStrict, AppT (ConT ''UniformFormat) $ VarT a)]
 			] []
-		, funD 'uniformType [clause [conP conName [varP b]] (normalB [| $(conE $ mkName $ "UTMat" ++ [ci, 'x', cj]) (uniformType $(varE b)) |]) []]
+		, funD 'uniformFormatToType [clause [conP conName [varP b]] (normalB [| $(conE $ mkName $ "UTMat" ++ [ci, 'x', cj]) (uniformFormatToType $(varE b)) |]) []]
 		]
 
 class ProgrammableTuple a where
@@ -292,260 +309,169 @@ instance ProgrammableTuple (a, b, c) where
 instance ProgrammableTuple (a, b, c, d) where
 	type MapTuple (a, b, c, d) f = (f a, f b, f c, f d)
 
-data ProgramSamplerDimension
-	= ProgramSampler1D
-	| ProgramSampler2D
-	| ProgramSampler3D
-	| ProgramSamplerCube
+data State = State
+	{ stateTemps :: [Temp]
+	, stateTempsCount :: Int
+	}
 
--- | Program stage class.
-class ProgramStage s
+data Attribute = Attribute
+	{ attributeSlot :: Int
+	, attributeOffset :: Int
+	, attributeDivisor :: Int
+	, attributeType :: AttributeType
+	} deriving (Eq, Ord)
 
-data VertexStage
-instance ProgramStage VertexStage
+data Uniform = Uniform
+	{ uniformSlot :: Int
+	, uniformOffset :: Int
+	, uniformSize :: Int
+	, uniformType :: UniformType
+	} deriving (Eq, Ord)
 
-data PixelStage
-instance ProgramStage PixelStage
+data Sampler = Sampler
+	{ samplerSlot :: Int
+	, samplerDimension :: SamplerDimension
+	, samplerSampleType :: ValueType
+	, samplerCoordsType :: ValueType
+	} deriving (Eq, Ord)
 
--- | Class of program generator.
-class ProgramGenerator g where
-	data ProgramNode g
-		:: * -- stage
-		-> * -- type
-		-> *
-	data ProgramSamplerNode g
-		:: * -- stage
-		-> * -- sample type
-		-> * -- coords type
-		-> *
-	programRegisterAttribute :: AttributableType a => g
-		-> Int -- ^ Slot.
-		-> Int -- ^ Offset.
-		-> Int -- ^ Divisor.
-		-> AttributeType
-		-> IO (ProgramNode g VertexStage a)
-	programRegisterUniform :: (UniformableType a, ProgramStage s) => g
-		-> Int -- ^ Buffer slot.
-		-> Int -- ^ Offset in buffer.
-		-> Int -- ^ Array size (0 for scalar).
-		-> UniformType
-		-> IO (ProgramNode g s a)
-	programRegisterSampler :: (ProgrammableType a, ProgrammableType b, ProgramStage s) => g
-		-> Int
-		-> ProgramSamplerDimension
-		-> IO (ProgramSamplerNode g s a b)
-	-- | Register temporary variable.
-	programRegisterTemp :: (ProgrammableType a, ProgramStage s) => g
-		-> ProgramNode g s a
-		-> IO (ProgramNode g s a)
-	programInterpolate :: ProgrammableType a => g
-		-> ProgramNode g VertexStage a
-		-> IO (ProgramNode g PixelStage a)
-	programNodeConst :: (ProgrammableType a, ProgramStage s) => a
-		-> ProgramNode g s a
-	programNodeCombineVec2 :: (ProgrammableType a, ProgrammableType b, Combine2Vec a b, ProgramStage s)
-		=> ProgramNode g s a
-		-> ProgramNode g s b
-		-> ProgramNode g s (Combine2VecResult a b)
-	programNodeCombineVec3 :: (ProgrammableType a, ProgrammableType b, ProgrammableType c, Combine3Vec a b c, ProgramStage s)
-		=> ProgramNode g s a
-		-> ProgramNode g s b
-		-> ProgramNode g s c
-		-> ProgramNode g s (Combine3VecResult a b c)
-	programNodeCombineVec4 :: (ProgrammableType a, ProgrammableType b, ProgrammableType c, ProgrammableType d, Combine4Vec a b c d, ProgramStage s)
-		=> ProgramNode g s a
-		-> ProgramNode g s b
-		-> ProgramNode g s c
-		-> ProgramNode g s d
-		-> ProgramNode g s (Combine4VecResult a b c d)
-	programNodeAdd :: (ProgrammableType a, Num a, ProgramStage s)
-		=> ProgramNode g s a
-		-> ProgramNode g s a
-		-> ProgramNode g s a
-	programNodeSubtract :: (ProgrammableType a, Num a, ProgramStage s)
-		=> ProgramNode g s a
-		-> ProgramNode g s a
-		-> ProgramNode g s a
-	programNodeMultiply :: (ProgrammableType a, Num a, ProgramStage s)
-		=> ProgramNode g s a
-		-> ProgramNode g s a
-		-> ProgramNode g s a
-	programNodeDivide :: (ProgrammableType a, Fractional a, ProgramStage s)
-		=> ProgramNode g s a
-		-> ProgramNode g s a
-		-> ProgramNode g s a
-	programNodeRecip :: (ProgrammableType a, Fractional a, ProgramStage s)
-		=> ProgramNode g s a
-		-> ProgramNode g s a
-	programNodeNegate :: (ProgrammableType a, Num a, ProgramStage s)
-		=> ProgramNode g s a
-		-> ProgramNode g s a
-	programNodeAbs :: (ProgrammableType a, Num a, ProgramStage s)
-		=> ProgramNode g s a
-		-> ProgramNode g s a
-	programNodeSignum :: (ProgrammableType a, Num a, ProgramStage s)
-		=> ProgramNode g s a
-		-> ProgramNode g s a
-	programNodePi :: (ProgrammableType a, ProgramStage s)
-		=> ProgramNode g s a
-	programNodeExp :: (ProgrammableType a, ProgramStage s)
-		=> ProgramNode g s a
-		-> ProgramNode g s a
-	programNodeSqrt :: (ProgrammableType a, ProgramStage s)
-		=> ProgramNode g s a
-		-> ProgramNode g s a
-	programNodeLog :: (ProgrammableType a, ProgramStage s)
-		=> ProgramNode g s a
-		-> ProgramNode g s a
-	programNodePow :: (ProgrammableType a, ProgramStage s)
-		=> ProgramNode g s a
-		-> ProgramNode g s a
-		-> ProgramNode g s a
-	programNodeLogBase :: (ProgrammableType a, ProgramStage s)
-		=> ProgramNode g s a
-		-> ProgramNode g s a
-		-> ProgramNode g s a
-	programNodeSin :: (ProgrammableType a, ProgramStage s)
-		=> ProgramNode g s a
-		-> ProgramNode g s a
-	programNodeTan :: (ProgrammableType a, ProgramStage s)
-		=> ProgramNode g s a
-		-> ProgramNode g s a
-	programNodeCos :: (ProgrammableType a, ProgramStage s)
-		=> ProgramNode g s a
-		-> ProgramNode g s a
-	programNodeAsin :: (ProgrammableType a, ProgramStage s)
-		=> ProgramNode g s a
-		-> ProgramNode g s a
-	programNodeAtan :: (ProgrammableType a, ProgramStage s)
-		=> ProgramNode g s a
-		-> ProgramNode g s a
-	programNodeAcos :: (ProgrammableType a, ProgramStage s)
-		=> ProgramNode g s a
-		-> ProgramNode g s a
-	programNodeSinh :: (ProgrammableType a, ProgramStage s)
-		=> ProgramNode g s a
-		-> ProgramNode g s a
-	programNodeTanh :: (ProgrammableType a, ProgramStage s)
-		=> ProgramNode g s a
-		-> ProgramNode g s a
-	programNodeCosh :: (ProgrammableType a, ProgramStage s)
-		=> ProgramNode g s a
-		-> ProgramNode g s a
-	programNodeAsinh :: (ProgrammableType a, ProgramStage s)
-		=> ProgramNode g s a
-		-> ProgramNode g s a
-	programNodeAtanh :: (ProgrammableType a, ProgramStage s)
-		=> ProgramNode g s a
-		-> ProgramNode g s a
-	programNodeAcosh :: (ProgrammableType a, ProgramStage s)
-		=> ProgramNode g s a
-		-> ProgramNode g s a
-	programNodeMul :: (Mul a b, ProgramStage s)
-		=> ProgramNode g s a
-		-> ProgramNode g s b
-		-> ProgramNode g s (MulResult a b)
-	programNodeDot :: (ProgrammableVectorType v, e ~ VecElement v, ProgrammableScalarType e, Dot v, ProgramStage s)
-		=> ProgramNode g s v
-		-> ProgramNode g s v
-		-> ProgramNode g s (VecElement v)
-	programNodeInstanceID :: ProgramNode g VertexStage Word
-	programNodeComponent :: (ProgrammableVectorType v, ProgrammableScalarType a, ProgramStage s)
-		=> Char
-		-> ProgramNode g s v
-		-> ProgramNode g s a
-	programNodeSwizzle :: (ProgrammableVectorType v1, ProgrammableVectorType v2, ProgramStage s)
-		=> String
-		-> ProgramNode g s v1
-		-> ProgramNode g s v2
-	programNodeSample :: (ProgrammableType a, ProgrammableType b, ProgramStage s)
-		=> ProgramSamplerNode g s a b
-		-> ProgramNode g s b
-		-> ProgramNode g s a
-	programNodeCast :: (ProgrammableType a, ProgrammableType b, ProgramStage s)
-		=> ProgramNode g s a
-		-> ProgramNode g s b
+data SamplerDimension
+	= Sampler1D
+	| Sampler2D
+	| Sampler3D
+	| SamplerCube
+	deriving (Eq, Ord)
 
-instance Vec v => Vec (ProgramNode g s v) where
-	type VecElement (ProgramNode g s v) = ProgramNode g s (VecElement v)
+data Temp = forall a. OfValueType a => Temp
+	{ tempIndex :: Int
+	, tempNode :: Node a
+	, tempType :: ValueType
+	}
+
+data Node a where
+	AttributeNode :: Attribute -> Node a
+	UniformNode :: Uniform -> Node a
+	TempNode :: Int -> Node a
+	ConstNode :: OfValueType a => ValueType -> a -> Node a
+	AddNode :: (OfValueType a, Num a) => ValueType -> Node a -> Node a -> Node a
+	SubtractNode :: (OfValueType a, Num a) => ValueType -> Node a -> Node a -> Node a
+	MultiplyNode :: (OfValueType a, Num a) => ValueType -> Node a -> Node a -> Node a
+	DivideNode :: (OfValueType a, Fractional a) => ValueType -> Node a -> Node a -> Node a
+	RecipNode :: (OfValueType a, Fractional a) => ValueType -> Node a -> Node a
+	NegateNode :: (OfValueType a, Num a) => ValueType -> Node a -> Node a
+	AbsNode :: (OfValueType a, Num a) => ValueType -> Node a -> Node a
+	SignumNode :: (OfValueType a, Num a) => ValueType -> Node a -> Node a
+	PiNode :: (OfValueType a, Floating a) => ValueType -> Node a
+	ExpNode :: (OfValueType a, Floating a) => ValueType -> Node a -> Node a
+	SqrtNode :: (OfValueType a, Floating a) => ValueType -> Node a -> Node a
+	LogNode :: (OfValueType a, Floating a) => ValueType -> Node a -> Node a
+	PowNode :: (OfValueType a, Floating a) => ValueType -> Node a -> Node a -> Node a
+	LogBaseNode :: (OfValueType a, Floating a) => ValueType -> Node a -> Node a -> Node a
+	SinNode :: (OfValueType a, Floating a) => ValueType -> Node a -> Node a
+	TanNode :: (OfValueType a, Floating a) => ValueType -> Node a -> Node a
+	CosNode :: (OfValueType a, Floating a) => ValueType -> Node a -> Node a
+	AsinNode :: (OfValueType a, Floating a) => ValueType -> Node a -> Node a
+	AtanNode :: (OfValueType a, Floating a) => ValueType -> Node a -> Node a
+	AcosNode :: (OfValueType a, Floating a) => ValueType -> Node a -> Node a
+	SinhNode :: (OfValueType a, Floating a) => ValueType -> Node a -> Node a
+	TanhNode :: (OfValueType a, Floating a) => ValueType -> Node a -> Node a
+	CoshNode :: (OfValueType a, Floating a) => ValueType -> Node a -> Node a
+	AsinhNode :: (OfValueType a, Floating a) => ValueType -> Node a -> Node a
+	AtanhNode :: (OfValueType a, Floating a) => ValueType -> Node a -> Node a
+	AcoshNode :: (OfValueType a, Floating a) => ValueType -> Node a -> Node a
+	MulNode :: (OfValueType a, OfValueType b, Mul a b, OfValueType (MulResult a b)) => ValueType -> ValueType -> ValueType -> Node a -> Node b -> Node (MulResult a b)
+	DotNode :: (OfVectorType v, OfScalarType (VecElement v), Dot v) => ValueType -> ValueType -> Node v -> Node v -> Node (VecElement v)
+	InstanceIdNode :: Node Word
+	ComponentNode :: OfVectorType v => ValueType -> ValueType -> Char -> Node v -> Node (VecElement v)
+	SwizzleNode :: (OfVectorType a, OfVectorType b) => ValueType -> ValueType -> String -> Node a -> Node b
+	SampleNode :: SamplerNode s c -> Node c -> Node s
+	CastNode :: (OfValueType a, OfValueType b) => ValueType -> ValueType -> Node a -> Node b
+	Combine2VecNode
+		:: (OfValueType a, OfValueType b, Combine2Vec a b, OfValueType (Combine2VecResult a b))
+		=> ValueType -> ValueType -> ValueType -> Node a -> Node b -> Node (Combine2VecResult a b)
+	Combine3VecNode
+		:: (OfValueType a, OfValueType b, OfValueType c, Combine3Vec a b c, OfValueType (Combine3VecResult a b c))
+		=> ValueType -> ValueType -> ValueType -> ValueType -> Node a -> Node b -> Node c -> Node (Combine3VecResult a b c)
+	Combine4VecNode
+		:: (OfValueType a, OfValueType b, OfValueType c, OfValueType d, Combine4Vec a b c d, OfValueType (Combine4VecResult a b c d))
+		=> ValueType -> ValueType -> ValueType -> ValueType -> ValueType -> Node a -> Node b -> Node c -> Node d -> Node (Combine4VecResult a b c d)
+
+newtype SamplerNode s c = SamplerNode Sampler
+
+nodeValueType :: OfValueType a => Node a -> ValueType
+nodeValueType node = valueType $ (undefined :: (Node a -> a)) node
+
+instance (OfVectorType v, Vec v) => Vec (Node v) where
+	type VecElement (Node v) = Node (VecElement v)
 	vecLength _ = vecLength (undefined :: v)
 	vecToList _ = undefined
+	vecFromScalar e = CastNode (nodeValueType e) (valueType (undefined :: v)) e
 
-instance (ProgramGenerator g, ProgramStage s, ProgrammableType a, Num a) => Num (ProgramNode g s a) where
-	(+) = programNodeAdd
-	(*) = programNodeMultiply
-	(-) = programNodeSubtract
-	negate = programNodeNegate
-	abs = programNodeAbs
-	signum = programNodeSignum
-	fromInteger = programNodeConst . fromInteger
+instance (OfValueType a, Num a) => Num (Node a) where
+	(+) = AddNode $ valueType (undefined :: a)
+	(*) = MultiplyNode $ valueType (undefined :: a)
+	(-) = SubtractNode $ valueType (undefined :: a)
+	negate = NegateNode $ valueType (undefined :: a)
+	abs = AbsNode $ valueType (undefined :: a)
+	signum = SignumNode $ valueType (undefined :: a)
+	fromInteger = (ConstNode $ valueType (undefined :: a)) . fromInteger
 
-instance (ProgramGenerator g, ProgramStage s, ProgrammableType a, Fractional a) => Fractional (ProgramNode g s a) where
-	(/) = programNodeDivide
-	recip = programNodeRecip
-	fromRational = programNodeConst . fromRational
+instance (OfValueType a, Fractional a) => Fractional (Node a) where
+	(/) = DivideNode $ valueType (undefined :: a)
+	recip = RecipNode $ valueType (undefined :: a)
+	fromRational = (ConstNode $ valueType (undefined :: a)) . fromRational
 
-instance (ProgramGenerator g, ProgramStage s, ProgrammableType a, Floating a) => Floating (ProgramNode g s a) where
-	pi = programNodePi
-	exp = programNodeExp
-	sqrt = programNodeSqrt
-	log = programNodeLog
-	(**) = programNodePow
-	logBase = programNodeLogBase
-	sin = programNodeSin
-	tan = programNodeTan
-	cos = programNodeCos
-	asin = programNodeAsin
-	atan = programNodeAtan
-	acos = programNodeAcos
-	sinh = programNodeSinh
-	tanh = programNodeTanh
-	cosh = programNodeCosh
-	asinh = programNodeAsinh
-	atanh = programNodeAtanh
-	acosh = programNodeAcosh
+instance (OfValueType a, Floating a) => Floating (Node a) where
+	pi = PiNode $ valueType (undefined :: a)
+	exp = ExpNode $ valueType (undefined :: a)
+	sqrt = SqrtNode $ valueType (undefined :: a)
+	log = LogNode $ valueType (undefined :: a)
+	(**) = PowNode $ valueType (undefined :: a)
+	logBase = LogBaseNode $ valueType (undefined :: a)
+	sin = SinNode $ valueType (undefined :: a)
+	tan = TanNode $ valueType (undefined :: a)
+	cos = CosNode $ valueType (undefined :: a)
+	asin = AsinNode $ valueType (undefined :: a)
+	atan = AtanNode $ valueType (undefined :: a)
+	acos = AcosNode $ valueType (undefined :: a)
+	sinh = SinhNode $ valueType (undefined :: a)
+	tanh = TanhNode $ valueType (undefined :: a)
+	cosh = CoshNode $ valueType (undefined :: a)
+	asinh = AsinhNode $ valueType (undefined :: a)
+	atanh = AtanhNode $ valueType (undefined :: a)
+	acosh = AcoshNode $ valueType (undefined :: a)
 
-instance (ProgramGenerator g, ProgramStage s, ProgrammableType a, ProgrammableType b, ProgrammableType (MulResult a b), Mul a b) => Mul (ProgramNode g s a) (ProgramNode g s b) where
-	type MulResult (ProgramNode g s a) (ProgramNode g s b) = ProgramNode g s (MulResult a b)
-	mul = programNodeMul
+instance (OfValueType a, OfValueType b, OfValueType (MulResult a b), Mul a b) => Mul (Node a) (Node b) where
+	type MulResult (Node a) (Node b) = Node (MulResult a b)
+	mul = MulNode (valueType (undefined :: a)) (valueType (undefined :: b)) (valueType (undefined :: MulResult a b))
 
-instance (ProgramGenerator g, ProgramStage s, ProgrammableVectorType v, ProgrammableScalarType (VecElement v), Dot v) => Dot (ProgramNode g s v) where
-	dot = programNodeDot
+instance (OfVectorType v, Dot v) => Dot (Node v) where
+	dot = DotNode (valueType (undefined :: v)) (valueType (undefined :: VecElement v))
 
 {- instance
-	( ProgramGenerator g
-	, ProgramStage s
-	, ProgrammableVectorType v
-	, ProgrammableScalarType (VecElement v)
+	( OfVectorType v
+	, OfScalarType (VecElement v)
 	, Vec{X..W} v
-	) => Vec{X..W} (ProgramNode g s v)
+	) => Vec{X..W} (Node v)
 -}
 forM "xyzw" $ \c -> do
-	g <- newName "g"
-	s <- newName "s"
 	v <- newName "v"
 	let vc = mkName $ "Vec" ++ [toUpper c]
 	instanceD (return
-		[ ClassP ''ProgramGenerator [VarT g]
-		, ClassP ''ProgramStage [VarT s]
-		, ClassP ''ProgrammableVectorType [VarT v]
-		, ClassP ''ProgrammableScalarType [AppT (ConT ''VecElement) $ VarT v]
+		[ ClassP ''OfVectorType [VarT v]
+		--, ClassP ''OfScalarType [AppT (ConT ''VecElement) $ VarT v]
 		, ClassP vc [VarT v]
-		]) [t| $(conT vc) (ProgramNode $(varT g) $(varT s) $(varT v)) |]
-		[ funD (mkName $ [c, '_']) [clause [] (normalB [| programNodeComponent $(litE $ charL c) |]) []]
+		]) [t| $(conT vc) (Node $(varT v)) |]
+		[ funD (mkName $ [c, '_']) [clause [] (normalB [| ComponentNode (valueType (undefined :: $(varT v))) (valueType (undefined :: VecElement $(varT v))) $(litE $ charL c) |]) []]
 		]
 
 {- instance
-	( ProgramGenerator g
-	, ProgramStage s
-	, ProgrammableVectorType v
-	, ProgrammableVectorType (SwizzleVec{X..W}{1..4}Result v)
+	( OfVectorType v
+	, OfVectorType (SwizzleVec{X..W}{1..4}Result v)
 	, SwizzleVec{X..W}{1..4} v
-	) => SwizzleVec{X..W}{1..4} (ProgramNode g s v)
+	) => SwizzleVec{X..W}{1..4} (Node v)
 -}
 forM [(maxComp, dim) | maxComp <- [1..4], dim <- [1..4]] $ \(maxComp, dim) -> do
-	g <- newName "g"
-	s <- newName "s"
 	v <- newName "v"
 	let components = take maxComp "xyzw"
 	let nameSuffix = [toUpper $ last components, intToDigit dim]
@@ -556,27 +482,95 @@ forM [(maxComp, dim) | maxComp <- [1..4], dim <- [1..4]] $ \(maxComp, dim) -> do
 		genVariants len = [c : cs | c <- components, cs <- genVariants $ len - 1]
 		variantFilter variant = all (\c -> elem c components) variant && elem (last components) variant
 	let funDecl variant = do
-		funD (mkName $ variant ++ "__") [clause [] (normalB [| programNodeSwizzle $(litE $ stringL variant) |]) []]
+		funD (mkName $ variant ++ "__") [clause [] (normalB [| SwizzleNode (valueType (undefined :: $(varT v))) (valueType (undefined :: $(conT resultTypeName) $(varT v))) $(litE $ stringL variant) |]) []]
 	let resultTypeDecl = tySynInstD resultTypeName $ tySynEqn
-		[ [t| ProgramNode $(varT g) $(varT s) $(varT v) |] ]
-		[t| ProgramNode $(varT g) $(varT s) ($(conT resultTypeName) $(varT v)) |]
+		[ [t| Node $(varT v) |] ]
+		[t| Node ($(conT resultTypeName) $(varT v)) |]
 	instanceD (return $
-		[ ClassP ''ProgramGenerator [VarT g]
-		, ClassP ''ProgramStage [VarT s]
-		, ClassP ''ProgrammableVectorType [VarT v]
-		, ClassP ''ProgrammableScalarType [AppT (ConT ''VecElement) $ VarT v]
-		, ClassP ''ProgrammableVectorType [AppT (ConT $ mkName $ "SwizzleVecResult" ++ nameSuffix) $ VarT v]
+		[ ClassP ''OfVectorType [VarT v]
+		, ClassP ''OfScalarType [AppT (ConT ''VecElement) $ VarT v]
+		, ClassP ''OfVectorType [AppT (ConT $ mkName $ "SwizzleVecResult" ++ nameSuffix) $ VarT v]
 		, ClassP sv [VarT v]
 		])
-		[t| $(conT sv) (ProgramNode $(varT g) $(varT s) $(varT v)) |] $ resultTypeDecl : map funDecl variants
+		[t| $(conT sv) (Node $(varT v)) |] $ resultTypeDecl : map funDecl variants
 
 ---- Combine{2..4}Vec instances.
-instance (ProgrammableType a, ProgrammableType b, ProgramGenerator g, ProgramStage s, Combine2Vec a b) => Combine2Vec (ProgramNode g s a) (ProgramNode g s b) where
-	type Combine2VecResult (ProgramNode g s a) (ProgramNode g s b) = ProgramNode g s (Combine2VecResult a b)
-	combine2Vec = programNodeCombineVec2
-instance (ProgrammableType a, ProgrammableType b, ProgrammableType c, ProgramGenerator g, ProgramStage s, Combine3Vec a b c) => Combine3Vec (ProgramNode g s a) (ProgramNode g s b) (ProgramNode g s c) where
-	type Combine3VecResult (ProgramNode g s a) (ProgramNode g s b) (ProgramNode g s c) = ProgramNode g s (Combine3VecResult a b c)
-	combine3Vec = programNodeCombineVec3
-instance (ProgrammableType a, ProgrammableType b, ProgrammableType c, ProgrammableType d, ProgramGenerator g, ProgramStage s, Combine4Vec a b c d) => Combine4Vec (ProgramNode g s a) (ProgramNode g s b) (ProgramNode g s c) (ProgramNode g s d) where
-	type Combine4VecResult (ProgramNode g s a) (ProgramNode g s b) (ProgramNode g s c) (ProgramNode g s d) = ProgramNode g s (Combine4VecResult a b c d)
-	combine4Vec = programNodeCombineVec4
+instance (OfValueType a, OfValueType b, Combine2Vec a b, OfValueType (Combine2VecResult a b)) => Combine2Vec (Node a) (Node b) where
+	type Combine2VecResult (Node a) (Node b) = Node (Combine2VecResult a b)
+	combine2Vec = Combine2VecNode
+		(valueType (undefined :: a))
+		(valueType (undefined :: b))
+		(valueType (undefined :: Combine2VecResult a b))
+instance (OfValueType a, OfValueType b, OfValueType c, Combine3Vec a b c, OfValueType (Combine3VecResult a b c)) => Combine3Vec (Node a) (Node b) (Node c) where
+	type Combine3VecResult (Node a) (Node b) (Node c) = Node (Combine3VecResult a b c)
+	combine3Vec = Combine3VecNode
+		(valueType (undefined :: a))
+		(valueType (undefined :: b))
+		(valueType (undefined :: c))
+		(valueType (undefined :: Combine3VecResult a b c))
+instance (OfValueType a, OfValueType b, OfValueType c, OfValueType d, Combine4Vec a b c d, OfValueType (Combine4VecResult a b c d)) => Combine4Vec (Node a) (Node b) (Node c) (Node d) where
+	type Combine4VecResult (Node a) (Node b) (Node c) (Node d) = Node (Combine4VecResult a b c d)
+	combine4Vec = Combine4VecNode
+		(valueType (undefined :: a))
+		(valueType (undefined :: b))
+		(valueType (undefined :: c))
+		(valueType (undefined :: d))
+		(valueType (undefined :: Combine4VecResult a b c d))
+
+-- | Program monad.
+type Program a = ReaderT (IORef State) IO a
+
+runProgram :: Program a -> IO (a, State)
+runProgram program = do
+	stateVar <- newIORef State
+		{ stateTemps = []
+		, stateTempsCount = 0
+		}
+	r <- runReaderT program stateVar
+	state <- readIORef stateVar
+	return (r, state)
+
+attribute :: OfAttributeType a => Int -> Int -> Int -> AttributeFormat a -> Node a
+attribute slot offset divisor format = AttributeNode Attribute
+	{ attributeSlot = slot
+	, attributeOffset = offset
+	, attributeDivisor = divisor
+	, attributeType = attributeFormatToType format
+	}
+
+uniform :: OfUniformType a => Int -> Int -> Int -> UniformFormat a -> Node a
+uniform slot offset size format = UniformNode Uniform
+	{ uniformSlot = slot
+	, uniformOffset = offset
+	, uniformSize = size
+	, uniformType = uniformFormatToType format
+	}
+
+sampler :: (OfValueType s, OfValueType c) => Int -> SamplerDimension -> SamplerNode s c
+sampler slot dimension = withUndefined f where
+	f s c = SamplerNode Sampler
+		{ samplerSlot = slot
+		, samplerDimension = dimension
+		, samplerSampleType = valueType s
+		, samplerCoordsType = valueType c
+		}
+	withUndefined :: (s -> c -> SamplerNode s c) -> SamplerNode s c
+	withUndefined a = a undefined undefined
+
+temp :: OfValueType a => Node a -> Program (Node a)
+temp node = do
+	stateVar <- ask
+	liftIO $ do
+		state@State
+			{ stateTemps = temps
+			, stateTempsCount = tempsCount
+			} <- readIORef stateVar
+		writeIORef stateVar state
+			{ stateTemps = (Temp
+				{ tempIndex = tempsCount
+				, tempNode = node
+				, tempType = nodeValueType node
+				}) : temps
+			, stateTempsCount = tempsCount + 1
+			}
+		return $ TempNode tempsCount
