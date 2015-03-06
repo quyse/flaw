@@ -26,6 +26,7 @@ module Flaw.Math
 	, Dot(..)
 	, Cross(..)
 	, Mat(..)
+	, Mul(..)
 	, Mat1x1(..), Mat1x2(..), Mat1x3(..), Mat1x4(..)
 	, Mat2x1(..), Mat2x2(..), Mat2x3(..), Mat2x4(..)
 	, Mat3x1(..), Mat3x2(..), Mat3x3(..), Mat3x4(..)
@@ -42,7 +43,6 @@ module Flaw.Math
 	, Mat2x1i, Mat2x2i, Mat2x3i, Mat2x4i
 	, Mat3x1i, Mat3x2i, Mat3x3i, Mat3x4i
 	, Mat4x1i, Mat4x2i, Mat4x3i, Mat4x4i
-	, Mul(..)
 	, Quaternion(..)
 	) where
 
@@ -59,6 +59,8 @@ class Vec v where
 	vecLength :: v -> Int -- v is unused
 	-- | Convert vector to list.
 	vecToList :: v -> [VecElement v]
+	-- | Create vector from scalar (put scalar into every component).
+	vecFromScalar :: VecElement v -> v
 
 -- | Generates classes VecX..VecW with only method to access components.
 {- Example:
@@ -75,7 +77,7 @@ forM vecComponents $ \c -> do
 
 -- | Class for dot operation.
 class Vec v => Dot v where
-	dot :: (VecElement v ~ e, Num e) => v -> v -> VecElement v
+	dot :: v -> v -> VecElement v
 
 -- | Class for cross operation.
 class Cross v where
@@ -154,6 +156,7 @@ instance Vec (Vec4 a) where
 	type VecElement (Vec4 a) = a
 	vecLength _ = 4
 	vecToList (Vec4 x y z w) = [x, y, z, w]
+	vecFromScalar a = Vec4 a a a a
 
 instance VecX (Vec4 a) where
 	x_ (Vec4 x _ _ _) = x
@@ -177,6 +180,8 @@ liftM concat $ forM [1..maxVecDimension] $ \dim -> do
 
 	-- string with symbols of components, like "xyz"
 	let components = take dim vecComponents
+	-- names for component-parameters
+	componentParams <- forM components $ \c -> newName [c]
 
 	-- instance for Vec class
 	let vecInstance = do
@@ -186,13 +191,16 @@ liftM concat $ forM [1..maxVecDimension] $ \dim -> do
 		let vecLengthDecl = funD 'vecLength [clause [wildP] (normalB $ litE $ integerL $ fromIntegral dim) []]
 		-- vecToList
 		vecToListDecls <- do
-			componentParams <- mapM (\c -> newName [c]) components
 			let funDecl = funD 'vecToList [clause [conP dataName $ map varP componentParams] (normalB $ listE $ map varE componentParams) []]
 			let specialiseDecl mathType = do
 				pragSpecInlD 'vecToList [t| $(conT dataName) $mathType -> [$mathType] |] Inline AllPhases
 			let specialiseDecls = map (specialiseDecl . conT) mathTypeNames
 			return $ funDecl : specialiseDecls
-		let decls = vecElementDecl : vecLengthDecl : vecToListDecls
+		-- vecFromScalar
+		let vecFromScalarDecl = do
+			a <- newName "a"
+			funD 'vecFromScalar [clause [varP a] (normalB $ foldl appE (conE dataName) $ map varE $ replicate dim a) []]
+		let decls = vecElementDecl : vecLengthDecl : vecFromScalarDecl : vecToListDecls
 		instanceD (return []) [t| Vec ($(conT dataName) $(varT tvA)) |] decls
 
 	-- instances for VecX .. VecW classes
@@ -206,6 +214,20 @@ liftM concat $ forM [1..maxVecDimension] $ \dim -> do
 		let specialiseDecls = map (specialiseDecl . conT) mathTypeNames
 		let decls = funDecl : specialiseDecls
 		instanceD (return []) [t| $(conT className) ($(conT dataName) $(varT tvA)) |] decls
+
+	-- instance for Dot class
+	let dotInstance = do
+		as <- forM components $ \c -> newName $ ['a', c]
+		bs <- forM components $ \c -> newName $ ['b', c]
+		instanceD (return [ClassP ''Num [VarT tvA]]) [t| Dot ($(conT dataName) $(varT tvA)) |]
+			[ funD 'dot
+				[ clause
+					[ conP dataName $ map varP as
+					, conP dataName $ map varP bs
+					]
+					(normalB $ foldl1 (\a b -> [| $a + $b |]) $ map (\(a, b) -> [| $(varE a) * $(varE b) |]) $ zip as bs) []
+				]
+			]
 
 	-- instance for SwizzleVec{maxComp}{dim} class
 	let swizzleVecInstances = map swizzleVecInstance [(srcDim, maxComp) | srcDim <- [1..4], maxComp <- [1..srcDim]] where
@@ -338,7 +360,7 @@ liftM concat $ forM [1..maxVecDimension] $ \dim -> do
 				]
 			])
 
-	sequence $ dataDec : vecInstance : numInstance : fractionalInstance : floatingInstance : (map genVecComponentInstance components) ++ swizzleVecInstances ++ combineVecInstances
+	sequence $ dataDec : vecInstance : dotInstance : numInstance : fractionalInstance : floatingInstance : (map genVecComponentInstance components) ++ swizzleVecInstances ++ combineVecInstances
 
 -- Generate matrix datatypes.
 liftM concat $ forM [(i, j) | i <- [1..maxVecDimension], j <- [1..maxVecDimension]] $ \(n, m) -> do
