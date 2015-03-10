@@ -70,8 +70,6 @@ class System s where
 class Device d where
 	-- | Type for deferred contexts.
 	type DeferredContext d :: *
-	-- | Type for program generator.
-	type DeviceProgramGenerator d :: *
 	-- | Type for texture id.
 	data TextureId d :: *
 	-- | Type for sampler state id.

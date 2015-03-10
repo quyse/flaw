@@ -4,7 +4,7 @@ Description: Internals for shader program support.
 License: MIT
 -}
 
-{-# LANGUAGE GADTs, FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, RankNTypes, ScopedTypeVariables, TemplateHaskell, TypeFamilies, UndecidableInstances #-}
+{-# LANGUAGE GADTs, FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, RankNTypes, ScopedTypeVariables, StandaloneDeriving, TemplateHaskell, TypeFamilies, UndecidableInstances #-}
 
 module Flaw.Graphics.Program.Internal
 	( ScalarType(..)
@@ -26,15 +26,21 @@ module Flaw.Graphics.Program.Internal
 	, Uniform(..)
 	, Sampler(..)
 	, SamplerDimension(..)
+	, Target(..)
+	, Stage(..)
 	, Temp(..)
 	, Node(..)
 	, SamplerNode(..)
 	, Program
 	, runProgram
+	, cnst
 	, attribute
 	, uniform
 	, sampler
 	, temp
+	, rasterize
+	, colorTarget
+	, colorDepthTarget
 	) where
 
 import Control.Monad
@@ -53,7 +59,7 @@ data ScalarType
 	| ScalarInt
 	| ScalarUint
 	| ScalarBool
-	deriving (Eq, Ord)
+	deriving (Eq, Ord, Show)
 
 -- | Supported dimensions in programs.
 data Dimension
@@ -61,14 +67,14 @@ data Dimension
 	| Dimension2
 	| Dimension3
 	| Dimension4
-	deriving (Eq, Ord)
+	deriving (Eq, Ord, Show)
 
 -- | Supported types in programs.
 data ValueType
 	= ScalarValueType ScalarType
 	| VectorValueType Dimension ScalarType
 	| MatrixValueType Dimension Dimension ScalarType
-	deriving (Eq, Ord)
+	deriving (Eq, Ord, Show)
 
 -- | Class of scalar types which can be used in program.
 class OfValueType a => OfScalarType a where
@@ -96,7 +102,7 @@ instance OfScalarType a => OfVectorType (Vec3 a)
 instance OfScalarType a => OfVectorType (Vec4 a)
 
 -- | Class of types which can be used in program.
-class OfValueType a where
+class Show a => OfValueType a where
 	valueType :: a -> ValueType
 
 instance OfValueType Float where
@@ -165,13 +171,13 @@ data AttributeType
 	| ATMat4x2 AttributeType
 	| ATMat4x3 AttributeType
 	| ATMat4x4 AttributeType
-	deriving (Eq, Ord)
+	deriving (Eq, Ord, Show)
 
 -- | Normalization mode.
 data Normalization
 	= NonNormalized
 	| Normalized
-	deriving (Eq, Ord)
+	deriving (Eq, Ord, Show)
 
 instance OfAttributeType Float where
 	data AttributeFormat Float
@@ -257,7 +263,7 @@ data UniformType
 	| UTMat4x2 UniformType
 	| UTMat4x3 UniformType
 	| UTMat4x4 UniformType
-	deriving (Eq, Ord)
+	deriving (Eq, Ord, Show)
 
 instance OfUniformType Float where
 	data UniformFormat Float = UniformFloat | UniformHalf
@@ -310,43 +316,65 @@ instance ProgrammableTuple (a, b, c, d) where
 	type MapTuple (a, b, c, d) f = (f a, f b, f c, f d)
 
 data State = State
-	{ stateTemps :: [Temp]
+	{ stateStage :: Stage
+	, stateTemps :: [Temp]
 	, stateTempsCount :: Int
-	}
+	, stateTargets :: [Target]
+	} deriving Show
 
 data Attribute = Attribute
 	{ attributeSlot :: Int
 	, attributeOffset :: Int
 	, attributeDivisor :: Int
 	, attributeType :: AttributeType
-	} deriving (Eq, Ord)
+	} deriving (Eq, Ord, Show)
 
 data Uniform = Uniform
 	{ uniformSlot :: Int
 	, uniformOffset :: Int
 	, uniformSize :: Int
 	, uniformType :: UniformType
-	} deriving (Eq, Ord)
+	} deriving (Eq, Ord, Show)
 
 data Sampler = Sampler
 	{ samplerSlot :: Int
 	, samplerDimension :: SamplerDimension
 	, samplerSampleType :: ValueType
 	, samplerCoordsType :: ValueType
-	} deriving (Eq, Ord)
+	} deriving (Eq, Ord, Show)
 
 data SamplerDimension
 	= Sampler1D
 	| Sampler2D
 	| Sampler3D
 	| SamplerCube
-	deriving (Eq, Ord)
+	deriving (Eq, Ord, Show)
+
+data Target
+	= ColorTarget
+		{ targetIndex :: Int
+		, targetColorNode :: Node Vec4f
+		}
+	| ColorDepthTarget
+		{ targetIndex :: Int
+		, targetColorNode :: Node Vec4f
+		, targetDepthNode :: Node Float
+		}
+	deriving Show
+
+data Stage
+	= VertexStage
+	| PixelStage
+	| EndStage
+	deriving (Eq, Show)
 
 data Temp = forall a. OfValueType a => Temp
 	{ tempIndex :: Int
 	, tempNode :: Node a
+	, tempStage :: Stage
 	, tempType :: ValueType
 	}
+deriving instance Show Temp
 
 data Node a where
 	AttributeNode :: Attribute -> Node a
@@ -396,7 +424,9 @@ data Node a where
 		:: (OfValueType a, OfValueType b, OfValueType c, OfValueType d, Combine4Vec a b c d, OfValueType (Combine4VecResult a b c d))
 		=> ValueType -> ValueType -> ValueType -> ValueType -> ValueType -> Node a -> Node b -> Node c -> Node d -> Node (Combine4VecResult a b c d)
 
-newtype SamplerNode s c = SamplerNode Sampler
+deriving instance Show (Node a)
+
+newtype SamplerNode s c = SamplerNode Sampler deriving Show
 
 nodeValueType :: OfValueType a => Node a -> ValueType
 nodeValueType node = valueType $ (undefined :: (Node a -> a)) node
@@ -517,26 +547,21 @@ instance (OfValueType a, OfValueType b, OfValueType c, OfValueType d, Combine4Ve
 		(valueType (undefined :: d))
 		(valueType (undefined :: Combine4VecResult a b c d))
 
--- | Program monad.
-type Program a = ReaderT (IORef State) IO a
+cnst :: OfValueType a => a -> Node a
+cnst value = ConstNode (valueType value) value
 
-runProgram :: Program a -> IO (a, State)
-runProgram program = do
-	stateVar <- newIORef State
-		{ stateTemps = []
-		, stateTempsCount = 0
-		}
-	r <- runReaderT program stateVar
-	state <- readIORef stateVar
-	return (r, state)
-
-attribute :: OfAttributeType a => Int -> Int -> Int -> AttributeFormat a -> Node a
-attribute slot offset divisor format = AttributeNode Attribute
-	{ attributeSlot = slot
-	, attributeOffset = offset
-	, attributeDivisor = divisor
-	, attributeType = attributeFormatToType format
-	}
+attribute :: OfAttributeType a => Int -> Int -> Int -> AttributeFormat a -> Program (Node a)
+attribute slot offset divisor format = withState $ \state@State
+	{ stateStage = stage
+	} -> do
+	if stage /= VertexStage then fail "attribute can only be defined in vertex program"
+	else return ()
+	tempInternal (AttributeNode Attribute
+		{ attributeSlot = slot
+		, attributeOffset = offset
+		, attributeDivisor = divisor
+		, attributeType = attributeFormatToType format
+		}) state
 
 uniform :: OfUniformType a => Int -> Int -> Int -> UniformFormat a -> Node a
 uniform slot offset size format = UniformNode Uniform
@@ -557,20 +582,97 @@ sampler slot dimension = withUndefined f where
 	withUndefined :: (s -> c -> SamplerNode s c) -> SamplerNode s c
 	withUndefined a = a undefined undefined
 
-temp :: OfValueType a => Node a -> Program (Node a)
-temp node = do
+-- | Program monad.
+type Program a = ReaderT (IORef State) IO a
+
+runProgram :: Program () -> IO State
+runProgram program = do
+	stateVar <- newIORef State
+		{ stateTemps = []
+		, stateTempsCount = 0
+		, stateStage = VertexStage
+		, stateTargets = []
+		}
+	runReaderT program stateVar
+	state@State
+		{ stateStage = stage
+		} <- readIORef stateVar
+	if stage /= EndStage then fail "wrong program: stage should be end"
+	else return ()
+	return state
+
+withState :: (State -> IO (State, a)) -> Program a
+withState f = do
 	stateVar <- ask
 	liftIO $ do
-		state@State
-			{ stateTemps = temps
-			, stateTempsCount = tempsCount
-			} <- readIORef stateVar
-		writeIORef stateVar state
-			{ stateTemps = (Temp
-				{ tempIndex = tempsCount
-				, tempNode = node
-				, tempType = nodeValueType node
-				}) : temps
-			, stateTempsCount = tempsCount + 1
-			}
-		return $ TempNode tempsCount
+		state <- readIORef stateVar
+		(newState, result) <- f state
+		writeIORef stateVar newState
+		return result
+
+temp :: OfValueType a => Node a -> Program (Node a)
+temp = withState . tempInternal
+
+tempInternal :: OfValueType a => Node a -> State -> IO (State, Node a)
+tempInternal node state@State
+	{ stateStage = stage
+	, stateTemps = temps
+	, stateTempsCount = tempsCount
+	} = do
+	if stage == EndStage then fail "failed to add temp after end of the program"
+	else return ()
+	return (state
+		{ stateTemps = (Temp
+			{ tempIndex = tempsCount
+			, tempNode = node
+			, tempStage = stage
+			, tempType = nodeValueType node
+			}) : temps
+		, stateTempsCount = tempsCount + 1
+		}, TempNode tempsCount)
+
+rasterize :: Program () -> Program ()
+rasterize pixelProgram = withState $ \state@State
+	{ stateStage = stage
+	} -> do
+	if stage /= VertexStage then fail $ show ("wrong stage to add pixel program", stage)
+	else return ()
+	pixelStateVar <- newIORef state
+		{ stateStage = PixelStage
+		}
+	runReaderT pixelProgram pixelStateVar
+	pixelState <- readIORef pixelStateVar
+	return (pixelState
+		{ stateStage = EndStage
+		}, ())
+
+colorTarget :: Int -> Node Vec4f -> Program ()
+colorTarget index colorNode = withState $ \state@State
+	{ stateStage = stage
+	, stateTargets = targets
+	} -> do
+	if stage /= PixelStage then fail $ "colorTarget can be used only in pixel program"
+	else return ()
+	let target = ColorTarget
+		{ targetIndex = index
+		, targetColorNode = colorNode
+		}
+	return (state
+		{ stateTargets = target : targets
+		}, ())
+
+colorDepthTarget :: Int -> Node Vec4f -> Node Float -> Program ()
+colorDepthTarget index colorNode depthNode = withState $ \state@State
+	{ stateStage = stage
+	, stateTargets = targets
+	} -> do
+	if stage /= PixelStage then fail $ "colorDepthTarget can be used only in pixel program"
+	else return ()
+	let target = ColorDepthTarget
+		{ targetIndex = index
+		, targetColorNode = colorNode
+		, targetDepthNode = depthNode
+		}
+	return (state
+		{ stateTargets = target : targets
+		}, ())
