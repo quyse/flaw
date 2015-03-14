@@ -14,7 +14,6 @@ module Flaw.Graphics.DirectX11.Internal
 import qualified Control.Exception.Lifted as Lifted
 import Control.Monad
 import Control.Monad.IO.Class
-import Control.Monad.Trans.Reader
 import Control.Monad.Trans.Resource
 import Data.Bits
 import qualified Data.ByteString as BS
@@ -54,7 +53,6 @@ data Dx11Device = Dx11Device
 
 instance Device Dx11Device where
 	type DeferredContext Dx11Device = Dx11Context
-	type DeviceProgramGenerator Dx11Device = HlslGenerator
 	data TextureId Dx11Device
 		= Dx11TextureId ID3D11ShaderResourceView
 		| Dx11NullTextureId
@@ -517,16 +515,17 @@ instance Device Dx11Device where
 		-- function to create input layout
 		let createInputLayout attributes vertexShaderByteCode = allocateCOMObject $ BS.unsafeUseAsCStringLen vertexShaderByteCode $ \(byteCodePtr, byteCodeSize) -> let
 			inputElementDescs (HlslAttribute
-				{ hlslAttributeName = name
-				, hlslAttributeSemantic = semantic
-				, hlslAttributeSlot = slot
-				, hlslAttributeOffset = offset
-				, hlslAttributeDivisor = divisor
-				, hlslAttributeAttributeType = atype
+				{ hlslAttributeSemantic = semantic
+				, hlslAttributeInfo = Attribute
+					{ attributeSlot = slot
+					, attributeOffset = offset
+					, attributeDivisor = divisor
+					, attributeType = atype
+					}
 				} : restAttributes) descs = do
 				BS.unsafeUseAsCString (T.encodeUtf8 semantic) $ \semanticPtr -> do
 					let format = convertFormat atype
-					if format == DXGI_FORMAT_UNKNOWN then fail $ "wrong attribute format for " ++ T.unpack name
+					if format == DXGI_FORMAT_UNKNOWN then fail $ "wrong attribute format for " ++ T.unpack semantic
 					else return ()
 					let desc = D3D11_INPUT_ELEMENT_DESC
 						{ f_D3D11_INPUT_ELEMENT_DESC_SemanticName = semanticPtr
@@ -544,44 +543,44 @@ instance Device Dx11Device where
 			convertFormat atype = case atype of
 				ATFloat32 -> DXGI_FORMAT_R32_FLOAT
 				ATFloat16 -> DXGI_FORMAT_R16_FLOAT
-				ATInt32 AttributeNonNormalized -> DXGI_FORMAT_R32_SINT
-				ATInt16 AttributeNonNormalized -> DXGI_FORMAT_R16_SINT
-				ATInt16 AttributeNormalized -> DXGI_FORMAT_R16_SNORM
-				ATInt8 AttributeNonNormalized -> DXGI_FORMAT_R8_SINT
-				ATInt8 AttributeNormalized -> DXGI_FORMAT_R8_SNORM
-				ATUint32 AttributeNonNormalized -> DXGI_FORMAT_R32_UINT
-				ATUint16 AttributeNonNormalized -> DXGI_FORMAT_R16_UINT
-				ATUint16 AttributeNormalized -> DXGI_FORMAT_R16_UNORM
-				ATUint8 AttributeNonNormalized -> DXGI_FORMAT_R8_UINT
-				ATUint8 AttributeNormalized -> DXGI_FORMAT_R8_UNORM
+				ATInt32 NonNormalized -> DXGI_FORMAT_R32_SINT
+				ATInt16 NonNormalized -> DXGI_FORMAT_R16_SINT
+				ATInt16 Normalized -> DXGI_FORMAT_R16_SNORM
+				ATInt8 NonNormalized -> DXGI_FORMAT_R8_SINT
+				ATInt8 Normalized -> DXGI_FORMAT_R8_SNORM
+				ATUint32 NonNormalized -> DXGI_FORMAT_R32_UINT
+				ATUint16 NonNormalized -> DXGI_FORMAT_R16_UINT
+				ATUint16 Normalized -> DXGI_FORMAT_R16_UNORM
+				ATUint8 NonNormalized -> DXGI_FORMAT_R8_UINT
+				ATUint8 Normalized -> DXGI_FORMAT_R8_UNORM
 				ATVec1 a -> convertFormat a
 				ATVec2 ATFloat32 -> DXGI_FORMAT_R32G32_FLOAT
 				ATVec2 ATFloat16 -> DXGI_FORMAT_R16G16_FLOAT
-				ATVec2 (ATInt32 AttributeNonNormalized) -> DXGI_FORMAT_R32G32_SINT
-				ATVec2 (ATInt16 AttributeNonNormalized) -> DXGI_FORMAT_R16G16_SINT
-				ATVec2 (ATInt16 AttributeNormalized) -> DXGI_FORMAT_R16G16_SNORM
-				ATVec2 (ATInt8 AttributeNonNormalized) -> DXGI_FORMAT_R8G8_SINT
-				ATVec2 (ATInt8 AttributeNormalized) -> DXGI_FORMAT_R8G8_SNORM
-				ATVec2 (ATUint32 AttributeNonNormalized) -> DXGI_FORMAT_R32G32_UINT
-				ATVec2 (ATUint16 AttributeNonNormalized) -> DXGI_FORMAT_R16G16_UINT
-				ATVec2 (ATUint16 AttributeNormalized) -> DXGI_FORMAT_R16G16_UNORM
-				ATVec2 (ATUint8 AttributeNonNormalized) -> DXGI_FORMAT_R8G8_UINT
-				ATVec2 (ATUint8 AttributeNormalized) -> DXGI_FORMAT_R8G8_UNORM
+				ATVec2 (ATInt32 NonNormalized) -> DXGI_FORMAT_R32G32_SINT
+				ATVec2 (ATInt16 NonNormalized) -> DXGI_FORMAT_R16G16_SINT
+				ATVec2 (ATInt16 Normalized) -> DXGI_FORMAT_R16G16_SNORM
+				ATVec2 (ATInt8 NonNormalized) -> DXGI_FORMAT_R8G8_SINT
+				ATVec2 (ATInt8 Normalized) -> DXGI_FORMAT_R8G8_SNORM
+				ATVec2 (ATUint32 NonNormalized) -> DXGI_FORMAT_R32G32_UINT
+				ATVec2 (ATUint16 NonNormalized) -> DXGI_FORMAT_R16G16_UINT
+				ATVec2 (ATUint16 Normalized) -> DXGI_FORMAT_R16G16_UNORM
+				ATVec2 (ATUint8 NonNormalized) -> DXGI_FORMAT_R8G8_UINT
+				ATVec2 (ATUint8 Normalized) -> DXGI_FORMAT_R8G8_UNORM
 				ATVec3 ATFloat32 -> DXGI_FORMAT_R32G32B32_FLOAT
-				ATVec3 (ATInt32 AttributeNonNormalized) -> DXGI_FORMAT_R32G32B32_SINT
-				ATVec3 (ATUint32 AttributeNonNormalized) -> DXGI_FORMAT_R32G32B32_UINT
+				ATVec3 (ATInt32 NonNormalized) -> DXGI_FORMAT_R32G32B32_SINT
+				ATVec3 (ATUint32 NonNormalized) -> DXGI_FORMAT_R32G32B32_UINT
 				ATVec4 ATFloat32 -> DXGI_FORMAT_R32G32B32A32_FLOAT
 				ATVec4 ATFloat16 -> DXGI_FORMAT_R16G16B16A16_FLOAT
-				ATVec4 (ATInt32 AttributeNonNormalized) -> DXGI_FORMAT_R32G32B32A32_SINT
-				ATVec4 (ATInt16 AttributeNonNormalized) -> DXGI_FORMAT_R16G16B16A16_SINT
-				ATVec4 (ATInt16 AttributeNormalized) -> DXGI_FORMAT_R16G16B16A16_SNORM
-				ATVec4 (ATInt8 AttributeNonNormalized) -> DXGI_FORMAT_R8G8B8A8_SINT
-				ATVec4 (ATInt8 AttributeNormalized) -> DXGI_FORMAT_R8G8B8A8_SNORM
-				ATVec4 (ATUint32 AttributeNonNormalized) -> DXGI_FORMAT_R32G32B32A32_UINT
-				ATVec4 (ATUint16 AttributeNonNormalized) -> DXGI_FORMAT_R16G16B16A16_UINT
-				ATVec4 (ATUint16 AttributeNormalized) -> DXGI_FORMAT_R16G16B16A16_UNORM
-				ATVec4 (ATUint8 AttributeNonNormalized) -> DXGI_FORMAT_R8G8B8A8_UINT
-				ATVec4 (ATUint8 AttributeNormalized) -> DXGI_FORMAT_R8G8B8A8_UNORM
+				ATVec4 (ATInt32 NonNormalized) -> DXGI_FORMAT_R32G32B32A32_SINT
+				ATVec4 (ATInt16 NonNormalized) -> DXGI_FORMAT_R16G16B16A16_SINT
+				ATVec4 (ATInt16 Normalized) -> DXGI_FORMAT_R16G16B16A16_SNORM
+				ATVec4 (ATInt8 NonNormalized) -> DXGI_FORMAT_R8G8B8A8_SINT
+				ATVec4 (ATInt8 Normalized) -> DXGI_FORMAT_R8G8B8A8_SNORM
+				ATVec4 (ATUint32 NonNormalized) -> DXGI_FORMAT_R32G32B32A32_UINT
+				ATVec4 (ATUint16 NonNormalized) -> DXGI_FORMAT_R16G16B16A16_UINT
+				ATVec4 (ATUint16 Normalized) -> DXGI_FORMAT_R16G16B16A16_UNORM
+				ATVec4 (ATUint8 NonNormalized) -> DXGI_FORMAT_R8G8B8A8_UINT
+				ATVec4 (ATUint8 Normalized) -> DXGI_FORMAT_R8G8B8A8_UNORM
 				_ -> DXGI_FORMAT_UNKNOWN
 			in inputElementDescs attributes []
 
@@ -589,7 +588,7 @@ instance Device Dx11Device where
 		let compileShader HlslShader
 			{ hlslShaderSource = source
 			, hlslShaderEntryPoint = entryPoint
-			, hlslShaderTarget = target
+			, hlslShaderProfile = profile
 			} = do
 			let debug = False
 			let optimize = True
@@ -598,7 +597,7 @@ instance Device Dx11Device where
 				.|. (if optimize then fromEnum D3DCOMPILE_OPTIMIZATION_LEVEL3 else (fromEnum D3DCOMPILE_OPTIMIZATION_LEVEL0) .|. (fromEnum D3DCOMPILE_SKIP_OPTIMIZATION))
 			(hr, shaderData, errorsData) <- BS.unsafeUseAsCStringLen (T.encodeUtf8 source) $ \(sourcePtr, sourceLen) -> do
 				BS.unsafeUseAsCString (T.encodeUtf8 entryPoint) $ \entryPointPtr -> do
-					BS.unsafeUseAsCString (T.encodeUtf8 target) $ \targetPtr -> do
+					BS.unsafeUseAsCString (T.encodeUtf8 profile) $ \profilePtr -> do
 						alloca $ \shaderBlobPtrPtr -> do
 							alloca $ \errorsBlobPtrPtr -> do
 								hr <- d3dCompile
@@ -608,7 +607,7 @@ instance Device Dx11Device where
 									nullPtr -- pDefines
 									nullPtr -- pInclude
 									entryPointPtr -- pEntrypoint
-									targetPtr -- pTarget
+									profilePtr -- pTarget
 									flags -- Flags1
 									0 -- Flags2
 									shaderBlobPtrPtr -- ppCode
@@ -641,7 +640,7 @@ instance Device Dx11Device where
 				createCOMObjectViaPtr $ m_ID3D11Device_CreatePixelShader deviceInterface (castPtr ptr) (fromIntegral len) nullPtr
 
 		-- generate HLSL
-		hlslProgram <- liftIO $ generateHlsl $ runReaderT program
+		hlslProgram <- liftIO $ liftM generateProgram $ runProgram program
 
 		-- select on type of the program
 		case hlslProgram of
