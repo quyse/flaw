@@ -17,10 +17,6 @@ module Flaw.Graphics.Program.Internal
 	, AttributeFormat(..)
 	, AttributeType(..)
 	, Normalization(..)
-	, OfUniformType(..)
-	, UniformFormat(..)
-	, UniformType(..)
-	, ProgrammableTuple(..)
 	, State(..)
 	, Attribute(..)
 	, Uniform(..)
@@ -31,16 +27,9 @@ module Flaw.Graphics.Program.Internal
 	, Temp(..)
 	, Node(..)
 	, SamplerNode(..)
+	, nodeValueType
 	, Program
 	, runProgram
-	, cnst
-	, attribute
-	, uniform
-	, sampler
-	, temp
-	, rasterize
-	, colorTarget
-	, colorDepthTarget
 	) where
 
 import Control.Monad
@@ -233,88 +222,6 @@ forM [(ci, cj) | ci <- ['1'..'4'], cj <- ['1'..'4']] $ \(ci, cj) -> do
 		, funD 'attributeFormatToType [clause [conP conName [varP b]] (normalB [| $(conE $ mkName $ "ATMat" ++ [ci, 'x', cj]) (attributeFormatToType $(varE b)) |]) []]
 		]
 
--- | Class of types which can be used in uniform.
-class OfValueType a => OfUniformType a where
-	data UniformFormat a :: *
-	uniformFormatToType :: UniformFormat a -> UniformType
-
-data UniformType
-	= UTFloat
-	| UTHalf
-	| UTInt
-	| UTUint
-	| UTVec1 UniformType
-	| UTVec2 UniformType
-	| UTVec3 UniformType
-	| UTVec4 UniformType
-	| UTMat1x1 UniformType
-	| UTMat1x2 UniformType
-	| UTMat1x3 UniformType
-	| UTMat1x4 UniformType
-	| UTMat2x1 UniformType
-	| UTMat2x2 UniformType
-	| UTMat2x3 UniformType
-	| UTMat2x4 UniformType
-	| UTMat3x1 UniformType
-	| UTMat3x2 UniformType
-	| UTMat3x3 UniformType
-	| UTMat3x4 UniformType
-	| UTMat4x1 UniformType
-	| UTMat4x2 UniformType
-	| UTMat4x3 UniformType
-	| UTMat4x4 UniformType
-	deriving (Eq, Ord, Show)
-
-instance OfUniformType Float where
-	data UniformFormat Float = UniformFloat | UniformHalf
-	uniformFormatToType f = case f of
-		UniformFloat -> UTFloat
-		UniformHalf -> UTHalf
-
-instance OfUniformType Int where
-	data UniformFormat Int = UniformInt
-	uniformFormatToType _ = UTInt
-
-instance OfUniformType Word where
-	data UniformFormat Word = UniformUint
-	uniformFormatToType _ = UTUint
-
--- instance (OfScalarType a, OfUniformType a) => OfUniformType (Vec{1..4} a)
-forM ['1'..'4'] $ \c -> do
-	let v = mkName $ "Vec" ++ [c]
-	a <- newName "a"
-	let conName = mkName $ "UniformVec" ++ [c]
-	b <- newName "b"
-	instanceD (return [ClassP ''OfScalarType [VarT a], ClassP ''OfUniformType [VarT a]]) (appT (conT ''OfUniformType) $ appT (conT v) $ varT a)
-		[ dataInstD (return []) ''UniformFormat [appT (conT v) $ varT a]
-			[ normalC conName [return (NotStrict, AppT (ConT ''UniformFormat) $ VarT a)]
-			] []
-		, funD 'uniformFormatToType [clause [conP conName [varP b]] (normalB [| $(conE $ mkName $ "UTVec" ++ [c]) (uniformFormatToType $(varE b)) |]) []]
-		]
-
--- instance (OfScalarType a, OfUniformType a) => OfUniformType (Mat{1..4}x{1..4} a)
-forM [(ci, cj) | ci <- ['1'..'4'], cj <- ['1'..'4']] $ \(ci, cj) -> do
-	let v = mkName $ "Mat" ++ [ci, 'x', cj]
-	a <- newName "a"
-	let conName = mkName $ "UniformMat" ++ [ci, 'x', cj]
-	b <- newName "b"
-	instanceD (return [ClassP ''OfScalarType [VarT a], ClassP ''OfUniformType [VarT a]]) (appT (conT ''OfUniformType) $ appT (conT v) $ varT a)
-		[ dataInstD (return []) ''UniformFormat [appT (conT v) $ varT a]
-			[ normalC conName [return (NotStrict, AppT (ConT ''UniformFormat) $ VarT a)]
-			] []
-		, funD 'uniformFormatToType [clause [conP conName [varP b]] (normalB [| $(conE $ mkName $ "UTMat" ++ [ci, 'x', cj]) (uniformFormatToType $(varE b)) |]) []]
-		]
-
-class ProgrammableTuple a where
-	type MapTuple a (b :: * -> *) :: *
-
-instance ProgrammableTuple (a, b) where
-	type MapTuple (a, b) f = (f a, f a)
-instance ProgrammableTuple (a, b, c) where
-	type MapTuple (a, b, c) f = (f a, f b, f c)
-instance ProgrammableTuple (a, b, c, d) where
-	type MapTuple (a, b, c, d) f = (f a, f b, f c, f d)
-
 data State = State
 	{ stateStage :: Stage
 	, stateTemps :: [Temp]
@@ -327,13 +234,14 @@ data Attribute = Attribute
 	, attributeOffset :: Int
 	, attributeDivisor :: Int
 	, attributeType :: AttributeType
+	, attributeValueType :: ValueType
 	} deriving (Eq, Ord, Show)
 
 data Uniform = Uniform
 	{ uniformSlot :: Int
 	, uniformOffset :: Int
 	, uniformSize :: Int
-	, uniformType :: UniformType
+	, uniformType :: ValueType
 	} deriving (Eq, Ord, Show)
 
 data Sampler = Sampler
@@ -547,41 +455,6 @@ instance (OfValueType a, OfValueType b, OfValueType c, OfValueType d, Combine4Ve
 		(valueType (undefined :: d))
 		(valueType (undefined :: Combine4VecResult a b c d))
 
-cnst :: OfValueType a => a -> Node a
-cnst value = ConstNode (valueType value) value
-
-attribute :: OfAttributeType a => Int -> Int -> Int -> AttributeFormat a -> Program (Node a)
-attribute slot offset divisor format = withState $ \state@State
-	{ stateStage = stage
-	} -> do
-	if stage /= VertexStage then fail "attribute can only be defined in vertex program"
-	else return ()
-	tempInternal (AttributeNode Attribute
-		{ attributeSlot = slot
-		, attributeOffset = offset
-		, attributeDivisor = divisor
-		, attributeType = attributeFormatToType format
-		}) state
-
-uniform :: OfUniformType a => Int -> Int -> Int -> UniformFormat a -> Node a
-uniform slot offset size format = UniformNode Uniform
-	{ uniformSlot = slot
-	, uniformOffset = offset
-	, uniformSize = size
-	, uniformType = uniformFormatToType format
-	}
-
-sampler :: (OfValueType s, OfValueType c) => Int -> SamplerDimension -> SamplerNode s c
-sampler slot dimension = withUndefined f where
-	f s c = SamplerNode Sampler
-		{ samplerSlot = slot
-		, samplerDimension = dimension
-		, samplerSampleType = valueType s
-		, samplerCoordsType = valueType c
-		}
-	withUndefined :: (s -> c -> SamplerNode s c) -> SamplerNode s c
-	withUndefined a = a undefined undefined
-
 -- | Program monad.
 type Program a = ReaderT (IORef State) IO a
 
@@ -600,79 +473,3 @@ runProgram program = do
 	if stage /= EndStage then fail "wrong program: stage should be end"
 	else return ()
 	return state
-
-withState :: (State -> IO (State, a)) -> Program a
-withState f = do
-	stateVar <- ask
-	liftIO $ do
-		state <- readIORef stateVar
-		(newState, result) <- f state
-		writeIORef stateVar newState
-		return result
-
-temp :: OfValueType a => Node a -> Program (Node a)
-temp = withState . tempInternal
-
-tempInternal :: OfValueType a => Node a -> State -> IO (State, Node a)
-tempInternal node state@State
-	{ stateStage = stage
-	, stateTemps = temps
-	, stateTempsCount = tempsCount
-	} = do
-	if stage == EndStage then fail "failed to add temp after end of the program"
-	else return ()
-	return (state
-		{ stateTemps = (Temp
-			{ tempIndex = tempsCount
-			, tempNode = node
-			, tempStage = stage
-			, tempType = nodeValueType node
-			}) : temps
-		, stateTempsCount = tempsCount + 1
-		}, TempNode tempsCount)
-
-rasterize :: Program () -> Program ()
-rasterize pixelProgram = withState $ \state@State
-	{ stateStage = stage
-	} -> do
-	if stage /= VertexStage then fail $ show ("wrong stage to add pixel program", stage)
-	else return ()
-	pixelStateVar <- newIORef state
-		{ stateStage = PixelStage
-		}
-	runReaderT pixelProgram pixelStateVar
-	pixelState <- readIORef pixelStateVar
-	return (pixelState
-		{ stateStage = EndStage
-		}, ())
-
-colorTarget :: Int -> Node Vec4f -> Program ()
-colorTarget index colorNode = withState $ \state@State
-	{ stateStage = stage
-	, stateTargets = targets
-	} -> do
-	if stage /= PixelStage then fail $ "colorTarget can be used only in pixel program"
-	else return ()
-	let target = ColorTarget
-		{ targetIndex = index
-		, targetColorNode = colorNode
-		}
-	return (state
-		{ stateTargets = target : targets
-		}, ())
-
-colorDepthTarget :: Int -> Node Vec4f -> Node Float -> Program ()
-colorDepthTarget index colorNode depthNode = withState $ \state@State
-	{ stateStage = stage
-	, stateTargets = targets
-	} -> do
-	if stage /= PixelStage then fail $ "colorDepthTarget can be used only in pixel program"
-	else return ()
-	let target = ColorDepthTarget
-		{ targetIndex = index
-		, targetColorNode = colorNode
-		, targetDepthNode = depthNode
-		}
-	return (state
-		{ stateTargets = target : targets
-		}, ())
