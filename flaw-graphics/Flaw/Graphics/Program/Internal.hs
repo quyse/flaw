@@ -93,6 +93,8 @@ instance OfScalarType a => OfVectorType (Vec4 a)
 -- | Class of types which can be used in program.
 class Show a => OfValueType a where
 	valueType :: a -> ValueType
+	valueToShowList :: a -> [String]
+	valueToShowList v = [show v]
 
 instance OfValueType Float where
 	valueType _ = ScalarValueType ScalarFloat
@@ -107,21 +109,27 @@ instance OfValueType Bool where
 
 -- instance OfScalarType a => OfValueType (Vec{1..4} a)
 liftM concat $ forM ['1'..'4'] $ \c -> do
-	let t = conT $ mkName $ "Vec" ++ [c]
+	let name = mkName $ "Vec" ++ [c]
+	let t = conT name
 	let d = conE $ mkName $ "Dimension" ++ [c]
+	ps <- forM ['1'..c] $ \p -> newName ['p', p]
 	[d|
 		instance OfScalarType a => OfValueType ($t a) where
 			valueType _ = VectorValueType $d $ scalarType (undefined :: a)
+			valueToShowList $(conP name $ map varP ps) = $(listE $ map (\p -> appE (varE 'show) $ varE p) ps)
 		|]
 
 -- instance OfScalarType a => OfValueType (Mat{1..4}x{1..4} a)
-liftM concat $ forM [(x, y) | x <- ['1'..'4'], y <- ['1'..'4']] $ \(cx, cy) -> let
-	t = conT $ mkName $ "Mat" ++ [cx, 'x', cy]
-	dx = conE $ mkName $ "Dimension" ++ [cx]
-	dy = conE $ mkName $ "Dimension" ++ [cy]
-	in [d|
+liftM concat $ forM [(i, j) | i <- ['1'..'4'], j <- ['1'..'4']] $ \(ci, cj) -> do
+	let name = mkName $ "Mat" ++ [ci, 'x', cj]
+	let t = conT name
+	let di = conE $ mkName $ "Dimension" ++ [ci]
+	let dj = conE $ mkName $ "Dimension" ++ [cj]
+	ps <- forM [(i, j) | i <- ['1'..ci], j <- ['1'..cj]] $ \(i, j) -> newName ['p', i, j]
+	[d|
 		instance OfScalarType a => OfValueType ($t a) where
-			valueType _ = MatrixValueType $dx $dy $ scalarType (undefined :: a)
+			valueType _ = MatrixValueType $di $dj $ scalarType (undefined :: a)
+			valueToShowList $(conP name $ map varP ps) = $(listE $ map (\p -> appE (varE 'show) $ varE p) ps)
 		|]
 
 -- | Class of types which can be used in vertex attribute.
@@ -222,6 +230,7 @@ forM [(ci, cj) | ci <- ['1'..'4'], cj <- ['1'..'4']] $ \(ci, cj) -> do
 		, funD 'attributeFormatToType [clause [conP conName [varP b]] (normalB [| $(conE $ mkName $ "ATMat" ++ [ci, 'x', cj]) (attributeFormatToType $(varE b)) |]) []]
 		]
 
+-- | State of the program while constructing.
 data State = State
 	{ stateStage :: Stage
 	, stateTemps :: [Temp]
@@ -259,15 +268,9 @@ data SamplerDimension
 	deriving (Eq, Ord, Show)
 
 data Target
-	= ColorTarget
-		{ targetIndex :: Int
-		, targetColorNode :: Node Vec4f
-		}
-	| ColorDepthTarget
-		{ targetIndex :: Int
-		, targetColorNode :: Node Vec4f
-		, targetDepthNode :: Node Float
-		}
+	= PositionTarget (Node Vec4f)
+	| ColorTarget Int (Node Vec4f)
+	| DepthTarget (Node Float)
 	deriving Show
 
 data Stage

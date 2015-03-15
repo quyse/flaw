@@ -10,6 +10,7 @@ module Flaw.Graphics.Program
 	( Program
 	, AttributeFormat(..)
 	, cnst
+	, constf, const2f, const3f, const4f
 	, attribute
 	, uniform
 	, uniformf
@@ -19,10 +20,15 @@ module Flaw.Graphics.Program
 	, uniform3x1f, uniform3x2f, uniform3x3f, uniform3x4f
 	, uniform4x1f, uniform4x2f, uniform4x3f, uniform4x4f
 	, sampler
+	, sampler1Df, sampler1D2f, sampler1D3f, sampler1D4f
+	, sampler2Df, sampler2D2f, sampler2D3f, sampler2D4f
+	, sampler3Df, sampler3D2f, sampler3D3f, sampler3D4f
+	, samplerCubef, samplerCube2f, samplerCube3f, samplerCube4f
+	, sample
 	, temp
 	, rasterize
 	, colorTarget
-	, colorDepthTarget
+	, depthTarget
 	) where
 
 import Control.Monad.Reader
@@ -72,6 +78,9 @@ sampler slot dimension = withUndefined2 f where
 	withUndefined2 :: (s -> c -> SamplerNode s c) -> SamplerNode s c
 	withUndefined2 q = q undefined undefined
 
+sample :: (OfValueType s, OfValueType c) => SamplerNode s c -> Node c -> Node s
+sample = SampleNode
+
 withState :: (State -> IO (State, a)) -> Program a
 withState f = do
 	stateVar <- ask
@@ -102,14 +111,17 @@ tempInternal node state@State
 		, stateTempsCount = tempsCount + 1
 		}, TempNode tempsCount)
 
-rasterize :: Program () -> Program ()
-rasterize pixelProgram = withState $ \state@State
+rasterize :: Node Vec4f -> Program () -> Program ()
+rasterize positionNode pixelProgram = withState $ \state@State
 	{ stateStage = stage
+	, stateTargets = targets
 	} -> do
 	if stage /= VertexStage then fail $ show ("wrong stage to add pixel program", stage)
 	else return ()
+	let positionTarget = PositionTarget positionNode
 	pixelStateVar <- newIORef state
 		{ stateStage = PixelStage
+		, stateTargets = positionTarget : targets
 		}
 	runReaderT pixelProgram pixelStateVar
 	pixelState <- readIORef pixelStateVar
@@ -118,35 +130,37 @@ rasterize pixelProgram = withState $ \state@State
 		}, ())
 
 colorTarget :: Int -> Node Vec4f -> Program ()
-colorTarget index colorNode = withState $ \state@State
+colorTarget i colorNode = withState $ \state@State
 	{ stateStage = stage
 	, stateTargets = targets
 	} -> do
 	if stage /= PixelStage then fail $ "colorTarget can be used only in pixel program"
 	else return ()
-	let target = ColorTarget
-		{ targetIndex = index
-		, targetColorNode = colorNode
-		}
+	let target = ColorTarget i colorNode
 	return (state
 		{ stateTargets = target : targets
 		}, ())
 
-colorDepthTarget :: Int -> Node Vec4f -> Node Float -> Program ()
-colorDepthTarget index colorNode depthNode = withState $ \state@State
+depthTarget :: Int -> Node Float -> Program ()
+depthTarget index depthNode = withState $ \state@State
 	{ stateStage = stage
 	, stateTargets = targets
 	} -> do
-	if stage /= PixelStage then fail $ "colorDepthTarget can be used only in pixel program"
+	if stage /= PixelStage then fail $ "depthTarget can be used only in pixel program"
 	else return ()
-	let target = ColorDepthTarget
-		{ targetIndex = index
-		, targetColorNode = colorNode
-		, targetDepthNode = depthNode
-		}
+	let target = DepthTarget depthNode
 	return (state
 		{ stateTargets = target : targets
 		}, ())
+
+constf :: Float -> Node Float
+constf = cnst
+const2f :: Vec2f -> Node Vec2f
+const2f = cnst
+const3f :: Vec3f -> Node Vec3f
+const3f = cnst
+const4f :: Vec4f -> Node Vec4f
+const4f = cnst
 
 uniformf :: Int -> Int -> Int -> Node Float
 uniformf = uniform
@@ -162,3 +176,39 @@ liftM concat $ forM [(di, dj) | di <- ['1'..'4'], dj <- ['1'..'4'] ] $ \(di, dj)
 	sigDec <- sigD name [t| Int -> Int -> Int -> Node $(appT (conT $ mkName $ "Mat" ++ [di, 'x', dj]) (conT ''Float)) |]
 	valDec <- valD (varP name) (normalB $ varE 'uniform) []
 	return [sigDec, valDec]
+
+sampler1Df :: Int -> SamplerNode Float Float
+sampler1Df slot = sampler slot Sampler1D
+sampler1D2f :: Int -> SamplerNode Vec2f Float
+sampler1D2f slot = sampler slot Sampler1D
+sampler1D3f :: Int -> SamplerNode Vec3f Float
+sampler1D3f slot = sampler slot Sampler1D
+sampler1D4f :: Int -> SamplerNode Vec4f Float
+sampler1D4f slot = sampler slot Sampler1D
+
+sampler2Df :: Int -> SamplerNode Float Vec2f
+sampler2Df slot = sampler slot Sampler2D
+sampler2D2f :: Int -> SamplerNode Vec2f Vec2f
+sampler2D2f slot = sampler slot Sampler2D
+sampler2D3f :: Int -> SamplerNode Vec3f Vec2f
+sampler2D3f slot = sampler slot Sampler2D
+sampler2D4f :: Int -> SamplerNode Vec4f Vec2f
+sampler2D4f slot = sampler slot Sampler2D
+
+sampler3Df :: Int -> SamplerNode Float Vec3f
+sampler3Df slot = sampler slot Sampler3D
+sampler3D2f :: Int -> SamplerNode Vec2f Vec3f
+sampler3D2f slot = sampler slot Sampler3D
+sampler3D3f :: Int -> SamplerNode Vec3f Vec3f
+sampler3D3f slot = sampler slot Sampler3D
+sampler3D4f :: Int -> SamplerNode Vec4f Vec3f
+sampler3D4f slot = sampler slot Sampler3D
+
+samplerCubef :: Int -> SamplerNode Float Vec3f
+samplerCubef slot = sampler slot SamplerCube
+samplerCube2f :: Int -> SamplerNode Vec2f Vec3f
+samplerCube2f slot = sampler slot SamplerCube
+samplerCube3f :: Int -> SamplerNode Vec3f Vec3f
+samplerCube3f slot = sampler slot SamplerCube
+samplerCube4f :: Int -> SamplerNode Vec4f Vec3f
+samplerCube4f slot = sampler slot SamplerCube
