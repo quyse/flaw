@@ -31,10 +31,6 @@ data HlslVar = HlslVar
 	, hlslVarType :: ValueType
 	}
 
-data HlslVarData
-	= HlslVarTarget Target
-	| HlslVarTemp Int
-
 -- | HLSL shader.
 data HlslShader = HlslShader
 	{ hlslShaderSource :: T.Text

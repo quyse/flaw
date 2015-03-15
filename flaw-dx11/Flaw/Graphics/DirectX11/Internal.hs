@@ -75,7 +75,7 @@ instance Device Dx11Device where
 		| Dx11NullVertexBufferId
 		deriving Eq
 	data IndexBufferId Dx11Device
-		= Dx11IndexBufferId ID3D11Buffer
+		= Dx11IndexBufferId ID3D11Buffer DXGI_FORMAT
 		| Dx11NullIndexBufferId
 		deriving Eq
 	data ProgramId Dx11Device
@@ -484,7 +484,7 @@ instance Device Dx11Device where
 
 	createStaticIndexBuffer Dx11Device
 		{ dx11DeviceInterface = deviceInterface
-		} bytes = describeException "failed to create DirectX11 index buffer" $ do
+		} bytes is32bit = describeException "failed to create DirectX11 index buffer" $ do
 		-- desc
 		let desc = D3D11_BUFFER_DESC
 			{ f_D3D11_BUFFER_DESC_ByteWidth = fromIntegral $ BS.length bytes
@@ -506,7 +506,7 @@ instance Device Dx11Device where
 				with (subresourceData $ castPtr bytesPtr) $ \subresourceDataPtr -> do
 					createCOMObjectViaPtr $ m_ID3D11Device_CreateBuffer deviceInterface descPtr subresourceDataPtr
 
-		return (releaseKey, Dx11IndexBufferId bufferInterface)
+		return (releaseKey, Dx11IndexBufferId bufferInterface (if is32bit then DXGI_FORMAT_R32_UINT else DXGI_FORMAT_R16_UINT))
 
 	createProgram Dx11Device
 		{ dx11DeviceInterface = deviceInterface
@@ -729,6 +729,7 @@ dx11DefaultRenderState = RenderState
 	, renderStateViewport = (0, 0)
 	, renderStateVertexBuffers = []
 	, renderStateIndexBuffer = Dx11NullIndexBufferId
+	, renderStateUniformBuffers = []
 	, renderStateSamplers = []
 	, renderStateProgram = Dx11NullProgramId
 	}
@@ -770,10 +771,13 @@ instance Context Dx11Context Dx11Device where
 		} indicesCount = do
 		dx11UpdateContext context renderState
 		case indexBuffer of
-			Dx11IndexBufferId _indexBufferInterface -> do
+			Dx11IndexBufferId _indexBufferInterface _format -> do
 				m_ID3D11DeviceContext_DrawIndexed contextInterface (fromIntegral indicesCount) 0 0
 			Dx11NullIndexBufferId -> do
 				m_ID3D11DeviceContext_Draw contextInterface (fromIntegral indicesCount) 0
+
+	-- TODO
+	contextPlay = undefined
 
 -- | Helper method to clear depth and/or stencil.
 dx11ClearDepthStencil :: Dx11Context -> RenderState Dx11Device -> Float -> Int -> Int -> IO ()
@@ -796,7 +800,7 @@ dx11UpdateContext Dx11Context
 	{ renderStateFrameBuffer = desiredFrameBuffer
 	, renderStateViewport = desiredViewport
 	, renderStateVertexBuffers = desiredVertexBuffers
-	, renderStateIndexBuffer = desiredIndexBuffers
+	, renderStateIndexBuffer = desiredIndexBuffer
 	, renderStateUniformBuffers = desiredUniformBuffers
 	, renderStateSamplers = desiredSamplers
 	, renderStateProgram = desiredProgram
@@ -823,6 +827,54 @@ dx11UpdateContext Dx11Context
 			m_ID3D11DeviceContext_OMSetRenderTargets contextInterface (fromIntegral $ length renderTargetsInterfaces) renderTargetsInterfacesPtr depthStencilInterface
 	else return ()
 
+	-- viewport
+	if actualViewport /= desiredViewport then do
+		let (viewportWidth, viewportHeight) = desiredViewport
+		let viewport = D3D11_VIEWPORT
+			{ f_D3D11_VIEWPORT_TopLeftX = 0
+			, f_D3D11_VIEWPORT_TopLeftY = 0
+			, f_D3D11_VIEWPORT_Width = fromIntegral viewportWidth
+			, f_D3D11_VIEWPORT_Height = fromIntegral viewportHeight
+			, f_D3D11_VIEWPORT_MinDepth = 0
+			, f_D3D11_VIEWPORT_MaxDepth = 1
+			}
+		with viewport $ \viewportPtr -> do
+			m_ID3D11DeviceContext_RSSetViewports contextInterface 1 viewportPtr
+	else return ()
+
+	-- vertex buffers
+	if actualVertexBuffers /= desiredVertexBuffers then do
+		let buffersCount = fromIntegral $ length desiredVertexBuffers
+		let (buffersInterfaces, strides) = unzip [case vertexBuffer of
+			Dx11VertexBufferId bufferInterface stride -> (pokeCOMObject bufferInterface, stride)
+			Dx11NullVertexBufferId -> (nullPtr, 0)
+			| vertexBuffer <- desiredVertexBuffers]
+		withArray buffersInterfaces $ \buffersInterfacesPtr -> do
+			withArray (map fromIntegral strides) $ \stridesPtr -> do
+				withArray (replicate buffersCount 0) $ \offsetsPtr -> do
+					m_ID3D11DeviceContext_IASetVertexBuffers contextInterface 0 (fromIntegral buffersCount) buffersInterfacesPtr stridesPtr offsetsPtr
+	else return ()
+
+	-- index buffer
+	if actualIndexBuffer /= desiredIndexBuffer then do
+		let (indexBufferInterfacePtr, format) = case desiredIndexBuffer of
+			Dx11IndexBufferId bufferInterface format' -> (pokeCOMObject bufferInterface, format')
+			Dx11NullIndexBufferId -> (nullPtr, DXGI_FORMAT_UNKNOWN)
+		m_ID3D11DeviceContext_IASetIndexBuffer contextInterface indexBufferInterfacePtr (wrapEnum format) 0
+	else return ()
+
+	-- uniform buffers
+	if actualUniformBuffers /= desiredUniformBuffers then do
+		let buffersCount = fromIntegral $ length desiredUniformBuffers
+		let buffersInterfaces = [case uniformBuffer of
+			Dx11UniformBufferId bufferInterface -> pokeCOMObject bufferInterface
+			Dx11NullUniformBufferId -> nullPtr
+			| uniformBuffer <- desiredUniformBuffers]
+		withArray buffersInterfaces $ \buffersInterfacesPtr -> do
+			m_ID3D11DeviceContext_VSSetConstantBuffers contextInterface 0 buffersCount buffersInterfacesPtr
+			m_ID3D11DeviceContext_PSSetConstantBuffers contextInterface 0 buffersCount buffersInterfacesPtr
+	else return ()
+
 	-- samplers
 	if actualSamplers /= desiredSamplers then do
 		let samplersCount = fromIntegral $ length desiredSamplers
@@ -837,18 +889,6 @@ dx11UpdateContext Dx11Context
 		withArray ssInterfaces $ \ssInterfacesPtr -> do
 			m_ID3D11DeviceContext_VSSetSamplers contextInterface 0 samplersCount ssInterfacesPtr
 			m_ID3D11DeviceContext_PSSetSamplers contextInterface 0 samplersCount ssInterfacesPtr
-	else return ()
-
-	-- uniform buffers
-	if actualUniformBuffers /= desiredUniformBuffers then do
-		let buffersCount = fromIntegral $ length desiredUniformBuffers
-		let buffersInterfaces = [case uniformBuffer of
-			Dx11UniformBufferId bufferInterface -> pokeCOMObject bufferInterface
-			Dx11NullUniformBufferId -> nullPtr
-			| uniformBuffer <- desiredUniformBuffers]
-		withArray buffersInterfaces $ \buffersInterfacesPtr -> do
-			m_ID3D11DeviceContext_VSSetConstantBuffers contextInterface 0 buffersCount buffersInterfacesPtr
-			m_ID3D11DeviceContext_PSSetConstantBuffers contextInterface 0 buffersCount buffersInterfacesPtr
 	else return ()
 
 	-- program (shaders, input layout)
@@ -867,17 +907,4 @@ dx11UpdateContext Dx11Context
 		m_ID3D11DeviceContext_IASetInputLayout contextInterface inputLayoutInterfacePtr
 		m_ID3D11DeviceContext_VSSetShader contextInterface vertexShaderInterfacePtr nullPtr 0
 		m_ID3D11DeviceContext_PSSetShader contextInterface pixelShaderInterfacePtr nullPtr 0
-	else return ()
-
-	-- vertex buffers
-	if actualVertexBuffers /= desiredVertexBuffers then do
-		let buffersCount = fromIntegral $ length desiredVertexBuffers
-		let (buffersInterfaces, strides) = unzip [case vertexBuffer of
-			Dx11VertexBufferId bufferInterface stride -> (pokeCOMObject bufferInterface, stride)
-			Dx11NullVertexBufferId -> (nullPtr, 0)
-			| vertexBuffer <- desiredVertexBuffers]
-		withArray buffersInterfaces $ \buffersInterfacesPtr -> do
-			withArray (map fromIntegral strides) $ \stridesPtr -> do
-				withArray (replicate buffersCount 0) $ \offsetsPtr -> do
-					m_ID3D11DeviceContext_IASetVertexBuffers contextInterface 0 (fromIntegral buffersCount) buffersInterfacesPtr stridesPtr offsetsPtr
 	else return ()

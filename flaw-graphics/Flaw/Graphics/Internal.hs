@@ -119,7 +119,7 @@ class Device d where
 		-> Int -- ^ Stride in bytes.
 		-> m (ReleaseKey, VertexBufferId d)
 	-- | Create index buffer.
-	createStaticIndexBuffer :: (MonadResource m, MonadBaseControl IO m) => d -> BS.ByteString -> m (ReleaseKey, IndexBufferId d)
+	createStaticIndexBuffer :: (MonadResource m, MonadBaseControl IO m) => d -> BS.ByteString -> Bool -> m (ReleaseKey, IndexBufferId d)
 	-- | Create program.
 	createProgram :: (MonadResource m, MonadBaseControl IO m)
 		=> d -- ^ Device.
