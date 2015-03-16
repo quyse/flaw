@@ -15,7 +15,6 @@ module Flaw.Window.Win32
 	, updateLayeredWin32Window
 	, invokeWin32WindowSystem
 	, invokeWin32WindowSystem_
-	, addWin32WindowCallback
 	) where
 
 import Control.Concurrent
@@ -32,7 +31,8 @@ import Foreign.Marshal.Alloc
 import Foreign.Ptr
 import Foreign.Storable
 
-import Flaw.Window.Internal
+import Flaw.Window
+import Flaw.FFI.Win32
 
 data Win32WindowSystem = Win32WindowSystem
 	{ wsHandle :: Ptr () -- ^ Opaque handle for C side.
@@ -59,6 +59,12 @@ instance Window Win32Window where
 			width <- peek widthPtr
 			height <- peek heightPtr
 			return (width, height)
+	addWindowCallback window callback = addWin32WindowCallback window $ \msg wParam lParam -> do
+		case msg of
+			0x0002 -> callback DestroyWindowEvent -- WM_DESTROY
+			0x0005 -> callback $ ResizeWindowEvent (fromIntegral $ loWord wParam) (fromIntegral $ hiWord lParam) -- WM_SIZE
+			0x0010 -> callback CloseWindowEvent -- WM_CLOSE
+			_ -> return ()
 
 initWin32WindowSystem :: MonadResource m => m (ReleaseKey, Win32WindowSystem)
 initWin32WindowSystem = allocate initialize shutdown where
@@ -103,8 +109,9 @@ internalCreateWin32Window :: MonadResource m => Win32WindowSystem -> T.Text -> I
 internalCreateWin32Window ws title left top width height layered = allocate create destroy where
 	create = invokeWin32WindowSystem ws $ mfix $ \w -> do
 		-- create callback
+		userCallbacksRef <- newIORef []
 		callback <- wrapWindowCallback $ \msg wParam lParam -> do
-			userCallbacks <- readIORef $ wUserCallbacksRef w
+			userCallbacks <- readIORef userCallbacksRef
 			forM userCallbacks $ \callback -> callback msg wParam lParam
 			case msg of
 				0x0002 -> do -- WM_DESTROY
@@ -116,7 +123,6 @@ internalCreateWin32Window ws title left top width height layered = allocate crea
 			c_createWin32Window (wsHandle ws) titleCString left top width height callback (if layered then 1 else 0)
 		if hwnd == nullPtr then error "cannot create Win32Window"
 		else do
-			userCallbacksRef <- newIORef []
 			return $ Win32Window
 				{ wWindowSystem = ws
 				, wHandle = hwnd
@@ -173,8 +179,6 @@ data Message where
 
 -- foreign types
 
-type LPTSTR = CWString
-type HWND = Ptr ()
 type WPARAM = CUIntPtr
 type LPARAM = CIntPtr
 
@@ -187,13 +191,13 @@ foreign import ccall unsafe "stopWin32WindowSystem" c_stopWin32WindowSystem :: I
 foreign import ccall unsafe "invokeWin32WindowSystem" c_invokeWin32WindowSystem :: Ptr () -> FunPtr InvokeCallback -> IO ()
 foreign import ccall unsafe "createWin32Window" c_createWin32Window
 	:: Ptr () -- window system handle
-	-> LPTSTR -- title
+	-> LPWSTR -- title
 	-> Int -> Int -- x y
 	-> Int -> Int -- width height
 	-> FunPtr WindowCallback -- callback
 	-> Int -- layered
 	-> IO HWND -- HWND
-foreign import ccall unsafe "setWin32WindowTitle" c_setWin32WindowTitle :: HWND -> LPTSTR -> IO ()
+foreign import ccall unsafe "setWin32WindowTitle" c_setWin32WindowTitle :: HWND -> LPWSTR -> IO ()
 foreign import ccall unsafe "getWin32WindowClientSize" c_getWin32WindowClientSize :: HWND -> Ptr Int -> Ptr Int -> IO ()
 foreign import ccall unsafe "destroyWin32Window" c_destroyWin32Window :: HWND -> IO ()
 foreign import ccall unsafe "updateLayeredWin32Window" c_updateLayeredWin32Window :: HWND -> IO ()
