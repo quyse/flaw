@@ -11,11 +11,9 @@ module Flaw.Graphics.DirectX11.Internal
 	, createDx11Device
 	, Dx11Context(..)
 	, Dx11Presenter(..)
-	, dx11ResizePresenter
 	, dx11CreatePresenter
 	) where
 
-import Control.Concurrent.MVar
 import qualified Control.Exception.Lifted as Lifted
 import Control.Monad
 import Control.Monad.IO.Class
@@ -73,9 +71,8 @@ instance Device Dx11Device where
 	newtype SamplerStateId Dx11Device
 		= Dx11SamplerStateId ID3D11SamplerState
 		deriving Eq
-	data RenderTargetId Dx11Device
+	newtype RenderTargetId Dx11Device
 		= Dx11RenderTargetId ID3D11RenderTargetView
-		| Dx11PresenterRenderTargetId Dx11Presenter
 		deriving Eq
 	data DepthStencilTargetId Dx11Device
 		= Dx11DepthStencilTargetId ID3D11DepthStencilView
@@ -761,14 +758,6 @@ dx11DefaultContextState :: Dx11ContextState
 dx11DefaultContextState = dx11DefaultRenderState
 
 instance Context Dx11Context Dx11Device where
-	contextReset Dx11Context
-		{ dx11ContextInterface = contextInterface
-		, dx11ContextState = contextState
-		} = do
-		m_ID3D11DeviceContext_ClearState contextInterface
-		writeIORef contextState dx11DefaultContextState
-		return dx11DefaultRenderState
-
 	contextClearColor Dx11Context
 		{ dx11ContextInterface = contextInterface
 		} RenderState
@@ -802,11 +791,15 @@ instance Context Dx11Context Dx11Device where
 	-- TODO
 	contextPlay = undefined
 
+	contextRender _context f = f dx11DefaultRenderState
+
 -- | DirectX11 DXGI presenter for window.
 data Dx11Presenter = Dx11Presenter
-	{ dx11PresenterSwapChainInterface :: IDXGISwapChain
+	{ dx11PresenterDevice :: Dx11Device
+	, dx11PresenterSwapChainInterface :: IDXGISwapChain
 	, dx11PresenterWindowSystem :: Win32WindowSystem
-	, dx11PresenterStateVar :: MVar Dx11PresenterState
+	-- | Mutable presenter state. Work only from window thread!
+	, dx11PresenterStateRef :: IORef Dx11PresenterState
 	}
 
 instance Eq Dx11Presenter where
@@ -827,57 +820,101 @@ data Dx11PresenterState = Dx11PresenterState
 	}
 
 instance Presenter Dx11Presenter DXGISystem Dx11Context Dx11Device where
-	setPresenterMode Dx11Presenter
+	setPresenterMode presenter@Dx11Presenter
 		{ dx11PresenterSwapChainInterface = swapChainInterface
-		, dx11PresenterStateVar = stateVar
-		} maybeDisplayMode = describeException ("failed to set DirectX11 presenter mode", maybeDisplayMode) $ do
-		modifyMVar_ stateVar $ \state@Dx11PresenterState
+		, dx11PresenterWindowSystem = windowSystem
+		, dx11PresenterStateRef = stateRef
+		} maybeDisplayMode = describeException ("failed to set DirectX11 presenter mode", maybeDisplayMode) $ invokeWin32WindowSystem windowSystem $ do
+		-- get state
+		state@Dx11PresenterState
 			{ dx11PresenterMaybeDisplayMode = currentMaybeDisplayMode
 			, dx11PresenterWidth = width
 			, dx11PresenterHeight = height
-			} -> do
-			-- resize target
-			let desc = getDXGIDisplayModeDesc maybeDisplayMode width height
-			with desc $ \descPtr -> do
-				hresultCheck =<< m_IDXGISwapChain_ResizeTarget swapChainInterface descPtr
-			-- if fullscreen state changed, change
-			newState <- if isJust currentMaybeDisplayMode /= isJust maybeDisplayMode then do
-				hresultCheck =<< m_IDXGISwapChain_SetFullscreenState swapChainInterface (isJust maybeDisplayMode) nullPtr
-				-- if now it's fullscreen, resize buffers
-				case maybeDisplayMode of
-					Just (DXGIDisplayModeId DXGI_MODE_DESC
-						{ f_DXGI_MODE_DESC_Width = modeWidth
-						, f_DXGI_MODE_DESC_Height = modeHeight
-						}) -> dx11ResizePresenterInternal (fromIntegral modeWidth) (fromIntegral modeHeight) state
-					_ -> return state
-			else return state
-			-- set new mode
-			return newState
-				{ dx11PresenterMaybeDisplayMode = maybeDisplayMode
+			} <- readIORef stateRef
+		-- resize target
+		let desc = getDXGIDisplayModeDesc maybeDisplayMode width height
+		with desc $ \descPtr -> do
+			hresultCheck =<< m_IDXGISwapChain_ResizeTarget swapChainInterface descPtr
+		-- if fullscreen state changed, change
+		newState <- if isJust currentMaybeDisplayMode /= isJust maybeDisplayMode then do
+			hresultCheck =<< m_IDXGISwapChain_SetFullscreenState swapChainInterface (isJust maybeDisplayMode) nullPtr
+			-- if now it's fullscreen, resize buffers
+			case maybeDisplayMode of
+				Just (DXGIDisplayModeId DXGI_MODE_DESC
+					{ f_DXGI_MODE_DESC_Width = modeWidth
+					, f_DXGI_MODE_DESC_Height = modeHeight
+					}) -> dx11ResizePresenter presenter state (fromIntegral modeWidth) (fromIntegral modeHeight)
+				_ -> return state
+		else return state
+		-- set new mode
+		writeIORef stateRef newState
+			{ dx11PresenterMaybeDisplayMode = maybeDisplayMode
+			}
+
+	presenterRender Dx11Presenter
+		{ dx11PresenterDevice = Dx11Device
+			{ dx11DeviceInterface = deviceInterface
+			}
+		, dx11PresenterSwapChainInterface = swapChainInterface
+		, dx11PresenterWindowSystem = windowSystem
+		, dx11PresenterStateRef = stateRef
+		} _context f = do
+		-- sync with window
+		invokeWin32WindowSystem windowSystem $ do
+			-- get RTV for backbuffer (create if needed)
+			state@Dx11PresenterState
+				{ dx11PresenterMaybeRTV = maybeRTV
+				, dx11PresenterWidth = width
+				, dx11PresenterHeight = height
+				} <- readIORef stateRef
+			rtv <- case maybeRTV of
+				Just rtv -> return rtv
+				Nothing -> do
+					-- create new RTV
+					backBufferTextureInterfacePtr <- with (getIID (undefined :: ID3D11Texture2D)) $ \iidPtr -> do
+						liftM castPtr $ createCOMValueViaPtr $ m_IDXGISwapChain_GetBuffer swapChainInterface 0 iidPtr
+					rtv <- createCOMObjectViaPtr $ m_ID3D11Device_CreateRenderTargetView deviceInterface backBufferTextureInterfacePtr nullPtr
+					_ <- m_IUnknown_Release =<< peekCOMObject backBufferTextureInterfacePtr
+					-- save it in state
+					writeIORef stateRef state
+						{ dx11PresenterMaybeRTV = Just rtv
+						}
+					return rtv
+
+			-- construct render state
+			let renderState = dx11DefaultRenderState
+				{ renderStateFrameBuffer = Dx11FrameBufferId [Dx11RenderTargetId rtv] Dx11NullDepthStencilTargetId
+				, renderStateViewport = (width, height)
 				}
 
-	present Dx11Presenter
-		{ dx11PresenterSwapChainInterface = swapChainInterface
-		, dx11PresenterWindowSystem = windowSystem
-		} _context = do
-		let invoke = invokeWin32WindowSystem windowSystem $ do
-			m_IDXGISwapChain_Present swapChainInterface 0 0
-		hresultCheck =<< invoke
+			-- perform render
+			f renderState
 
-dx11ResizePresenter :: Dx11Presenter -> Int -> Int -> IO ()
+			-- present
+			hresultCheck =<< m_IDXGISwapChain_Present swapChainInterface 1 0
+
+			return ()
+
+dx11ResizePresenter :: Dx11Presenter -> Dx11PresenterState -> Int -> Int -> IO Dx11PresenterState
 dx11ResizePresenter Dx11Presenter
-	{ dx11PresenterStateVar = stateVar
-	} width height = modifyMVar_ stateVar $ dx11ResizePresenterInternal width height
-
-dx11ResizePresenterInternal :: Int -> Int -> Dx11PresenterState -> IO Dx11PresenterState
-dx11ResizePresenterInternal width height state@Dx11PresenterState
+	{ dx11PresenterSwapChainInterface = swapChainInterface
+	} state@Dx11PresenterState
 	{ dx11PresenterMaybeRTV = maybePreviousRTV
-	} = do
+	, dx11PresenterMaybeDisplayMode = maybeDisplayMode
+	} width height = do
+	-- release previous RTV if any
 	case maybePreviousRTV of
 		Just previousRTV -> do
 			_ <- m_IUnknown_Release previousRTV
 			return ()
 		Nothing -> return ()
+	-- resize buffers
+	let DXGI_MODE_DESC
+		{ f_DXGI_MODE_DESC_Format = format
+		} = getDXGIDisplayModeDesc maybeDisplayMode width height
+	hresultCheck =<< m_IDXGISwapChain_ResizeBuffers swapChainInterface 2
+		(fromIntegral width) (fromIntegral height) (wrapEnum format) (fromIntegral $ fromEnum DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH)
+	-- remember size
 	return state
 		{ dx11PresenterMaybeRTV = Nothing
 		, dx11PresenterWidth = width
@@ -885,7 +922,7 @@ dx11ResizePresenterInternal width height state@Dx11PresenterState
 		}
 
 dx11CreatePresenter :: (MonadResource m, MonadBaseControl IO m) => Dx11Device -> Win32Window -> Maybe (DisplayModeId DXGISystem) -> m (ReleaseKey, Dx11Presenter)
-dx11CreatePresenter Dx11Device
+dx11CreatePresenter device@Dx11Device
 	{ dx11DeviceSystem = DXGISystem
 		{ dxgiSystemFactory = factoryInterface
 		}
@@ -896,11 +933,11 @@ dx11CreatePresenter Dx11Device
 	} maybeDisplayMode = do
 
 	-- window client size
-	(width, height) <- liftIO $ getWindowClientSize window
+	(initialWidth, initialHeight) <- liftIO $ getWindowClientSize window
 
 	-- swap chain desc
 	let desc = DXGI_SWAP_CHAIN_DESC
-		{ f_DXGI_SWAP_CHAIN_DESC_BufferDesc = getDXGIDisplayModeDesc maybeDisplayMode width height
+		{ f_DXGI_SWAP_CHAIN_DESC_BufferDesc = getDXGIDisplayModeDesc maybeDisplayMode initialWidth initialHeight
 		, f_DXGI_SWAP_CHAIN_DESC_SampleDesc = DXGI_SAMPLE_DESC
 			{ f_DXGI_SAMPLE_DESC_Count = 1
 			, f_DXGI_SAMPLE_DESC_Quality = 0
@@ -918,30 +955,33 @@ dx11CreatePresenter Dx11Device
 		with desc $ \descPtr -> do
 			createCOMObjectViaPtr $ m_IDXGIFactory_CreateSwapChain factoryInterface (pokeCOMObject $ com_get_IUnknown deviceInterface) descPtr
 
-	-- presenter var
-	stateVar <- liftIO $ newMVar Dx11PresenterState
+	-- presenter state ref
+	stateRef <- liftIO $ newIORef Dx11PresenterState
 		{ dx11PresenterMaybeRTV = Nothing
 		, dx11PresenterMaybeDisplayMode = Nothing
-		, dx11PresenterWidth = width
-		, dx11PresenterHeight = height
+		, dx11PresenterWidth = initialWidth
+		, dx11PresenterHeight = initialHeight
 		}
 
 	-- create presenter
 	let presenter = Dx11Presenter
-		{ dx11PresenterSwapChainInterface = swapChainInterface
+		{ dx11PresenterDevice = device
+		, dx11PresenterSwapChainInterface = swapChainInterface
 		, dx11PresenterWindowSystem = windowSystem
-		, dx11PresenterStateVar = stateVar
+		, dx11PresenterStateRef = stateRef
 		}
 
 	-- create ioref for window callback
 	presenterValidRef <- liftIO $ newIORef True
 
 	-- set window callback
-	liftIO $ addWin32WindowCallback window $ \msg _wParam lParam -> do
-		case msg of
-			0x0005 -> do -- WM_SIZE
+	liftIO $ addWindowCallback window $ \event -> do
+		case event of
+			ResizeWindowEvent width height -> do
 				presenterValid <- readIORef presenterValidRef
-				if presenterValid then dx11ResizePresenter presenter (fromIntegral $ loWord lParam) (fromIntegral $ hiWord lParam)
+				if presenterValid then do
+					state <- readIORef stateRef
+					writeIORef stateRef =<< dx11ResizePresenter presenter state width height
 				else return ()
 			_ -> return ()
 
@@ -950,7 +990,19 @@ dx11CreatePresenter Dx11Device
 
 	releaseKey <- register $ do
 		invokeWin32WindowSystem windowSystem $ do
+			-- set that presenter is invalid
 			writeIORef presenterValidRef False
+			-- free RTV if needed
+			state@Dx11PresenterState
+				{ dx11PresenterMaybeRTV = maybeRTV
+				} <- readIORef stateRef
+			case maybeRTV of
+				Just rtv -> do
+					_ <- m_IUnknown_Release rtv
+					writeIORef stateRef state
+						{ dx11PresenterMaybeRTV = Nothing
+						}
+				Nothing -> return ()
 		release swapChainReleaseKey
 
 	return (releaseKey, presenter)
@@ -995,7 +1047,7 @@ dx11UpdateContext Dx11Context
 	-- framebuffer
 	if actualFrameBuffer /= desiredFrameBuffer then do
 		let Dx11FrameBufferId renderTargets depthStencilTarget = desiredFrameBuffer
-		let renderTargetsInterfaces = [pokeCOMObject renderTargetInterface | Dx11RenderTargetId renderTargetInterface <- renderTargets]
+		let renderTargetsInterfaces = [pokeCOMObject rtv | Dx11RenderTargetId rtv <- renderTargets]
 		let depthStencilInterface = case depthStencilTarget of
 			Dx11DepthStencilTargetId interface -> pokeCOMObject interface
 			Dx11NullDepthStencilTargetId -> nullPtr

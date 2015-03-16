@@ -9,7 +9,6 @@ module Flaw.Graphics.DirectX11
 	, createDx11Device
 	, Dx11Context
 	, Dx11Presenter
-	, dx11ResizePresenter
 	, dx11CreatePresenter
 	) where
 
