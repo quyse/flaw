@@ -4,7 +4,7 @@ Description: Math.
 License: MIT
 -}
 
-{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, TemplateHaskell, TypeFamilies #-}
+{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, ScopedTypeVariables, TemplateHaskell, TypeFamilies #-}
 
 module Flaw.Math
 	( maxVecDimension
@@ -48,6 +48,8 @@ module Flaw.Math
 
 import Control.Monad
 import Data.Char
+import Foreign.Ptr
+import Foreign.Storable
 import Language.Haskell.TH
 
 import Flaw.Math.Internal
@@ -337,7 +339,20 @@ liftM concat $ forM [1..maxVecDimension] $ \dim -> do
 				]
 			]
 
-	sequence $ dataDec : vecInstance : dotInstance : numInstance : fractionalInstance : floatingInstance : (map genVecComponentInstance components) ++ swizzleVecInstances ++ combineVecInstances
+	-- instance for Storable class
+	let storableInstance = do
+		p <- newName "p"
+		let params = zip [1..dim] aParams
+		instanceD (return [ClassP ''Storable [VarT paramName]]) [t| Storable ($(conT dataName) $(varT paramName)) |]
+			[ funD 'sizeOf [clause [wildP] (normalB [| $(litE $ integerL $ fromIntegral dim) * sizeOf (undefined :: $(varT paramName)) |]) []]
+			, funD 'alignment [clause [wildP] (normalB [| alignment (undefined :: $(varT paramName)) |]) []]
+			, funD 'peek [clause [varP p] (normalB $ doE $ [bindS (varP a) [| peekElemOff (castPtr $(varE p)) $(litE $ integerL $ fromIntegral $ i - 1) |] | (i, a) <- params] ++
+				[noBindS [| return $(foldl appE (conE dataName) $ map (varE . snd) params) |]]) []]
+			, funD 'poke [clause [varP p, conP dataName $ map (varP . snd) params]
+				(normalB $ doE [noBindS [| pokeElemOff (castPtr $(varE p)) $(litE $ integerL $ fromIntegral $ i - 1) $(varE a) |] | (i, a) <- params]) []]
+			]
+
+	sequence $ dataDec : vecInstance : dotInstance : numInstance : fractionalInstance : floatingInstance : storableInstance : (map genVecComponentInstance components) ++ swizzleVecInstances ++ combineVecInstances
 
 -- Generate matrix datatypes.
 liftM concat $ forM [(i, j) | i <- [1..maxVecDimension], j <- [1..maxVecDimension]] $ \(n, m) -> do
