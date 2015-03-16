@@ -24,13 +24,14 @@ module Flaw.Graphics.Internal
 	, renderUniformBuffers
 	, renderSamplers
 	, renderProgram
-	, renderReset
 	, renderClearColor
 	, renderClearDepth
 	, renderClearStencil
 	, renderClearDepthStencil
 	, renderDraw
 	, renderPlay
+	, render
+	, present
 	) where
 
 import Control.Applicative
@@ -132,8 +133,6 @@ class Device d where
 -- | Class of graphics context.
 -- Performs actual render operations.
 class Device d => Context c d | c -> d where
-	-- | Reset context to some "default" state, and return that state.
-	contextReset :: c -> IO (RenderState d)
 	-- | Clear render target.
 	contextClearColor :: c -> RenderState d -> Int -> Vec4f -> IO ()
 	-- | Clear depth.
@@ -146,12 +145,16 @@ class Device d => Context c d | c -> d where
 	contextDraw :: c -> RenderState d -> Int -> IO ()
 	-- | Replay deferred context on immediate context.
 	contextPlay :: Context dc d => c -> RenderState d -> dc -> IO (RenderState d)
+	-- | Perform offscreen rendering. Initial state is context's default state.
+	contextRender :: c -> (RenderState d -> IO ()) -> IO ()
 
 -- | Presenter class.
 class (System s, Context c d) => Presenter p s c d | p -> s c d where
 	setPresenterMode :: p -> Maybe (DisplayModeId s) -> IO ()
-	-- | Present whatever needed.
-	present :: p -> c -> IO ()
+	-- | Perform rendering on presenter's surface.
+	-- Presenter's framebuffer, viewport, etc will be automatically set
+	-- as an initial state.
+	presenterRender :: p -> c -> (RenderState d -> IO ()) -> IO ()
 
 -- | Device information structure.
 data DeviceInfo device = DeviceInfo
@@ -256,11 +259,6 @@ renderProgram program = renderDesire $ \s -> s
 	{ renderStateProgram = program
 	}
 
-renderReset :: Context c d => Render c d ()
-renderReset = Render $ \context _renderState -> do
-	newRenderState <- contextReset context
-	return (newRenderState, ())
-
 -- | Clear render target.
 renderClearColor :: Context c d => Int -> Vec4f -> Render c d ()
 renderClearColor targetIndex color = Render $ \context renderState -> do
@@ -296,3 +294,17 @@ renderPlay :: (Context c d, Context dc d) => dc -> Render c d ()
 renderPlay deferredContext = Render $ \context renderState -> do
 	newRenderState <- contextPlay context renderState deferredContext
 	return (newRenderState, ())
+
+-- | Perform offscreen rendering.
+render :: Context c d => c -> Render c d () -> IO ()
+render context (Render f) = contextRender context $ \state -> do
+	_ <- f context state
+	return ()
+
+-- | Perform rendering on presenter.
+present :: Presenter p s c d => p -> Render c d () -> Render c d ()
+present presenter (Render f) = Render $ \context state1 -> do
+	presenterRender presenter context $ \state2 -> do
+		_ <- f context state2
+		return ()
+	return (state1, ())

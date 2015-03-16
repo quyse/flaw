@@ -12,7 +12,7 @@ module Flaw.Graphics
 	, DeviceInfo(..)
 	, DisplayInfo(..)
 	, DisplayModeInfo(..)
-	, Render(..)
+	, Render
 	, renderScope
 	, renderFrameBuffer
 	, renderViewport
@@ -21,13 +21,14 @@ module Flaw.Graphics
 	, renderUniformBuffers
 	, renderSamplers
 	, renderProgram
-	, renderReset
 	, renderClearColor
 	, renderClearDepth
 	, renderClearStencil
 	, renderClearDepthStencil
 	, renderDraw
 	, renderPlay
+	, render
+	, present
 	) where
 
 import Flaw.Graphics.Internal
