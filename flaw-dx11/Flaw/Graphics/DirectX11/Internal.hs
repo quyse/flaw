@@ -86,8 +86,8 @@ instance Device Dx11Device where
 		| Dx11NullVertexBufferId
 		deriving Eq
 	data IndexBufferId Dx11Device
-		= Dx11IndexBufferId ID3D11Buffer DXGI_FORMAT
-		| Dx11NullIndexBufferId
+		= Dx11IndexBufferId ID3D11Buffer DXGI_FORMAT D3D11_PRIMITIVE_TOPOLOGY
+		| Dx11NullIndexBufferId D3D11_PRIMITIVE_TOPOLOGY
 		deriving Eq
 	data ProgramId Dx11Device
 		= Dx11VertexPixelProgramId ID3D11InputLayout ID3D11VertexShader ID3D11PixelShader
@@ -100,7 +100,7 @@ instance Device Dx11Device where
 
 	nullTexture = Dx11NullTextureId
 	nullDepthStencilTarget = Dx11NullDepthStencilTargetId
-	nullIndexBuffer = Dx11NullIndexBufferId
+	nullIndexBuffer = Dx11NullIndexBufferId D3D11_PRIMITIVE_TOPOLOGY_POINTLIST
 	nullUniformBuffer = Dx11NullUniformBufferId
 
 	createDeferredContext Dx11Device
@@ -517,7 +517,7 @@ instance Device Dx11Device where
 				with (subresourceData $ castPtr bytesPtr) $ \subresourceDataPtr -> do
 					createCOMObjectViaPtr $ m_ID3D11Device_CreateBuffer deviceInterface descPtr subresourceDataPtr
 
-		return (releaseKey, Dx11IndexBufferId bufferInterface (if is32bit then DXGI_FORMAT_R32_UINT else DXGI_FORMAT_R16_UINT))
+		return (releaseKey, Dx11IndexBufferId bufferInterface (if is32bit then DXGI_FORMAT_R32_UINT else DXGI_FORMAT_R16_UINT) D3D11_PRIMITIVE_TOPOLOGY_POINTLIST)
 
 	createProgram Dx11Device
 		{ dx11DeviceInterface = deviceInterface
@@ -748,7 +748,7 @@ dx11DefaultRenderState = RenderState
 	{ renderStateFrameBuffer = Dx11FrameBufferId [] Dx11NullDepthStencilTargetId
 	, renderStateViewport = (0, 0)
 	, renderStateVertexBuffers = []
-	, renderStateIndexBuffer = Dx11NullIndexBufferId
+	, renderStateIndexBuffer = Dx11NullIndexBufferId D3D11_PRIMITIVE_TOPOLOGY_POINTLIST
 	, renderStateUniformBuffers = []
 	, renderStateSamplers = []
 	, renderStateProgram = Dx11NullProgramId
@@ -783,9 +783,9 @@ instance Context Dx11Context Dx11Device where
 		} indicesCount = do
 		dx11UpdateContext context renderState
 		case indexBuffer of
-			Dx11IndexBufferId _indexBufferInterface _format -> do
+			Dx11IndexBufferId _indexBufferInterface _format _primitiveTopology -> do
 				m_ID3D11DeviceContext_DrawIndexed contextInterface (fromIntegral indicesCount) 0 0
-			Dx11NullIndexBufferId -> do
+			Dx11NullIndexBufferId _primitiveTopology -> do
 				m_ID3D11DeviceContext_Draw contextInterface (fromIntegral indicesCount) 0
 
 	-- TODO
@@ -1085,10 +1085,11 @@ dx11UpdateContext Dx11Context
 
 	-- index buffer
 	if actualIndexBuffer /= desiredIndexBuffer then do
-		let (indexBufferInterfacePtr, format) = case desiredIndexBuffer of
-			Dx11IndexBufferId bufferInterface format' -> (pokeCOMObject bufferInterface, format')
-			Dx11NullIndexBufferId -> (nullPtr, DXGI_FORMAT_UNKNOWN)
+		let (indexBufferInterfacePtr, format, primitiveTopology) = case desiredIndexBuffer of
+			Dx11IndexBufferId bufferInterface format' primitiveTopology' -> (pokeCOMObject bufferInterface, format', primitiveTopology')
+			Dx11NullIndexBufferId primitiveTopology' -> (nullPtr, DXGI_FORMAT_UNKNOWN, primitiveTopology')
 		m_ID3D11DeviceContext_IASetIndexBuffer contextInterface indexBufferInterfacePtr (wrapEnum format) 0
+		m_ID3D11DeviceContext_IASetPrimitiveTopology contextInterface (wrapEnum primitiveTopology)
 	else return ()
 
 	-- uniform buffers
