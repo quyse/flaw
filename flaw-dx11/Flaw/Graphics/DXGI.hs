@@ -8,6 +8,10 @@ License: MIT
 
 module Flaw.Graphics.DXGI
 	( DXGISystem
+	, dxgiCreateSystem
+	, DeviceId
+	, DisplayId
+	, DisplayModeId
 	) where
 
 import Flaw.Graphics.DXGI.Internal

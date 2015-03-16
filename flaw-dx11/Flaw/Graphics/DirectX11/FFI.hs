@@ -126,7 +126,8 @@ module Flaw.Graphics.DirectX11.FFI
 	, ID3D11Device(..), ID3D11Device_Class(..)
 	, d3d11CreateDevice
 	, d3d11SdkVersion
-	, d3dCompile
+	, D3DCompileProc
+	, mkD3DCompile
 	) where
 
 import Control.Monad
@@ -1332,9 +1333,8 @@ foreign import stdcall safe "dynamic" mkD3D11CreateDeviceProc :: FunPtr D3D11Cre
 d3d11SdkVersion :: UINT
 d3d11SdkVersion = 7
 
--- | D3DCompile.
-foreign import stdcall safe "D3DCompile" d3dCompile
-	:: Ptr () -- pSrcData
+type D3DCompileProc
+	=  Ptr () -- pSrcData
 	-> SIZE_T -- SrcDataSize
 	-> LPSTR -- pSourceName
 	-> Ptr () -- pDefines
@@ -1346,3 +1346,6 @@ foreign import stdcall safe "D3DCompile" d3dCompile
 	-> Ptr (Ptr ID3DBlob) -- ppCode
 	-> Ptr (Ptr ID3DBlob) -- ppErrorMsgs
 	-> IO HRESULT
+
+-- | D3DCompile.
+foreign import stdcall safe "dynamic" mkD3DCompile :: FunPtr D3DCompileProc -> D3DCompileProc

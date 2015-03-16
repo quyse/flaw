@@ -56,10 +56,11 @@ class System s where
 	-- | Type for id of display mode.
 	data DisplayModeId s :: *
 	-- | Get list of graphics devices installed in system.
-	getInstalledDevices :: (MonadResource m, MonadBaseControl IO m) => m (ReleaseKey, [(DeviceId s, DeviceInfo s)])
+	getInstalledDevices :: (MonadResource m, MonadBaseControl IO m) => s -> m (ReleaseKey, [(DeviceId s, DeviceInfo s)])
 	-- | Create custom display mode (with specified width and height) for specified display.
 	createDisplayMode :: (MonadResource m, MonadBaseControl IO m)
-		=> DisplayId s -- ^ Display id.
+		=> s
+		-> DisplayId s -- ^ Display id.
 		-> Int -- ^ Width.
 		-> Int -- ^ Height.
 		-> m (ReleaseKey, (DisplayModeId s, DisplayModeInfo))
@@ -147,9 +148,10 @@ class Device d => Context c d | c -> d where
 	contextPlay :: Context dc d => c -> RenderState d -> dc -> IO (RenderState d)
 
 -- | Presenter class.
-class Context c d => Presenter p c d | p -> c d where
+class (System s, Context c d) => Presenter p s c d | p -> s c d where
+	setPresenterMode :: p -> Maybe (DisplayModeId s) -> IO ()
 	-- | Present whatever needed.
-	present :: p -> c -> Render c d ()
+	present :: p -> c -> IO ()
 
 -- | Device information structure.
 data DeviceInfo device = DeviceInfo

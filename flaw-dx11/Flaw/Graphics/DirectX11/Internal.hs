@@ -9,8 +9,13 @@ License: MIT
 module Flaw.Graphics.DirectX11.Internal
 	( Dx11Device(..)
 	, createDx11Device
+	, Dx11Context(..)
+	, Dx11Presenter(..)
+	, dx11ResizePresenter
+	, dx11CreatePresenter
 	) where
 
+import Control.Concurrent.MVar
 import qualified Control.Exception.Lifted as Lifted
 import Control.Monad
 import Control.Monad.IO.Class
@@ -22,6 +27,7 @@ import qualified Data.ByteString.Unsafe as BS
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import Data.IORef
+import Data.Maybe
 import Foreign.Marshal.Alloc
 import Foreign.Marshal.Array
 import Foreign.Marshal.Utils
@@ -30,6 +36,7 @@ import Foreign.Storable
 
 import Flaw.Exception
 import Flaw.FFI
+import Flaw.FFI.Win32
 import Flaw.FFI.COM
 import Flaw.Graphics
 import Flaw.Graphics.DirectX11.FFI
@@ -41,14 +48,20 @@ import Flaw.Graphics.Program.Internal
 import Flaw.Graphics.Sampler
 import Flaw.Graphics.Texture
 import Flaw.Math
+import Flaw.Window
+import Flaw.Window.Win32
 
 -- | DirectX11 graphics device.
 data Dx11Device = Dx11Device
 	{
+	-- | System.
+	  dx11DeviceSystem :: DXGISystem
 	-- | Main device interface.
-	  dx11DeviceInterface :: ID3D11Device
+	, dx11DeviceInterface :: ID3D11Device
 	-- | Device's immediate context.
 	, dx11DeviceImmediateContext :: ID3D11DeviceContext
+	-- | D3DCompile function.
+	, dx11DeviceD3DCompile :: D3DCompileProc
 	}
 
 instance Device Dx11Device where
@@ -60,8 +73,9 @@ instance Device Dx11Device where
 	newtype SamplerStateId Dx11Device
 		= Dx11SamplerStateId ID3D11SamplerState
 		deriving Eq
-	newtype RenderTargetId Dx11Device
+	data RenderTargetId Dx11Device
 		= Dx11RenderTargetId ID3D11RenderTargetView
+		| Dx11PresenterRenderTargetId Dx11Presenter
 		deriving Eq
 	data DepthStencilTargetId Dx11Device
 		= Dx11DepthStencilTargetId ID3D11DepthStencilView
@@ -510,6 +524,7 @@ instance Device Dx11Device where
 
 	createProgram Dx11Device
 		{ dx11DeviceInterface = deviceInterface
+		, dx11DeviceD3DCompile = d3dCompile
 		} program = describeException "failed to create DirectX11 program" $ do
 
 		-- function to create input layout
@@ -589,15 +604,15 @@ instance Device Dx11Device where
 			{ hlslShaderSource = source
 			, hlslShaderEntryPoint = entryPoint
 			, hlslShaderProfile = profile
-			} = do
+			} = describeException ("failed to compile shader", source, entryPoint, profile) $ do
 			let debug = False
 			let optimize = True
 			let flags = fromIntegral $ (fromEnum D3DCOMPILE_ENABLE_STRICTNESS) .|. (fromEnum D3DCOMPILE_PACK_MATRIX_COLUMN_MAJOR)
 				.|. (if debug then fromEnum D3DCOMPILE_DEBUG else 0)
 				.|. (if optimize then fromEnum D3DCOMPILE_OPTIMIZATION_LEVEL3 else (fromEnum D3DCOMPILE_OPTIMIZATION_LEVEL0) .|. (fromEnum D3DCOMPILE_SKIP_OPTIMIZATION))
 			(hr, shaderData, errorsData) <- BS.unsafeUseAsCStringLen (T.encodeUtf8 source) $ \(sourcePtr, sourceLen) -> do
-				BS.unsafeUseAsCString (T.encodeUtf8 entryPoint) $ \entryPointPtr -> do
-					BS.unsafeUseAsCString (T.encodeUtf8 profile) $ \profilePtr -> do
+				BS.useAsCString (T.encodeUtf8 entryPoint) $ \entryPointPtr -> do
+					BS.useAsCString (T.encodeUtf8 profile) $ \profilePtr -> do
 						alloca $ \shaderBlobPtrPtr -> do
 							alloca $ \errorsBlobPtrPtr -> do
 								hr <- d3dCompile
@@ -633,11 +648,13 @@ instance Device Dx11Device where
 		-- function to create vertex shader
 		let createVertexShader bytecode = allocateCOMObject $ do
 			BS.unsafeUseAsCStringLen bytecode $ \(ptr, len) -> do
-				createCOMObjectViaPtr $ m_ID3D11Device_CreateVertexShader deviceInterface (castPtr ptr) (fromIntegral len) nullPtr
+				describeException "failed to create vertex shader" $ do
+					createCOMObjectViaPtr $ m_ID3D11Device_CreateVertexShader deviceInterface (castPtr ptr) (fromIntegral len) nullPtr
 		-- function to create pixel shader
 		let createPixelShader bytecode = allocateCOMObject $ do
 			BS.unsafeUseAsCStringLen bytecode $ \(ptr, len) -> do
-				createCOMObjectViaPtr $ m_ID3D11Device_CreatePixelShader deviceInterface (castPtr ptr) (fromIntegral len) nullPtr
+				describeException "failed to create pixel shader" $ do
+					createCOMObjectViaPtr $ m_ID3D11Device_CreatePixelShader deviceInterface (castPtr ptr) (fromIntegral len) nullPtr
 
 		-- generate HLSL
 		hlslProgram <- liftIO $ liftM generateProgram $ runProgram program
@@ -681,21 +698,27 @@ instance Device Dx11Device where
 
 -- | Create DirectX11 device.
 createDx11Device :: (MonadResource m, MonadBaseControl IO m) => DeviceId DXGISystem -> m (ReleaseKey, Dx11Device, Dx11Context)
-createDx11Device (DXGIDeviceId adapter) = describeException "failed to create DirectX11 graphics device" $ do
+createDx11Device (DXGIDeviceId system adapter) = describeException "failed to create DirectX11 graphics device" $ do
 	-- create function
 	let create = alloca $ \devicePtr -> alloca $ \deviceContextPtr -> do
 		let featureLevels = [D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_1, D3D_FEATURE_LEVEL_10_0]
 		withArray featureLevels $ \featureLevelsPtr -> alloca $ \realFeatureLevelPtr -> do
-			hresultCheck =<< d3d11CreateDevice (pokeCOMObject adapter) (wrapEnum D3D_DRIVER_TYPE_HARDWARE) nullPtr 0 featureLevelsPtr (fromIntegral $ length featureLevels) d3d11SdkVersion devicePtr realFeatureLevelPtr deviceContextPtr
+			describeException "failed to create D3D11 device" $ do
+				-- driver type is required to be D3D_DRIVER_TYPE_UNKNOWN, because adapter is not null
+				-- see http://msdn.microsoft.com/en-us/library/ff476082 (remarks)
+				hresultCheck =<< d3d11CreateDevice (pokeCOMObject adapter) (wrapEnum D3D_DRIVER_TYPE_UNKNOWN) nullPtr 0 featureLevelsPtr (fromIntegral $ length featureLevels) d3d11SdkVersion devicePtr realFeatureLevelPtr deviceContextPtr
 		deviceInterface <- peekCOMObject =<< peek devicePtr
 		contextInterface <- peekCOMObject =<< peek deviceContextPtr
+		d3dCompileProc <- liftM mkD3DCompile $ loadLibraryAndGetProcAddress "D3DCompiler_43.dll" "D3DCompile"
 
 		-- create context state
 		contextState <- liftIO $ newIORef dx11DefaultContextState
 
 		return (Dx11Device
-			{ dx11DeviceInterface = deviceInterface
+			{ dx11DeviceSystem = system
+			, dx11DeviceInterface = deviceInterface
 			, dx11DeviceImmediateContext = contextInterface
+			, dx11DeviceD3DCompile = d3dCompileProc
 			}, Dx11Context
 			{ dx11ContextInterface = contextInterface
 			, dx11ContextState = contextState
@@ -778,6 +801,159 @@ instance Context Dx11Context Dx11Device where
 
 	-- TODO
 	contextPlay = undefined
+
+-- | DirectX11 DXGI presenter for window.
+data Dx11Presenter = Dx11Presenter
+	{ dx11PresenterSwapChainInterface :: IDXGISwapChain
+	, dx11PresenterWindowSystem :: Win32WindowSystem
+	, dx11PresenterStateVar :: MVar Dx11PresenterState
+	}
+
+instance Eq Dx11Presenter where
+	Dx11Presenter
+		{ dx11PresenterSwapChainInterface = a
+		} == Dx11Presenter
+		{ dx11PresenterSwapChainInterface = b
+		} = a == b
+
+-- | Mutable state of DXGI presenter.
+data Dx11PresenterState = Dx11PresenterState
+	{ -- | Render target of presenter. May be reset to Nothing if needs an update.
+	  dx11PresenterMaybeRTV :: Maybe ID3D11RenderTargetView
+	  -- | Current display mode.
+	, dx11PresenterMaybeDisplayMode :: Maybe (DisplayModeId DXGISystem)
+	, dx11PresenterWidth :: Int
+	, dx11PresenterHeight :: Int
+	}
+
+instance Presenter Dx11Presenter DXGISystem Dx11Context Dx11Device where
+	setPresenterMode Dx11Presenter
+		{ dx11PresenterSwapChainInterface = swapChainInterface
+		, dx11PresenterStateVar = stateVar
+		} maybeDisplayMode = describeException ("failed to set DirectX11 presenter mode", maybeDisplayMode) $ do
+		modifyMVar_ stateVar $ \state@Dx11PresenterState
+			{ dx11PresenterMaybeDisplayMode = currentMaybeDisplayMode
+			, dx11PresenterWidth = width
+			, dx11PresenterHeight = height
+			} -> do
+			-- resize target
+			let desc = getDXGIDisplayModeDesc maybeDisplayMode width height
+			with desc $ \descPtr -> do
+				hresultCheck =<< m_IDXGISwapChain_ResizeTarget swapChainInterface descPtr
+			-- if fullscreen state changed, change
+			newState <- if isJust currentMaybeDisplayMode /= isJust maybeDisplayMode then do
+				hresultCheck =<< m_IDXGISwapChain_SetFullscreenState swapChainInterface (isJust maybeDisplayMode) nullPtr
+				-- if now it's fullscreen, resize buffers
+				case maybeDisplayMode of
+					Just (DXGIDisplayModeId DXGI_MODE_DESC
+						{ f_DXGI_MODE_DESC_Width = modeWidth
+						, f_DXGI_MODE_DESC_Height = modeHeight
+						}) -> dx11ResizePresenterInternal (fromIntegral modeWidth) (fromIntegral modeHeight) state
+					_ -> return state
+			else return state
+			-- set new mode
+			return newState
+				{ dx11PresenterMaybeDisplayMode = maybeDisplayMode
+				}
+
+	present Dx11Presenter
+		{ dx11PresenterSwapChainInterface = swapChainInterface
+		, dx11PresenterWindowSystem = windowSystem
+		} _context = do
+		let invoke = invokeWin32WindowSystem windowSystem $ do
+			m_IDXGISwapChain_Present swapChainInterface 0 0
+		hresultCheck =<< invoke
+
+dx11ResizePresenter :: Dx11Presenter -> Int -> Int -> IO ()
+dx11ResizePresenter Dx11Presenter
+	{ dx11PresenterStateVar = stateVar
+	} width height = modifyMVar_ stateVar $ dx11ResizePresenterInternal width height
+
+dx11ResizePresenterInternal :: Int -> Int -> Dx11PresenterState -> IO Dx11PresenterState
+dx11ResizePresenterInternal width height state@Dx11PresenterState
+	{ dx11PresenterMaybeRTV = maybePreviousRTV
+	} = do
+	case maybePreviousRTV of
+		Just previousRTV -> do
+			_ <- m_IUnknown_Release previousRTV
+			return ()
+		Nothing -> return ()
+	return state
+		{ dx11PresenterMaybeRTV = Nothing
+		, dx11PresenterWidth = width
+		, dx11PresenterHeight = height
+		}
+
+dx11CreatePresenter :: (MonadResource m, MonadBaseControl IO m) => Dx11Device -> Win32Window -> Maybe (DisplayModeId DXGISystem) -> m (ReleaseKey, Dx11Presenter)
+dx11CreatePresenter Dx11Device
+	{ dx11DeviceSystem = DXGISystem
+		{ dxgiSystemFactory = factoryInterface
+		}
+	, dx11DeviceInterface = deviceInterface
+	} window@Win32Window
+	{ wWindowSystem = windowSystem
+	, wHandle = hwnd
+	} maybeDisplayMode = do
+
+	-- window client size
+	(width, height) <- liftIO $ getWindowClientSize window
+
+	-- swap chain desc
+	let desc = DXGI_SWAP_CHAIN_DESC
+		{ f_DXGI_SWAP_CHAIN_DESC_BufferDesc = getDXGIDisplayModeDesc maybeDisplayMode width height
+		, f_DXGI_SWAP_CHAIN_DESC_SampleDesc = DXGI_SAMPLE_DESC
+			{ f_DXGI_SAMPLE_DESC_Count = 1
+			, f_DXGI_SAMPLE_DESC_Quality = 0
+			}
+		, f_DXGI_SWAP_CHAIN_DESC_BufferUsage = fromIntegral $ (fromEnum DXGI_USAGE_BACK_BUFFER) .|. (fromEnum DXGI_USAGE_RENDER_TARGET_OUTPUT)
+		, f_DXGI_SWAP_CHAIN_DESC_BufferCount = 2
+		, f_DXGI_SWAP_CHAIN_DESC_OutputWindow = hwnd
+		, f_DXGI_SWAP_CHAIN_DESC_Windowed = True
+		, f_DXGI_SWAP_CHAIN_DESC_SwapEffect = DXGI_SWAP_EFFECT_DISCARD
+		, f_DXGI_SWAP_CHAIN_DESC_Flags = fromIntegral $ fromEnum DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH
+		}
+
+	-- create swap chain
+	(swapChainReleaseKey, swapChainInterface) <- allocateCOMObject $ do
+		with desc $ \descPtr -> do
+			createCOMObjectViaPtr $ m_IDXGIFactory_CreateSwapChain factoryInterface (pokeCOMObject $ com_get_IUnknown deviceInterface) descPtr
+
+	-- presenter var
+	stateVar <- liftIO $ newMVar Dx11PresenterState
+		{ dx11PresenterMaybeRTV = Nothing
+		, dx11PresenterMaybeDisplayMode = Nothing
+		, dx11PresenterWidth = width
+		, dx11PresenterHeight = height
+		}
+
+	-- create presenter
+	let presenter = Dx11Presenter
+		{ dx11PresenterSwapChainInterface = swapChainInterface
+		, dx11PresenterWindowSystem = windowSystem
+		, dx11PresenterStateVar = stateVar
+		}
+
+	-- create ioref for window callback
+	presenterValidRef <- liftIO $ newIORef True
+
+	-- set window callback
+	liftIO $ addWin32WindowCallback window $ \msg _wParam lParam -> do
+		case msg of
+			0x0005 -> do -- WM_SIZE
+				presenterValid <- readIORef presenterValidRef
+				if presenterValid then dx11ResizePresenter presenter (fromIntegral $ loWord lParam) (fromIntegral $ hiWord lParam)
+				else return ()
+			_ -> return ()
+
+	-- set mode
+	liftIO $ setPresenterMode presenter maybeDisplayMode
+
+	releaseKey <- register $ do
+		invokeWin32WindowSystem windowSystem $ do
+			writeIORef presenterValidRef False
+		release swapChainReleaseKey
+
+	return (releaseKey, presenter)
 
 -- | Helper method to clear depth and/or stencil.
 dx11ClearDepthStencil :: Dx11Context -> RenderState Dx11Device -> Float -> Int -> Int -> IO ()

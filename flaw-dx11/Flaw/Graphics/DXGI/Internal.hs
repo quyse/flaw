@@ -4,13 +4,15 @@ Description: Internals of graphics implementation for DXGI.
 License: MIT
 -}
 
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE FlexibleContexts, TypeFamilies #-}
 
 module Flaw.Graphics.DXGI.Internal
-	( DXGISystem
+	( DXGISystem(..)
+	, dxgiCreateSystem
 	, DeviceId(..)
 	, DisplayId(..)
 	, DisplayModeId(..)
+	, getDXGIDisplayModeDesc
 	, getDXGIFormat
 	) where
 
@@ -35,22 +37,33 @@ import Flaw.Graphics.DXGI.FFI
 import Flaw.Graphics.Texture
 
 -- | DXGI graphics system.
-data DXGISystem
+data DXGISystem = DXGISystem
+	{ dxgiSystemFactory :: IDXGIFactory
+	}
+
+dxgiCreateSystem :: (MonadResource m, MonadBaseControl IO m) => m (ReleaseKey, DXGISystem)
+dxgiCreateSystem = describeException "failed to create DXGI system" $ do
+	(releaseKey, factoryInterface) <- allocateCOMObject createDXGIFactory
+	return (releaseKey, DXGISystem
+		{ dxgiSystemFactory = factoryInterface
+		})
 
 instance System DXGISystem where
-	newtype DeviceId DXGISystem = DXGIDeviceId IDXGIAdapter
-	newtype DisplayId DXGISystem = DXGIDisplayId IDXGIOutput
-	newtype DisplayModeId DXGISystem = DXGIDisplayModeId DXGI_MODE_DESC
-	getInstalledDevices = describeException "failed to get installed DirectX11 devices" $ do
-		-- create DXGI factory
-		(dxgiFactoryReleaseKey, dxgiFactory) <- allocateCOMObject createDXGIFactory
+	data DeviceId DXGISystem = DXGIDeviceId DXGISystem IDXGIAdapter
+	data DisplayId DXGISystem = DXGIDisplayId (DeviceId DXGISystem) IDXGIOutput
+	newtype DisplayModeId DXGISystem = DXGIDisplayModeId DXGI_MODE_DESC deriving Show
+	getInstalledDevices system@DXGISystem
+		{ dxgiSystemFactory = factoryInterface
+		} = describeException "failed to get installed DirectX11 devices" $ do
 		-- enumerate adapters with release keys
 		let enumerateAdapter i = Lifted.handle (\(FailedHRESULT _hr) -> return []) $ do
-			releaseKeyAndAdapter <- allocateCOMObject $ createCOMObjectViaPtr $ m_IDXGIFactory_EnumAdapters dxgiFactory i
+			releaseKeyAndAdapter <- allocateCOMObject $ createCOMObjectViaPtr $ m_IDXGIFactory_EnumAdapters factoryInterface i
 			rest <- enumerateAdapter $ i + 1
 			return $ releaseKeyAndAdapter : rest
 		-- make id-info adapter pairs
 		let makeAdapterIdInfo (adapterReleaseKey, adapter) = do
+			-- device id
+			let deviceId = DXGIDeviceId system adapter
 			-- get adapter desc
 			adapterDesc <- liftIO $ createCOMValueViaPtr $ m_IDXGIAdapter_GetDesc adapter
 			-- enumerate outputs
@@ -72,7 +85,7 @@ instance System DXGISystem where
 				-- make id-info output pairs
 				let modes = [(DXGIDisplayModeId modeDesc, displayModeInfoFromDesc modeDesc) | modeDesc <- modeDescs]
 				-- return output pair
-				return (outputReleaseKey, (DXGIDisplayId output, DisplayInfo
+				return (outputReleaseKey, (DXGIDisplayId deviceId output, DisplayInfo
 					{ displayName = winUTF16ToText $ f_DXGI_OUTPUT_DESC_DeviceName outputDesc
 					, displayModes = modes
 					}))
@@ -82,17 +95,16 @@ instance System DXGISystem where
 				release adapterReleaseKey
 				mapM_ (release . fst) outputs
 			-- return adapter pair
-			return (adapterCompoundReleaseKey, (DXGIDeviceId adapter, DeviceInfo
+			return (adapterCompoundReleaseKey, (deviceId, DeviceInfo
 				{ deviceName = winUTF16ToText $ f_DXGI_ADAPTER_DESC_Description adapterDesc
 				, deviceDisplays = map snd outputs
 				}))
 		adapters <- mapM makeAdapterIdInfo =<< enumerateAdapter 0
-		release dxgiFactoryReleaseKey
 		-- create compound release key
 		compoundReleaseKey <- register $ mapM_ (release . fst) adapters
 		-- return adapters
 		return (compoundReleaseKey, map snd adapters)
-	createDisplayMode (DXGIDisplayId output) width height = describeException "failed to try create DirectX11 display mode" $ do
+	createDisplayMode _system (DXGIDisplayId _adapter output) width height = describeException "failed to try create DirectX11 display mode" $ do
 		let create = do
 			let desc = DXGI_MODE_DESC
 				{ f_DXGI_MODE_DESC_Width = fromIntegral width
@@ -120,6 +132,22 @@ displayModeInfoFromDesc desc = info where
 		, displayModeRefreshRate = (fromIntegral $ f_DXGI_RATIONAL_Numerator refreshRate) % (fromIntegral $ f_DXGI_RATIONAL_Denominator refreshRate)
 		}
 	refreshRate = f_DXGI_MODE_DESC_RefreshRate desc
+
+-- | Convert display mode to DXGI_MODE_DESC
+getDXGIDisplayModeDesc :: Maybe (DisplayModeId DXGISystem) -> Int -> Int -> DXGI_MODE_DESC
+getDXGIDisplayModeDesc maybeDisplayMode width height = case maybeDisplayMode of
+	Just (DXGIDisplayModeId displayModeDesc) -> displayModeDesc
+	Nothing -> DXGI_MODE_DESC
+		{ f_DXGI_MODE_DESC_Width = fromIntegral width
+		, f_DXGI_MODE_DESC_Height = fromIntegral height
+		, f_DXGI_MODE_DESC_RefreshRate = DXGI_RATIONAL
+			{ f_DXGI_RATIONAL_Numerator = 0
+			, f_DXGI_RATIONAL_Denominator = 0
+			}
+		, f_DXGI_MODE_DESC_Format = DXGI_FORMAT_R8G8B8A8_UNORM
+		, f_DXGI_MODE_DESC_ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED
+		, f_DXGI_MODE_DESC_Scaling = DXGI_MODE_SCALING_UNSPECIFIED
+		}
 
 -- | Convert TextureFormat to DXGI_FORMAT.
 getDXGIFormat :: TextureFormat -> DXGI_FORMAT
