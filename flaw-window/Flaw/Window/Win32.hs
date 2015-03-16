@@ -62,7 +62,7 @@ instance Window Win32Window where
 	addWindowCallback window callback = addWin32WindowCallback window $ \msg wParam lParam -> do
 		case msg of
 			0x0002 -> callback DestroyWindowEvent -- WM_DESTROY
-			0x0005 -> callback $ ResizeWindowEvent (fromIntegral $ loWord wParam) (fromIntegral $ hiWord lParam) -- WM_SIZE
+			0x0005 -> callback $ ResizeWindowEvent (fromIntegral $ loWord lParam) (fromIntegral $ hiWord lParam) -- WM_SIZE
 			0x0010 -> callback CloseWindowEvent -- WM_CLOSE
 			_ -> return ()
 
