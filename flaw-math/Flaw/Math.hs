@@ -185,35 +185,24 @@ liftM concat $ forM [1..maxVecDimension] $ \dim -> do
 
 	-- instance for Vec class
 	let vecInstance = do
-		-- VecElement
-		let vecElementDecl = tySynInstD ''VecElement $ tySynEqn [ [t| $(conT dataName) $(varT tvA) |] ] $ varT tvA
-		-- vecLength
-		let vecLengthDecl = funD 'vecLength [clause [wildP] (normalB $ litE $ integerL $ fromIntegral dim) []]
-		-- vecToList
-		vecToListDecls <- do
-			let funDecl = funD 'vecToList [clause [conP dataName $ map varP componentParams] (normalB $ listE $ map varE componentParams) []]
-			let specialiseDecl mathType = do
-				pragSpecInlD 'vecToList [t| $(conT dataName) $mathType -> [$mathType] |] Inline AllPhases
-			let specialiseDecls = map (specialiseDecl . conT) mathTypeNames
-			return $ funDecl : specialiseDecls
-		-- vecFromScalar
 		let vecFromScalarDecl = do
 			a <- newName "a"
 			funD 'vecFromScalar [clause [varP a] (normalB $ foldl appE (conE dataName) $ map varE $ replicate dim a) []]
-		let decls = vecElementDecl : vecLengthDecl : vecFromScalarDecl : vecToListDecls
-		instanceD (return []) [t| Vec ($(conT dataName) $(varT tvA)) |] decls
+		instanceD (return []) [t| Vec ($(conT dataName) $(varT tvA)) |]
+			[ tySynInstD ''VecElement $ tySynEqn [ [t| $(conT dataName) $(varT tvA) |] ] $ varT tvA
+			, funD 'vecLength [clause [wildP] (normalB $ litE $ integerL $ fromIntegral dim) []]
+			, funD 'vecToList [clause [conP dataName $ map varP componentParams] (normalB $ listE $ map varE componentParams) []]
+			, vecFromScalarDecl
+			]
 
 	-- instances for VecX .. VecW classes
 	let genVecComponentInstance component = do
 		let className = mkName $ "Vec" ++ [toUpper component]
 		let funName = mkName [component, '_']
 		varName <- newName [component]
-		let funDecl = funD funName [clause [conP dataName [if c == component then (varP varName) else wildP | c <- components]] (normalB (varE varName)) []]
-		let specialiseDecl mathType = do
-			pragSpecInlD funName [t| $(conT dataName) $mathType -> $mathType |] Inline AllPhases
-		let specialiseDecls = map (specialiseDecl . conT) mathTypeNames
-		let decls = funDecl : specialiseDecls
-		instanceD (return []) [t| $(conT className) ($(conT dataName) $(varT tvA)) |] decls
+		instanceD (return []) [t| $(conT className) ($(conT dataName) $(varT tvA)) |]
+			[ funD funName [clause [conP dataName [if c == component then (varP varName) else wildP | c <- components]] (normalB (varE varName)) []]
+			]
 
 	-- instance for Dot class
 	let dotInstance = do
@@ -267,37 +256,28 @@ liftM concat $ forM [1..maxVecDimension] $ \dim -> do
 	paramName <- newName "a"
 	aParams <- mapM (\c -> newName $ ['a', c]) components
 	bParams <- mapM (\c -> newName $ ['b', c]) components
-	let supportedMathTypeNames className = do
-		filterM (\mathTypeName -> isInstance className [ConT mathTypeName]) mathTypeNames
-	let binaryOp opName mtn = let
-		funDecl = funD opName [clause
+	let binaryOp opName = funD opName
+		[ clause
 			[ conP dataName $ map varP aParams
 			, conP dataName $ map varP bParams
 			]
 			(normalB $ foldl appE (conE dataName) $ map (\(a, b) -> [| $(varE opName) $(varE a) $(varE b) |]) $ zip aParams bParams)
-			[]]
-		specialiseDecl mathType = do
-			pragSpecInlD opName [t| $(conT dataName) $mathType -> $(conT dataName) $mathType -> $(conT dataName) $mathType |] Inline AllPhases
-		in funDecl : map (specialiseDecl . conT) mtn
-	let unaryOp opName mtn = let
-		funDecl = funD opName [clause
+			[]
+		]
+	let unaryOp opName = funD opName
+		[ clause
 			[ conP dataName $ map varP aParams
 			]
 			(normalB $ foldl appE (conE dataName) $ map (\a -> [| $(varE opName) $(varE a) |]) aParams)
-			[]]
-		specialiseDecl mathType = do
-			pragSpecInlD opName [t| $(conT dataName) $mathType -> $(conT dataName) $mathType |] Inline AllPhases
-		in funDecl : map (specialiseDecl . conT) mtn
-	let nullaryOp opName mtn = let
-		funDecl = funD opName [clause []
+			[]
+		]
+	let nullaryOp opName = funD opName
+		[ clause []
 			(normalB $ foldl appE (conE dataName) $ map (\_ -> varE opName) aParams)
-			[]]
-		specialiseDecl mathType = do
-			pragSpecInlD opName [t| $(conT dataName) $mathType |] Inline AllPhases
-		in funDecl : map (specialiseDecl . conT) mtn
+			[]
+		]
 
 	-- instance for Num class
-	mtnNum <- supportedMathTypeNames ''Num
 	let numInstance = do
 		let fromIntegerDecl = do
 			iParam <- newName "i"
@@ -306,19 +286,17 @@ liftM concat $ forM [1..maxVecDimension] $ \dim -> do
 				(normalB $ foldl appE (conE dataName) $ replicate dim $ varE fiParam)
 				[valD (varP fiParam) (normalB [| fromInteger $(varE iParam) |]) []]]
 
-		let funcs = concat
-			[ binaryOp '(+) mtnNum
-			, binaryOp '(*) mtnNum
-			, binaryOp '(-) mtnNum
-			, unaryOp 'negate mtnNum
-			, unaryOp 'abs mtnNum
-			, unaryOp 'signum mtnNum
-			, [fromIntegerDecl]
+		instanceD (return [ClassP ''Num [VarT paramName]]) [t| Num ($(conT dataName) $(varT paramName)) |]
+			[ binaryOp '(+)
+			, binaryOp '(*)
+			, binaryOp '(-)
+			, unaryOp 'negate
+			, unaryOp 'abs
+			, unaryOp 'signum
+			, fromIntegerDecl
 			]
-		instanceD (return [ClassP ''Num [VarT paramName]]) [t| Num ($(conT dataName) $(varT paramName)) |] funcs
 
 	-- instance for Fractional class
-	mtnFractional <- supportedMathTypeNames ''Fractional
 	let fractionalInstance = do
 		let fromRationalDecl = do
 			rParam <- newName "r"
@@ -326,22 +304,21 @@ liftM concat $ forM [1..maxVecDimension] $ \dim -> do
 			funD 'fromRational [clause [varP rParam]
 				(normalB $ foldl appE (conE dataName) $ replicate dim $ varE frParam)
 				[valD (varP frParam) (normalB [| fromRational $(varE rParam) |]) []]]
-		instanceD (return [ClassP ''Fractional [VarT paramName]]) [t| Fractional ($(conT dataName) $(varT paramName)) |] (concat
-			[ binaryOp '(/) mtnFractional
-			, unaryOp 'recip mtnFractional
-			, [fromRationalDecl]
-			])
+		instanceD (return [ClassP ''Fractional [VarT paramName]]) [t| Fractional ($(conT dataName) $(varT paramName)) |]
+			[ binaryOp '(/)
+			, unaryOp 'recip
+			, fromRationalDecl
+			]
 
 	-- instance for Floating class
-	mtnFloating <- supportedMathTypeNames ''Floating
 	let floatingInstance = do
-		instanceD (return [ClassP ''Floating [VarT paramName]]) [t| Floating ($(conT dataName) $(varT paramName)) |] (concat $ concat
-			[ [nullaryOp 'pi mtnFloating]
-			, map (\op -> binaryOp op mtnFloating)
+		instanceD (return [ClassP ''Floating [VarT paramName]]) [t| Floating ($(conT dataName) $(varT paramName)) |] $ concat
+			[ [nullaryOp 'pi]
+			, map binaryOp
 				[ '(**)
 				, 'logBase
 				]
-			, map (\op -> unaryOp op mtnFloating)
+			, map unaryOp
 				[ 'exp
 				, 'sqrt
 				, 'log
@@ -358,7 +335,7 @@ liftM concat $ forM [1..maxVecDimension] $ \dim -> do
 				, 'atanh
 				, 'acosh
 				]
-			])
+			]
 
 	sequence $ dataDec : vecInstance : dotInstance : numInstance : fractionalInstance : floatingInstance : (map genVecComponentInstance components) ++ swizzleVecInstances ++ combineVecInstances
 
@@ -384,25 +361,21 @@ liftM concat $ forM [(i, j) | i <- [1..maxVecDimension], j <- [1..maxVecDimensio
 		paramName <- newName "a"
 		aParams <- sequence [newName $ ['a', '_', intToDigit i, '_', intToDigit j] | i <- [1..n], j <- [1..m]]
 		bParams <- sequence [newName $ ['b', '_', intToDigit i, '_', intToDigit j] | i <- [1..n], j <- [1..m]]
-		let binaryOp opName = let
-			funDecl = funD opName [clause
+		let binaryOp opName = funD opName
+			[ clause
 				[ conP dataName $ map varP aParams
 				, conP dataName $ map varP bParams
 				]
 				(normalB $ foldl appE (conE dataName) $ map (\(a, b) -> [| $(varE opName) $(varE a) $(varE b) |]) $ zip aParams bParams)
-				[]]
-			specialiseDecl mathType = do
-				pragSpecInlD opName [t| $(conT dataName) $mathType -> $(conT dataName) $mathType -> $(conT dataName) $mathType |] Inline AllPhases
-			in funDecl : map (specialiseDecl . conT) mathTypeNames
-		let unaryOp opName = let
-			funDecl = funD opName [clause
+				[]
+			]
+		let unaryOp opName = funD opName
+			[ clause
 				[ conP dataName $ map varP aParams
 				]
 				(normalB $ foldl appE (conE dataName) $ map (\a -> [| $(varE opName) $(varE a) |]) aParams)
-				[]]
-			specialiseDecl mathType = do
-				pragSpecInlD opName [t| $(conT dataName) $mathType -> $(conT dataName) $mathType |] Inline AllPhases
-			in funDecl : map (specialiseDecl . conT) mathTypeNames
+				[]
+			]
 
 		let fromIntegerDecl = do
 			iParam <- newName "i"
@@ -411,15 +384,15 @@ liftM concat $ forM [(i, j) | i <- [1..maxVecDimension], j <- [1..maxVecDimensio
 				(normalB $ foldl appE (conE dataName) $ replicate (n * m) $ varE fiParam)
 				[valD (varP fiParam) (normalB [| fromInteger $(varE iParam) |]) []]]
 
-		instanceD (return [ClassP ''Num [VarT paramName]]) [t| Num ($(conT dataName) $(varT paramName)) |] (concat
+		instanceD (return [ClassP ''Num [VarT paramName]]) [t| Num ($(conT dataName) $(varT paramName)) |]
 			[ binaryOp '(+)
 			, binaryOp '(*)
 			, binaryOp '(-)
 			, unaryOp 'negate
 			, unaryOp 'abs
 			, unaryOp 'signum
-			, [fromIntegerDecl]
-			])
+			, fromIntegerDecl
+			]
 
 	sequence $ [dataDec, matInstance, numInstance]
 
@@ -431,16 +404,14 @@ let
 	genVecMatMuls = sequence [genVecMatMul n m | (n, m) <- dimensions2]
 	genMatVecMuls = sequence [genMatVecMul n m | (n, m) <- dimensions2]
 	genMatMatMuls = sequence [genMatMatMul n m k | (n, m, k) <- dimensions3]
-	mathTypes = map conT mathTypeNames
 
 	gen aName bName cName funDecl = do
-		let specialiseDecl mathType = do
-			pragSpecInlD 'mul [t| $(conT aName) $mathType -> $(conT bName) $mathType -> MulResult ($(conT aName) $mathType) ($(conT bName) $mathType) |] Inline AllPhases
-		let specialiseDecls = map specialiseDecl mathTypes
 		eName <- newName "e"
 		let eType = varT eName
-		let mulResultDecl = tySynInstD ''MulResult $ tySynEqn [ [t| $(conT aName) $eType |], [t| $(conT bName) $eType |] ] [t| $(conT cName) $eType |]
-		instanceD (return [ClassP ''Num [VarT eName]]) [t| Mul ($(conT aName) $eType) ($(conT bName) $eType) |] $ mulResultDecl : funDecl : specialiseDecls
+		instanceD (return [ClassP ''Num [VarT eName]]) [t| Mul ($(conT aName) $eType) ($(conT bName) $eType) |]
+			[ tySynInstD ''MulResult $ tySynEqn [ [t| $(conT aName) $eType |], [t| $(conT bName) $eType |] ] [t| $(conT cName) $eType |]
+			, funDecl
+			]
 
 	genVecMatMul n m = do
 		let aName = mkName $ "Vec" ++ [intToDigit n]
