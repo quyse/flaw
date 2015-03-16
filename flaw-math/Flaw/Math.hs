@@ -369,14 +369,14 @@ liftM concat $ forM [1..maxVecDimension] $ \dim -> do
 	-- instance for Storable class
 	let storableInstance = do
 		p <- newName "p"
-		let params = zip [1..dim] aParams
+		let params = zip [0..(dim - 1)] aParams
 		instanceD (return [ClassP ''Storable [VarT paramName]]) [t| Storable ($(conT dataName) $(varT paramName)) |]
 			[ funD 'sizeOf [clause [wildP] (normalB [| $(litE $ integerL $ fromIntegral dim) * sizeOf (undefined :: $(varT paramName)) |]) []]
 			, funD 'alignment [clause [wildP] (normalB [| alignment (undefined :: $(varT paramName)) |]) []]
-			, funD 'peek [clause [varP p] (normalB $ doE $ [bindS (varP a) [| peekElemOff (castPtr $(varE p)) $(litE $ integerL $ fromIntegral $ i - 1) |] | (i, a) <- params] ++
+			, funD 'peek [clause [varP p] (normalB $ doE $ [bindS (varP a) [| peekElemOff (castPtr $(varE p)) $(litE $ integerL $ fromIntegral i) |] | (i, a) <- params] ++
 				[noBindS [| return $(foldl appE (conE dataName) $ map (varE . snd) params) |]]) []]
 			, funD 'poke [clause [varP p, conP dataName $ map (varP . snd) params]
-				(normalB $ doE [noBindS [| pokeElemOff (castPtr $(varE p)) $(litE $ integerL $ fromIntegral $ i - 1) $(varE a) |] | (i, a) <- params]) []]
+				(normalB $ doE [noBindS [| pokeElemOff (castPtr $(varE p)) $(litE $ integerL $ fromIntegral i) $(varE a) |] | (i, a) <- params]) []]
 			]
 
 	sequence $ dataDec : vecInstance : dotInstance : normInstance : normalizeInstance : numInstance : fractionalInstance : floatingInstance : storableInstance : (map genVecComponentInstance components) ++ swizzleVecInstances ++ combineVecInstances
@@ -385,8 +385,14 @@ liftM concat $ forM [1..maxVecDimension] $ \dim -> do
 liftM concat $ forM [(i, j) | i <- [1..maxVecDimension], j <- [1..maxVecDimension]] $ \(n, m) -> do
 	-- name of data (Mat{n}x{m})
 	let dataName = mkName $ "Mat" ++ [intToDigit n, 'x', intToDigit m]
+
 	-- name of type parameter
 	tvA <- newName "a"
+	-- some params
+	paramName <- newName "a"
+	aParams <- sequence [newName $ ['a', '_', intToDigit i, '_', intToDigit j] | i <- [1..n], j <- [1..m]]
+	bParams <- sequence [newName $ ['b', '_', intToDigit i, '_', intToDigit j] | i <- [1..n], j <- [1..m]]
+
 	-- data declaration
 	let dataDec = dataD (return []) dataName [PlainTV tvA]
 		[ normalC dataName (replicate (n * m) $ return (IsStrict, VarT tvA))
@@ -400,9 +406,6 @@ liftM concat $ forM [(i, j) | i <- [1..maxVecDimension], j <- [1..maxVecDimensio
 
 	-- instance for Num class
 	let numInstance = do
-		paramName <- newName "a"
-		aParams <- sequence [newName $ ['a', '_', intToDigit i, '_', intToDigit j] | i <- [1..n], j <- [1..m]]
-		bParams <- sequence [newName $ ['b', '_', intToDigit i, '_', intToDigit j] | i <- [1..n], j <- [1..m]]
 		let binaryOp opName = funD opName
 			[ clause
 				[ conP dataName $ map varP aParams
@@ -436,7 +439,20 @@ liftM concat $ forM [(i, j) | i <- [1..maxVecDimension], j <- [1..maxVecDimensio
 			, fromIntegerDecl
 			]
 
-	sequence $ [dataDec, matInstance, numInstance]
+	-- instance for Storable class
+	let storableInstance = do
+		p <- newName "p"
+		let params = zip [0..(n * m - 1)] aParams
+		instanceD (return [ClassP ''Storable [VarT paramName]]) [t| Storable ($(conT dataName) $(varT paramName)) |]
+			[ funD 'sizeOf [clause [wildP] (normalB [| $(litE $ integerL $ fromIntegral (n * m)) * sizeOf (undefined :: $(varT paramName)) |]) []]
+			, funD 'alignment [clause [wildP] (normalB [| alignment (undefined :: $(varT paramName)) |]) []]
+			, funD 'peek [clause [varP p] (normalB $ doE $ [bindS (varP a) [| peekElemOff (castPtr $(varE p)) $(litE $ integerL $ fromIntegral i) |] | (i, a) <- params] ++
+				[noBindS [| return $(foldl appE (conE dataName) $ map (varE . snd) params) |]]) []]
+			, funD 'poke [clause [varP p, conP dataName $ map (varP . snd) params]
+				(normalB $ doE [noBindS [| pokeElemOff (castPtr $(varE p)) $(litE $ integerL $ fromIntegral i) $(varE a) |] | (i, a) <- params]) []]
+			]
+
+	sequence $ [dataDec, matInstance, numInstance, storableInstance]
 
 -- Generate multiplications.
 let
