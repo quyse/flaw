@@ -236,6 +236,13 @@ void setWin32WindowTitle(HWND hWnd, LPCTSTR title)
 	SetWindowText(hWnd, title);
 }
 
+void getWin32WindowClientSize(HWND hWnd, int* width, int* height)
+{
+	Win32Window* window = getWin32Window(hWnd);
+	*width = window->clientWidth;
+	*height = window->clientHeight;
+}
+
 void destroyWin32Window(HWND hWnd)
 {
 	DestroyWindow(hWnd);
