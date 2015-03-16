@@ -100,7 +100,7 @@ instance Device Dx11Device where
 
 	nullTexture = Dx11NullTextureId
 	nullDepthStencilTarget = Dx11NullDepthStencilTargetId
-	nullIndexBuffer = Dx11NullIndexBufferId D3D11_PRIMITIVE_TOPOLOGY_POINTLIST
+	nullIndexBuffer = Dx11NullIndexBufferId D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST
 	nullUniformBuffer = Dx11NullUniformBufferId
 
 	createDeferredContext Dx11Device
@@ -517,7 +517,7 @@ instance Device Dx11Device where
 				with (subresourceData $ castPtr bytesPtr) $ \subresourceDataPtr -> do
 					createCOMObjectViaPtr $ m_ID3D11Device_CreateBuffer deviceInterface descPtr subresourceDataPtr
 
-		return (releaseKey, Dx11IndexBufferId bufferInterface (if is32bit then DXGI_FORMAT_R32_UINT else DXGI_FORMAT_R16_UINT) D3D11_PRIMITIVE_TOPOLOGY_POINTLIST)
+		return (releaseKey, Dx11IndexBufferId bufferInterface (if is32bit then DXGI_FORMAT_R32_UINT else DXGI_FORMAT_R16_UINT) D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST)
 
 	createProgram Dx11Device
 		{ dx11DeviceInterface = deviceInterface
@@ -748,7 +748,7 @@ dx11DefaultRenderState = RenderState
 	{ renderStateFrameBuffer = Dx11FrameBufferId [] Dx11NullDepthStencilTargetId
 	, renderStateViewport = (0, 0)
 	, renderStateVertexBuffers = []
-	, renderStateIndexBuffer = Dx11NullIndexBufferId D3D11_PRIMITIVE_TOPOLOGY_POINTLIST
+	, renderStateIndexBuffer = Dx11NullIndexBufferId D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST
 	, renderStateUniformBuffers = []
 	, renderStateSamplers = []
 	, renderStateProgram = Dx11NullProgramId
