@@ -29,6 +29,7 @@ module Flaw.Graphics.Program
 	, rasterize
 	, colorTarget
 	, depthTarget
+	, min_, max_
 	) where
 
 import Control.Monad.Reader
@@ -141,8 +142,8 @@ colorTarget i colorNode = withState $ \state@State
 		{ stateTargets = target : targets
 		}, ())
 
-depthTarget :: Int -> Node Float -> Program ()
-depthTarget index depthNode = withState $ \state@State
+depthTarget :: Node Float -> Program ()
+depthTarget depthNode = withState $ \state@State
 	{ stateStage = stage
 	, stateTargets = targets
 	} -> do
@@ -212,3 +213,9 @@ samplerCube3f :: Int -> SamplerNode Vec3f Vec3f
 samplerCube3f slot = sampler slot SamplerCube
 samplerCube4f :: Int -> SamplerNode Vec4f Vec3f
 samplerCube4f slot = sampler slot SamplerCube
+
+min_ :: OfValueType a => Node a -> Node a -> Node a
+min_ a b = MinNode (nodeValueType a) a b
+
+max_ :: OfValueType a => Node a -> Node a -> Node a
+max_ a b = MaxNode (nodeValueType a) a b

@@ -33,6 +33,8 @@ nodeInfo node = case node of
 	NegateNode _ a -> nodeInfo a
 	AbsNode _ a -> nodeInfo a
 	SignumNode _ a -> nodeInfo a
+	MinNode _ a b -> mergeNodeInfo (nodeInfo a) (nodeInfo b)
+	MaxNode _ a b -> mergeNodeInfo (nodeInfo a) (nodeInfo b)
 	PiNode _ -> emptyNodeInfo
 	ExpNode _ a -> nodeInfo a
 	SqrtNode _ a -> nodeInfo a
@@ -53,6 +55,9 @@ nodeInfo node = case node of
 	AcoshNode _ a -> nodeInfo a
 	MulNode _ _ _ a b -> mergeNodeInfo (nodeInfo a) (nodeInfo b)
 	DotNode _ _ a b -> mergeNodeInfo (nodeInfo a) (nodeInfo b)
+	NormNode _ _ a -> nodeInfo a
+	Norm2Node _ _ a -> nodeInfo a
+	NormalizeNode _ a -> nodeInfo a
 	InstanceIdNode -> emptyNodeInfo
 	ComponentNode _ _ _ a -> nodeInfo a
 	SwizzleNode _ _ _ a -> nodeInfo a

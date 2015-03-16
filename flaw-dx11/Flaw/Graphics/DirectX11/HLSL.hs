@@ -80,7 +80,7 @@ generateProgram state = case SL.programInfo state of
 			}
 
 		-- outputs for vertex shader - position and interpolants
-		vsOutputs = map targetOutput vsTargets ++ interpolants
+		vsOutputs = interpolants ++ map targetOutput vsTargets
 
 		-- inputs for pixel shader - interpolants
 		psInputs = interpolants
@@ -282,6 +282,8 @@ nodeSource node = case node of
 	NegateNode _ a -> "-(" <> nodeSource a <> ")"
 	AbsNode _ a -> func1Source "abs" a
 	SignumNode _ a -> func1Source "sign" a
+	MinNode _ a b -> func2Source "min" a b
+	MaxNode _ a b -> func2Source "max" a b
 	PiNode t -> let
 		typedPi :: Floating a => Node a -> a
 		typedPi _ = pi
@@ -305,6 +307,9 @@ nodeSource node = case node of
 	AcoshNode _ a -> func1Source "acosh" a
 	MulNode _ _ _ a b -> func2Source "mul" a b
 	DotNode _ _ a b -> func2Source "dot" a b
+	NormNode _ _ a -> func1Source "length" a
+	Norm2Node _ _ a -> func1Source "length2" a
+	NormalizeNode _ a -> func1Source "normalize" a
 	InstanceIdNode -> "sI"
 	ComponentNode _ _ c a -> "(" <> nodeSource a <> ")." <> singleton c
 	SwizzleNode _ _ s a ->  "(" <> nodeSource a <> ")." <> fromString s

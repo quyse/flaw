@@ -25,6 +25,8 @@ module Flaw.Math
 	, Vec1i, Vec2i, Vec3i, Vec4i
 	, Dot(..)
 	, Cross(..)
+	, Norm(..)
+	, Normalize(..)
 	, Mat(..)
 	, Mul(..)
 	, Mat1x1(..), Mat1x2(..), Mat1x3(..), Mat1x4(..)
@@ -84,6 +86,15 @@ class Vec v => Dot v where
 -- | Class for cross operation.
 class Cross v where
 	cross :: v -> v -> v
+
+-- | Class for norm operation.
+class Dot v => Norm v where
+	norm :: v -> VecElement v
+	norm2 :: v -> VecElement v
+
+-- | Class for normalize operation.
+class Norm v => Normalize v where
+	normalize :: v -> v
 
 -- | General matrix class.
 class Mat m where
@@ -220,6 +231,22 @@ liftM concat $ forM [1..maxVecDimension] $ \dim -> do
 				]
 			]
 
+	-- instance for Norm class
+	let normInstance = do
+		as <- forM components $ \c -> newName [c]
+		instanceD (return [ClassP ''Floating [VarT tvA]]) [t| Norm ($(conT dataName) $(varT tvA)) |]
+			[ funD 'norm [clause [] (normalB $ [| sqrt . norm2 |]) []]
+			, funD 'norm2 [clause [conP dataName $ map varP as]
+				(normalB $ foldl1 (\a b -> [| $a + $b |]) $ map (\a -> [| $a * $a |]) $ map varE as) []]
+			]
+
+	-- instance for Normalize class
+	let normalizeInstance = do
+		a <- newName "a"
+		instanceD (return [ClassP ''Floating [VarT tvA]]) [t| Normalize ($(conT dataName) $(varT tvA)) |]
+			[ funD 'normalize [clause [varP a] (normalB [| $(varE a) * (vecFromScalar (1 / norm $(varE a))) |]) []]
+			]
+
 	-- instance for SwizzleVec{maxComp}{dim} class
 	let swizzleVecInstances = map swizzleVecInstance [(srcDim, maxComp) | srcDim <- [1..4], maxComp <- [1..srcDim]] where
 		swizzleVecInstance (srcDim, maxComp) = do
@@ -352,7 +379,7 @@ liftM concat $ forM [1..maxVecDimension] $ \dim -> do
 				(normalB $ doE [noBindS [| pokeElemOff (castPtr $(varE p)) $(litE $ integerL $ fromIntegral $ i - 1) $(varE a) |] | (i, a) <- params]) []]
 			]
 
-	sequence $ dataDec : vecInstance : dotInstance : numInstance : fractionalInstance : floatingInstance : storableInstance : (map genVecComponentInstance components) ++ swizzleVecInstances ++ combineVecInstances
+	sequence $ dataDec : vecInstance : dotInstance : normInstance : normalizeInstance : numInstance : fractionalInstance : floatingInstance : storableInstance : (map genVecComponentInstance components) ++ swizzleVecInstances ++ combineVecInstances
 
 -- Generate matrix datatypes.
 liftM concat $ forM [(i, j) | i <- [1..maxVecDimension], j <- [1..maxVecDimension]] $ \(n, m) -> do

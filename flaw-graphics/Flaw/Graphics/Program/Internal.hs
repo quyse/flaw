@@ -300,6 +300,8 @@ data Node a where
 	NegateNode :: (OfValueType a, Num a) => ValueType -> Node a -> Node a
 	AbsNode :: (OfValueType a, Num a) => ValueType -> Node a -> Node a
 	SignumNode :: (OfValueType a, Num a) => ValueType -> Node a -> Node a
+	MinNode :: OfValueType a => ValueType -> Node a -> Node a -> Node a
+	MaxNode :: OfValueType a => ValueType -> Node a -> Node a -> Node a
 	PiNode :: (OfValueType a, Floating a) => ValueType -> Node a
 	ExpNode :: (OfValueType a, Floating a) => ValueType -> Node a -> Node a
 	SqrtNode :: (OfValueType a, Floating a) => ValueType -> Node a -> Node a
@@ -320,6 +322,9 @@ data Node a where
 	AcoshNode :: (OfValueType a, Floating a) => ValueType -> Node a -> Node a
 	MulNode :: (OfValueType a, OfValueType b, Mul a b, OfValueType (MulResult a b)) => ValueType -> ValueType -> ValueType -> Node a -> Node b -> Node (MulResult a b)
 	DotNode :: (OfVectorType v, OfScalarType (VecElement v), Dot v) => ValueType -> ValueType -> Node v -> Node v -> Node (VecElement v)
+	NormNode :: (OfVectorType v, OfScalarType (VecElement v), Norm v) => ValueType -> ValueType -> Node v -> Node (VecElement v)
+	Norm2Node :: (OfVectorType v, OfScalarType (VecElement v), Norm v) => ValueType -> ValueType -> Node v -> Node (VecElement v)
+	NormalizeNode :: (OfVectorType v, Normalize v) => ValueType -> Node v -> Node v
 	InstanceIdNode :: Node Word
 	ComponentNode :: OfVectorType v => ValueType -> ValueType -> Char -> Node v -> Node (VecElement v)
 	SwizzleNode :: (OfVectorType a, OfVectorType b) => ValueType -> ValueType -> String -> Node a -> Node b
@@ -388,6 +393,13 @@ instance (OfValueType a, OfValueType b, OfValueType (MulResult a b), Mul a b) =>
 
 instance (OfVectorType v, Dot v) => Dot (Node v) where
 	dot = DotNode (valueType (undefined :: v)) (valueType (undefined :: VecElement v))
+
+instance (OfVectorType v, Norm v) => Norm (Node v) where
+	norm = NormNode (valueType (undefined :: v)) (valueType (undefined :: VecElement v))
+	norm2 = Norm2Node (valueType (undefined :: v)) (valueType (undefined :: VecElement v))
+
+instance (OfVectorType v, Normalize v) => Normalize (Node v) where
+	normalize = NormalizeNode (valueType (undefined :: v))
 
 {- instance
 	( OfVectorType v
