@@ -30,6 +30,8 @@ module Flaw.FFI.Win32
 	, HINSTANCE
 	, HMODULE
 	, HWND
+	, loWord
+	, hiWord
 	, loadLibrary
 	, getProcAddress
 	, loadLibraryAndGetProcAddress
@@ -39,6 +41,7 @@ module Flaw.FFI.Win32
 import Control.Monad
 import qualified Data.ByteString.Builder as BSB
 import qualified Data.ByteString.Lazy as BL
+import Data.Bits
 import Data.Int
 import Data.Monoid
 import qualified Data.Text as T
@@ -84,6 +87,12 @@ type HINSTANCE = HANDLE
 type HMODULE = HINSTANCE
 
 type HWND = HANDLE
+
+loWord :: (Num a, Bits a) => a -> a
+loWord a = a .&. 0xffff
+
+hiWord :: (Num a, Bits a) => a -> a
+hiWord a = (a `shiftR` 16) .&. 0xffff
 
 loadLibrary :: String -> IO HMODULE
 loadLibrary name = withCWString name winapi_loadLibraryW
