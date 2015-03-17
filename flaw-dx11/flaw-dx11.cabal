@@ -28,6 +28,6 @@ library
     Flaw.Graphics.DirectX11.Internal
     Flaw.Graphics.DXGI.Internal
   -- other-extensions:    
-  build-depends:       base >=4.7 && <4.8, bytestring, flaw-base, flaw-ffi, flaw-graphics, flaw-math, flaw-sl, flaw-window, lifted-base, monad-control, mtl, resourcet, text, transformers, transformers-base
+  build-depends:       base >=4.7 && <4.8, bytestring, flaw-base, flaw-ffi, flaw-graphics, flaw-math, flaw-sl, flaw-window, lifted-base, monad-control, mtl, resourcet, text, transformers, transformers-base, unordered-containers
   -- hs-source-dirs:      
   default-language:    Haskell2010

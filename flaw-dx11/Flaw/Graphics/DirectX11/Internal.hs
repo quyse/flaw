@@ -22,10 +22,11 @@ import Data.Bits
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BSC
 import qualified Data.ByteString.Unsafe as BS
-import qualified Data.Text as T
-import qualified Data.Text.Encoding as T
+import qualified Data.HashMap.Strict as HashMap
 import Data.IORef
 import Data.Maybe
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
 import Foreign.Marshal.Alloc
 import Foreign.Marshal.Array
 import Foreign.Marshal.Utils
@@ -107,10 +108,10 @@ instance Device Dx11Device where
 		{ dx11DeviceInterface = deviceInterface
 		} = describeException "failed to create DirectX11 deferred context" $ do
 		(releaseKey, contextInterface) <- allocateCOMObject $ createCOMObjectViaPtr $ m_ID3D11Device_CreateDeferredContext deviceInterface 0
-		contextState <- liftIO $ newIORef dx11DefaultContextState
+		contextStateRef <- liftIO $ newIORef dx11DefaultContextState
 		return (releaseKey, Dx11Context
 			{ dx11ContextInterface = contextInterface
-			, dx11ContextState = contextState
+			, dx11ContextStateRef = contextStateRef
 			})
 
 	createStaticTexture Dx11Device
@@ -709,7 +710,7 @@ createDx11Device (DXGIDeviceId system adapter) = describeException "failed to cr
 		d3dCompileProc <- liftM mkD3DCompile $ loadLibraryAndGetProcAddress "D3DCompiler_43.dll" "D3DCompile"
 
 		-- create context state
-		contextState <- liftIO $ newIORef dx11DefaultContextState
+		contextStateRef <- liftIO $ newIORef dx11DefaultContextState
 
 		return (Dx11Device
 			{ dx11DeviceSystem = system
@@ -718,7 +719,7 @@ createDx11Device (DXGIDeviceId system adapter) = describeException "failed to cr
 			, dx11DeviceD3DCompile = d3dCompileProc
 			}, Dx11Context
 			{ dx11ContextInterface = contextInterface
-			, dx11ContextState = contextState
+			, dx11ContextStateRef = contextStateRef
 			})
 
 	-- destroy function
@@ -738,7 +739,7 @@ createDx11Device (DXGIDeviceId system adapter) = describeException "failed to cr
 -- | DirectX11 graphics context.
 data Dx11Context = Dx11Context
 	{ dx11ContextInterface :: ID3D11DeviceContext
-	, dx11ContextState :: IORef Dx11ContextState
+	, dx11ContextStateRef :: IORef Dx11ContextState
 	}
 
 type Dx11ContextState = RenderState Dx11Device
@@ -749,7 +750,7 @@ dx11DefaultRenderState = RenderState
 	, renderStateViewport = (0, 0)
 	, renderStateVertexBuffers = []
 	, renderStateIndexBuffer = Dx11NullIndexBufferId D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST
-	, renderStateUniformBuffers = []
+	, renderStateUniformBuffers = HashMap.empty
 	, renderStateSamplers = []
 	, renderStateProgram = Dx11NullProgramId
 	}
@@ -775,6 +776,19 @@ instance Context Dx11Context Dx11Device where
 
 	contextClearDepthStencil context renderState depth stencil = do
 		dx11ClearDepthStencil context renderState depth stencil ((fromEnum D3D11_CLEAR_DEPTH) .|. (fromEnum D3D11_CLEAR_STENCIL))
+
+	contextUploadUniformBuffer Dx11Context
+		{ dx11ContextInterface = contextInterface
+		} uniformBuffer ptr size = do
+		case uniformBuffer of
+			Dx11UniformBufferId bufferInterface -> do
+				let resourceInterfacePtr = castPtr $ pokeCOMObject bufferInterface
+				D3D11_MAPPED_SUBRESOURCE
+					{ f_D3D11_MAPPED_SUBRESOURCE_pData = bufferPtr
+					} <- createCOMValueViaPtr $ m_ID3D11DeviceContext_Map contextInterface resourceInterfacePtr 0 (wrapEnum D3D11_MAP_WRITE_DISCARD) 0
+				copyBytes bufferPtr ptr size
+				m_ID3D11DeviceContext_Unmap contextInterface resourceInterfacePtr 0
+			Dx11NullUniformBufferId -> return ()
 
 	contextDraw context@Dx11Context
 		{ dx11ContextInterface = contextInterface
@@ -1023,8 +1037,8 @@ dx11ClearDepthStencil Dx11Context
 dx11UpdateContext :: Dx11Context -> RenderState Dx11Device -> IO ()
 dx11UpdateContext Dx11Context
 	{ dx11ContextInterface = contextInterface
-	, dx11ContextState = actualContextState
-	} RenderState
+	, dx11ContextStateRef = actualContextStateRef
+	} desiredContextState@RenderState
 	{ renderStateFrameBuffer = desiredFrameBuffer
 	, renderStateViewport = desiredViewport
 	, renderStateVertexBuffers = desiredVertexBuffers
@@ -1042,7 +1056,7 @@ dx11UpdateContext Dx11Context
 		, renderStateUniformBuffers = actualUniformBuffers
 		, renderStateSamplers = actualSamplers
 		, renderStateProgram = actualProgram
-		} <- readIORef actualContextState
+		} <- readIORef actualContextStateRef
 
 	-- framebuffer
 	if actualFrameBuffer /= desiredFrameBuffer then do
@@ -1094,14 +1108,21 @@ dx11UpdateContext Dx11Context
 
 	-- uniform buffers
 	if actualUniformBuffers /= desiredUniformBuffers then do
-		let buffersCount = fromIntegral $ length desiredUniformBuffers
-		let buffersInterfaces = [case uniformBuffer of
-			Dx11UniformBufferId bufferInterface -> pokeCOMObject bufferInterface
-			Dx11NullUniformBufferId -> nullPtr
-			| uniformBuffer <- desiredUniformBuffers]
-		withArray buffersInterfaces $ \buffersInterfacesPtr -> do
-			m_ID3D11DeviceContext_VSSetConstantBuffers contextInterface 0 buffersCount buffersInterfacesPtr
-			m_ID3D11DeviceContext_PSSetConstantBuffers contextInterface 0 buffersCount buffersInterfacesPtr
+		-- calculate maximum buffer index
+		let maxBufferId = maximum $ HashMap.keys desiredUniformBuffers
+		let buffersCount = maxBufferId + 1
+		-- allocate array for interfaces
+		allocaArray buffersCount $ \buffersInterfacesPtr -> do
+			-- fill with nulls
+			forM_ [0..maxBufferId] $ \i -> pokeElemOff buffersInterfacesPtr i nullPtr
+			-- fill with pointers
+			forM_ (HashMap.toList desiredUniformBuffers) $ \(i, uniformBuffer) -> do
+				case uniformBuffer of
+					Dx11UniformBufferId bufferInterface -> pokeElemOff buffersInterfacesPtr i $ pokeCOMObject bufferInterface
+					Dx11NullUniformBufferId -> return ()
+			-- set into context
+			m_ID3D11DeviceContext_VSSetConstantBuffers contextInterface 0 (fromIntegral buffersCount) buffersInterfacesPtr
+			m_ID3D11DeviceContext_PSSetConstantBuffers contextInterface 0 (fromIntegral buffersCount) buffersInterfacesPtr
 	else return ()
 
 	-- samplers
@@ -1137,3 +1158,6 @@ dx11UpdateContext Dx11Context
 		m_ID3D11DeviceContext_VSSetShader contextInterface vertexShaderInterfacePtr nullPtr 0
 		m_ID3D11DeviceContext_PSSetShader contextInterface pixelShaderInterfacePtr nullPtr 0
 	else return ()
+
+	-- update actual state
+	writeIORef actualContextStateRef desiredContextState

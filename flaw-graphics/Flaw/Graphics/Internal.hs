@@ -17,6 +17,7 @@ module Flaw.Graphics.Internal
 	, Render(..)
 	, RenderState(..)
 	, renderScope
+	, renderDesire
 	, renderFrameBuffer
 	, renderViewport
 	, renderVertexBuffers
@@ -35,10 +36,13 @@ module Flaw.Graphics.Internal
 	) where
 
 import Control.Applicative
+import Control.Monad.IO.Class
 import Control.Monad.Trans.Control
 import Control.Monad.Trans.Resource
 import qualified Data.ByteString as BS
+import qualified Data.HashMap.Strict as HashMap
 import qualified Data.Text as T
+import Foreign.Ptr
 
 import Flaw.Graphics.Program
 import Flaw.Graphics.Sampler
@@ -141,6 +145,8 @@ class Device d => Context c d | c -> d where
 	contextClearStencil :: c -> RenderState d -> Int -> IO ()
 	-- | Clear depth and stencil.
 	contextClearDepthStencil :: c -> RenderState d -> Float -> Int -> IO ()
+	-- | Upload contents of uniform buffer.
+	contextUploadUniformBuffer :: c -> UniformBufferId d -> Ptr () -> Int -> IO ()
 	-- | Draw.
 	contextDraw :: c -> RenderState d -> Int -> IO ()
 	-- | Replay deferred context on immediate context.
@@ -198,12 +204,17 @@ instance Monad (Render c d) where
 		let Render q = f r1
 		q c s1
 
+instance MonadIO (Render c d) where
+	liftIO io = Render $ \_c s -> do
+		r <- io
+		return (s, r)
+
 data RenderState d = RenderState
 	{ renderStateFrameBuffer :: FrameBufferId d
 	, renderStateViewport :: (Int, Int)
 	, renderStateVertexBuffers :: [VertexBufferId d]
 	, renderStateIndexBuffer :: IndexBufferId d
-	, renderStateUniformBuffers :: [UniformBufferId d]
+	, renderStateUniformBuffers :: HashMap.HashMap Int (UniformBufferId d)
 	, renderStateSamplers :: [(TextureId d, SamplerStateId d)]
 	, renderStateProgram :: ProgramId d
 	}
@@ -242,7 +253,7 @@ renderIndexBuffer indexBuffer = renderDesire $ \s -> s
 	}
 
 -- | Set uniform buffers.
-renderUniformBuffers :: [UniformBufferId d] -> Render c d ()
+renderUniformBuffers :: HashMap.HashMap Int (UniformBufferId d) -> Render c d ()
 renderUniformBuffers uniformBuffers = renderDesire $ \s -> s
 	{ renderStateUniformBuffers = uniformBuffers
 	}
