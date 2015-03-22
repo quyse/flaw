@@ -4,7 +4,7 @@ Description: General types for graphics.
 License: MIT
 -}
 
-{-# LANGUAGE FlexibleContexts, FunctionalDependencies, MultiParamTypeClasses, TypeFamilies #-}
+{-# LANGUAGE FlexibleContexts, FunctionalDependencies, MultiParamTypeClasses, RankNTypes, TypeFamilies #-}
 
 module Flaw.Graphics.Internal
 	( System(..)
@@ -14,40 +14,39 @@ module Flaw.Graphics.Internal
 	, DeviceInfo(..)
 	, DisplayInfo(..)
 	, DisplayModeInfo(..)
-	, Render(..)
-	, RenderState(..)
+	, Render
 	, renderScope
-	, renderDesire
 	, renderFrameBuffer
 	, renderViewport
-	, renderVertexBuffers
+	, renderVertexBuffer
 	, renderIndexBuffer
-	, renderUniformBuffers
-	, renderSamplers
+	, renderUniformBuffer
+	, renderSampler
 	, renderProgram
 	, renderClearColor
 	, renderClearDepth
 	, renderClearStencil
 	, renderClearDepthStencil
+	, renderUploadUniformBuffer
 	, renderDraw
 	, renderPlay
 	, render
 	, present
 	) where
 
-import Control.Applicative
-import Control.Monad.IO.Class
+import Control.Monad.Trans.Class
 import Control.Monad.Trans.Control
+import Control.Monad.Trans.Reader
 import Control.Monad.Trans.Resource
 import qualified Data.ByteString as BS
-import qualified Data.HashMap.Strict as HashMap
 import qualified Data.Text as T
 import Foreign.Ptr
 
-import Flaw.Graphics.Program
+import Flaw.Graphics.Program.Internal
 import Flaw.Graphics.Sampler
 import Flaw.Graphics.Texture
 import Flaw.Math
+import Flaw.Stack
 
 -- | Class of graphics system.
 {- Initialization of graphics system depends on implementation.
@@ -137,22 +136,38 @@ class Device d where
 -- | Class of graphics context.
 -- Performs actual render operations.
 class Device d => Context c d | c -> d where
+	------- Immediate commands.
 	-- | Clear render target.
-	contextClearColor :: c -> RenderState d -> Int -> Vec4f -> IO ()
+	contextClearColor :: c -> Int -> Vec4f -> IO ()
 	-- | Clear depth.
-	contextClearDepth :: c -> RenderState d -> Float -> IO ()
+	contextClearDepth :: c -> Float -> IO ()
 	-- | Clear stencil.
-	contextClearStencil :: c -> RenderState d -> Int -> IO ()
+	contextClearStencil :: c -> Int -> IO ()
 	-- | Clear depth and stencil.
-	contextClearDepthStencil :: c -> RenderState d -> Float -> Int -> IO ()
-	-- | Upload contents of uniform buffer.
+	contextClearDepthStencil :: c -> Float -> Int -> IO ()
+	-- | Upload data to uniform buffer.
 	contextUploadUniformBuffer :: c -> UniformBufferId d -> Ptr () -> Int -> IO ()
 	-- | Draw.
-	contextDraw :: c -> RenderState d -> Int -> IO ()
+	contextDraw :: c -> Int -> IO ()
 	-- | Replay deferred context on immediate context.
-	contextPlay :: Context dc d => c -> RenderState d -> dc -> IO (RenderState d)
+	contextPlay :: Context dc d => c -> dc -> IO ()
 	-- | Perform offscreen rendering. Initial state is context's default state.
-	contextRender :: c -> (RenderState d -> IO ()) -> IO ()
+	contextRender :: c -> IO a -> IO a
+	------- Setup commands.
+	-- | Set framebuffer.
+	contextSetFrameBuffer :: c -> FrameBufferId d -> IO a -> IO a
+	-- | Set viewport.
+	contextSetViewport :: c -> Int -> Int -> IO a -> IO a
+	-- | Set vertex buffer.
+	contextSetVertexBuffer :: c -> Int -> VertexBufferId d -> IO a -> IO a
+	-- | Set index buffer.
+	contextSetIndexBuffer :: c -> IndexBufferId d -> IO a -> IO a
+	-- | Set uniform buffer.
+	contextSetUniformBuffer :: c -> Int -> UniformBufferId d -> IO a -> IO a
+	-- | Set sampler.
+	contextSetSampler :: c -> Int -> TextureId d -> SamplerStateId d -> IO a -> IO a
+	-- | Set program.
+	contextSetProgram :: c -> ProgramId d -> IO a -> IO a
 
 -- | Presenter class.
 class (System s, Context c d) => Presenter p s c d | p -> s c d where
@@ -160,7 +175,7 @@ class (System s, Context c d) => Presenter p s c d | p -> s c d where
 	-- | Perform rendering on presenter's surface.
 	-- Presenter's framebuffer, viewport, etc will be automatically set
 	-- as an initial state.
-	presenterRender :: p -> c -> (RenderState d -> IO ()) -> IO ()
+	presenterRender :: p -> c -> IO a -> IO a
 
 -- | Device information structure.
 data DeviceInfo device = DeviceInfo
@@ -183,139 +198,82 @@ data DisplayModeInfo = DisplayModeInfo
 	} deriving Show
 
 -- | Rendering monad.
-newtype Render c d a = Render (c -> RenderState d -> IO (RenderState d, a))
+type Render c a = StackT (ReaderT c IO) a
 
-instance Functor (Render c d) where
-	fmap f (Render h) = Render $ \c s0 -> do
-		(s1, r) <- h c s0
-		return (s1, f r)
+renderSetup :: (forall a. c -> IO a -> IO a) -> Render c ()
+renderSetup setup = StackT $ \q -> do
+	c <- ask
+	mapReaderT (setup c) $ q ()
 
-instance Applicative (Render c d) where
-	pure a = Render $ \_c s -> return (s, a)
-	(Render f) <*> (Render h) = Render $ \c s0 -> do
-		(s1, r1) <- h c s0
-		(s2, r2) <- f c s1
-		return (s2, r2 r1)
+renderAction :: (c -> IO a) -> Render c a
+renderAction action = StackT $ \q -> do
+	c <- ask
+	lift (action c) >>= q
 
-instance Monad (Render c d) where
-	return a = Render $ \_c s -> return (s, a)
-	(Render h) >>= f = Render $ \c s0 -> do
-		(s1, r1) <- h c s0
-		let Render q = f r1
-		q c s1
-
-instance MonadIO (Render c d) where
-	liftIO io = Render $ \_c s -> do
-		r <- io
-		return (s, r)
-
-data RenderState d = RenderState
-	{ renderStateFrameBuffer :: FrameBufferId d
-	, renderStateViewport :: (Int, Int)
-	, renderStateVertexBuffers :: [VertexBufferId d]
-	, renderStateIndexBuffer :: IndexBufferId d
-	, renderStateUniformBuffers :: HashMap.HashMap Int (UniformBufferId d)
-	, renderStateSamplers :: [(TextureId d, SamplerStateId d)]
-	, renderStateProgram :: ProgramId d
-	}
-
--- | Make a render scope, i.e. save context state and restore it after.
-renderScope :: Render c d a -> Render c d a
-renderScope (Render r) = Render $ \context oldState -> do
-	(_newState, result) <- r context oldState
-	return (oldState, result)
-
--- | Set new desired state.
-renderDesire :: (RenderState d -> RenderState d) -> Render c d ()
-renderDesire f = Render $ \_context renderState -> return (f renderState, ())
+-- | Scope for rendering state.
+-- Context state will be restored after the scope.
+renderScope :: Render c a -> Render c a
+renderScope = scope
 
 -- | Set current framebuffer.
-renderFrameBuffer :: FrameBufferId d -> Render c d ()
-renderFrameBuffer frameBuffer = renderDesire $ \s -> s
-	{ renderStateFrameBuffer = frameBuffer
-	}
+renderFrameBuffer :: Context c d => FrameBufferId d -> Render c ()
+renderFrameBuffer fb = renderSetup $ \c q -> contextSetFrameBuffer c fb q
 
-renderViewport :: Int -> Int -> Render c d ()
-renderViewport width height = renderDesire $ \s -> s
-	{ renderStateViewport = (width, height)
-	}
+renderViewport :: Context c d => Int -> Int -> Render c ()
+renderViewport width height = renderSetup $ \c q -> contextSetViewport c width height q
 
--- | Set current vertex buffers.
-renderVertexBuffers :: [VertexBufferId d] -> Render c d ()
-renderVertexBuffers vertexBuffers = renderDesire $ \s -> s
-	{ renderStateVertexBuffers = vertexBuffers
-	}
+-- | Set vertex buffer.
+renderVertexBuffer :: Context c d => Int -> VertexBufferId d -> Render c ()
+renderVertexBuffer i vb = renderSetup $ \c q -> contextSetVertexBuffer c i vb q
 
 -- | Set current index buffer.
-renderIndexBuffer ::  IndexBufferId d -> Render c d ()
-renderIndexBuffer indexBuffer = renderDesire $ \s -> s
-	{ renderStateIndexBuffer = indexBuffer
-	}
+renderIndexBuffer :: Context c d => IndexBufferId d -> Render c ()
+renderIndexBuffer ib = renderSetup $ \c q -> contextSetIndexBuffer c ib q
 
--- | Set uniform buffers.
-renderUniformBuffers :: HashMap.HashMap Int (UniformBufferId d) -> Render c d ()
-renderUniformBuffers uniformBuffers = renderDesire $ \s -> s
-	{ renderStateUniformBuffers = uniformBuffers
-	}
+-- | Set uniform buffer.
+renderUniformBuffer :: Context c d => Int -> UniformBufferId d -> Render c ()
+renderUniformBuffer i ub = renderSetup $ \c q -> contextSetUniformBuffer c i ub q
 
--- | Set samplers.
-renderSamplers :: [(TextureId d, SamplerStateId d)] -> Render c d ()
-renderSamplers samplers = renderDesire $ \s -> s
-	{ renderStateSamplers = samplers
-	}
+-- | Set sampler.
+renderSampler :: Context c d => Int -> TextureId d -> SamplerStateId d -> Render c ()
+renderSampler i t s = renderSetup $ \c q -> contextSetSampler c i t s q
 
 -- | Set current program.
-renderProgram :: ProgramId d -> Render c d ()
-renderProgram program = renderDesire $ \s -> s
-	{ renderStateProgram = program
-	}
+renderProgram :: Context c d => ProgramId d -> Render c ()
+renderProgram p = renderSetup $ \c q -> contextSetProgram c p q
 
 -- | Clear render target.
-renderClearColor :: Context c d => Int -> Vec4f -> Render c d ()
-renderClearColor targetIndex color = Render $ \context renderState -> do
-	contextClearColor context renderState targetIndex color
-	return (renderState, ())
+renderClearColor :: Context c d => Int -> Vec4f -> Render c ()
+renderClearColor i color = renderAction $ \c -> contextClearColor c i color
 
 -- | Clear depth.
-renderClearDepth :: Context c d => Float -> Render c d ()
-renderClearDepth depth = Render $ \context renderState -> do
-	contextClearDepth context renderState depth
-	return (renderState, ())
+renderClearDepth :: Context c d => Float -> Render c ()
+renderClearDepth depth = renderAction $ \c -> contextClearDepth c depth
 
 -- | Clear stencil.
-renderClearStencil :: Context c d => Int -> Render c d ()
-renderClearStencil stencil = Render $ \context renderState -> do
-	contextClearStencil context renderState stencil
-	return (renderState, ())
+renderClearStencil :: Context c d => Int -> Render c ()
+renderClearStencil stencil = renderAction $ \c -> contextClearStencil c stencil
 
 -- | Clear depth and stencil.
-renderClearDepthStencil :: Context c d => Float -> Int -> Render c d ()
-renderClearDepthStencil depth stencil = Render $ \context renderState -> do
-	contextClearDepthStencil context renderState depth stencil
-	return (renderState, ())
+renderClearDepthStencil :: Context c d => Float -> Int -> Render c ()
+renderClearDepthStencil depth stencil = renderAction $ \c -> contextClearDepthStencil c depth stencil
+
+-- | Upload data to uniform buffer.
+renderUploadUniformBuffer :: Context c d => UniformBufferId d -> ((Ptr () -> Int -> IO ()) -> IO ()) -> Render c ()
+renderUploadUniformBuffer ub f = renderAction $ \c -> f $ contextUploadUniformBuffer c ub
 
 -- | Draw.
-renderDraw :: Context c d => Int -> Render c d ()
-renderDraw indicesCount = Render $ \context renderState -> do
-	contextDraw context renderState indicesCount
-	return (renderState, ())
+renderDraw :: Context c d => Int -> Render c ()
+renderDraw indicesCount = renderAction $ \c -> contextDraw c indicesCount
 
 -- | Play deferred context on immediate context.
-renderPlay :: (Context c d, Context dc d) => dc -> Render c d ()
-renderPlay deferredContext = Render $ \context renderState -> do
-	newRenderState <- contextPlay context renderState deferredContext
-	return (newRenderState, ())
+renderPlay :: (Context c d, Context dc d) => dc -> Render c ()
+renderPlay deferredContext = renderAction $ \c -> contextPlay c deferredContext
 
 -- | Perform offscreen rendering.
-render :: Context c d => c -> Render c d () -> IO ()
-render context (Render f) = contextRender context $ \state -> do
-	_ <- f context state
-	return ()
+render :: Context c d => c -> Render c a -> IO a
+render c f = contextRender c $ runReaderT (runStackT f) c
 
 -- | Perform rendering on presenter.
-present :: Presenter p s c d => p -> Render c d () -> Render c d ()
-present presenter (Render f) = Render $ \context state1 -> do
-	presenterRender presenter context $ \state2 -> do
-		_ <- f context state2
-		return ()
-	return (state1, ())
+present :: Presenter p s c d => p -> Render c a -> Render c a
+present p f = renderAction $ \c -> presenterRender p c $ runReaderT (runStackT f) c

@@ -18,17 +18,17 @@ import qualified Control.Exception.Lifted as Lifted
 import Control.Monad
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Resource
+import Data.Array.IO
 import Data.Bits
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BSC
 import qualified Data.ByteString.Unsafe as BS
-import qualified Data.HashMap.Strict as HashMap
 import Data.IORef
 import Data.Maybe
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import Foreign.Marshal.Alloc
-import Foreign.Marshal.Array
+import Foreign.Marshal.Array(copyArray, withArray)
 import Foreign.Marshal.Utils
 import Foreign.Ptr
 import Foreign.Storable
@@ -37,7 +37,6 @@ import Flaw.Exception
 import Flaw.FFI
 import Flaw.FFI.Win32
 import Flaw.FFI.COM
-import Flaw.Graphics
 import Flaw.Graphics.DirectX11.FFI
 import Flaw.Graphics.DirectX11.HLSL
 import Flaw.Graphics.DXGI.FFI
@@ -69,8 +68,9 @@ instance Device Dx11Device where
 		= Dx11TextureId ID3D11ShaderResourceView
 		| Dx11NullTextureId
 		deriving Eq
-	newtype SamplerStateId Dx11Device
+	data SamplerStateId Dx11Device
 		= Dx11SamplerStateId ID3D11SamplerState
+		| Dx11NullSamplerStateId
 		deriving Eq
 	newtype RenderTargetId Dx11Device
 		= Dx11RenderTargetId ID3D11RenderTargetView
@@ -108,11 +108,8 @@ instance Device Dx11Device where
 		{ dx11DeviceInterface = deviceInterface
 		} = describeException "failed to create DirectX11 deferred context" $ do
 		(releaseKey, contextInterface) <- allocateCOMObject $ createCOMObjectViaPtr $ m_ID3D11Device_CreateDeferredContext deviceInterface 0
-		contextStateRef <- liftIO $ newIORef dx11DefaultContextState
-		return (releaseKey, Dx11Context
-			{ dx11ContextInterface = contextInterface
-			, dx11ContextStateRef = contextStateRef
-			})
+		context <- liftIO $ dx11CreateContextFromInterface contextInterface
+		return (releaseKey, context)
 
 	createStaticTexture Dx11Device
 		{ dx11DeviceInterface = deviceInterface
@@ -709,18 +706,14 @@ createDx11Device (DXGIDeviceId system adapter) = describeException "failed to cr
 		contextInterface <- peekCOMObject =<< peek deviceContextPtr
 		d3dCompileProc <- liftM mkD3DCompile $ loadLibraryAndGetProcAddress "D3DCompiler_43.dll" "D3DCompile"
 
-		-- create context state
-		contextStateRef <- liftIO $ newIORef dx11DefaultContextState
+		context <- dx11CreateContextFromInterface contextInterface
 
 		return (Dx11Device
 			{ dx11DeviceSystem = system
 			, dx11DeviceInterface = deviceInterface
 			, dx11DeviceImmediateContext = contextInterface
 			, dx11DeviceD3DCompile = d3dCompileProc
-			}, Dx11Context
-			{ dx11ContextInterface = contextInterface
-			, dx11ContextStateRef = contextStateRef
-			})
+			}, context)
 
 	-- destroy function
 	let destroy (Dx11Device
@@ -739,43 +732,92 @@ createDx11Device (DXGIDeviceId system adapter) = describeException "failed to cr
 -- | DirectX11 graphics context.
 data Dx11Context = Dx11Context
 	{ dx11ContextInterface :: ID3D11DeviceContext
-	, dx11ContextStateRef :: IORef Dx11ContextState
+	-- | Context state corresponding to the ID3D11DeviceContext state.
+	, dx11ContextActualState :: Dx11ContextState
+	-- | Desired context state set by user.
+	, dx11ContextDesiredState :: Dx11ContextState
 	}
 
-type Dx11ContextState = RenderState Dx11Device
-
-dx11DefaultRenderState :: RenderState Dx11Device
-dx11DefaultRenderState = RenderState
-	{ renderStateFrameBuffer = Dx11FrameBufferId [] Dx11NullDepthStencilTargetId
-	, renderStateViewport = (0, 0)
-	, renderStateVertexBuffers = []
-	, renderStateIndexBuffer = Dx11NullIndexBufferId D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST
-	, renderStateUniformBuffers = HashMap.empty
-	, renderStateSamplers = []
-	, renderStateProgram = Dx11NullProgramId
+data Dx11ContextState = Dx11ContextState
+	{ dx11ContextStateFrameBuffer :: !(IORef (FrameBufferId Dx11Device))
+	, dx11ContextStateViewport :: !(IORef (Int, Int))
+	, dx11ContextStateVertexBuffers :: !(IOArray Int (VertexBufferId Dx11Device))
+	, dx11ContextStateIndexBuffer :: !(IORef (IndexBufferId Dx11Device))
+	, dx11ContextStateUniformBuffers :: !(IOArray Int (UniformBufferId Dx11Device))
+	, dx11ContextStateSamplers :: !(IOArray Int (TextureId Dx11Device, SamplerStateId Dx11Device))
+	, dx11ContextStateProgram :: !(IORef (ProgramId Dx11Device))
 	}
 
-dx11DefaultContextState :: Dx11ContextState
-dx11DefaultContextState = dx11DefaultRenderState
+dx11CreateContextFromInterface :: ID3D11DeviceContext -> IO Dx11Context
+dx11CreateContextFromInterface contextInterface = do
+	actualContextState <- dx11CreateContextState
+	desiredContextState <- dx11CreateContextState
+	return Dx11Context
+		{ dx11ContextInterface = contextInterface
+		, dx11ContextActualState = actualContextState
+		, dx11ContextDesiredState = desiredContextState
+		}
+
+dx11CreateContextState :: IO Dx11ContextState
+dx11CreateContextState = do
+	frameBuffer <- newIORef $ Dx11FrameBufferId [] Dx11NullDepthStencilTargetId
+	viewport <- newIORef (0, 0)
+	vertexBuffers <- newArray (0, 7) Dx11NullVertexBufferId
+	indexBuffer <- newIORef $ Dx11NullIndexBufferId D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST
+	uniformBuffers <- newArray (0, 7) Dx11NullUniformBufferId
+	samplers <- newArray (0, 7) (Dx11NullTextureId, Dx11NullSamplerStateId)
+	program <- newIORef Dx11NullProgramId
+	return Dx11ContextState
+		{ dx11ContextStateFrameBuffer = frameBuffer
+		, dx11ContextStateViewport = viewport
+		, dx11ContextStateVertexBuffers = vertexBuffers
+		, dx11ContextStateIndexBuffer = indexBuffer
+		, dx11ContextStateUniformBuffers = uniformBuffers
+		, dx11ContextStateSamplers = samplers
+		, dx11ContextStateProgram = program
+		}
+
+dx11SetDefaultContextState :: Dx11ContextState -> IO ()
+dx11SetDefaultContextState Dx11ContextState
+	{ dx11ContextStateFrameBuffer = frameBufferRef
+	, dx11ContextStateViewport = viewportRef
+	, dx11ContextStateVertexBuffers = vertexBuffersArray
+	, dx11ContextStateIndexBuffer = indexBufferRef
+	, dx11ContextStateUniformBuffers = uniformBuffersArray
+	, dx11ContextStateSamplers = samplersArray
+	, dx11ContextStateProgram = programRef
+	} = do
+	writeIORef frameBufferRef $ Dx11FrameBufferId [] Dx11NullDepthStencilTargetId
+	writeIORef viewportRef (0, 0)
+	vertexBuffersBounds <- getBounds vertexBuffersArray
+	forM_ (range vertexBuffersBounds) $ \i -> writeArray vertexBuffersArray i Dx11NullVertexBufferId
+	writeIORef indexBufferRef $ Dx11NullIndexBufferId D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST
+	uniformBuffersBounds <- getBounds uniformBuffersArray
+	forM_ (range uniformBuffersBounds) $ \i -> writeArray uniformBuffersArray i Dx11NullUniformBufferId
+	samplersBounds <- getBounds samplersArray
+	forM_ (range samplersBounds) $ \i -> writeArray samplersArray i (Dx11NullTextureId, Dx11NullSamplerStateId)
+	writeIORef programRef Dx11NullProgramId
 
 instance Context Dx11Context Dx11Device where
 	contextClearColor Dx11Context
 		{ dx11ContextInterface = contextInterface
-		} RenderState
-		{ renderStateFrameBuffer = Dx11FrameBufferId renderTargets _depthStencilTarget
+		, dx11ContextDesiredState = Dx11ContextState
+			{ dx11ContextStateFrameBuffer = frameBufferRef
+			}
 		} targetIndex color = do
+		Dx11FrameBufferId renderTargets _depthStencilTarget <- readIORef frameBufferRef
 		let Dx11RenderTargetId rtvInterface = renderTargets !! targetIndex
 		withArray (vecToList color) $ \colorPtr -> do
 			m_ID3D11DeviceContext_ClearRenderTargetView contextInterface (pokeCOMObject rtvInterface) colorPtr
 
-	contextClearDepth context renderState depth = do
-		dx11ClearDepthStencil context renderState depth 0 (fromEnum D3D11_CLEAR_DEPTH)
+	contextClearDepth context depth = do
+		dx11ClearDepthStencil context depth 0 (fromEnum D3D11_CLEAR_DEPTH)
 
-	contextClearStencil context renderState stencil = do
-		dx11ClearDepthStencil context renderState 0 stencil (fromEnum D3D11_CLEAR_STENCIL)
+	contextClearStencil context stencil = do
+		dx11ClearDepthStencil context 0 stencil (fromEnum D3D11_CLEAR_STENCIL)
 
-	contextClearDepthStencil context renderState depth stencil = do
-		dx11ClearDepthStencil context renderState depth stencil ((fromEnum D3D11_CLEAR_DEPTH) .|. (fromEnum D3D11_CLEAR_STENCIL))
+	contextClearDepthStencil context depth stencil = do
+		dx11ClearDepthStencil context depth stencil ((fromEnum D3D11_CLEAR_DEPTH) .|. (fromEnum D3D11_CLEAR_STENCIL))
 
 	contextUploadUniformBuffer Dx11Context
 		{ dx11ContextInterface = contextInterface
@@ -792,10 +834,12 @@ instance Context Dx11Context Dx11Device where
 
 	contextDraw context@Dx11Context
 		{ dx11ContextInterface = contextInterface
-		} renderState@RenderState
-		{ renderStateIndexBuffer = indexBuffer
+		, dx11ContextDesiredState = Dx11ContextState
+			{ dx11ContextStateIndexBuffer = indexBufferRef
+			}
 		} indicesCount = do
-		dx11UpdateContext context renderState
+		dx11UpdateContext context
+		indexBuffer <- readIORef indexBufferRef
 		case indexBuffer of
 			Dx11IndexBufferId _indexBufferInterface _format _primitiveTopology -> do
 				m_ID3D11DeviceContext_DrawIndexed contextInterface (fromIntegral indicesCount) 0 0
@@ -805,7 +849,88 @@ instance Context Dx11Context Dx11Device where
 	-- TODO
 	contextPlay = undefined
 
-	contextRender _context f = f dx11DefaultRenderState
+	contextRender Dx11Context
+		{ dx11ContextDesiredState = desiredContextState
+		} f = do
+		dx11SetDefaultContextState desiredContextState
+		f
+
+	contextSetFrameBuffer Dx11Context
+		{ dx11ContextDesiredState = Dx11ContextState
+			{ dx11ContextStateFrameBuffer = frameBufferRef
+			}
+		} frameBuffer scope = do
+		oldFrameBuffer <- readIORef frameBufferRef
+		writeIORef frameBufferRef frameBuffer
+		r <- scope
+		writeIORef frameBufferRef oldFrameBuffer
+		return r
+
+	contextSetViewport Dx11Context
+		{ dx11ContextDesiredState = Dx11ContextState
+			{ dx11ContextStateViewport = viewportRef
+			}
+		} width height scope = do
+		oldViewport <- readIORef viewportRef
+		writeIORef viewportRef (width, height)
+		r <- scope
+		writeIORef viewportRef oldViewport
+		return r
+
+	contextSetVertexBuffer Dx11Context
+		{ dx11ContextDesiredState = Dx11ContextState
+			{ dx11ContextStateVertexBuffers = vertexBuffersArray
+			}
+		} i vertexBuffer scope = do
+		oldVertexBuffer <- readArray vertexBuffersArray i
+		writeArray vertexBuffersArray i vertexBuffer
+		r <- scope
+		writeArray vertexBuffersArray i oldVertexBuffer
+		return r
+
+	contextSetIndexBuffer Dx11Context
+		{ dx11ContextDesiredState = Dx11ContextState
+			{ dx11ContextStateIndexBuffer = indexBufferRef
+			}
+		} indexBuffer scope = do
+		oldIndexBuffer <- readIORef indexBufferRef
+		writeIORef indexBufferRef indexBuffer
+		r <- scope
+		writeIORef indexBufferRef oldIndexBuffer
+		return r
+
+	contextSetUniformBuffer Dx11Context
+		{ dx11ContextDesiredState = Dx11ContextState
+			{ dx11ContextStateUniformBuffers = uniformBuffersArray
+			}
+		} i uniformBuffer scope = do
+		oldUniformBuffer <- readArray uniformBuffersArray i
+		writeArray uniformBuffersArray i uniformBuffer
+		r <- scope
+		writeArray uniformBuffersArray i oldUniformBuffer
+		return r
+
+	contextSetSampler Dx11Context
+		{ dx11ContextDesiredState = Dx11ContextState
+			{ dx11ContextStateSamplers = samplersArray
+			}
+		} i texture samplerState scope = do
+		oldSampler <- readArray samplersArray i
+		writeArray samplersArray i (texture, samplerState)
+		r <- scope
+		writeArray samplersArray i oldSampler
+		return r
+
+	contextSetProgram Dx11Context
+		{ dx11ContextDesiredState = Dx11ContextState
+			{ dx11ContextStateProgram = programRef
+			}
+		} program scope = do
+		oldProgram <- readIORef programRef
+		writeIORef programRef program
+		r <- scope
+		writeIORef programRef oldProgram
+		return r
 
 -- | DirectX11 DXGI presenter for window.
 data Dx11Presenter = Dx11Presenter
@@ -872,7 +997,12 @@ instance Presenter Dx11Presenter DXGISystem Dx11Context Dx11Device where
 		, dx11PresenterSwapChainInterface = swapChainInterface
 		, dx11PresenterWindowSystem = windowSystem
 		, dx11PresenterStateRef = stateRef
-		} _context f = do
+		} Dx11Context
+		{ dx11ContextDesiredState = Dx11ContextState
+			{ dx11ContextStateFrameBuffer = frameBufferRef
+			, dx11ContextStateViewport = viewportRef
+			}
+		} f = do
 		-- sync with window
 		invokeWin32WindowSystem windowSystem $ do
 			-- get RTV for backbuffer (create if needed)
@@ -895,19 +1025,17 @@ instance Presenter Dx11Presenter DXGISystem Dx11Context Dx11Device where
 						}
 					return rtv
 
-			-- construct render state
-			let renderState = dx11DefaultRenderState
-				{ renderStateFrameBuffer = Dx11FrameBufferId [Dx11RenderTargetId rtv] Dx11NullDepthStencilTargetId
-				, renderStateViewport = (width, height)
-				}
+			-- set context state
+			writeIORef frameBufferRef $ Dx11FrameBufferId [Dx11RenderTargetId rtv] Dx11NullDepthStencilTargetId
+			writeIORef viewportRef (width, height)
 
 			-- perform render
-			f renderState
+			r <- f
 
 			-- present
 			hresultCheck =<< m_IDXGISwapChain_Present swapChainInterface 1 0
 
-			return ()
+			return r
 
 dx11ResizePresenter :: Dx11Presenter -> Dx11PresenterState -> Int -> Int -> IO Dx11PresenterState
 dx11ResizePresenter Dx11Presenter
@@ -1022,44 +1150,66 @@ dx11CreatePresenter device@Dx11Device
 	return (releaseKey, presenter)
 
 -- | Helper method to clear depth and/or stencil.
-dx11ClearDepthStencil :: Dx11Context -> RenderState Dx11Device -> Float -> Int -> Int -> IO ()
+dx11ClearDepthStencil :: Dx11Context -> Float -> Int -> Int -> IO ()
 dx11ClearDepthStencil Dx11Context
 	{ dx11ContextInterface = contextInterface
-	} RenderState
-	{ renderStateFrameBuffer = Dx11FrameBufferId _renderTargets depthStencilTarget
+	, dx11ContextDesiredState = Dx11ContextState
+		{ dx11ContextStateFrameBuffer = frameBufferRef
+		}
 	} depth stencil flags = do
+	Dx11FrameBufferId _renderTargets depthStencilTarget <- readIORef frameBufferRef
 	case depthStencilTarget of
 		Dx11DepthStencilTargetId dsvInterface -> do
 			m_ID3D11DeviceContext_ClearDepthStencilView contextInterface (pokeCOMObject dsvInterface) (fromIntegral flags) depth (fromIntegral stencil)
 		Dx11NullDepthStencilTargetId -> return ()
 
 -- | Update context.
-dx11UpdateContext :: Dx11Context -> RenderState Dx11Device -> IO ()
+dx11UpdateContext :: Dx11Context -> IO ()
 dx11UpdateContext Dx11Context
 	{ dx11ContextInterface = contextInterface
-	, dx11ContextStateRef = actualContextStateRef
-	} desiredContextState@RenderState
-	{ renderStateFrameBuffer = desiredFrameBuffer
-	, renderStateViewport = desiredViewport
-	, renderStateVertexBuffers = desiredVertexBuffers
-	, renderStateIndexBuffer = desiredIndexBuffer
-	, renderStateUniformBuffers = desiredUniformBuffers
-	, renderStateSamplers = desiredSamplers
-	, renderStateProgram = desiredProgram
+	, dx11ContextActualState = Dx11ContextState
+		{ dx11ContextStateFrameBuffer = actualFrameBufferRef
+		, dx11ContextStateViewport = actualViewportRef
+		, dx11ContextStateVertexBuffers = actualVertexBuffersArray
+		, dx11ContextStateIndexBuffer = actualIndexBufferRef
+		, dx11ContextStateUniformBuffers = actualUniformBuffersArray
+		, dx11ContextStateSamplers = actualSamplersArray
+		, dx11ContextStateProgram = actualProgramRef
+		}
+	, dx11ContextDesiredState = Dx11ContextState
+		{ dx11ContextStateFrameBuffer = desiredFrameBufferRef
+		, dx11ContextStateViewport = desiredViewportRef
+		, dx11ContextStateVertexBuffers = desiredVertexBuffersArray
+		, dx11ContextStateIndexBuffer = desiredIndexBufferRef
+		, dx11ContextStateUniformBuffers = desiredUniformBuffersArray
+		, dx11ContextStateSamplers = desiredSamplersArray
+		, dx11ContextStateProgram = desiredProgramRef
+		}
 	} = do
-	-- unpack actual render state
-	RenderState
-		{ renderStateFrameBuffer = actualFrameBuffer
-		, renderStateViewport = actualViewport
-		, renderStateVertexBuffers = actualVertexBuffers
-		, renderStateIndexBuffer = actualIndexBuffer
-		, renderStateUniformBuffers = actualUniformBuffers
-		, renderStateSamplers = actualSamplers
-		, renderStateProgram = actualProgram
-		} <- readIORef actualContextStateRef
+
+	let
+		refSetup :: Eq a => IORef a -> IORef a -> (a -> IO ()) -> IO ()
+		refSetup actualRef desiredRef setup = do
+			actual <- readIORef actualRef
+			desired <- readIORef desiredRef
+			if actual /= desired then do
+				setup desired
+				writeIORef actualRef desired
+			else return ()
+
+	let
+		arraySetup :: Eq a => IOArray Int a -> IOArray Int a -> ([a] -> IO ()) -> IO ()
+		arraySetup actualArray desiredArray setup = do
+			actual <- getElems actualArray
+			desired <- getElems desiredArray
+			if actual /= desired then do
+				setup desired
+				bounds <- getBounds desiredArray
+				forM_ (range bounds) $ \i -> writeArray actualArray i =<< readArray desiredArray i
+			else return ()
 
 	-- framebuffer
-	if actualFrameBuffer /= desiredFrameBuffer then do
+	refSetup actualFrameBufferRef desiredFrameBufferRef $ \desiredFrameBuffer -> do
 		let Dx11FrameBufferId renderTargets depthStencilTarget = desiredFrameBuffer
 		let renderTargetsInterfaces = [pokeCOMObject rtv | Dx11RenderTargetId rtv <- renderTargets]
 		let depthStencilInterface = case depthStencilTarget of
@@ -1067,10 +1217,10 @@ dx11UpdateContext Dx11Context
 			Dx11NullDepthStencilTargetId -> nullPtr
 		withArray renderTargetsInterfaces $ \renderTargetsInterfacesPtr -> do
 			m_ID3D11DeviceContext_OMSetRenderTargets contextInterface (fromIntegral $ length renderTargetsInterfaces) renderTargetsInterfacesPtr depthStencilInterface
-	else return ()
 
 	-- viewport
-	if actualViewport /= desiredViewport then do
+	refSetup actualViewportRef desiredViewportRef $ \desiredViewport -> do
+		-- set new viewport
 		let (viewportWidth, viewportHeight) = desiredViewport
 		let viewport = D3D11_VIEWPORT
 			{ f_D3D11_VIEWPORT_TopLeftX = 0
@@ -1082,11 +1232,10 @@ dx11UpdateContext Dx11Context
 			}
 		with viewport $ \viewportPtr -> do
 			m_ID3D11DeviceContext_RSSetViewports contextInterface 1 viewportPtr
-	else return ()
 
 	-- vertex buffers
-	if actualVertexBuffers /= desiredVertexBuffers then do
-		let buffersCount = fromIntegral $ length desiredVertexBuffers
+	arraySetup actualVertexBuffersArray desiredVertexBuffersArray $ \desiredVertexBuffers -> do
+		let buffersCount = length desiredVertexBuffers
 		let (buffersInterfaces, strides) = unzip [case vertexBuffer of
 			Dx11VertexBufferId bufferInterface stride -> (pokeCOMObject bufferInterface, stride)
 			Dx11NullVertexBufferId -> (nullPtr, 0)
@@ -1095,38 +1244,28 @@ dx11UpdateContext Dx11Context
 			withArray (map fromIntegral strides) $ \stridesPtr -> do
 				withArray (replicate buffersCount 0) $ \offsetsPtr -> do
 					m_ID3D11DeviceContext_IASetVertexBuffers contextInterface 0 (fromIntegral buffersCount) buffersInterfacesPtr stridesPtr offsetsPtr
-	else return ()
 
 	-- index buffer
-	if actualIndexBuffer /= desiredIndexBuffer then do
+	refSetup actualIndexBufferRef desiredIndexBufferRef $ \desiredIndexBuffer -> do
 		let (indexBufferInterfacePtr, format, primitiveTopology) = case desiredIndexBuffer of
 			Dx11IndexBufferId bufferInterface format' primitiveTopology' -> (pokeCOMObject bufferInterface, format', primitiveTopology')
 			Dx11NullIndexBufferId primitiveTopology' -> (nullPtr, DXGI_FORMAT_UNKNOWN, primitiveTopology')
 		m_ID3D11DeviceContext_IASetIndexBuffer contextInterface indexBufferInterfacePtr (wrapEnum format) 0
 		m_ID3D11DeviceContext_IASetPrimitiveTopology contextInterface (wrapEnum primitiveTopology)
-	else return ()
 
 	-- uniform buffers
-	if actualUniformBuffers /= desiredUniformBuffers then do
-		-- calculate maximum buffer index
-		let maxBufferId = maximum $ HashMap.keys desiredUniformBuffers
-		let buffersCount = maxBufferId + 1
-		-- allocate array for interfaces
-		allocaArray buffersCount $ \buffersInterfacesPtr -> do
-			-- fill with nulls
-			forM_ [0..maxBufferId] $ \i -> pokeElemOff buffersInterfacesPtr i nullPtr
-			-- fill with pointers
-			forM_ (HashMap.toList desiredUniformBuffers) $ \(i, uniformBuffer) -> do
-				case uniformBuffer of
-					Dx11UniformBufferId bufferInterface -> pokeElemOff buffersInterfacesPtr i $ pokeCOMObject bufferInterface
-					Dx11NullUniformBufferId -> return ()
-			-- set into context
-			m_ID3D11DeviceContext_VSSetConstantBuffers contextInterface 0 (fromIntegral buffersCount) buffersInterfacesPtr
-			m_ID3D11DeviceContext_PSSetConstantBuffers contextInterface 0 (fromIntegral buffersCount) buffersInterfacesPtr
-	else return ()
+	arraySetup actualUniformBuffersArray desiredUniformBuffersArray $ \desiredUniformBuffers -> do
+		let buffersCount = fromIntegral $ length desiredUniformBuffers
+		let buffersInterfaces = [case uniformBuffer of
+			Dx11UniformBufferId bufferInterface -> pokeCOMObject bufferInterface
+			Dx11NullUniformBufferId -> nullPtr
+			| uniformBuffer <- desiredUniformBuffers]
+		withArray buffersInterfaces $ \buffersInterfacesPtr -> do
+			m_ID3D11DeviceContext_VSSetConstantBuffers contextInterface 0 buffersCount buffersInterfacesPtr
+			m_ID3D11DeviceContext_PSSetConstantBuffers contextInterface 0 buffersCount buffersInterfacesPtr
 
 	-- samplers
-	if actualSamplers /= desiredSamplers then do
+	arraySetup actualSamplersArray desiredSamplersArray $ \desiredSamplers -> do
 		let samplersCount = fromIntegral $ length desiredSamplers
 		let srvInterfaces = [case texture of
 			Dx11TextureId srvInterface -> pokeCOMObject srvInterface
@@ -1139,10 +1278,9 @@ dx11UpdateContext Dx11Context
 		withArray ssInterfaces $ \ssInterfacesPtr -> do
 			m_ID3D11DeviceContext_VSSetSamplers contextInterface 0 samplersCount ssInterfacesPtr
 			m_ID3D11DeviceContext_PSSetSamplers contextInterface 0 samplersCount ssInterfacesPtr
-	else return ()
 
 	-- program (shaders, input layout)
-	if actualProgram /= desiredProgram then do
+	refSetup actualProgramRef desiredProgramRef $ \desiredProgram -> do
 		(inputLayoutInterfacePtr, vertexShaderInterfacePtr, pixelShaderInterfacePtr) <- case desiredProgram of
 			Dx11VertexPixelProgramId inputLayoutInterface vertexShaderInterface pixelShaderInterface -> return
 				( pokeCOMObject inputLayoutInterface
@@ -1157,7 +1295,3 @@ dx11UpdateContext Dx11Context
 		m_ID3D11DeviceContext_IASetInputLayout contextInterface inputLayoutInterfacePtr
 		m_ID3D11DeviceContext_VSSetShader contextInterface vertexShaderInterfacePtr nullPtr 0
 		m_ID3D11DeviceContext_PSSetShader contextInterface pixelShaderInterfacePtr nullPtr 0
-	else return ()
-
-	-- update actual state
-	writeIORef actualContextStateRef desiredContextState

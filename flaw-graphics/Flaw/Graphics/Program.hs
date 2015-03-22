@@ -4,7 +4,7 @@ Description: Shader program support.
 License: MIT
 -}
 
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Flaw.Graphics.Program
 	( Program
@@ -12,13 +12,16 @@ module Flaw.Graphics.Program
 	, cnst
 	, constf, const2f, const3f, const4f
 	, attribute
+	, UniformBufferSlot
+	, UniformStorage
+	, uniformBufferSlot
 	, uniform
-	, uniformf
-	, uniform1f, uniform2f, uniform3f, uniform4f
-	, uniform1x1f, uniform1x2f, uniform1x3f, uniform1x4f
-	, uniform2x1f, uniform2x2f, uniform2x3f, uniform2x4f
-	, uniform3x1f, uniform3x2f, uniform3x3f, uniform3x4f
-	, uniform4x1f, uniform4x2f, uniform4x3f, uniform4x4f
+	, uniformArray
+	, createUniformStorage
+	, setUniform
+	, renderUniform
+	, renderUploadUniformStorage
+	, renderUniformStorage
 	, sampler
 	, sampler1Df, sampler1D2f, sampler1D3f, sampler1D4f
 	, sampler2Df, sampler2D2f, sampler2D3f, sampler2D4f
@@ -33,14 +36,14 @@ module Flaw.Graphics.Program
 	) where
 
 import Control.Monad.Reader
+import Control.Monad.Trans.Resource
 import Data.IORef
-import Language.Haskell.TH
+import Foreign.ForeignPtr
+import Foreign.Storable
 
+import Flaw.Graphics.Internal
 import Flaw.Graphics.Program.Internal
 import Flaw.Math
-
-withUndefined :: (a -> Node a) -> Node a
-withUndefined q = q undefined
 
 cnst :: OfValueType a => a -> Node a
 cnst value = ConstNode (valueType value) value
@@ -51,6 +54,9 @@ attribute slot offset divisor format = withState $ \state@State
 	} -> do
 	if stage /= VertexStage then fail "attribute can only be defined in vertex program"
 	else return ()
+	let
+		withUndefined :: (a -> Node a) -> Node a
+		withUndefined q = q undefined
 	tempInternal (withUndefined $ \u -> AttributeNode Attribute
 		{ attributeSlot = slot
 		, attributeOffset = offset
@@ -59,14 +65,91 @@ attribute slot offset divisor format = withState $ \state@State
 		, attributeValueType = valueType u
 		}) state
 
-uniform :: OfValueType a => Int -> Int -> Int -> Node a
-uniform slot offset size = withUndefined f where
-	f u = UniformNode Uniform
-		{ uniformSlot = slot
-		, uniformOffset = offset
-		, uniformSize = size
-		, uniformType = valueType u
+data UniformBufferSlot = UniformBufferSlot
+	{ uniformBufferSlotIndex :: Int
+	, uniformBufferSlotSizeRef :: IORef Int
+	}
+
+-- | Helper object for uniform buffer.
+data UniformStorage d = UniformStorage
+	{ uniformStorageSlot :: Int
+	, uniformStorageBufferId :: UniformBufferId d
+	, uniformStorageBytes :: ForeignPtr ()
+	, uniformStorageSize :: Int
+	}
+
+uniformBufferSlot :: Int -> IO UniformBufferSlot
+uniformBufferSlot slot = do
+	sizeRef <- newIORef 0
+	return UniformBufferSlot
+		{ uniformBufferSlotIndex = slot
+		, uniformBufferSlotSizeRef = sizeRef
 		}
+
+uniform :: (OfValueType a, Storable a) => UniformBufferSlot -> IO (Node a)
+uniform = uniformArray 0
+
+uniformArray :: (OfValueType a, Storable a) => Int -> UniformBufferSlot -> IO (Node a)
+uniformArray size UniformBufferSlot
+	{ uniformBufferSlotIndex = slot
+	, uniformBufferSlotSizeRef = sizeRef
+	} = withUndefined func where
+	withUndefined :: (a -> IO (Node a)) -> IO (Node a)
+	withUndefined f = f undefined
+	func u = do
+		bufferSize <- readIORef sizeRef
+		let align = alignment u
+		let alignedBufferSize = ((bufferSize + align - 1) `div` align) * align
+		writeIORef sizeRef $ alignedBufferSize + (sizeOf u) * (if size > 0 then size else 1)
+		return $ UniformNode Uniform
+			{ uniformSlot = slot
+			, uniformOffset = alignedBufferSize
+			, uniformSize = size
+			, uniformType = valueType u
+			}
+
+createUniformStorage :: (MonadResource m, MonadBaseControl IO m, Device d) => d -> UniformBufferSlot -> m (ReleaseKey, UniformStorage d)
+createUniformStorage device UniformBufferSlot
+	{ uniformBufferSlotIndex = slot
+	, uniformBufferSlotSizeRef = sizeRef
+	} = do
+	size <- liftIO $ readIORef sizeRef
+	-- align just in case
+	let alignedSize = ((size + 15) `div` 16) * 16
+	(releaseKey, uniformBuffer) <- createUniformBuffer device alignedSize
+	bytes <- liftIO $ mallocForeignPtrBytes alignedSize
+	return (releaseKey, UniformStorage
+		{ uniformStorageSlot = slot
+		, uniformStorageBufferId = uniformBuffer
+		, uniformStorageBytes = bytes
+		, uniformStorageSize = alignedSize
+		})
+
+setUniform :: (OfValueType a, Storable a) => UniformStorage d -> Node a -> a -> IO ()
+setUniform UniformStorage
+	{ uniformStorageBytes = bytes
+	} (UniformNode Uniform
+	{ uniformOffset = offset
+	}) value = do
+	withForeignPtr bytes $ \ptr -> do
+		pokeByteOff ptr offset value
+setUniform _ _ _ = undefined
+
+renderUniform :: (OfValueType a, Storable a) => UniformStorage d -> Node a -> a -> Render c ()
+renderUniform uniformStorage node value = liftIO $ setUniform uniformStorage node value
+
+renderUploadUniformStorage :: Context c d => UniformStorage d -> Render c ()
+renderUploadUniformStorage UniformStorage
+	{ uniformStorageBufferId = uniformBuffer
+	, uniformStorageBytes = bytes
+	, uniformStorageSize = size
+	} = renderUploadUniformBuffer uniformBuffer $ \f -> withForeignPtr bytes $ \ptr -> f ptr size
+
+renderUniformStorage :: Context c d => UniformStorage d -> Render c ()
+renderUniformStorage UniformStorage
+	{ uniformStorageSlot = slot
+	, uniformStorageBufferId = uniformBuffer
+	} = renderUniformBuffer slot uniformBuffer
 
 sampler :: (OfValueType s, OfValueType c) => Int -> SamplerDimension -> SamplerNode s c
 sampler slot dimension = withUndefined2 f where
@@ -162,21 +245,6 @@ const3f :: Vec3f -> Node Vec3f
 const3f = cnst
 const4f :: Vec4f -> Node Vec4f
 const4f = cnst
-
-uniformf :: Int -> Int -> Int -> Node Float
-uniformf = uniform
-
-liftM concat $ forM ['1'..'4'] $ \d -> do
-	let name = mkName $ "uniform" ++ [d, 'f']
-	sigDec <- sigD name [t| Int -> Int -> Int -> Node $(appT (conT $ mkName $ "Vec" ++ [d]) (conT ''Float)) |]
-	valDec <- valD (varP name) (normalB $ varE 'uniform) []
-	return [sigDec, valDec]
-
-liftM concat $ forM [(di, dj) | di <- ['1'..'4'], dj <- ['1'..'4'] ] $ \(di, dj) -> do
-	let name = mkName $ "uniform" ++ [di, 'x', dj, 'f']
-	sigDec <- sigD name [t| Int -> Int -> Int -> Node $(appT (conT $ mkName $ "Mat" ++ [di, 'x', dj]) (conT ''Float)) |]
-	valDec <- valD (varP name) (normalB $ varE 'uniform) []
-	return [sigDec, valDec]
 
 sampler1Df :: Int -> SamplerNode Float Float
 sampler1Df slot = sampler slot Sampler1D
