@@ -20,6 +20,7 @@ source-repository head
 library
   exposed-modules:
     Flaw.Math
+    Flaw.Math.Geometry
   other-modules:
     Flaw.Math.Internal
   -- other-extensions:    
