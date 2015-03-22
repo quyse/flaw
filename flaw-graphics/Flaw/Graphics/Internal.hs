@@ -18,6 +18,7 @@ module Flaw.Graphics.Internal
 	, renderScope
 	, renderFrameBuffer
 	, renderViewport
+	, renderGetViewport
 	, renderVertexBuffer
 	, renderIndexBuffer
 	, renderUniformBuffer
@@ -158,6 +159,8 @@ class Device d => Context c d | c -> d where
 	contextSetFrameBuffer :: c -> FrameBufferId d -> IO a -> IO a
 	-- | Set viewport.
 	contextSetViewport :: c -> Int -> Int -> IO a -> IO a
+	-- | Get current viewport.
+	contextGetViewport :: c -> IO (Int, Int)
 	-- | Set vertex buffer.
 	contextSetVertexBuffer :: c -> Int -> VertexBufferId d -> IO a -> IO a
 	-- | Set index buffer.
@@ -221,6 +224,9 @@ renderFrameBuffer fb = renderSetup $ \c q -> contextSetFrameBuffer c fb q
 
 renderViewport :: Context c d => Int -> Int -> Render c ()
 renderViewport width height = renderSetup $ \c q -> contextSetViewport c width height q
+
+renderGetViewport :: Context c d => Render c (Int, Int)
+renderGetViewport = renderAction contextGetViewport
 
 -- | Set vertex buffer.
 renderVertexBuffer :: Context c d => Int -> VertexBufferId d -> Render c ()

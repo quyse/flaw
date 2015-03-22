@@ -877,6 +877,12 @@ instance Context Dx11Context Dx11Device where
 		writeIORef viewportRef oldViewport
 		return r
 
+	contextGetViewport Dx11Context
+		{ dx11ContextDesiredState = Dx11ContextState
+			{ dx11ContextStateViewport = viewportRef
+			}
+		} = readIORef viewportRef
+
 	contextSetVertexBuffer Dx11Context
 		{ dx11ContextDesiredState = Dx11ContextState
 			{ dx11ContextStateVertexBuffers = vertexBuffersArray

@@ -16,6 +16,7 @@ module Flaw.Graphics
 	, renderScope
 	, renderFrameBuffer
 	, renderViewport
+	, renderGetViewport
 	, renderVertexBuffer
 	, renderIndexBuffer
 	, renderUniformBuffer
