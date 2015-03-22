@@ -439,17 +439,17 @@ liftM concat $ forM [(i, j) | i <- [1..maxVecDimension], j <- [1..maxVecDimensio
 			, fromIntegerDecl
 			]
 
-	-- instance for Storable class
+	-- instance for Storable class (column-major)
 	let storableInstance = do
 		p <- newName "p"
-		let params = zip [0..(n * m - 1)] aParams
+		let params = zip [(i, j) | i <- [0..(n - 1)], j <- [0..(m - 1)]] aParams
 		instanceD (return [ClassP ''Storable [VarT paramName]]) [t| Storable ($(conT dataName) $(varT paramName)) |]
 			[ funD 'sizeOf [clause [wildP] (normalB [| $(litE $ integerL $ fromIntegral (n * m)) * sizeOf (undefined :: $(varT paramName)) |]) []]
 			, funD 'alignment [clause [wildP] (normalB [| alignment (undefined :: $(varT paramName)) |]) []]
-			, funD 'peek [clause [varP p] (normalB $ doE $ [bindS (varP a) [| peekElemOff (castPtr $(varE p)) $(litE $ integerL $ fromIntegral i) |] | (i, a) <- params] ++
+			, funD 'peek [clause [varP p] (normalB $ doE $ [bindS (varP a) [| peekElemOff (castPtr $(varE p)) $(litE $ integerL $ fromIntegral (j * n + i)) |] | ((i, j), a) <- params] ++
 				[noBindS [| return $(foldl appE (conE dataName) $ map (varE . snd) params) |]]) []]
 			, funD 'poke [clause [varP p, conP dataName $ map (varP . snd) params]
-				(normalB $ doE [noBindS [| pokeElemOff (castPtr $(varE p)) $(litE $ integerL $ fromIntegral i) $(varE a) |] | (i, a) <- params]) []]
+				(normalB $ doE [noBindS [| pokeElemOff (castPtr $(varE p)) $(litE $ integerL $ fromIntegral (j * n + i)) $(varE a) |] | ((i, j), a) <- params]) []]
 			]
 
 	sequence $ [dataDec, matInstance, numInstance, storableInstance]
