@@ -533,7 +533,7 @@ instance Device Dx11Device where
 					, attributeType = atype
 					}
 				} : restAttributes) descs = do
-				BS.unsafeUseAsCString (T.encodeUtf8 semantic) $ \semanticPtr -> do
+				BS.useAsCString (T.encodeUtf8 semantic) $ \semanticPtr -> do
 					let format = convertFormat atype
 					if format == DXGI_FORMAT_UNKNOWN then fail $ "wrong attribute format for " ++ T.unpack semantic
 					else return ()
