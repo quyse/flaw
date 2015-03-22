@@ -6,7 +6,7 @@ License: MIT
 
 module Flaw.Graphics.DirectX11
 	( Dx11Device
-	, createDx11Device
+	, dx11CreateDevice
 	, Dx11Context
 	, Dx11Presenter
 	, dx11CreatePresenter

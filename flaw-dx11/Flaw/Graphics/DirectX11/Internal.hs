@@ -8,7 +8,7 @@ License: MIT
 
 module Flaw.Graphics.DirectX11.Internal
 	( Dx11Device(..)
-	, createDx11Device
+	, dx11CreateDevice
 	, Dx11Context(..)
 	, Dx11Presenter(..)
 	, dx11CreatePresenter
@@ -692,8 +692,8 @@ instance Device Dx11Device where
 		return (releaseKey, Dx11UniformBufferId bufferInterface)
 
 -- | Create DirectX11 device.
-createDx11Device :: (MonadResource m, MonadBaseControl IO m) => DeviceId DXGISystem -> m (ReleaseKey, Dx11Device, Dx11Context)
-createDx11Device (DXGIDeviceId system adapter) = describeException "failed to create DirectX11 graphics device" $ do
+dx11CreateDevice :: (MonadResource m, MonadBaseControl IO m) => DeviceId DXGISystem -> m (ReleaseKey, Dx11Device, Dx11Context)
+dx11CreateDevice (DXGIDeviceId system adapter) = describeException "failed to create DirectX11 graphics device" $ do
 	-- create function
 	let create = alloca $ \devicePtr -> alloca $ \deviceContextPtr -> do
 		let featureLevels = [D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_1, D3D_FEATURE_LEVEL_10_0]
