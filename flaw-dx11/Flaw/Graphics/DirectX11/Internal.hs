@@ -1060,8 +1060,8 @@ dx11ResizePresenter Dx11Presenter
 	let DXGI_MODE_DESC
 		{ f_DXGI_MODE_DESC_Format = format
 		} = getDXGIDisplayModeDesc maybeDisplayMode width height
-	hresultCheck =<< m_IDXGISwapChain_ResizeBuffers swapChainInterface 2
-		(fromIntegral width) (fromIntegral height) (wrapEnum format) (fromIntegral $ fromEnum DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH)
+	hresultCheck =<< m_IDXGISwapChain_ResizeBuffers swapChainInterface 0
+		(fromIntegral width) (fromIntegral height) (wrapEnum DXGI_FORMAT_UNKNOWN) (fromIntegral $ fromEnum DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH)
 	-- remember size
 	return state
 		{ dx11PresenterMaybeRTV = Nothing
