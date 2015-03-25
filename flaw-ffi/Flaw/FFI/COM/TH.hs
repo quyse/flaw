@@ -169,7 +169,7 @@ genCOMInterface interfaceNameStr iid parentInterfaceNames ms = do
 	let comGetName = mkName $ "com_get_" ++ interfaceNameStr
 	paramName <- newName "a"
 	-- class IInterface_Class a
-	classDec <- classD (return [ClassP ''COMInterface [VarT paramName]]) className [PlainTV paramName] []
+	classDec <- classD (sequence [ [t| COMInterface $(varT paramName) |] ]) className [PlainTV paramName] []
 		((sigD comGetName [t| $(varT paramName) -> $(conT interfaceName) |]) : (concat $ map (\method -> methodClassDecs method paramName $ varE comGetName) methods))
 	-- instance IInterface_Class IInterface
 	instanceDec <- instanceD (return []) [t| $(conT className) $(conT interfaceName) |]

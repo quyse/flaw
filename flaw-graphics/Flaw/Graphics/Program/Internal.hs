@@ -36,7 +36,6 @@ import Control.Monad
 import Control.Monad.Reader
 import Data.Char
 import Data.IORef
-import Data.Word
 import Language.Haskell.TH
 
 import Flaw.Math
@@ -82,14 +81,6 @@ instance OfScalarType Word where
 instance OfScalarType Bool where
 	scalarType _ = ScalarBool
 
--- | Class of vector types which can be used in program.
-class (OfValueType a, Vec a, OfScalarType (VecElement a)) => OfVectorType a
-
-instance OfScalarType a => OfVectorType (Vec1 a)
-instance OfScalarType a => OfVectorType (Vec2 a)
-instance OfScalarType a => OfVectorType (Vec3 a)
-instance OfScalarType a => OfVectorType (Vec4 a)
-
 -- | Class of types which can be used in program.
 class Show a => OfValueType a where
 	valueType :: a -> ValueType
@@ -131,6 +122,14 @@ liftM concat $ forM [(i, j) | i <- ['1'..'4'], j <- ['1'..'4']] $ \(ci, cj) -> d
 			valueType _ = MatrixValueType $di $dj $ scalarType (undefined :: a)
 			valueToShowList $(conP name $ map varP ps) = $(listE $ map (\p -> appE (varE 'show) $ varE p) ps)
 		|]
+
+-- | Class of vector types which can be used in program.
+class (OfValueType a, Vec a, OfScalarType (VecElement a)) => OfVectorType a
+
+instance OfScalarType a => OfVectorType (Vec1 a)
+instance OfScalarType a => OfVectorType (Vec2 a)
+instance OfScalarType a => OfVectorType (Vec3 a)
+instance OfScalarType a => OfVectorType (Vec4 a)
 
 -- | Class of types which can be used in vertex attribute.
 class OfValueType a => OfAttributeType a where
@@ -210,7 +209,7 @@ forM ['1'..'4'] $ \c -> do
 	a <- newName "a"
 	let conName = mkName $ "AttributeVec" ++ [c]
 	b <- newName "b"
-	instanceD (return [ClassP ''OfScalarType [VarT a], ClassP ''OfAttributeType [VarT a]]) (appT (conT ''OfAttributeType) $ appT (conT v) $ varT a)
+	instanceD (sequence [ [t| OfScalarType $(varT a) |], [t| OfAttributeType $(varT a) |] ]) (appT (conT ''OfAttributeType) $ appT (conT v) $ varT a)
 		[ dataInstD (return []) ''AttributeFormat [appT (conT v) $ varT a]
 			[ normalC conName [return (NotStrict, AppT (ConT ''AttributeFormat) $ VarT a)]
 			] []
@@ -223,7 +222,7 @@ forM [(ci, cj) | ci <- ['1'..'4'], cj <- ['1'..'4']] $ \(ci, cj) -> do
 	a <- newName "a"
 	let conName = mkName $ "AttributeMat" ++ [ci, 'x', cj]
 	b <- newName "b"
-	instanceD (return [ClassP ''OfScalarType [VarT a], ClassP ''OfAttributeType [VarT a]]) (appT (conT ''OfAttributeType) $ appT (conT v) $ varT a)
+	instanceD (sequence [ [t| OfScalarType $(varT a) |], [t| OfAttributeType $(varT a) |] ]) (appT (conT ''OfAttributeType) $ appT (conT v) $ varT a)
 		[ dataInstD (return []) ''AttributeFormat [appT (conT v) $ varT a]
 			[ normalC conName [return (NotStrict, AppT (ConT ''AttributeFormat) $ VarT a)]
 			] []
@@ -347,7 +346,7 @@ newtype SamplerNode s c = SamplerNode Sampler deriving Show
 nodeValueType :: OfValueType a => Node a -> ValueType
 nodeValueType node = valueType $ (undefined :: (Node a -> a)) node
 
-instance (OfVectorType v, Vec v) => Vec (Node v) where
+instance OfVectorType v => Vec (Node v) where
 	type VecElement (Node v) = Node (VecElement v)
 	vecLength _ = vecLength (undefined :: v)
 	vecToList _ = undefined
@@ -410,10 +409,9 @@ instance (OfVectorType v, Normalize v) => Normalize (Node v) where
 forM "xyzw" $ \c -> do
 	v <- newName "v"
 	let vc = mkName $ "Vec" ++ [toUpper c]
-	instanceD (return
-		[ ClassP ''OfVectorType [VarT v]
-		--, ClassP ''OfScalarType [AppT (ConT ''VecElement) $ VarT v]
-		, ClassP vc [VarT v]
+	instanceD (sequence
+		[ [t| OfVectorType $(varT v) |]
+		, [t| $(conT vc) $(varT v) |]
 		]) [t| $(conT vc) (Node $(varT v)) |]
 		[ funD (mkName $ [c, '_']) [clause [] (normalB [| ComponentNode (valueType (undefined :: $(varT v))) (valueType (undefined :: VecElement $(varT v))) $(litE $ charL c) |]) []]
 		]
@@ -439,11 +437,10 @@ forM [(maxComp, dim) | maxComp <- [1..4], dim <- [1..4]] $ \(maxComp, dim) -> do
 	let resultTypeDecl = tySynInstD resultTypeName $ tySynEqn
 		[ [t| Node $(varT v) |] ]
 		[t| Node ($(conT resultTypeName) $(varT v)) |]
-	instanceD (return $
-		[ ClassP ''OfVectorType [VarT v]
-		, ClassP ''OfScalarType [AppT (ConT ''VecElement) $ VarT v]
-		, ClassP ''OfVectorType [AppT (ConT $ mkName $ "SwizzleVecResult" ++ nameSuffix) $ VarT v]
-		, ClassP sv [VarT v]
+	instanceD (sequence
+		[ [t| OfVectorType $(varT v) |]
+		, [t| OfVectorType ($(conT $ mkName $ "SwizzleVecResult" ++ nameSuffix) $(varT v)) |]
+		, [t| $(conT sv) $(varT v) |]
 		])
 		[t| $(conT sv) (Node $(varT v)) |] $ resultTypeDecl : map funDecl variants
 

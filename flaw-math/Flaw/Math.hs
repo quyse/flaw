@@ -75,7 +75,7 @@ forM vecComponents $ \c -> do
 	let className = mkName $ "Vec" ++ [toUpper c]
 	let methodName = mkName $ [c, '_']
 	tvV <- newName "v"
-	classD (return [ClassP (mkName "Vec") [VarT tvV]]) className [PlainTV tvV] []
+	classD (return [AppT (ConT $ mkName "Vec") $ VarT tvV]) className [PlainTV tvV] []
 		[ sigD methodName [t| $(varT tvV) -> VecElement $(varT tvV) |]
 		]
 
@@ -131,7 +131,7 @@ liftM concat $ forM [2..4] $ \dim -> do
 		[ familyKindD typeFam resultTypeName (map PlainTV params) StarT
 		, sigD methodName $ foldr (\ a b -> appT (appT arrowT a) b) (foldl appT (conT resultTypeName) $ map varT params) $ map varT params
 		]
-	instanceDec <- instanceD (return [ClassP className $ map VarT params]) [t| CombineVec $(foldl appT (tupleT dim) $ map varT params) |]
+	instanceDec <- instanceD (return [foldl AppT (ConT className) $ map VarT params]) [t| CombineVec $(foldl appT (tupleT dim) $ map varT params) |]
 		[ tySynInstD ''CombineVecResult $ tySynEqn [foldl appT (tupleT dim) $ map varT params] $ foldl appT (conT resultTypeName) $ map varT params
 		, funD 'combineVec [clause [tupP $ map varP params] (normalB $ foldl appE (varE methodName) $ map varE params) []]
 		]
@@ -157,7 +157,7 @@ forM [(len, maxComp) | len <- [1..4], maxComp <- [1..4]] $ \(len, maxComp) -> do
 	let variants = filter (swizzleVariantFilter components) $ genSwizzleVariants len
 	let genSig variant = do
 		sigD (mkName $ variant ++ "__") [t| $(varT tvV) -> $(conT resultTypeName) $(varT tvV) |]
-	classD (return [ClassP (mkName $ "Vec" ++ [toUpper c]) [VarT tvV] | c <- components])
+	classD (sequence [ [t| $(conT $ mkName $ "Vec" ++ [toUpper c]) $(varT tvV) |] | c <- components])
 		className [PlainTV tvV] [] $ (familyKindD typeFam resultTypeName [PlainTV tvV] StarT) : map genSig variants
 
 -- | Generate actual vector data with instances.
@@ -221,7 +221,7 @@ liftM concat $ forM [1..maxVecDimension] $ \dim -> do
 	let dotInstance = do
 		as <- forM components $ \c -> newName $ ['a', c]
 		bs <- forM components $ \c -> newName $ ['b', c]
-		instanceD (return [ClassP ''Num [VarT tvA]]) [t| Dot ($(conT dataName) $(varT tvA)) |]
+		instanceD (sequence [ [t| Num $(varT tvA) |] ]) [t| Dot ($(conT dataName) $(varT tvA)) |]
 			[ funD 'dot
 				[ clause
 					[ conP dataName $ map varP as
@@ -234,7 +234,7 @@ liftM concat $ forM [1..maxVecDimension] $ \dim -> do
 	-- instance for Norm class
 	let normInstance = do
 		as <- forM components $ \c -> newName [c]
-		instanceD (return [ClassP ''Floating [VarT tvA]]) [t| Norm ($(conT dataName) $(varT tvA)) |]
+		instanceD (sequence [ [t| Floating $(varT tvA) |] ]) [t| Norm ($(conT dataName) $(varT tvA)) |]
 			[ funD 'norm [clause [] (normalB $ [| sqrt . norm2 |]) []]
 			, funD 'norm2 [clause [conP dataName $ map varP as]
 				(normalB $ foldl1 (\a b -> [| $a + $b |]) $ map (\a -> [| $a * $a |]) $ map varE as) []]
@@ -243,7 +243,7 @@ liftM concat $ forM [1..maxVecDimension] $ \dim -> do
 	-- instance for Normalize class
 	let normalizeInstance = do
 		a <- newName "a"
-		instanceD (return [ClassP ''Floating [VarT tvA]]) [t| Normalize ($(conT dataName) $(varT tvA)) |]
+		instanceD (sequence [ [t| Floating $(varT tvA) |] ]) [t| Normalize ($(conT dataName) $(varT tvA)) |]
 			[ funD 'normalize [clause [varP a] (normalB [| $(varE a) * (vecFromScalar (1 / norm $(varE a))) |]) []]
 			]
 
@@ -315,7 +315,7 @@ liftM concat $ forM [1..maxVecDimension] $ \dim -> do
 				(normalB $ foldl appE (conE dataName) $ replicate dim $ varE fiParam)
 				[valD (varP fiParam) (normalB [| fromInteger $(varE iParam) |]) []]]
 
-		instanceD (return [ClassP ''Num [VarT paramName]]) [t| Num ($(conT dataName) $(varT paramName)) |]
+		instanceD (sequence [ [t| Num $(varT paramName) |] ]) [t| Num ($(conT dataName) $(varT paramName)) |]
 			[ binaryOp '(+)
 			, binaryOp '(*)
 			, binaryOp '(-)
@@ -333,7 +333,7 @@ liftM concat $ forM [1..maxVecDimension] $ \dim -> do
 			funD 'fromRational [clause [varP rParam]
 				(normalB $ foldl appE (conE dataName) $ replicate dim $ varE frParam)
 				[valD (varP frParam) (normalB [| fromRational $(varE rParam) |]) []]]
-		instanceD (return [ClassP ''Fractional [VarT paramName]]) [t| Fractional ($(conT dataName) $(varT paramName)) |]
+		instanceD (sequence [ [t| Fractional $(varT paramName) |] ]) [t| Fractional ($(conT dataName) $(varT paramName)) |]
 			[ binaryOp '(/)
 			, unaryOp 'recip
 			, fromRationalDecl
@@ -341,7 +341,7 @@ liftM concat $ forM [1..maxVecDimension] $ \dim -> do
 
 	-- instance for Floating class
 	let floatingInstance = do
-		instanceD (return [ClassP ''Floating [VarT paramName]]) [t| Floating ($(conT dataName) $(varT paramName)) |] $ concat
+		instanceD (sequence [ [t| Floating $(varT paramName) |] ]) [t| Floating ($(conT dataName) $(varT paramName)) |] $ concat
 			[ [nullaryOp 'pi]
 			, map binaryOp
 				[ '(**)
@@ -370,7 +370,7 @@ liftM concat $ forM [1..maxVecDimension] $ \dim -> do
 	let storableInstance = do
 		p <- newName "p"
 		let params = zip [0..(dim - 1)] aParams
-		instanceD (return [ClassP ''Storable [VarT paramName]]) [t| Storable ($(conT dataName) $(varT paramName)) |]
+		instanceD (sequence [ [t| Storable $(varT paramName) |] ]) [t| Storable ($(conT dataName) $(varT paramName)) |]
 			[ funD 'sizeOf [clause [wildP] (normalB [| $(litE $ integerL $ fromIntegral dim) * sizeOf (undefined :: $(varT paramName)) |]) []]
 			, funD 'alignment [clause [wildP] (normalB [| alignment (undefined :: $(varT paramName)) |]) []]
 			, funD 'peek [clause [varP p] (normalB $ doE $ [bindS (varP a) [| peekElemOff (castPtr $(varE p)) $(litE $ integerL $ fromIntegral i) |] | (i, a) <- params] ++
@@ -429,7 +429,7 @@ liftM concat $ forM [(i, j) | i <- [1..maxVecDimension], j <- [1..maxVecDimensio
 				(normalB $ foldl appE (conE dataName) $ replicate (n * m) $ varE fiParam)
 				[valD (varP fiParam) (normalB [| fromInteger $(varE iParam) |]) []]]
 
-		instanceD (return [ClassP ''Num [VarT paramName]]) [t| Num ($(conT dataName) $(varT paramName)) |]
+		instanceD (sequence [ [t| Num $(varT paramName) |] ]) [t| Num ($(conT dataName) $(varT paramName)) |]
 			[ binaryOp '(+)
 			, binaryOp '(*)
 			, binaryOp '(-)
@@ -443,7 +443,7 @@ liftM concat $ forM [(i, j) | i <- [1..maxVecDimension], j <- [1..maxVecDimensio
 	let storableInstance = do
 		p <- newName "p"
 		let params = zip [(i, j) | i <- [0..(n - 1)], j <- [0..(m - 1)]] aParams
-		instanceD (return [ClassP ''Storable [VarT paramName]]) [t| Storable ($(conT dataName) $(varT paramName)) |]
+		instanceD (sequence [ [t| Storable $(varT paramName) |] ]) [t| Storable ($(conT dataName) $(varT paramName)) |]
 			[ funD 'sizeOf [clause [wildP] (normalB [| $(litE $ integerL $ fromIntegral (n * m)) * sizeOf (undefined :: $(varT paramName)) |]) []]
 			, funD 'alignment [clause [wildP] (normalB [| alignment (undefined :: $(varT paramName)) |]) []]
 			, funD 'peek [clause [varP p] (normalB $ doE $ [bindS (varP a) [| peekElemOff (castPtr $(varE p)) $(litE $ integerL $ fromIntegral (j * n + i)) |] | ((i, j), a) <- params] ++
@@ -466,7 +466,7 @@ let
 	gen aName bName cName funDecl = do
 		eName <- newName "e"
 		let eType = varT eName
-		instanceD (return [ClassP ''Num [VarT eName]]) [t| Mul ($(conT aName) $eType) ($(conT bName) $eType) |]
+		instanceD (sequence [ [t| Num $(varT eName) |] ]) [t| Mul ($(conT aName) $eType) ($(conT bName) $eType) |]
 			[ tySynInstD ''MulResult $ tySynEqn [ [t| $(conT aName) $eType |], [t| $(conT bName) $eType |] ] [t| $(conT cName) $eType |]
 			, funDecl
 			]
