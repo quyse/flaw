@@ -15,6 +15,7 @@ module Flaw.Window.Win32
 	, updateLayeredWin32Window
 	, invokeWin32WindowSystem
 	, invokeWin32WindowSystem_
+	, addWin32WindowCallback
 	) where
 
 import Control.Concurrent
@@ -176,11 +177,6 @@ addWin32WindowCallback Win32Window
 -- | Message to invoke.
 data Message where
 	Message :: IO a -> Maybe (MVar a) -> Message
-
--- foreign types
-
-type WPARAM = CUIntPtr
-type LPARAM = CIntPtr
 
 -- foreign imports
 

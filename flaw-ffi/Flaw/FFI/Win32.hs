@@ -12,6 +12,8 @@ module Flaw.FFI.Win32
 	, UINT8
 	, CHAR
 	, WCHAR
+	, SHORT
+	, USHORT
 	, INT
 	, UINT
 	, LONG
@@ -30,6 +32,8 @@ module Flaw.FFI.Win32
 	, HINSTANCE
 	, HMODULE
 	, HWND
+	, WPARAM
+	, LPARAM
 	, loWord
 	, hiWord
 	, loadLibrary
@@ -49,6 +53,7 @@ import qualified Data.Text.Encoding as T
 import Data.UUID
 import Data.Word
 import Foreign.C.String
+import Foreign.C.Types
 import Foreign.Ptr
 
 import Flaw.FFI
@@ -58,6 +63,8 @@ type BYTE = Word8
 type UINT8 = Word8
 type CHAR = Word8
 type WCHAR = Word16
+type SHORT = Int16
+type USHORT = Word16
 type INT = Int32
 type UINT = Word32
 type LONG = Int32
@@ -87,6 +94,8 @@ type HINSTANCE = HANDLE
 type HMODULE = HINSTANCE
 
 type HWND = HANDLE
+type WPARAM = CUIntPtr
+type LPARAM = CIntPtr
 
 loWord :: (Num a, Bits a) => a -> a
 loWord a = a .&. 0xffff
