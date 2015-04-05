@@ -23,6 +23,7 @@ module Flaw.Math
 	, Vec1f, Vec2f, Vec3f, Vec4f
 	, Vec1d, Vec2d, Vec3d, Vec4d
 	, Vec1i, Vec2i, Vec3i, Vec4i
+	, Vec1u, Vec2u, Vec3u, Vec4u
 	, Dot(..)
 	, Cross(..)
 	, Norm(..)
@@ -45,6 +46,10 @@ module Flaw.Math
 	, Mat2x1i, Mat2x2i, Mat2x3i, Mat2x4i
 	, Mat3x1i, Mat3x2i, Mat3x3i, Mat3x4i
 	, Mat4x1i, Mat4x2i, Mat4x3i, Mat4x4i
+	, Mat1x1u, Mat1x2u, Mat1x3u, Mat1x4u
+	, Mat2x1u, Mat2x2u, Mat2x3u, Mat2x4u
+	, Mat3x1u, Mat3x2u, Mat3x3u, Mat3x4u
+	, Mat4x1u, Mat4x2u, Mat4x3u, Mat4x4u
 	, Quaternion(..)
 	) where
 

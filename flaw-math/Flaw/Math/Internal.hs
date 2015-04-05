@@ -4,6 +4,8 @@ Description: Template-Haskell generating math types and functions.
 License: MIT
 -}
 
+{-# LANGUAGE TemplateHaskell #-}
+
 module Flaw.Math.Internal
 	( maxVecDimension
 	, vecComponents
@@ -26,7 +28,7 @@ vecComponents = "xyzw"
 mathTypeNames :: [Name]
 mathTypeNames = map fst mathTypeNamesWithChar
 mathTypeNamesWithChar :: [(Name, Char)]
-mathTypeNamesWithChar = [(mkName "Float", 'f'), (mkName "Double", 'd'), (mkName "Int", 'i')]
+mathTypeNamesWithChar = [(''Float, 'f'), (''Double, 'd'), (''Int, 'i'), (''Word, 'u')]
 
 swizzleVariantFilter :: String -> String -> Bool
 swizzleVariantFilter components variant = all (\c -> elem c components) variant && elem (last components) variant
