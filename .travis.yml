@@ -1,7 +1,6 @@
 language: haskell
 ghc:
-  - 7.10
-  - 7.11
+  - '7.10'
 install: true
 script:
   - cabal install ./flaw-base ./flaw-ffi ./flaw-graphics ./flaw-input ./flaw-math ./flaw-sl ./flaw-window
