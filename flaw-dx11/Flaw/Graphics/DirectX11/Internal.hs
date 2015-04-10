@@ -763,7 +763,7 @@ dx11CreateContextState = do
 	frameBuffer <- newIORef $ Dx11FrameBufferId [] Dx11NullDepthStencilTargetId
 	viewport <- newIORef (0, 0)
 	vertexBuffers <- newArray (0, 7) Dx11NullVertexBufferId
-	indexBuffer <- newIORef $ Dx11NullIndexBufferId D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST
+	indexBuffer <- newIORef $ Dx11NullIndexBufferId D3D11_PRIMITIVE_TOPOLOGY_UNDEFINED
 	uniformBuffers <- newArray (0, 7) Dx11NullUniformBufferId
 	samplers <- newArray (0, 7) (Dx11NullTextureId, Dx11NullSamplerStateId)
 	program <- newIORef Dx11NullProgramId
