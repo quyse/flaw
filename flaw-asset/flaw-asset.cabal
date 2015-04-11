@@ -20,7 +20,8 @@ source-repository head
 library
   exposed-modules:
     Flaw.Asset.Collada
+    Flaw.Asset.Texture
   -- other-extensions:    
-  build-depends:       array, base, bytestring, containers, mtl, text, xml
+  build-depends:       array, base, bytestring, containers, flaw-graphics, JuicyPixels, mtl, text, vector, xml
   -- hs-source-dirs:      
   default-language:    Haskell2010
