@@ -97,6 +97,8 @@ class Device d where
 
 	-- | Null texture.
 	nullTexture :: TextureId d
+	-- | Null sampler state.
+	nullSamplerState :: SamplerStateId d
 	-- | Null depth stencil target.
 	nullDepthStencilTarget :: DepthStencilTargetId d
 	-- | Null index buffer.

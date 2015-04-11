@@ -100,6 +100,7 @@ instance Device Dx11Device where
 		deriving Eq
 
 	nullTexture = Dx11NullTextureId
+	nullSamplerState = Dx11NullSamplerStateId
 	nullDepthStencilTarget = Dx11NullDepthStencilTargetId
 	nullIndexBuffer = Dx11NullIndexBufferId D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST
 	nullUniformBuffer = Dx11NullUniformBufferId
