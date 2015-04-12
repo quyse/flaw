@@ -376,7 +376,7 @@ instance Device Dx11Device where
 				, f_DXGI_SAMPLE_DESC_Quality = 0
 				}
 			, f_D3D11_TEXTURE2D_DESC_Usage = D3D11_USAGE_DEFAULT
-			, f_D3D11_TEXTURE2D_DESC_BindFlags = fromIntegral $ fromEnum D3D11_BIND_RENDER_TARGET
+			, f_D3D11_TEXTURE2D_DESC_BindFlags = fromIntegral $ fromEnum D3D11_BIND_DEPTH_STENCIL
 			, f_D3D11_TEXTURE2D_DESC_CPUAccessFlags = 0
 			, f_D3D11_TEXTURE2D_DESC_MiscFlags = 0
 			}
@@ -418,7 +418,7 @@ instance Device Dx11Device where
 				, f_DXGI_SAMPLE_DESC_Quality = 0
 				}
 			, f_D3D11_TEXTURE2D_DESC_Usage = D3D11_USAGE_DEFAULT
-			, f_D3D11_TEXTURE2D_DESC_BindFlags = fromIntegral ((fromEnum D3D11_BIND_RENDER_TARGET) .|. (fromEnum D3D11_BIND_SHADER_RESOURCE))
+			, f_D3D11_TEXTURE2D_DESC_BindFlags = fromIntegral ((fromEnum D3D11_BIND_DEPTH_STENCIL) .|. (fromEnum D3D11_BIND_SHADER_RESOURCE))
 			, f_D3D11_TEXTURE2D_DESC_CPUAccessFlags = 0
 			, f_D3D11_TEXTURE2D_DESC_MiscFlags = 0
 			}
@@ -943,6 +943,7 @@ instance Context Dx11Context Dx11Device where
 data Dx11Presenter = Dx11Presenter
 	{ dx11PresenterDevice :: Dx11Device
 	, dx11PresenterSwapChainInterface :: IDXGISwapChain
+	, dx11PresenterNeedDepthStencil :: Bool
 	, dx11PresenterWindowSystem :: Win32WindowSystem
 	-- | Mutable presenter state. Work only from window thread!
 	, dx11PresenterStateRef :: IORef Dx11PresenterState
@@ -959,6 +960,8 @@ instance Eq Dx11Presenter where
 data Dx11PresenterState = Dx11PresenterState
 	{ -- | Render target of presenter. May be reset to Nothing if needs an update.
 	  dx11PresenterMaybeRTV :: Maybe ID3D11RenderTargetView
+		-- | Depth stencil target of presenter. May be reset to Nothing if needs an update (or disabled).
+	, dx11PresenterMaybeDSV :: Maybe ID3D11DepthStencilView
 	  -- | Current display mode.
 	, dx11PresenterMaybeDisplayMode :: Maybe (DisplayModeId DXGISystem)
 	, dx11PresenterWidth :: Int
@@ -1002,6 +1005,7 @@ instance Presenter Dx11Presenter DXGISystem Dx11Context Dx11Device where
 			{ dx11DeviceInterface = deviceInterface
 			}
 		, dx11PresenterSwapChainInterface = swapChainInterface
+		, dx11PresenterNeedDepthStencil = needDepthStencil
 		, dx11PresenterWindowSystem = windowSystem
 		, dx11PresenterStateRef = stateRef
 		} Dx11Context
@@ -1013,8 +1017,9 @@ instance Presenter Dx11Presenter DXGISystem Dx11Context Dx11Device where
 		-- sync with window
 		invokeWin32WindowSystem windowSystem $ do
 			-- get RTV for backbuffer (create if needed)
-			state@Dx11PresenterState
+			Dx11PresenterState
 				{ dx11PresenterMaybeRTV = maybeRTV
+				, dx11PresenterMaybeDSV = maybeDSV
 				, dx11PresenterWidth = width
 				, dx11PresenterHeight = height
 				} <- readIORef stateRef
@@ -1027,13 +1032,60 @@ instance Presenter Dx11Presenter DXGISystem Dx11Context Dx11Device where
 					rtv <- createCOMObjectViaPtr $ m_ID3D11Device_CreateRenderTargetView deviceInterface backBufferTextureInterfacePtr nullPtr
 					_ <- m_IUnknown_Release =<< peekCOMObject backBufferTextureInterfacePtr
 					-- save it in state
-					writeIORef stateRef state
+					modifyIORef stateRef $ \s -> s
 						{ dx11PresenterMaybeRTV = Just rtv
 						}
 					return rtv
+			depthStencilTarget <- case maybeDSV of
+				Just dsv -> return $ Dx11DepthStencilTargetId dsv
+				Nothing -> do
+					if needDepthStencil then do
+						-- create new DSV
+						-- resource desc
+						let desc = D3D11_TEXTURE2D_DESC
+							{ f_D3D11_TEXTURE2D_DESC_Width = fromIntegral width
+							, f_D3D11_TEXTURE2D_DESC_Height = fromIntegral height
+							, f_D3D11_TEXTURE2D_DESC_MipLevels = 1
+							, f_D3D11_TEXTURE2D_DESC_ArraySize = 1
+							, f_D3D11_TEXTURE2D_DESC_Format = DXGI_FORMAT_R24G8_TYPELESS
+							, f_D3D11_TEXTURE2D_DESC_SampleDesc = DXGI_SAMPLE_DESC
+								{ f_DXGI_SAMPLE_DESC_Count = 1
+								, f_DXGI_SAMPLE_DESC_Quality = 0
+								}
+							, f_D3D11_TEXTURE2D_DESC_Usage = D3D11_USAGE_DEFAULT
+							, f_D3D11_TEXTURE2D_DESC_BindFlags = fromIntegral $ fromEnum D3D11_BIND_DEPTH_STENCIL
+							, f_D3D11_TEXTURE2D_DESC_CPUAccessFlags = 0
+							, f_D3D11_TEXTURE2D_DESC_MiscFlags = 0
+							}
+						-- create resource
+						resourceInterface <- with desc $ \descPtr -> do
+							liftM com_get_ID3D11Resource $ createCOMObjectViaPtr $ m_ID3D11Device_CreateTexture2D deviceInterface descPtr nullPtr
+
+						-- DSV desc
+						let dsvDesc = D3D11_DEPTH_STENCIL_VIEW_DESC_Texture2D
+							{ f_D3D11_DEPTH_STENCIL_VIEW_DESC_Format = DXGI_FORMAT_D24_UNORM_S8_UINT
+							, f_D3D11_DEPTH_STENCIL_VIEW_DESC_ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D
+							, f_D3D11_DEPTH_STENCIL_VIEW_DESC_Flags = 0
+							, f_D3D11_DEPTH_STENCIL_VIEW_DESC_Texture2D = D3D11_TEX2D_DSV
+								{ f_D3D11_TEX2D_DSV_MipSlice = 0
+								}
+							}
+						-- create depth stencil view
+						dsvInterface <- with dsvDesc $ \dsvDescPtr -> do
+							createCOMObjectViaPtr $ m_ID3D11Device_CreateDepthStencilView deviceInterface (pokeCOMObject resourceInterface) dsvDescPtr
+
+						-- release resource
+						_ <- m_IUnknown_Release resourceInterface
+
+						-- save it in state
+						modifyIORef stateRef $ \s -> s
+							{ dx11PresenterMaybeDSV = Just dsvInterface
+							}
+						return $ Dx11DepthStencilTargetId dsvInterface
+					else return Dx11NullDepthStencilTargetId
 
 			-- set context state
-			writeIORef frameBufferRef $ Dx11FrameBufferId [Dx11RenderTargetId rtv] Dx11NullDepthStencilTargetId
+			writeIORef frameBufferRef $ Dx11FrameBufferId [Dx11RenderTargetId rtv] depthStencilTarget
 			writeIORef viewportRef (width, height)
 
 			-- perform render
@@ -1049,7 +1101,7 @@ dx11ResizePresenter Dx11Presenter
 	{ dx11PresenterSwapChainInterface = swapChainInterface
 	} state@Dx11PresenterState
 	{ dx11PresenterMaybeRTV = maybePreviousRTV
-	, dx11PresenterMaybeDisplayMode = maybeDisplayMode
+	, dx11PresenterMaybeDSV = maybePreviousDSV
 	} width height = do
 	-- release previous RTV if any
 	case maybePreviousRTV of
@@ -1057,20 +1109,24 @@ dx11ResizePresenter Dx11Presenter
 			_ <- m_IUnknown_Release previousRTV
 			return ()
 		Nothing -> return ()
+	-- release previous DSV if any
+	case maybePreviousDSV of
+		Just previousDSV -> do
+			_ <- m_IUnknown_Release previousDSV
+			return ()
+		Nothing -> return ()
 	-- resize buffers
-	let DXGI_MODE_DESC
-		{ f_DXGI_MODE_DESC_Format = format
-		} = getDXGIDisplayModeDesc maybeDisplayMode width height
 	hresultCheck =<< m_IDXGISwapChain_ResizeBuffers swapChainInterface 0
 		(fromIntegral width) (fromIntegral height) (wrapEnum DXGI_FORMAT_UNKNOWN) (fromIntegral $ fromEnum DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH)
 	-- remember size
 	return state
 		{ dx11PresenterMaybeRTV = Nothing
+		, dx11PresenterMaybeDSV = Nothing
 		, dx11PresenterWidth = width
 		, dx11PresenterHeight = height
 		}
 
-dx11CreatePresenter :: (MonadResource m, MonadBaseControl IO m) => Dx11Device -> Win32Window -> Maybe (DisplayModeId DXGISystem) -> m (ReleaseKey, Dx11Presenter)
+dx11CreatePresenter :: (MonadResource m, MonadBaseControl IO m) => Dx11Device -> Win32Window -> Maybe (DisplayModeId DXGISystem) -> Bool -> m (ReleaseKey, Dx11Presenter)
 dx11CreatePresenter device@Dx11Device
 	{ dx11DeviceSystem = DXGISystem
 		{ dxgiSystemFactory = factoryInterface
@@ -1079,7 +1135,7 @@ dx11CreatePresenter device@Dx11Device
 	} window@Win32Window
 	{ wWindowSystem = windowSystem
 	, wHandle = hwnd
-	} maybeDisplayMode = do
+	} maybeDisplayMode needDepthStencil = do
 
 	-- window client size
 	(initialWidth, initialHeight) <- liftIO $ getWindowClientSize window
@@ -1107,6 +1163,7 @@ dx11CreatePresenter device@Dx11Device
 	-- presenter state ref
 	stateRef <- liftIO $ newIORef Dx11PresenterState
 		{ dx11PresenterMaybeRTV = Nothing
+		, dx11PresenterMaybeDSV = Nothing
 		, dx11PresenterMaybeDisplayMode = Nothing
 		, dx11PresenterWidth = initialWidth
 		, dx11PresenterHeight = initialHeight
@@ -1116,6 +1173,7 @@ dx11CreatePresenter device@Dx11Device
 	let presenter = Dx11Presenter
 		{ dx11PresenterDevice = device
 		, dx11PresenterSwapChainInterface = swapChainInterface
+		, dx11PresenterNeedDepthStencil = needDepthStencil
 		, dx11PresenterWindowSystem = windowSystem
 		, dx11PresenterStateRef = stateRef
 		}
@@ -1142,14 +1200,22 @@ dx11CreatePresenter device@Dx11Device
 			-- set that presenter is invalid
 			writeIORef presenterValidRef False
 			-- free RTV if needed
-			state@Dx11PresenterState
+			Dx11PresenterState
 				{ dx11PresenterMaybeRTV = maybeRTV
+				, dx11PresenterMaybeDSV = maybeDSV
 				} <- readIORef stateRef
 			case maybeRTV of
 				Just rtv -> do
 					_ <- m_IUnknown_Release rtv
-					writeIORef stateRef state
+					modifyIORef stateRef $ \s -> s
 						{ dx11PresenterMaybeRTV = Nothing
+						}
+				Nothing -> return ()
+			case maybeDSV of
+				Just dsv -> do
+					_ <- m_IUnknown_Release dsv
+					modifyIORef stateRef $ \s -> s
+						{ dx11PresenterMaybeDSV = Nothing
 						}
 				Nothing -> return ()
 		release swapChainReleaseKey
