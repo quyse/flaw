@@ -20,6 +20,7 @@ source-repository head
 library
   exposed-modules:
     Flaw.Asset.Collada
+    Flaw.Asset.Geometry
     Flaw.Asset.Texture
   -- other-extensions:    
   build-depends:       array, base, bytestring, containers, flaw-graphics, JuicyPixels, mtl, text, vector, xml
