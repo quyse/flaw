@@ -22,9 +22,9 @@ import Control.Monad.Except
 import Control.Monad.State
 import Data.Array((!), listArray)
 import Data.List
-import qualified Data.Map.Lazy as Map
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
+import qualified Data.Map.Lazy as Map
 import qualified Data.Text as T
 import qualified Text.XML.Light as XML
 
@@ -191,9 +191,9 @@ parseSource element@XML.Element
 		let gr v = let (a, b) = splitAt stride v in a : gr b
 		return $ take count $ gr values
 
-type VertexConstructor t = (forall a. Parse a => String -> ColladaM [[a]]) -> ColladaM [t]
+type VertexConstructor v = (forall a. Parse a => String -> ColladaM [[a]]) -> ColladaM [v]
 
-parseTriangles :: VertexConstructor t -> XML.Element -> ColladaM [t]
+parseTriangles :: VertexConstructor v -> XML.Element -> ColladaM [v]
 parseTriangles f element = do
 	-- helper to convert array to list
 	let l2a list = listArray (0, (length list) - 1) list
@@ -218,11 +218,17 @@ parseTriangles f element = do
 				a <- liftM l2a $ parseSource se
 				return $ map (\i -> a ! (indices ! i)) [o, (o + stride)..]
 			Nothing -> throwError $ show ("missing semantic", semantic)
-	-- take enough
-	return $ take (triangleCount * 3) vertices
+	-- take enough and flip triangles
+	return $ flipTriangles $ take (triangleCount * 3) vertices
 
-parseMesh :: VertexConstructor t -> XML.Element -> ColladaM [t]
+parseMesh :: VertexConstructor v -> XML.Element -> ColladaM [v]
 parseMesh f element = parseTriangles f =<< getSingleChildWithTag "triangles" element
 
-parseGeometry :: VertexConstructor t -> XML.Element -> ColladaM [t]
+parseGeometry :: VertexConstructor v -> XML.Element -> ColladaM [v]
 parseGeometry f element = parseMesh f =<< getSingleChildWithTag "mesh" element
+
+-- | Flip triangles.
+flipTriangles :: [v] -> [v]
+flipTriangles (v0:v1:v2:vs) = v1:v0:v2:flipTriangles vs
+flipTriangles [] = []
+flipTriangles _ = undefined
