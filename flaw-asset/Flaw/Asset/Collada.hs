@@ -22,7 +22,6 @@ import Control.Monad.Except
 import Control.Monad.State
 import Data.Array((!), listArray)
 import Data.List
-import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.Map.Lazy as Map
 import qualified Data.Text as T
