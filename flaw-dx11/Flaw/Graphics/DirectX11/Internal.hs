@@ -1292,9 +1292,8 @@ dx11UpdateContext Dx11Context
 			m_ID3D11DeviceContext_OMSetRenderTargets contextInterface (fromIntegral $ length renderTargetsInterfaces) renderTargetsInterfacesPtr depthStencilInterface
 
 	-- viewport
-	refSetup actualViewportRef desiredViewportRef $ \desiredViewport -> do
+	refSetup actualViewportRef desiredViewportRef $ \(viewportWidth, viewportHeight) -> do
 		-- set new viewport
-		let (viewportWidth, viewportHeight) = desiredViewport
 		let viewport = D3D11_VIEWPORT
 			{ f_D3D11_VIEWPORT_TopLeftX = 0
 			, f_D3D11_VIEWPORT_TopLeftY = 0

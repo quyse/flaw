@@ -1,6 +1,6 @@
 {-|
-Module: Flaw.Graphics.DirectX11.Internal
-Description: Internals of graphics implementation for DirectX 11.
+Module: Flaw.Graphics.DirectX11.HLSL
+Description: HLSL generator for DirectX11 graphics.
 License: MIT
 -}
 
