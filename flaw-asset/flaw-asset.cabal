@@ -21,8 +21,11 @@ library
   exposed-modules:
     Flaw.Asset.Collada
     Flaw.Asset.Geometry
-    Flaw.Asset.Texture
   -- other-extensions:    
-  build-depends:       array, base, bytestring, containers, flaw-build, flaw-graphics, JuicyPixels, mtl, text, vector, xml
+  build-depends:       array, base, bytestring, containers, flaw-build, flaw-graphics, mtl, text, vector, xml
   -- hs-source-dirs:      
   default-language:    Haskell2010
+  if !impl(ghcjs)
+    exposed-modules:
+      Flaw.Asset.Texture
+    build-depends: JuicyPixels
