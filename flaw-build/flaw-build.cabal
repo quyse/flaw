@@ -21,6 +21,6 @@ library
   exposed-modules:
     Flaw.Build
   -- other-extensions:    
-  build-depends:       base, bytestring, template-haskell
+  build-depends:       base, bytestring, template-haskell, text
   -- hs-source-dirs:      
   default-language:    Haskell2010

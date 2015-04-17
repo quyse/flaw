@@ -9,6 +9,8 @@ License: MIT
 module Flaw.Build
 	( loadFile
 	, Embed(..)
+	, EmbedIO(..)
+	, embedStringExp
 	, fileExp
 	, packList
 	) where
@@ -16,6 +18,7 @@ module Flaw.Build
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Unsafe as B
 import qualified Data.ByteString.Lazy as BL
+import qualified Data.Text as T
 import Foreign.Marshal.Array
 import Foreign.Ptr
 import Foreign.Storable
@@ -29,56 +32,87 @@ loadFile filePath = do
 	qAddDependentFile filePath
 	return fileData
 
--- | Class of data may be embedded.
+-- | Class of pure data may be embedded.
+-- An embedded expression is of type a.
 class Embed a where
-	-- | Construct an expression for the data (of type 'IO a').
 	embedExp :: a -> Q Exp
 
 instance Embed Int where
-	embedExp n = [| return $(litE $ integerL $ fromIntegral n) |]
+	embedExp n = litE $ integerL $ fromIntegral n
 
 instance Embed Bool where
-	embedExp b = [| return $(if b then (conE 'True) else (conE 'False)) |]
+	embedExp b = if b then (conE 'True) else (conE 'False)
 
-instance Embed B.ByteString where
-	embedExp bytes = do
-		[| B.unsafePackAddressLen $(litE $ integerL $ fromIntegral $ B.length bytes) $(litE $ stringPrimL $ B.unpack bytes) |]
-
-instance Embed BL.ByteString where
-	embedExp bytes = do
-		[| B.unsafePackAddressLen $(litE $ integerL $ fromIntegral $ BL.length bytes) $(litE $ stringPrimL $ BL.unpack bytes) |]
+instance Embed T.Text where
+	embedExp t = [| T.pack $(litE $ stringL $ T.unpack t) |]
 
 instance Embed a => Embed [a] where
-	embedExp a = [| sequence $(listE $ map embedExp a) |]
+	embedExp a = listE $ map embedExp a
 
 instance (Embed a, Embed b) => Embed (a, b) where
-	embedExp (a, b) = [| do
-		av <- $(embedExp a)
-		bv <- $(embedExp b)
+	embedExp (a, b) = [| ($(embedExp a), $(embedExp b)) |]
+
+instance (Embed a, Embed b, Embed c) => Embed (a, b, c) where
+	embedExp (a, b, c) = [| ($(embedExp a), $(embedExp b), $(embedExp c)) |]
+
+instance (Embed a, Embed b, Embed c, Embed d) => Embed (a, b, c, d) where
+	embedExp (a, b, c, d) = [| ($(embedExp a), $(embedExp b), $(embedExp c), $(embedExp d)) |]
+
+-- | Class of data may be embedded.
+-- An embedded expression is of type IO a.
+class EmbedIO a where
+	-- | Construct an expression for the data (of type 'IO a').
+	embedIOExp :: a -> Q Exp
+
+instance EmbedIO Int where
+	embedIOExp n = [| return $(embedExp n) |]
+
+instance EmbedIO Bool where
+	embedIOExp b = [| return $(embedExp b) |]
+
+instance EmbedIO B.ByteString where
+	embedIOExp bytes = do
+		[| B.unsafePackAddressLen $(litE $ integerL $ fromIntegral $ B.length bytes) $(litE $ stringPrimL $ B.unpack bytes) |]
+
+instance EmbedIO BL.ByteString where
+	embedIOExp bytes = do
+		[| B.unsafePackAddressLen $(litE $ integerL $ fromIntegral $ BL.length bytes) $(litE $ stringPrimL $ BL.unpack bytes) |]
+
+instance EmbedIO a => EmbedIO [a] where
+	embedIOExp a = [| sequence $(listE $ map embedIOExp a) |]
+
+instance (EmbedIO a, EmbedIO b) => EmbedIO (a, b) where
+	embedIOExp (a, b) = [| do
+		av <- $(embedIOExp a)
+		bv <- $(embedIOExp b)
 		return (av, bv)
 		|]
 
-instance (Embed a, Embed b, Embed c) => Embed (a, b, c) where
-	embedExp (a, b, c) = [| do
-		av <- $(embedExp a)
-		bv <- $(embedExp b)
-		cv <- $(embedExp c)
+instance (EmbedIO a, EmbedIO b, EmbedIO c) => EmbedIO (a, b, c) where
+	embedIOExp (a, b, c) = [| do
+		av <- $(embedIOExp a)
+		bv <- $(embedIOExp b)
+		cv <- $(embedIOExp c)
 		return (av, bv, cv)
 		|]
 
-instance (Embed a, Embed b, Embed c, Embed d) => Embed (a, b, c, d) where
-	embedExp (a, b, c, d) = [| do
-		av <- $(embedExp a)
-		bv <- $(embedExp b)
-		cv <- $(embedExp c)
-		dv <- $(embedExp d)
+instance (EmbedIO a, EmbedIO b, EmbedIO c, EmbedIO d) => EmbedIO (a, b, c, d) where
+	embedIOExp (a, b, c, d) = [| do
+		av <- $(embedIOExp a)
+		bv <- $(embedIOExp b)
+		cv <- $(embedIOExp c)
+		dv <- $(embedIOExp d)
 		return (av, bv, cv, dv)
 		|]
 
--- | Embed file data as an expression.
+-- | Embed string as an expression.
+embedStringExp :: String -> Q Exp
+embedStringExp s = litE $ stringL s
+
+-- | EmbedIO file data as an expression.
 fileExp :: FilePath -> Q Exp
 fileExp filePath = do
-	embedExp =<< loadFile filePath
+	embedIOExp =<< loadFile filePath
 
 -- | Pack storable list to bytestring.
 packList :: Storable a => [a] -> IO B.ByteString
