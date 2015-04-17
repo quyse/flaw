@@ -25,7 +25,6 @@ import Control.Monad.Fix
 import Control.Monad.Trans.Resource
 import Data.IORef
 import qualified Data.Text as T
-import Data.Word
 import Foreign.C.String
 import Foreign.C.Types
 import Foreign.Marshal.Alloc
@@ -60,7 +59,7 @@ instance Window Win32Window where
 			width <- peek widthPtr
 			height <- peek heightPtr
 			return (width, height)
-	addWindowCallback window callback = addWin32WindowCallback window $ \msg wParam lParam -> do
+	addWindowCallback window callback = addWin32WindowCallback window $ \msg _wParam lParam -> do
 		case msg of
 			0x0002 -> callback DestroyWindowEvent -- WM_DESTROY
 			0x0005 -> callback $ ResizeWindowEvent (fromIntegral $ loWord lParam) (fromIntegral $ hiWord lParam) -- WM_SIZE
@@ -113,7 +112,7 @@ internalCreateWin32Window ws title left top width height layered = allocate crea
 		userCallbacksRef <- newIORef []
 		callback <- wrapWindowCallback $ \msg wParam lParam -> do
 			userCallbacks <- readIORef userCallbacksRef
-			forM userCallbacks $ \callback -> callback msg wParam lParam
+			forM_ userCallbacks $ \callback -> callback msg wParam lParam
 			case msg of
 				0x0002 -> do -- WM_DESTROY
 					-- free callback
@@ -130,7 +129,7 @@ internalCreateWin32Window ws title left top width height layered = allocate crea
 				, wCallback = callback
 				, wUserCallbacksRef = userCallbacksRef
 				}
-	destroy Win32Window { wWindowSystem = ws, wHandle = hwnd } = invokeWin32WindowSystem_ ws $ c_destroyWin32Window hwnd
+	destroy Win32Window { wHandle = hwnd } = invokeWin32WindowSystem_ ws $ c_destroyWin32Window hwnd
 
 updateLayeredWin32Window :: Win32Window -> IO ()
 updateLayeredWin32Window w = invokeWin32WindowSystem_ (wWindowSystem w) $ c_updateLayeredWin32Window $ wHandle w
@@ -173,10 +172,6 @@ addWin32WindowCallback Win32Window
 	invokeWin32WindowSystem ws $ do
 		callbacks <- readIORef userCallbacksRef
 		writeIORef userCallbacksRef $ callback : callbacks
-
--- | Message to invoke.
-data Message where
-	Message :: IO a -> Maybe (MVar a) -> Message
 
 -- foreign imports
 
