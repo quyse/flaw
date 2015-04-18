@@ -58,19 +58,19 @@ type GameInputManager = Win32InputManager
 #endif
 
 
-initGame :: (MonadResource m, MonadBaseControl IO m) => T.Text -> Int -> Int
+initGame :: (MonadResource m, MonadBaseControl IO m) => T.Text -> Int -> Int -> Bool
 	-> m
 		( ReleaseKey
 		, (GameWindow, GameGraphicsDevice, GameGraphicsContext, GameGraphicsPresenter, GameInputManager)
 		)
-initGame title width height = do
+initGame title width height needDepth = do
 #if defined(ghcjs_HOST_OS)
 
-	window@(Web.Canvas jsCanvas) <- liftIO $ Web.initCanvas width height
+	window@(Web.Canvas domCanvas) <- liftIO $ Web.initCanvas width height
 
 	inputManager <- liftIO $ initWebInputManager window
 
-	(releaseKey, graphicsDevice, graphicsContext, presenter) <- webglInit jsCanvas
+	(releaseKey, graphicsDevice, graphicsContext, presenter) <- webglInit domCanvas needDepth
 
 #else
 
@@ -84,7 +84,7 @@ initGame title width height = do
 	(graphicsSystemReleaseKey, graphicsSystem) <- dxgiCreateSystem
 	(graphicsDevicesReleaseKey, graphicsDevices) <- getInstalledDevices graphicsSystem
 	(graphicsDeviceReleaseKey, graphicsDevice, graphicsContext) <- dx11CreateDevice $ fst $ head graphicsDevices
-	(presenterReleaseKey, presenter) <- dx11CreatePresenter graphicsDevice window Nothing True
+	(presenterReleaseKey, presenter) <- dx11CreatePresenter graphicsDevice window Nothing needDepth
 
 	releaseKey <- register $ do
 		release windowSystemReleaseKey
