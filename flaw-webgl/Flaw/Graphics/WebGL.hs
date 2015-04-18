@@ -248,18 +248,21 @@ data WebGLContextState = WebGLContextState
 	, webglContextStateUniformBuffers :: !(IOArray Int (UniformBufferId WebGLDevice))
 	, webglContextStateSamplers :: !(IOArray Int (TextureId WebGLDevice, SamplerStateId WebGLDevice))
 	, webglContextStateProgram :: !(IORef (ProgramId WebGLDevice))
-	, webglContextStateAttributes :: !(IORef ([Attribute], Int))
+	, webglContextStateAttributes :: !(IORef ([Attribute], VertexBufferId WebGLDevice))
+	}
+
+nullVertexBuffer :: VertexBufferId WebGLDevice
+nullVertexBuffer = WebGLVertexBufferId
+	{ webglVertexBufferId = 0
+	, webglVertexBufferBuffer = nullRef
+	, webglVertexBufferStride = 0
 	}
 
 webglCreateContextState :: IO WebGLContextState
 webglCreateContextState = do
 	frameBuffer <- newIORef $ WebGLFrameBufferId nullRef
 	viewport <- newIORef (0, 0)
-	vertexBuffers <- A.newArray (0, 7) $ WebGLVertexBufferId
-		{ webglVertexBufferId = 0
-		, webglVertexBufferBuffer = nullRef
-		, webglVertexBufferStride = 0
-		}
+	vertexBuffers <- A.newArray (0, 7) nullVertexBuffer
 	indexBuffer <- newIORef $ WebGLIndexBufferId
 		{ webglIndexBufferId = 0
 		, webglIndexBufferBuffer = nullRef
@@ -280,7 +283,7 @@ webglCreateContextState = do
 		, webglProgramAttributes = []
 		, webglProgramUniforms = []
 		}
-	attributes <- newIORef ([], 0)
+	attributes <- newIORef ([], nullVertexBuffer)
 	return WebGLContextState
 		{ webglContextStateFrameBuffer = frameBuffer
 		, webglContextStateViewport = viewport
@@ -306,11 +309,7 @@ webglSetDefaultContextState WebGLContextState
 	writeIORef frameBufferRef $ WebGLFrameBufferId nullRef
 	writeIORef viewportRef (0, 0)
 	vertexBuffersBounds <- getBounds vertexBuffersArray
-	forM_ (range vertexBuffersBounds) $ \i -> writeArray vertexBuffersArray i $ WebGLVertexBufferId
-		{ webglVertexBufferId = 0
-		, webglVertexBufferBuffer = nullRef
-		, webglVertexBufferStride = 0
-		}
+	forM_ (range vertexBuffersBounds) $ \i -> writeArray vertexBuffersArray i nullVertexBuffer
 	writeIORef indexBufferRef $ WebGLIndexBufferId
 		{ webglIndexBufferId = 0
 		, webglIndexBufferBuffer = nullRef
@@ -333,7 +332,7 @@ webglSetDefaultContextState WebGLContextState
 		, webglProgramAttributes = []
 		, webglProgramUniforms = []
 		}
-	writeIORef attributesRef ([], 0)
+	writeIORef attributesRef ([], nullVertexBuffer)
 
 instance Context WebGLContext WebGLDevice where
 	contextClearColor context@WebGLContext
@@ -426,13 +425,11 @@ instance Context WebGLContext WebGLDevice where
 			{ webglContextStateVertexBuffers = vertexBuffersArray
 			, webglContextStateAttributes = attributesRef
 			}
-		} i vertexBuffer@WebGLVertexBufferId
-			{ webglVertexBufferStride = stride
-			} scope = do
+		} i vertexBuffer scope = do
 		oldVertexBuffer <- readArray vertexBuffersArray i
 		writeArray vertexBuffersArray i vertexBuffer
-		oldAttributes@(as, _oldStride)  <- readIORef attributesRef
-		writeIORef attributesRef (as, stride)
+		oldAttributes@(as, _oldVertexBuffer)  <- readIORef attributesRef
+		writeIORef attributesRef (as, vertexBuffer)
 		r <- scope
 		writeArray vertexBuffersArray i oldVertexBuffer
 		writeIORef attributesRef oldAttributes
@@ -740,7 +737,9 @@ webglUpdateContext WebGLContext
 		js_bindBuffer jsContext webgl_ELEMENT_ARRAY_BUFFER jsBuffer
 
 	-- attributes
-	refSetup actualAttributesRef desiredAttributesRef $ \(attributes, stride) -> do
+	refSetup actualAttributesRef desiredAttributesRef $ \(attributes, WebGLVertexBufferId
+		{ webglVertexBufferStride = stride
+		}) -> do
 		forM_ (zip attributes [0..]) $ \(Attribute
 			--{ attributeSlot = slot -- TODO multiple slots
 			{ attributeOffset = offset
