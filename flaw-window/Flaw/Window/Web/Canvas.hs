@@ -13,6 +13,8 @@ module Flaw.Window.Web.Canvas
 
 import Control.Monad
 import Data.Maybe
+import qualified Data.Text as T
+import GHCJS.Foreign
 import GHCJS.Marshal
 import GHCJS.Types
 import qualified GHCJS.DOM.Element as DOM
@@ -21,14 +23,16 @@ import Flaw.Window
 
 data Canvas = Canvas DOM.Element
 
-initCanvas :: Int -> Int -> IO Canvas
-initCanvas width height = do
-	jsCanvas <- js_initCanvas width height
+initCanvas :: T.Text -> IO Canvas
+initCanvas title = do
+	jsCanvas <- js_initCanvas
 	maybeDomCanvas <- fromJSRef jsCanvas
-	return $ Canvas $ fromJust maybeDomCanvas
+	let canvas = Canvas $ fromJust maybeDomCanvas
+	setWindowTitle canvas title
+	return canvas
 
 instance Window Canvas where
-	setWindowTitle _ _ = return ()
+	setWindowTitle _canvas title = js_setTitle $ toJSString title
 	getWindowClientSize (Canvas domCanvas) = do
 		width <- liftM floor $ DOM.elementGetClientWidth domCanvas
 		height <- liftM floor $ DOM.elementGetClientHeight domCanvas
@@ -37,7 +41,17 @@ instance Window Canvas where
 
 foreign import javascript unsafe " \
 	\ var c = document.createElement('canvas'); \
-	\ c.width = $1; \
-	\ c.height = $2; \
+	\ c.style.position = 'absolute'; \
+	\ c.style.left = 0; \
+	\ c.style.top = 0; \
+	\ c.width = window.innerWidth; \
+	\ c.height = window.innerHeight; \
 	\ document.body.appendChild(c); \
-	\ $r=c" js_initCanvas :: Int -> Int -> IO (JSRef DOM.Element)
+	\ document.body.style.overflow = 'hidden'; \
+	\ window.addEventListener('resize', function() { \
+	\ c.width = window.innerWidth; \
+	\ c.height = window.innerHeight; \
+	\ }, false); \
+	\ $r=c" js_initCanvas :: IO (JSRef DOM.Element)
+
+foreign import javascript unsafe "document.title=$1" js_setTitle :: JSString -> IO ()

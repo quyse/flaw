@@ -66,7 +66,7 @@ initGame :: (MonadResource m, MonadBaseControl IO m) => T.Text -> Int -> Int -> 
 initGame title width height needDepth = do
 #if defined(ghcjs_HOST_OS)
 
-	window@(Web.Canvas domCanvas) <- liftIO $ Web.initCanvas width height
+	window@(Web.Canvas domCanvas) <- liftIO $ Web.initCanvas title
 
 	inputManager <- liftIO $ initWebInputManager window
 
