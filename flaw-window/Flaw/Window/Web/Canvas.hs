@@ -24,14 +24,14 @@ data Canvas = Canvas DOM.Element
 initCanvas :: Int -> Int -> IO Canvas
 initCanvas width height = do
 	jsCanvas <- js_initCanvas width height
-	maybeCanvas <- fromJSRef jsCanvas
-	return $ Canvas $ fromJust maybeCanvas
+	maybeDomCanvas <- fromJSRef jsCanvas
+	return $ Canvas $ fromJust maybeDomCanvas
 
 instance Window Canvas where
 	setWindowTitle _ _ = return ()
-	getWindowClientSize (Canvas jsCanvas) = do
-		width <- liftM floor $ DOM.elementGetClientWidth jsCanvas
-		height <- liftM floor $ DOM.elementGetClientHeight jsCanvas
+	getWindowClientSize (Canvas domCanvas) = do
+		width <- liftM floor $ DOM.elementGetClientWidth domCanvas
+		height <- liftM floor $ DOM.elementGetClientHeight domCanvas
 		return (width, height)
 	addWindowCallback _ _ = return ()
 
