@@ -8,13 +8,11 @@ License: MIT
 
 module Flaw.Input.Win32
 	( Win32InputManager()
-	, Win32InputFrame()
 	, initWin32InputManager
 	) where
 
 import Control.Exception
 import Control.Monad
-import Data.Array.IO
 import Data.Bits
 import Data.IORef
 import Foreign.Marshal.Alloc
@@ -25,6 +23,7 @@ import Foreign.Storable
 
 import Flaw.Exception
 import Flaw.Input
+import Flaw.Input.Basic
 import Flaw.FFI
 import Flaw.FFI.Win32
 import Flaw.Window.Win32
@@ -200,132 +199,37 @@ keyFromVKKey k = case k of
 	0x5A {- VK_Z -} -> KeyZ
 	_ -> KeyUnknown
 
-data Win32InputFrame = Win32InputFrame
-	{ fKeys :: IOUArray Key Bool
-	, fMouseButtons :: IOUArray MouseButton Bool
-	, fCursor :: IORef (Int, Int)
-	, fEvents :: IORef [Event]
-	}
-
-initWin32InputFrame :: IO Win32InputFrame
-initWin32InputFrame = do
-	keys <- newArray (minBound, maxBound) False
-	mouseButtons <- newArray (minBound, maxBound) False
-	cursor <- newIORef (0, 0)
-	events <- newIORef []
-	return Win32InputFrame
-		{ fKeys = keys
-		, fMouseButtons = mouseButtons
-		, fCursor = cursor
-		, fEvents = events
-		}
-
-instance State Win32InputFrame where
-	getKeyState Win32InputFrame
-		{ fKeys = keysArray
-		} key = readArray keysArray key
-	getMouseButtonState Win32InputFrame
-		{ fMouseButtons = mouseButtonsArray
-		} mouseButton = readArray mouseButtonsArray mouseButton
-	getMouseCursor Win32InputFrame
-		{ fCursor = cursorRef
-		} = readIORef cursorRef
-
-instance Frame Win32InputFrame where
-	nextInputEvent frame@Win32InputFrame
-		{ fEvents = eventsRef
-		} = do
-		events <- readIORef eventsRef
-		case events of
-			e:es -> do
-				applyEventToState frame e
-				writeIORef eventsRef es
-				return $ Just e
-			[] -> return Nothing
-
-applyEventToState :: Win32InputFrame -> Event -> IO ()
-applyEventToState Win32InputFrame
-	{ fKeys = keysArray
-	} (EventKeyboard keyboardEvent) = do
-	case keyboardEvent of
-		KeyDownEvent key -> writeArray keysArray key True
-		KeyUpEvent key -> writeArray keysArray key False
-		CharEvent _char -> return ()
-applyEventToState Win32InputFrame
-	{ fMouseButtons = mouseButtonsArray
-	, fCursor = cursorRef
-	} (EventMouse mouseEvent) = do
-	case mouseEvent of
-		MouseDownEvent mouseButton -> writeArray mouseButtonsArray mouseButton True
-		MouseUpEvent mouseButton -> writeArray mouseButtonsArray mouseButton False
-		RawMouseMoveEvent _x _y _z -> return ()
-		CursorMoveEvent dx dy -> modifyIORef' cursorRef $ \(x, y) -> (x + dx, y + dy)
-
 data Win32InputManager = Win32InputManager
 	{ -- | Input frames (current and internal).
-	  mFrames :: IORef (Win32InputFrame, Win32InputFrame)
+	  mFramePair :: IORef (BasicFrame, BasicFrame)
 	, mWindow :: Win32Window
 	}
 
 instance Manager Win32InputManager where
-	type ManagerFrame Win32InputManager = Win32InputFrame
+	type ManagerFrame Win32InputManager = BasicFrame
 	nextInputFrame Win32InputManager
-		{ mFrames = framesRef
+		{ mFramePair = framePair
 		, mWindow = Win32Window
 			{ wWindowSystem = windowSystem
 			}
 		} = do
-		-- swap current and internal frames with syncronization
-		invokeWin32WindowSystem windowSystem $ do
-			-- get frames
-			(currentFrame@Win32InputFrame
-				{ fEvents = eventsRef
-				}, internalFrame) <- readIORef framesRef
-			-- rewind current frame (if there's some events left)
-			events <- readIORef eventsRef
-			forM_ events $ applyEventToState currentFrame
-			writeIORef eventsRef []
-			-- swap frames
-			writeIORef framesRef (internalFrame, currentFrame)
-		-- return current current frame
-		(currentFrame, _internalFrame) <- readIORef framesRef
-		return currentFrame
+		invokeWin32WindowSystem windowSystem $ nextBasicFrame framePair
 
 initWin32InputManager :: Win32Window -> IO Win32InputManager
 initWin32InputManager window@Win32Window
 	{ wHandle = hwnd
 	} = do
 	-- initialize frames
-	framesRef <- do
-		currentFrame <- initWin32InputFrame
-		internalFrame <- initWin32InputFrame
-		newIORef (currentFrame, internalFrame)
+	framePair <- initBasicFramePair
 
 	-- add callback for windows messages
 	addWin32WindowCallback window $ \msg wParam lParam -> do
-		let addEvent event = do
-			(_currentFrame, Win32InputFrame
-				{ fEvents = eventsRef
-				}) <- readIORef framesRef
-			modifyIORef eventsRef (++ [event])
-		let addEventWithFrame callback = do
-			(_currentFrame, internalFrame@Win32InputFrame
-				{ fEvents = eventsRef
-				}) <- readIORef framesRef
-			event <- callback internalFrame
-			modifyIORef eventsRef (++ [event])
-
 		case msg of
 			0x0102 {- WM_CHAR -} -> do
-				addEvent $ EventKeyboard $ CharEvent $ toEnum $ fromIntegral wParam
+				addEventToBasicFrame framePair $ EventKeyboard $ CharEvent $ toEnum $ fromIntegral wParam
 			0x0200 {- WM_MOUSEMOVE -} -> do
-				addEventWithFrame $ \Win32InputFrame
-					{ fCursor = cursorRef
-					} -> do
-					(cursorX, cursorY) <- readIORef cursorRef
-					return $ EventMouse $ CursorMoveEvent
-						(loWord (fromIntegral lParam) - cursorX)
-						(hiWord (fromIntegral lParam) - cursorY)
+				addEventToBasicFrame framePair $ EventMouse $ CursorMoveEvent
+					(loWord $ fromIntegral lParam) (hiWord $ fromIntegral lParam)
 			0x00FF {- WM_INPUT -} -> do
 				let blockSize = sizeOf (undefined :: RAWINPUTHEADER) + 32
 				allocaBytes blockSize $ \blockPtr -> do
@@ -342,7 +246,7 @@ initWin32InputManager window@Win32Window
 							RIM_TYPEKEYBOARD -> do
 								keyboardData <- peek $ castPtr eventDataPtr
 								let key = keyFromVKKey $ f_RAWKEYBOARD_VKey keyboardData
-								addEvent $ EventKeyboard $
+								addEventToBasicFrame framePair $ EventKeyboard $
 									if (f_RAWKEYBOARD_Flags keyboardData .&. 1 {- RI_KEY_BREAK -}) == 0 then
 										KeyDownEvent key
 									else
@@ -352,21 +256,21 @@ initWin32InputManager window@Win32Window
 								let flags = f_RAWMOUSE_usButtonFlags mouseData
 
 								if (flags .&. 0x0001 {- RI_MOUSE_LEFT_BUTTON_DOWN -}) > 0 then
-									addEvent $ EventMouse $ MouseDownEvent LeftMouseButton
+									addEventToBasicFrame framePair $ EventMouse $ MouseDownEvent LeftMouseButton
 								else if (flags .&. 0x0002 {- RI_MOUSE_LEFT_BUTTON_UP -}) > 0 then
-									addEvent $ EventMouse $ MouseUpEvent LeftMouseButton
+									addEventToBasicFrame framePair $ EventMouse $ MouseUpEvent LeftMouseButton
 								else return ()
 
 								if (flags .&. 0x0004 {- RI_MOUSE_RIGHT_BUTTON_DOWN -}) > 0 then
-									addEvent $ EventMouse $ MouseDownEvent RightMouseButton
+									addEventToBasicFrame framePair $ EventMouse $ MouseDownEvent RightMouseButton
 								else if (flags .&. 0x0008 {- RI_MOUSE_RIGHT_BUTTON_UP -}) > 0 then
-									addEvent $ EventMouse $ MouseUpEvent RightMouseButton
+									addEventToBasicFrame framePair $ EventMouse $ MouseUpEvent RightMouseButton
 								else return ()
 
 								if (flags .&. 0x0010 {- RI_MOUSE_MIDDLE_BUTTON_DOWN -}) > 0 then
-									addEvent $ EventMouse $ MouseDownEvent MiddleMouseButton
+									addEventToBasicFrame framePair $ EventMouse $ MouseDownEvent MiddleMouseButton
 								else if (flags .&. 0x0020 {- RI_MOUSE_MIDDLE_BUTTON_UP -}) > 0 then
-									addEvent $ EventMouse $ MouseUpEvent MiddleMouseButton
+									addEventToBasicFrame framePair $ EventMouse $ MouseUpEvent MiddleMouseButton
 								else return ()
 
 								let lastX = f_RAWMOUSE_lLastX mouseData
@@ -375,7 +279,7 @@ initWin32InputManager window@Win32Window
 
 								if lastX /= 0 || lastY /= 0 || wheelChanged then do
 									let wheel = if wheelChanged then f_RAWMOUSE_usButtonData mouseData else 0
-									addEvent $ EventMouse $ RawMouseMoveEvent (fromIntegral lastX) (fromIntegral lastY) (fromIntegral wheel)
+									addEventToBasicFrame framePair $ EventMouse $ RawMouseMoveEvent (fromIntegral lastX) (fromIntegral lastY) (fromIntegral wheel)
 								else return ()
 
 							_ -> return ()
@@ -403,6 +307,6 @@ initWin32InputManager window@Win32Window
 	else return ()
 
 	return Win32InputManager
-		{ mFrames = framesRef
+		{ mFramePair = framePair
 		, mWindow = window
 		}

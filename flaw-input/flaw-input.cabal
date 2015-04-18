@@ -21,10 +21,16 @@ library
   exposed-modules:
     Flaw.Input
   other-modules:
-  if os(windows)
-    exposed-modules:
-      Flaw.Input.Win32
+    Flaw.Input.Basic
   -- other-extensions:    
   build-depends:       array, base, flaw-base, flaw-ffi, flaw-window
   -- hs-source-dirs:      
   default-language:    Haskell2010
+  if impl(ghcjs)
+    exposed-modules:
+      Flaw.Input.Web
+    build-depends:       ghcjs-base, ghcjs-dom
+  else
+    if os(windows)
+      exposed-modules:
+        Flaw.Input.Win32
