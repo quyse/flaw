@@ -57,11 +57,14 @@ initWebInputManager (Web.Canvas domCanvas) = do
 		maybeX <- fromJSRef jsX
 		maybeY <- fromJSRef jsY
 		addEventToBasicFrame framePair $ EventMouse $ CursorMoveEvent (fromJust maybeX) (fromJust maybeY)
+	mousewheelCallback <- syncCallback1 AlwaysRetain False $ \jsZ -> do
+		maybeZ <- fromJSRef jsZ
+		addEventToBasicFrame framePair $ EventMouse $ RawMouseMoveEvent 0 0 $ fromJust maybeZ
 
 	jsCanvas <- toJSRef domCanvas
 	js_registerEvents jsCanvas
 		keydownCallback keyupCallback keypressCallback
-		mousedownCallback mouseupCallback mousemoveCallback
+		mousedownCallback mouseupCallback mousemoveCallback mousewheelCallback
 
 	return WebInputManager
 		{ mFramePair = framePair
@@ -71,6 +74,10 @@ convertKeyCode :: JSRef Int -> IO Key
 convertKeyCode jsKeyCode = do
 	maybeKeyCode <- fromJSRef jsKeyCode
 	return $ case fromJust maybeKeyCode of
+		37 -> KeyLeft
+		38 -> KeyUp
+		39 -> KeyRight
+		40 -> KeyDown
 		65 -> KeyA
 		66 -> KeyB
 		67 -> KeyC
@@ -132,6 +139,9 @@ foreign import javascript unsafe " \
 	\ $1.addEventListener('mousemove', function(e) { \
 	\ $7(e.clientX, e.clientY); \
 	\ }, false); \
+	\ $1.addEventListener('wheel', function(e) { \
+	\ $8(e.wheelDelta); \
+	\ }, false); \
 	\ " js_registerEvents
 	:: JSRef DOM.Element
 	-> JSFun (JSRef Int -> IO ())
@@ -140,4 +150,5 @@ foreign import javascript unsafe " \
 	-> JSFun (JSRef Int -> IO ())
 	-> JSFun (JSRef Int -> IO ())
 	-> JSFun (JSRef Int -> JSRef Int -> IO ())
+	-> JSFun (JSRef Float -> IO ())
 	-> IO ()
