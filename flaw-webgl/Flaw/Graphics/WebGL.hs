@@ -765,8 +765,8 @@ loadWebGLTexture2DFromURL device@WebGLDevice
 	jsTexture <- js_createTexture jsContext
 	js_bindTexture jsContext webgl_TEXTURE_2D jsTexture
 	js_texImage2D jsContext webgl_TEXTURE_2D 0 webgl_RGBA webgl_RGBA webgl_UNSIGNED_BYTE image
-	js_texParameteri jsContext webgl_TEXTURE_2D webgl_TEXTURE_WRAP_S $ fromIntegral webgl_CLAMP_TO_EDGE
-	js_texParameteri jsContext webgl_TEXTURE_2D webgl_TEXTURE_WRAP_T $ fromIntegral webgl_CLAMP_TO_EDGE
+	js_texParameteri jsContext webgl_TEXTURE_2D webgl_TEXTURE_WRAP_S $ fromIntegral webgl_REPEAT
+	js_texParameteri jsContext webgl_TEXTURE_2D webgl_TEXTURE_WRAP_T $ fromIntegral webgl_REPEAT
 	js_texParameteri jsContext webgl_TEXTURE_2D webgl_TEXTURE_MIN_FILTER $ fromIntegral webgl_LINEAR
 	js_texParameteri jsContext webgl_TEXTURE_2D webgl_TEXTURE_MAG_FILTER $ fromIntegral webgl_LINEAR
 	textureId <- webglAllocateId device
