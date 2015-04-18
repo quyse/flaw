@@ -96,12 +96,27 @@ nextBasicFrame :: BasicFramePair -> IO BasicFrame
 nextBasicFrame framesRef = do
 	-- get frames
 	(currentFrame@BasicFrame
-		{ fEvents = eventsRef
-		}, internalFrame) <- readIORef framesRef
-	-- rewind current frame (if there's some events left)
-	events <- readIORef eventsRef
-	forM_ events $ applyEventToBasicFrame currentFrame
-	writeIORef eventsRef []
+		{ fKeys = currentKeysArray
+		, fMouseButtons = currentMouseButtonsArray
+		, fCursor = currentCursorRef
+		, fEvents = currentEventsRef
+		}, internalFrame@BasicFrame
+		{ fKeys = internalKeysArray
+		, fMouseButtons = internalMouseButtonsArray
+		, fCursor = internalCursorRef
+		, fEvents = internalEventsRef
+		}) <- readIORef framesRef
+	-- copy state of internal frame to current (just to be safe, as it already should be the same)
+	keysBounds <- getBounds internalKeysArray
+	forM_ (range keysBounds) $ \i -> writeArray currentKeysArray i =<< readArray internalKeysArray i
+	mouseButtonsBounds <- getBounds internalMouseButtonsArray
+	forM_ (range mouseButtonsBounds) $ \i -> writeArray currentMouseButtonsArray i =<< readArray internalMouseButtonsArray i
+	writeIORef currentCursorRef =<< readIORef internalCursorRef
+	-- replay internal events on current frame
+	internalEvents <- readIORef internalEventsRef
+	forM_ internalEvents $ applyEventToBasicFrame currentFrame
+	-- event queue is empty
+	writeIORef currentEventsRef []
 	-- swap frames
 	writeIORef framesRef (internalFrame, currentFrame)
 	-- return new current frame
