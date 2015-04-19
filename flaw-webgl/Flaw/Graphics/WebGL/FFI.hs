@@ -25,6 +25,7 @@ module Flaw.Graphics.WebGL.FFI
 	, GLbitfield
 	, js_getWebGLContext
 	, js_frontFace
+	, js_cullFace
 	, js_enable
 	, js_disable
 	, js_createTexture
@@ -402,6 +403,7 @@ foreign import javascript unsafe " \
 	\" js_getWebGLContext :: JSRef DOM.Element -> Bool -> IO (JSRef JS_WebGLContext)
 
 foreign import javascript unsafe "$1.frontFace($2)" js_frontFace :: JSRef JS_WebGLContext -> GLenum -> IO ()
+foreign import javascript unsafe "$1.cullFace($2)" js_cullFace :: JSRef JS_WebGLContext -> GLenum -> IO ()
 foreign import javascript unsafe "$1.enable($2)" js_enable :: JSRef JS_WebGLContext -> GLenum -> IO ()
 foreign import javascript unsafe "$1.disable($2)" js_disable :: JSRef JS_WebGLContext -> GLenum -> IO ()
 

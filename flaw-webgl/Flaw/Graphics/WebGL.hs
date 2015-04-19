@@ -562,6 +562,9 @@ webglInit canvas needDepth = do
 		}
 	-- set front face mode
 	liftIO $ js_frontFace jsContext webgl_CW
+	-- enable culling
+	liftIO $ js_enable jsContext webgl_CULL_FACE
+	liftIO $ js_cullFace jsContext webgl_BACK
 	-- enable depth test
 	liftIO $ js_enable jsContext webgl_DEPTH_TEST
 	-- create presenter
