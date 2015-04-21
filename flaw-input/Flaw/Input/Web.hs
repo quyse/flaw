@@ -140,7 +140,7 @@ foreign import javascript unsafe " \
 	\ $7(e.clientX, e.clientY); \
 	\ }, false); \
 	\ $1.addEventListener('wheel', function(e) { \
-	\ $8(e.wheelDelta); \
+	\ $8(e.wheelDelta || ((e.deltaY || 0) * 40)); \
 	\ }, false); \
 	\ " js_registerEvents
 	:: JSRef DOM.Element
