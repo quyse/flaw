@@ -7,7 +7,7 @@ License: MIT
 {-# LANGUAGE CPP, TemplateHaskell #-}
 
 module Flaw.Game.Texture
-	( loadPngTextureExp
+	( loadTextureExp
 	) where
 
 import Language.Haskell.TH
@@ -34,8 +34,8 @@ import Flaw.Asset.Texture
 -- | Create expression for loading texture.
 -- Expression will be of type:
 -- :: (MonadResource m, MonadBaseControl IO m) => GameGraphicsDevice -> m (ReleaseKey, TextureId GameGraphicsDevice)
-loadPngTextureExp :: FilePath -> Q Exp
-loadPngTextureExp filePath = do
+loadTextureExp :: FilePath -> Q Exp
+loadTextureExp filePath = do
 
 #if defined(ghcjs_HOST_OS)
 
@@ -44,7 +44,7 @@ loadPngTextureExp filePath = do
 #else
 
 	fileData <- loadFile filePath
-	(ti, fileBytes) <- runIO $ loadPngTexture $ BL.toStrict fileData
+	(ti, fileBytes) <- runIO $ loadTexture $ BL.toStrict fileData
 	[|
 		\device -> do
 			bytes <- liftIO $(embedIOExp fileBytes)
