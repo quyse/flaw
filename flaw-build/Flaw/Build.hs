@@ -13,12 +13,15 @@ module Flaw.Build
 	, embedStringExp
 	, fileExp
 	, packList
+	, packVector
 	) where
 
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Unsafe as B
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.Text as T
+import qualified Data.Vector.Generic as V
+import qualified Data.Vector.Storable as VS
 import Foreign.Marshal.Array
 import Foreign.Ptr
 import Foreign.Storable
@@ -121,3 +124,12 @@ packList vs = do
 	bytesPtr <- mallocArray len
 	pokeArray bytesPtr vs
 	B.unsafePackMallocCStringLen (castPtr bytesPtr, len * sizeOf (head vs))
+
+-- | Pack storable vector to bytestring.
+packVector :: (Storable a, V.Vector v a) => v a -> IO B.ByteString
+packVector v = do
+	let len = V.length v
+	bytesPtr <- mallocArray len
+	VS.unsafeWith (V.convert v) $ \vecPtr -> do
+		copyArray bytesPtr vecPtr len
+	B.unsafePackMallocCStringLen (castPtr bytesPtr, len * sizeOf (V.head v))
