@@ -1342,11 +1342,14 @@ dx11UpdateContext Dx11Context
 		let srvInterfaces = [case texture of
 			Dx11TextureId srvInterface -> pokeCOMObject srvInterface
 			Dx11NullTextureId -> nullPtr
-			| (texture, _sampler) <- desiredSamplers]
+			| (texture, _samplerState) <- desiredSamplers]
 		withArray srvInterfaces $ \srvInterfacesPtr -> do
 			m_ID3D11DeviceContext_VSSetShaderResources contextInterface 0 samplersCount srvInterfacesPtr
 			m_ID3D11DeviceContext_PSSetShaderResources contextInterface 0 samplersCount srvInterfacesPtr
-		let ssInterfaces = [pokeCOMObject ssInterface | (_texture, Dx11SamplerStateId ssInterface) <- desiredSamplers]
+		let ssInterfaces = [case samplerState of
+			Dx11SamplerStateId ssInterface -> pokeCOMObject ssInterface
+			Dx11NullSamplerStateId -> nullPtr
+			| (_texture, samplerState) <- desiredSamplers]
 		withArray ssInterfaces $ \ssInterfacesPtr -> do
 			m_ID3D11DeviceContext_VSSetSamplers contextInterface 0 samplersCount ssInterfacesPtr
 			m_ID3D11DeviceContext_PSSetSamplers contextInterface 0 samplersCount ssInterfacesPtr
