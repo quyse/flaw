@@ -14,8 +14,10 @@ module Flaw.Build
 	, fileExp
 	, packList
 	, packVector
+	, genEmbed
 	) where
 
+import Control.Monad
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Unsafe as B
 import qualified Data.ByteString.Lazy as BL
@@ -43,11 +45,20 @@ class Embed a where
 instance Embed Int where
 	embedExp n = litE $ integerL $ fromIntegral n
 
+instance Embed Float where
+	embedExp n = litE $ rationalL $ toRational n
+
+instance Embed Double where
+	embedExp n = litE $ rationalL $ toRational n
+
 instance Embed Bool where
 	embedExp b = if b then (conE 'True) else (conE 'False)
 
 instance Embed T.Text where
 	embedExp t = [| T.pack $(litE $ stringL $ T.unpack t) |]
+
+instance Embed Name where
+	embedExp n = [| mkName $(litE $ stringL $ (maybe "" (++ ".") $ nameModule n) ++ nameBase n) |]
 
 instance Embed a => Embed [a] where
 	embedExp a = listE $ map embedExp a
@@ -133,3 +144,70 @@ packVector v = do
 	VS.unsafeWith (V.convert v) $ \vecPtr -> do
 		copyArray bytesPtr vecPtr len
 	B.unsafePackMallocCStringLen (castPtr bytesPtr, len * sizeOf (V.head v))
+
+-- | Generate Embed instance for ADT.
+{- Example:
+
+data A a => T a
+	= T1 a
+	| T2 { f1 :: a, f2 :: a }
+	| a :* a
+
+genEmbed ''T:
+
+instance A a => Embed (T a) where
+	embedExp x = case x of
+		T1 x1 -> appE (conE (mkName "T1")) (embedExp x1)
+		T2 { f1 = x1, f2 = x2 } -> do
+			e1 <- embedExp x1
+			e2 <- embedExp x2
+			recConE (mkName "T2")
+				[ return (mkName "f1", e1)
+				, return (mkName "f2", e2)
+				]
+		x1 :* x2 -> uInfixE (embedExp x1) (varE (mkName ":*")) (embedExp x2)
+
+-}
+genEmbed :: Name -> Q [Dec]
+genEmbed dn = do
+	info <- reify dn
+	case info of
+		TyConI (DataD dataContext dataName tvbs cons _derivings) -> do
+			let tvns = [case tvb of
+				PlainTV n -> n
+				KindedTV n _k -> n
+				| tvb <- tvbs]
+			x <- newName "x"
+			let embedMatch con = case con of
+				NormalC conName sts -> do
+					xs <- mapM (newName . snd) $ zip sts ["x" ++ show (n :: Int) | n <- [1..]]
+					let body = normalB $ foldl
+						(\a b -> [| appE $a $b |])
+						[| conE $(embedExp conName) |]
+						(map (\v -> [| embedExp $(varE v) |]) xs)
+					match (conP conName $ map varP xs) body []
+				RecC conName vsts -> do
+					xs <- forM [n | (n, _s, _t) <- vsts] $ \n -> do
+						xn <- newName $ nameBase n
+						en <- newName $ "e" ++ nameBase n
+						return (n, xn, en)
+					let enStmt (_n, xn, en) = bindS (varP en) [| embedExp $(varE xn) |]
+					let fExp (n, _xn, en) = [| return ($(embedExp n), $(varE en)) |]
+					let body = normalB $ doE ((map enStmt xs) ++
+						[noBindS [| recConE $(embedExp conName) $(listE $ map fExp xs) |]])
+					match (recP conName [return (n, VarP xn) | (n, xn, _en) <- xs]) body []
+				InfixC _st1 conName _st2 -> do
+					x1 <- newName "x1"
+					x2 <- newName "x2"
+					let body = normalB
+						[| uInfixE (embedExp $(varE x1)) (conE $(embedExp conName)) (embedExp $(varE x2)) |]
+					match (infixP (varP x1) conName (varP x2)) body []
+				ForallC _tvbs _cxt c -> embedMatch c
+			sequence
+				[ instanceD (return dataContext) (appT (conT ''Embed) $ foldl (\a b -> appT a (varT b)) (conT dataName) tvns)
+					[ funD 'embedExp
+						[ clause [varP x] (normalB $ caseE (varE x) $ map embedMatch cons) []
+						]
+					]
+				]
+		_ -> fail "unsupported declaration"
