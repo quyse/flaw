@@ -31,6 +31,14 @@ import Flaw.Asset.Texture
 
 #endif
 
+genEmbed ''PixelSize
+genEmbed ''ColorSpace
+genEmbed ''PixelValueType
+genEmbed ''PixelComponents
+genEmbed ''TextureCompression
+genEmbed ''TextureFormat
+genEmbed ''TextureInfo
+
 -- | Create expression for loading texture.
 -- Expression will be of type:
 -- :: (MonadResource m, MonadBaseControl IO m) => GameGraphicsDevice -> m (ReleaseKey, TextureId GameGraphicsDevice)
@@ -44,23 +52,11 @@ loadTextureExp filePath = do
 #else
 
 	fileData <- loadFile filePath
-	(ti, fileBytes) <- runIO $ loadTexture $ BL.toStrict fileData
+	(textureInfo, fileBytes) <- runIO $ loadTexture $ BL.toStrict fileData
 	[|
 		\device -> do
 			bytes <- liftIO $(embedIOExp fileBytes)
-			createStaticTexture device TextureInfo
-				{ textureWidth = $(embedExp $ textureWidth ti)
-				, textureHeight = $(embedExp $ textureHeight ti)
-				, textureDepth = 0
-				, textureMips = 1
-				, textureFormat = UncompressedTextureFormat
-					{ textureFormatComponents = PixelRGBA
-					, textureFormatValueType = PixelUint
-					, textureFormatPixelSize = Pixel32bit
-					, textureFormatColorSpace = LinearColorSpace
-					}
-				, textureCount = 0
-				} bytes
+			createStaticTexture device $(embedExp textureInfo) bytes
 		|]
 
 #endif
