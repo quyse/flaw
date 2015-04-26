@@ -29,8 +29,6 @@ import Flaw.Graphics
 import Flaw.Graphics.Texture
 import Flaw.Asset.Texture
 
-#endif
-
 genEmbed ''PixelSize
 genEmbed ''ColorSpace
 genEmbed ''PixelValueType
@@ -38,6 +36,8 @@ genEmbed ''PixelComponents
 genEmbed ''TextureCompression
 genEmbed ''TextureFormat
 genEmbed ''TextureInfo
+
+#endif
 
 -- | Create expression for loading texture.
 -- Expression will be of type:
