@@ -22,7 +22,7 @@ library
     Flaw.Asset.Collada
     Flaw.Asset.Geometry
   -- other-extensions:    
-  build-depends:       array, base, bytestring, containers, flaw-build, flaw-graphics, mtl, text, vector, xml
+  build-depends:       array, base, bytestring, containers, flaw-build, flaw-graphics, mtl, primitive, text, vector, vector-algorithms, xml
   -- hs-source-dirs:      
   default-language:    Haskell2010
   if !impl(ghcjs)

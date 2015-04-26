@@ -4,7 +4,7 @@ Description: Collada support.
 License: MIT
 -}
 
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE FunctionalDependencies, MultiParamTypeClasses, RankNTypes #-}
 
 module Flaw.Asset.Collada
 	( Parse()
@@ -20,11 +20,13 @@ module Flaw.Asset.Collada
 import Control.Monad
 import Control.Monad.Except
 import Control.Monad.State
-import Data.Array((!), listArray)
-import Data.List
 import qualified Data.ByteString.Lazy as BL
+import Data.List
 import qualified Data.Map.Lazy as Map
 import qualified Data.Text as T
+import qualified Data.Vector as V
+import qualified Data.Vector.Generic as VG
+import qualified Data.Vector.Unboxed as VU
 import qualified Text.XML.Light as XML
 
 data Collada = Collada
@@ -34,9 +36,9 @@ data Collada = Collada
 data ColladaCache = ColladaCache
 	{ ccContents :: [XML.Content]
 	, ccElementsById :: Map.Map String XML.Element
-	, ccIntArrays :: Map.Map String [Int]
-	, ccFloatArrays :: Map.Map String [Float]
-	, ccNameArrays :: Map.Map String [T.Text]
+	, ccIntArrays :: Map.Map String (VU.Vector Int)
+	, ccFloatArrays :: Map.Map String (VU.Vector Float)
+	, ccNameArrays :: Map.Map String (V.Vector T.Text)
 	}
 
 type ColladaM a = StateT ColladaCache (Either String) a
@@ -121,40 +123,42 @@ resolveElement name = case name of
 	('#' : elementId) -> getElementById elementId
 	_ -> throwError "local addresses not implemented yet" -- TODO: local addresses
 
-class Parse a where
+class VG.Vector v a => Parse a v | a -> v where
 	parse :: String -> a
-	getParsedArrays :: ColladaM (Map.Map String [a])
-	putParsedArrays :: (Map.Map String [a] -> Map.Map String [a]) -> ColladaM ()
+	getParsedArrays :: ColladaM (Map.Map String (v a))
+	putParsedArrays :: (Map.Map String (v a) -> Map.Map String (v a)) -> ColladaM ()
 
-instance Parse Int where
+instance Parse Int VU.Vector where
 	parse = read
 	getParsedArrays = liftM ccIntArrays get
 	putParsedArrays f = do
 		cache <- get
 		put cache { ccIntArrays = f $ ccIntArrays cache }
 
-instance Parse Float where
+instance Parse Float VU.Vector where
 	parse = read
 	getParsedArrays = liftM ccFloatArrays get
 	putParsedArrays f = do
 		cache <- get
 		put cache { ccFloatArrays = f $ ccFloatArrays cache }
 
-instance Parse T.Text where
+instance Parse T.Text V.Vector where
 	parse = T.pack
 	getParsedArrays = liftM ccNameArrays get
 	putParsedArrays f = do
 		cache <- get
 		put cache { ccNameArrays = f $ ccNameArrays cache }
 
-parseArrayUncached :: Parse a => XML.Element -> ColladaM [a]
+-- | Get contents of an element as CData, split into words and parse.
+parseArrayUncached :: Parse a v => XML.Element -> ColladaM (v a)
 parseArrayUncached element = case XML.elContent element of
 	[XML.Text XML.CData
 		{ XML.cdData = str
-		}] -> return $ map parse $ words str
+		}] -> return $ VG.fromList $ map parse $ words str
 	_ -> throwError "wrong array"
 
-parseArray :: Parse a => XML.Element -> ColladaM [a]
+-- | Get contents of an element as CData, split into words, parse and cache.
+parseArray :: Parse a v => XML.Element -> ColladaM (v a)
 parseArray element = catchError withId withoutId where
 	withId = do
 		elementId <- getElementId element
@@ -168,7 +172,7 @@ parseArray element = catchError withId withoutId where
 	withoutId _err = parseArrayUncached element
 
 -- | Parse "source" tag. Right now it just returns contents of underlying array.
-parseSource :: Parse a => XML.Element -> ColladaM [[a]]
+parseSource :: Parse a v => XML.Element -> ColladaM (V.Vector (v a))
 parseSource element@XML.Element
 	{ XML.elName = XML.QName
 		{ XML.qName = name
@@ -187,19 +191,17 @@ parseSource element@XML.Element
 		sourceRef <- getElementAttr "source" accessorElement
 		arrayElement <- resolveElement sourceRef
 		values <- parseArray arrayElement
-		let gr v = let (a, b) = splitAt stride v in a : gr b
-		return $ take count $ gr values
+		let gr v = let (a, b) = VG.splitAt stride v in a : gr b
+		return $ VG.fromList $ take count $ gr values
 
-type VertexConstructor v = (forall a. Parse a => String -> ColladaM [[a]]) -> ColladaM [v]
+type VertexConstructor q = (forall a v. Parse a v => String -> ColladaM [[a]]) -> ColladaM [q]
 
-parseTriangles :: VertexConstructor v -> XML.Element -> ColladaM [v]
+parseTriangles :: VertexConstructor q -> XML.Element -> ColladaM (V.Vector q)
 parseTriangles f element = do
-	-- helper to convert array to list
-	let l2a list = listArray (0, (length list) - 1) list
 	-- get count
 	triangleCount <- liftM parse $ getElementAttr "count" element
 	-- parse indices
-	indices <- liftM l2a $ parseArray =<< getSingleChildWithTag "p" element
+	indices <- parseArray =<< getSingleChildWithTag "p" element
 	-- parse inputs
 	inputElements <- getChildrenWithTag "input" element
 	inputs <- forM inputElements $ \inputElement -> do
@@ -214,16 +216,16 @@ parseTriangles f element = do
 	vertices <- f $ \semantic -> do
 		case find (\(s, _o, _se) -> s == semantic) inputs of
 			Just (_s, o, se) -> do
-				a <- liftM l2a $ parseSource se
-				return $ map (\i -> a ! (indices ! i)) [o, (o + stride)..]
+				a <- parseSource se
+				return $ map (\i -> VG.toList $ a VG.! (indices VG.! i)) [o, (o + stride)..]
 			Nothing -> throwError $ show ("missing semantic", semantic)
 	-- take enough and flip triangles
-	return $ flipTriangles $ take (triangleCount * 3) vertices
+	return $ VG.fromList $ flipTriangles $ take (triangleCount * 3) vertices
 
-parseMesh :: VertexConstructor v -> XML.Element -> ColladaM [v]
+parseMesh :: VertexConstructor v -> XML.Element -> ColladaM (V.Vector v)
 parseMesh f element = parseTriangles f =<< getSingleChildWithTag "triangles" element
 
-parseGeometry :: VertexConstructor v -> XML.Element -> ColladaM [v]
+parseGeometry :: VertexConstructor v -> XML.Element -> ColladaM (V.Vector v)
 parseGeometry f element = parseMesh f =<< getSingleChildWithTag "mesh" element
 
 -- | Flip triangles.
