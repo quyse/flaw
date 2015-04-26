@@ -9,6 +9,7 @@ License: MIT
 module Flaw.Asset.Collada
 	( Parse()
 	, ColladaM()
+	, ColladaSettings(..)
 	, runCollada
 	, initColladaCache
 	, getElementById
@@ -29,16 +30,17 @@ import qualified Data.Vector.Generic as VG
 import qualified Data.Vector.Unboxed as VU
 import qualified Text.XML.Light as XML
 
-data Collada = Collada
-	{ colladaUnit :: Float
-	} deriving Show
-
 data ColladaCache = ColladaCache
-	{ ccContents :: [XML.Content]
+	{ ccSettings :: ColladaSettings
+	, ccContents :: [XML.Content]
 	, ccElementsById :: Map.Map String XML.Element
 	, ccIntArrays :: Map.Map String (VU.Vector Int)
 	, ccFloatArrays :: Map.Map String (VU.Vector Float)
 	, ccNameArrays :: Map.Map String (V.Vector T.Text)
+	}
+
+data ColladaSettings = ColladaSettings
+	{ colladaUnit :: Float
 	}
 
 type ColladaM a = StateT ColladaCache (Either String) a
@@ -86,8 +88,23 @@ initColladaCache fileData = do
 	let
 		ignoreErrors q = catchError q (\_ -> return ())
 		traverseElement element@XML.Element
-			{ XML.elContent = contents
+			{ XML.elName = XML.QName
+				{ XML.qName = tag
+				}
+			, XML.elContent = contents
 			} = do
+			if tag == "COLLADA" then ignoreErrors $ do
+				assetElement <- getSingleChildWithTag "asset" element
+				unitElement <- getSingleChildWithTag "unit" assetElement
+				unit <- getElementAttr "meter" unitElement
+				state $ \cache@ColladaCache
+					{ ccSettings = settings
+					} -> ((), cache
+					{ ccSettings = settings
+						{ colladaUnit = read unit
+						}
+					})
+			else return ()
 			ignoreErrors $ do
 				elementId <- getElementId element
 				cache <- get
@@ -101,7 +118,10 @@ initColladaCache fileData = do
 		traverseContents = mapM_ traverseContent
 		fileContents = XML.parseXML fileData
 	put ColladaCache
-		{ ccContents = fileContents
+		{ ccSettings = ColladaSettings
+			{ colladaUnit = 1
+			}
+		, ccContents = fileContents
 		, ccElementsById = Map.empty
 		, ccIntArrays = Map.empty
 		, ccFloatArrays = Map.empty
@@ -194,7 +214,7 @@ parseSource element@XML.Element
 		let gr v = let (a, b) = VG.splitAt stride v in a : gr b
 		return $ VG.fromList $ take count $ gr values
 
-type VertexConstructor q = (forall a v. Parse a v => String -> ColladaM [[a]]) -> ColladaM [q]
+type VertexConstructor q = ColladaSettings -> (forall a v. Parse a v => String -> ColladaM [[a]]) -> ColladaM [q]
 
 parseTriangles :: VertexConstructor q -> XML.Element -> ColladaM (V.Vector q)
 parseTriangles f element = do
@@ -213,7 +233,8 @@ parseTriangles f element = do
 	-- calculate stride
 	let stride = 1 + (maximum $ map (\(_s, o, _se) -> o) inputs)
 	-- calculate vertices
-	vertices <- f $ \semantic -> do
+	ColladaCache { ccSettings = settings } <- get
+	vertices <- f settings $ \semantic -> do
 		case find (\(s, _o, _se) -> s == semantic) inputs of
 			Just (_s, o, se) -> do
 				a <- parseSource se
