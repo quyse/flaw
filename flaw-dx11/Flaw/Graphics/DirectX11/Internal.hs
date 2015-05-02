@@ -1182,13 +1182,13 @@ dx11CreatePresenter device@Dx11Device
 	presenterValidRef <- liftIO $ newIORef True
 
 	-- set window callback
-	liftIO $ addWindowCallback window $ \event -> do
-		case event of
-			ResizeWindowEvent width height -> do
+	liftIO $ addWin32WindowCallback window $ \msg _wParam lParam -> do
+		case msg of
+			0x0005 {- WM_SIZE -} -> do
 				presenterValid <- readIORef presenterValidRef
 				if presenterValid then do
 					state <- readIORef stateRef
-					writeIORef stateRef =<< dx11ResizePresenter presenter state width height
+					writeIORef stateRef =<< dx11ResizePresenter presenter state (fromIntegral $ loWord lParam) (fromIntegral $ hiWord lParam)
 				else return ()
 			_ -> return ()
 

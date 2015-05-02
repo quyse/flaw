@@ -11,6 +11,7 @@ module Flaw.Window
 	, WindowEvent(..)
 	) where
 
+import Control.Concurrent.STM
 import qualified Data.Text as T
 
 -- | Class of window.
@@ -19,8 +20,8 @@ class Window w where
 	setWindowTitle :: w -> T.Text -> IO ()
 	-- | Get window client size.
 	getWindowClientSize :: w -> IO (Int, Int)
-	-- | Add window callback.
-	addWindowCallback :: w -> (WindowEvent -> IO ()) -> IO ()
+	-- | Get chan of window messages.
+	chanWindowEvents :: w -> STM (TChan WindowEvent)
 
 data WindowEvent
 	= CloseWindowEvent

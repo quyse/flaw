@@ -11,6 +11,7 @@ module Flaw.Window.Web.Canvas
 	, initCanvas
 	) where
 
+import Control.Concurrent.STM
 import Control.Monad
 import Data.Maybe
 import qualified Data.Text as T
@@ -21,23 +22,34 @@ import qualified GHCJS.DOM.Element as DOM
 
 import Flaw.Window
 
-data Canvas = Canvas DOM.Element
+data Canvas = Canvas
+	{ canvasElement :: DOM.Element
+	, canvasEventsChan :: TChan WindowEvent
+	}
 
 initCanvas :: T.Text -> IO Canvas
 initCanvas title = do
 	jsCanvas <- js_initCanvas
 	maybeDomCanvas <- fromJSRef jsCanvas
-	let canvas = Canvas $ fromJust maybeDomCanvas
+	eventsChan <- newBroadcastTChanIO
+	let canvas = Canvas
+		{ canvasElement = fromJust maybeDomCanvas
+		, canvasEventsChan = eventsChan
+		}
 	setWindowTitle canvas title
 	return canvas
 
 instance Window Canvas where
 	setWindowTitle _canvas title = js_setTitle $ toJSString title
-	getWindowClientSize (Canvas domCanvas) = do
+	getWindowClientSize Canvas
+		{ canvasElement = domCanvas
+		} = do
 		width <- liftM floor $ DOM.elementGetClientWidth domCanvas
 		height <- liftM floor $ DOM.elementGetClientHeight domCanvas
 		return (width, height)
-	addWindowCallback _ _ = return ()
+	chanWindowEvents Canvas
+		{ canvasEventsChan = eventsChan
+		} = dupTChan eventsChan
 
 foreign import javascript unsafe " \
 	\ var c = document.createElement('canvas'); \

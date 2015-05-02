@@ -16,9 +16,11 @@ module Flaw.Window.Win32
 	, invokeWin32WindowSystem
 	, invokeWin32WindowSystem_
 	, addWin32WindowCallback
+	, chanWin32WindowMessages
 	) where
 
 import Control.Concurrent
+import Control.Concurrent.STM
 import Control.Exception
 import Control.Monad
 import Control.Monad.Fix
@@ -45,6 +47,8 @@ data Win32Window = Win32Window
 	, wHandle :: Ptr ()
 	, wCallback :: FunPtr WindowCallback
 	, wUserCallbacksRef :: IORef [WindowCallback]
+	, wMessagesChan :: TChan (Word, WPARAM, LPARAM)
+	, wEventsChan :: TChan WindowEvent
 	}
 
 instance Window Win32Window where
@@ -59,12 +63,9 @@ instance Window Win32Window where
 			width <- peek widthPtr
 			height <- peek heightPtr
 			return (width, height)
-	addWindowCallback window callback = addWin32WindowCallback window $ \msg _wParam lParam -> do
-		case msg of
-			0x0002 -> callback DestroyWindowEvent -- WM_DESTROY
-			0x0005 -> callback $ ResizeWindowEvent (fromIntegral $ loWord lParam) (fromIntegral $ hiWord lParam) -- WM_SIZE
-			0x0010 -> callback CloseWindowEvent -- WM_CLOSE
-			_ -> return ()
+	chanWindowEvents Win32Window
+		{ wEventsChan = eventsChan
+		} = dupTChan eventsChan
 
 initWin32WindowSystem :: MonadResource m => m (ReleaseKey, Win32WindowSystem)
 initWin32WindowSystem = allocate initialize shutdown where
@@ -110,9 +111,24 @@ internalCreateWin32Window ws title left top width height layered = allocate crea
 	create = invokeWin32WindowSystem ws $ mfix $ \w -> do
 		-- create callback
 		userCallbacksRef <- newIORef []
+		messagesChan <- newBroadcastTChanIO
+		eventsChan <- newBroadcastTChanIO
 		callback <- wrapWindowCallback $ \msg wParam lParam -> do
+			-- run sync callbacks
 			userCallbacks <- readIORef userCallbacksRef
 			forM_ userCallbacks $ \callback -> callback msg wParam lParam
+			-- dispatch raw message
+			atomically $ writeTChan messagesChan (msg, wParam, lParam)
+			-- dispatch event
+			let maybeEvent = case msg of
+				0x0002 {- WM_DESTROY -} -> Just DestroyWindowEvent
+				0x0005 {- WM_SIZE -} -> Just $ ResizeWindowEvent (fromIntegral $ loWord lParam) (fromIntegral $ hiWord lParam)
+				0x0010 {- WM_CLOSE -} -> Just CloseWindowEvent
+				_ -> Nothing
+			case maybeEvent of
+				Just event -> atomically $ writeTChan eventsChan event
+				Nothing -> return ()
+			-- process some other messages
 			case msg of
 				0x0002 -> do -- WM_DESTROY
 					-- free callback
@@ -128,6 +144,8 @@ internalCreateWin32Window ws title left top width height layered = allocate crea
 				, wHandle = hwnd
 				, wCallback = callback
 				, wUserCallbacksRef = userCallbacksRef
+				, wMessagesChan = messagesChan
+				, wEventsChan = eventsChan
 				}
 	destroy Win32Window { wHandle = hwnd } = invokeWin32WindowSystem_ ws $ c_destroyWin32Window hwnd
 
@@ -172,6 +190,11 @@ addWin32WindowCallback Win32Window
 	invokeWin32WindowSystem ws $ do
 		callbacks <- readIORef userCallbacksRef
 		writeIORef userCallbacksRef $ callback : callbacks
+
+chanWin32WindowMessages :: Win32Window -> STM (TChan (Word, WPARAM, LPARAM))
+chanWin32WindowMessages Win32Window
+	{ wMessagesChan = messagesChan
+	} = dupTChan messagesChan
 
 -- foreign imports
 
