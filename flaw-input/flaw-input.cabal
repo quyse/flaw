@@ -20,10 +20,12 @@ source-repository head
 library
   exposed-modules:
     Flaw.Input
+    Flaw.Input.Mouse
+    Flaw.Input.Keyboard
   other-modules:
     Flaw.Input.Basic
   -- other-extensions:    
-  build-depends:       array, base, flaw-base, flaw-ffi, flaw-window
+  build-depends:       array, base, flaw-base, flaw-ffi, flaw-window, stm
   -- hs-source-dirs:      
   default-language:    Haskell2010
   if impl(ghcjs)

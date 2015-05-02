@@ -66,9 +66,11 @@ initGame :: (MonadResource m, MonadBaseControl IO m) => T.Text -> Int -> Int -> 
 initGame title width height needDepth = do
 #if defined(ghcjs_HOST_OS)
 
-	window@(Web.Canvas domCanvas) <- liftIO $ Web.initCanvas title
+	window@Web.Canvas
+		{ Web.canvasElement = domCanvas
+		} <- liftIO $ Web.initCanvas title
 
-	inputManager <- liftIO $ initWebInputManager window
+	inputManager <- liftIO $ initWebInput window
 
 	(releaseKey, graphicsDevice, graphicsContext, presenter) <- webglInit domCanvas needDepth
 
@@ -79,7 +81,7 @@ initGame title width height needDepth = do
 	(windowSystemReleaseKey, windowSystem) <- initWin32WindowSystem
 	(windowReleaseKey, window) <- createWin32Window windowSystem title 0 0 width height
 
-	inputManager <- liftIO $ initWin32InputManager window
+	inputManager <- liftIO $ initWin32Input window
 
 	(graphicsSystemReleaseKey, graphicsSystem) <- dxgiCreateSystem
 	(graphicsDevicesReleaseKey, graphicsDevices) <- getInstalledDevices graphicsSystem

@@ -4,17 +4,17 @@ Description: User input for Win32.
 License: MIT
 -}
 
-{-# LANGUAGE TemplateHaskell, TypeFamilies #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module Flaw.Input.Win32
 	( Win32InputManager()
-	, initWin32InputManager
+	, initWin32Input
 	) where
 
+import Control.Concurrent.STM
 import Control.Exception
 import Control.Monad
 import Data.Bits
-import Data.IORef
 import Foreign.Marshal.Alloc
 import Foreign.Marshal.Array(withArray)
 import Foreign.Marshal.Utils(with)
@@ -22,8 +22,9 @@ import Foreign.Ptr
 import Foreign.Storable
 
 import Flaw.Exception
-import Flaw.Input
 import Flaw.Input.Basic
+import Flaw.Input.Keyboard
+import Flaw.Input.Mouse
 import Flaw.FFI
 import Flaw.FFI.Win32
 import Flaw.Window.Win32
@@ -199,36 +200,31 @@ keyFromVKKey k = case k of
 	0x5A {- VK_Z -} -> KeyZ
 	_ -> KeyUnknown
 
-data Win32InputManager = Win32InputManager
-	{ -- | Input frames (current and internal).
-	  mFramePair :: IORef (BasicFrame, BasicFrame)
-	, mWindow :: Win32Window
-	}
+type Win32InputManager = BasicInputManager
 
-instance Manager Win32InputManager where
-	type ManagerFrame Win32InputManager = BasicFrame
-	nextInputFrame Win32InputManager
-		{ mFramePair = framePair
-		, mWindow = Win32Window
-			{ wWindowSystem = windowSystem
-			}
-		} = do
-		invokeWin32WindowSystem windowSystem $ nextBasicFrame framePair
-
-initWin32InputManager :: Win32Window -> IO Win32InputManager
-initWin32InputManager window@Win32Window
+initWin32Input :: Win32Window -> IO Win32InputManager
+initWin32Input window@Win32Window
 	{ wHandle = hwnd
 	} = do
-	-- initialize frames
-	framePair <- initBasicFramePair
+
+	-- init basic manager
+	inputManager@BasicInputManager
+		{ mKeyboardChan = keyboardChan
+		, mMouseChan = mouseChan
+		} <- initBasicInputManager
 
 	-- add callback for windows messages
 	addWin32WindowCallback window $ \msg wParam lParam -> do
+		-- helper routines
+		let addKeyboardEvent event = atomically $ writeTChan keyboardChan event
+		let addMouseEvent event = atomically $ writeTChan mouseChan event
+
+		-- process message
 		case msg of
 			0x0102 {- WM_CHAR -} -> do
-				addEventToBasicFrame framePair $ EventKeyboard $ CharEvent $ toEnum $ fromIntegral wParam
+				addKeyboardEvent $ CharEvent $ toEnum $ fromIntegral wParam
 			0x0200 {- WM_MOUSEMOVE -} -> do
-				addEventToBasicFrame framePair $ EventMouse $ CursorMoveEvent
+				addMouseEvent $ CursorMoveEvent
 					(loWord $ fromIntegral lParam) (hiWord $ fromIntegral lParam)
 			0x00FF {- WM_INPUT -} -> do
 				let blockSize = sizeOf (undefined :: RAWINPUTHEADER) + 32
@@ -246,7 +242,7 @@ initWin32InputManager window@Win32Window
 							RIM_TYPEKEYBOARD -> do
 								keyboardData <- peek $ castPtr eventDataPtr
 								let key = keyFromVKKey $ f_RAWKEYBOARD_VKey keyboardData
-								addEventToBasicFrame framePair $ EventKeyboard $
+								addKeyboardEvent $
 									if (f_RAWKEYBOARD_Flags keyboardData .&. 1 {- RI_KEY_BREAK -}) == 0 then
 										KeyDownEvent key
 									else
@@ -256,21 +252,21 @@ initWin32InputManager window@Win32Window
 								let flags = f_RAWMOUSE_usButtonFlags mouseData
 
 								if (flags .&. 0x0001 {- RI_MOUSE_LEFT_BUTTON_DOWN -}) > 0 then
-									addEventToBasicFrame framePair $ EventMouse $ MouseDownEvent LeftMouseButton
+									addMouseEvent $ MouseDownEvent LeftMouseButton
 								else if (flags .&. 0x0002 {- RI_MOUSE_LEFT_BUTTON_UP -}) > 0 then
-									addEventToBasicFrame framePair $ EventMouse $ MouseUpEvent LeftMouseButton
+									addMouseEvent $ MouseUpEvent LeftMouseButton
 								else return ()
 
 								if (flags .&. 0x0004 {- RI_MOUSE_RIGHT_BUTTON_DOWN -}) > 0 then
-									addEventToBasicFrame framePair $ EventMouse $ MouseDownEvent RightMouseButton
+									addMouseEvent $ MouseDownEvent RightMouseButton
 								else if (flags .&. 0x0008 {- RI_MOUSE_RIGHT_BUTTON_UP -}) > 0 then
-									addEventToBasicFrame framePair $ EventMouse $ MouseUpEvent RightMouseButton
+									addMouseEvent $ MouseUpEvent RightMouseButton
 								else return ()
 
 								if (flags .&. 0x0010 {- RI_MOUSE_MIDDLE_BUTTON_DOWN -}) > 0 then
-									addEventToBasicFrame framePair $ EventMouse $ MouseDownEvent MiddleMouseButton
+									addMouseEvent $ MouseDownEvent MiddleMouseButton
 								else if (flags .&. 0x0020 {- RI_MOUSE_MIDDLE_BUTTON_UP -}) > 0 then
-									addEventToBasicFrame framePair $ EventMouse $ MouseUpEvent MiddleMouseButton
+									addMouseEvent $ MouseUpEvent MiddleMouseButton
 								else return ()
 
 								let lastX = f_RAWMOUSE_lLastX mouseData
@@ -279,12 +275,11 @@ initWin32InputManager window@Win32Window
 
 								if lastX /= 0 || lastY /= 0 || wheelChanged then do
 									let wheel = if wheelChanged then f_RAWMOUSE_usButtonData mouseData else 0
-									addEventToBasicFrame framePair $ EventMouse $ RawMouseMoveEvent (fromIntegral lastX) (fromIntegral lastY) (fromIntegral wheel)
+									addMouseEvent $ RawMouseMoveEvent (fromIntegral lastX) (fromIntegral lastY) (fromIntegral wheel)
 								else return ()
 
 							_ -> return ()
 					else return ()
-
 			_ -> return ()
 
 	-- register raw input
@@ -306,7 +301,4 @@ initWin32InputManager window@Win32Window
 	if not success then throwIO $ DescribeFirstException "failed to register raw input"
 	else return ()
 
-	return Win32InputManager
-		{ mFramePair = framePair
-		, mWindow = window
-		}
+	return inputManager

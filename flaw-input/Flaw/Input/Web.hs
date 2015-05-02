@@ -4,13 +4,12 @@ Description: User input for web.
 License: MIT
 -}
 
-{-# LANGUAGE TypeFamilies #-}
-
 module Flaw.Input.Web
 	( WebInputManager()
-	, initWebInputManager
+	, initWebInput
 	) where
 
+import Control.Concurrent.STM
 import Data.Char
 import Data.Maybe
 import qualified GHCJS.DOM.Element as DOM
@@ -19,56 +18,56 @@ import GHCJS.Marshal
 import GHCJS.Types
 
 import qualified Flaw.Window.Web.Canvas as Web
-import Flaw.Input
 import Flaw.Input.Basic
+import Flaw.Input.Mouse
+import Flaw.Input.Keyboard
 
-data WebInputManager = WebInputManager
-	{ mFramePair :: BasicFramePair
-	}
+type WebInputManager = BasicInputManager
 
-instance Manager WebInputManager where
-	type ManagerFrame WebInputManager = BasicFrame
-	nextInputFrame WebInputManager
-		{ mFramePair = framePair
-		} = nextBasicFrame framePair
+initWebInput :: Web.Canvas -> IO WebInputManager
+initWebInput Web.Canvas
+	{ Web.canvasElement = domCanvas
+	} = do
+	-- init basic manager
+	inputManager@BasicInputManager
+		{ mKeyboardChan = keyboardChan
+		, mMouseChan = mouseChan
+		} <- initBasicInputManager
 
-initWebInputManager :: Web.Canvas -> IO WebInputManager
-initWebInputManager (Web.Canvas domCanvas) = do
-	-- create frame pair
-	framePair <- initBasicFramePair
+	-- helper routines
+	let addKeyboardEvent event = atomically $ writeTChan keyboardChan event
+	let addMouseEvent event = atomically $ writeTChan mouseChan event
 
 	-- register callbacks
 	keydownCallback <- syncCallback1 AlwaysRetain False $ \jsKeyCode -> do
 		keyCode <- convertKeyCode jsKeyCode
-		addEventToBasicFrame framePair $ EventKeyboard $ KeyDownEvent keyCode
+		addKeyboardEvent $ KeyDownEvent keyCode
 	keyupCallback <- syncCallback1 AlwaysRetain False $ \jsKeyCode -> do
 		keyCode <- convertKeyCode jsKeyCode
-		addEventToBasicFrame framePair $ EventKeyboard $ KeyUpEvent keyCode
+		addKeyboardEvent $ KeyUpEvent keyCode
 	keypressCallback <- syncCallback1 AlwaysRetain False $ \jsCharCode -> do
 		charCode <- convertCharCode jsCharCode
-		addEventToBasicFrame framePair $ EventKeyboard $ CharEvent charCode
+		addKeyboardEvent $ CharEvent charCode
 	mousedownCallback <- syncCallback1 AlwaysRetain False $ \jsButton -> do
 		button <- convertMouseButton jsButton
-		addEventToBasicFrame framePair $ EventMouse $ MouseDownEvent button
+		addMouseEvent $ MouseDownEvent button
 	mouseupCallback <- syncCallback1 AlwaysRetain False $ \jsButton -> do
 		button <- convertMouseButton jsButton
-		addEventToBasicFrame framePair $ EventMouse $ MouseUpEvent button
+		addMouseEvent $ MouseUpEvent button
 	mousemoveCallback <- syncCallback2 AlwaysRetain False $ \jsX jsY -> do
 		maybeX <- fromJSRef jsX
 		maybeY <- fromJSRef jsY
-		addEventToBasicFrame framePair $ EventMouse $ CursorMoveEvent (fromJust maybeX) (fromJust maybeY)
+		addMouseEvent $ CursorMoveEvent (fromJust maybeX) (fromJust maybeY)
 	mousewheelCallback <- syncCallback1 AlwaysRetain False $ \jsZ -> do
 		maybeZ <- fromJSRef jsZ
-		addEventToBasicFrame framePair $ EventMouse $ RawMouseMoveEvent 0 0 $ fromJust maybeZ
+		addMouseEvent $ RawMouseMoveEvent 0 0 $ fromJust maybeZ
 
 	jsCanvas <- toJSRef domCanvas
 	js_registerEvents jsCanvas
 		keydownCallback keyupCallback keypressCallback
 		mousedownCallback mouseupCallback mousemoveCallback mousewheelCallback
 
-	return WebInputManager
-		{ mFramePair = framePair
-		}
+	return inputManager
 
 convertKeyCode :: JSRef Int -> IO Key
 convertKeyCode jsKeyCode = do
