@@ -36,7 +36,6 @@ module Flaw.Graphics.Program
 	) where
 
 import Control.Monad.Reader
-import Control.Monad.Trans.Resource
 import Data.IORef
 import Foreign.ForeignPtr
 import Foreign.Storable
@@ -44,6 +43,7 @@ import Foreign.Storable
 import Flaw.Graphics.Internal
 import Flaw.Graphics.Program.Internal
 import Flaw.Math
+import Flaw.Resource
 
 cnst :: OfValueType a => a -> Node a
 cnst value = ConstNode (valueType value) value
@@ -108,7 +108,7 @@ uniformArray size UniformBufferSlot
 			, uniformType = valueType u
 			}
 
-createUniformStorage :: (MonadResource m, MonadBaseControl IO m, Device d) => d -> UniformBufferSlot -> m (ReleaseKey, UniformStorage d)
+createUniformStorage :: (ResourceIO m, Device d) => d -> UniformBufferSlot -> m (ReleaseKey, UniformStorage d)
 createUniformStorage device UniformBufferSlot
 	{ uniformBufferSlotIndex = slot
 	, uniformBufferSlotSizeRef = sizeRef

@@ -4,7 +4,7 @@ Description: Integration with Windows COM.
 License: MIT
 -}
 
-{-# LANGUAGE TemplateHaskell, ScopedTypeVariables, RankNTypes #-}
+{-# LANGUAGE FlexibleContexts, RankNTypes, ScopedTypeVariables, TemplateHaskell #-}
 
 module Flaw.FFI.COM
 	( HRESULT
@@ -30,7 +30,6 @@ module Flaw.FFI.COM
 
 import Control.Exception
 import Control.Monad
-import Control.Monad.Trans.Resource
 import Data.UUID
 import Foreign.Marshal.Alloc
 import Foreign.Ptr
@@ -39,6 +38,7 @@ import Foreign.Storable
 import Flaw.FFI.COM.Internal
 import Flaw.FFI.COM.TH
 import Flaw.FFI.Win32
+import Flaw.Resource
 
 genCOMInterface "IUnknown" "00000000-0000-0000-C000-000000000046" []
 	[ ([t| Ptr UUID -> Ptr (Ptr ()) -> IO HRESULT |], "QueryInterface")
@@ -85,7 +85,7 @@ createCOMObjectViaPtr :: COMInterface a => (Ptr (Ptr a) -> IO HRESULT) -> IO a
 createCOMObjectViaPtr create = peekCOMObject =<< createCOMValueViaPtr create
 
 -- | Allocate COM object in ResourceT.
-allocateCOMObject :: (MonadResource m, IUnknown_Class a) => IO a -> m (ReleaseKey, a)
+allocateCOMObject :: (ResourceIO m, IUnknown_Class a) => IO a -> m (ReleaseKey, a)
 allocateCOMObject create = allocate create $ \o -> do
 	_ <- m_IUnknown_Release o
 	return ()

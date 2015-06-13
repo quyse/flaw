@@ -4,7 +4,7 @@ Description: Win32 window framework.
 License: MIT
 -}
 
-{-# LANGUAGE GADTs, TypeFamilies #-}
+{-# LANGUAGE FlexibleContexts, GADTs, TypeFamilies #-}
 
 module Flaw.Window.Win32
 	( Win32WindowSystem()
@@ -24,7 +24,6 @@ import Control.Concurrent.STM
 import Control.Exception
 import Control.Monad
 import Control.Monad.Fix
-import Control.Monad.Trans.Resource
 import Data.IORef
 import qualified Data.Text as T
 import Foreign.C.String
@@ -35,6 +34,7 @@ import Foreign.Storable
 
 import Flaw.Window
 import Flaw.FFI.Win32
+import Flaw.Resource
 
 data Win32WindowSystem = Win32WindowSystem
 	{ wsHandle :: Ptr () -- ^ Opaque handle for C side.
@@ -67,7 +67,7 @@ instance Window Win32Window where
 		{ wEventsChan = eventsChan
 		} = dupTChan eventsChan
 
-initWin32WindowSystem :: MonadResource m => m (ReleaseKey, Win32WindowSystem)
+initWin32WindowSystem :: ResourceIO m => m (ReleaseKey, Win32WindowSystem)
 initWin32WindowSystem = allocate initialize shutdown where
 	initialize = do
 		-- create vars
@@ -100,13 +100,13 @@ initWin32WindowSystem = allocate initialize shutdown where
 		-- free resources
 		c_shutdownWin32WindowSystem $ wsHandle ws
 
-createWin32Window :: MonadResource m => Win32WindowSystem -> T.Text -> Int -> Int -> Int -> Int -> m (ReleaseKey, Win32Window)
+createWin32Window :: ResourceIO m => Win32WindowSystem -> T.Text -> Int -> Int -> Int -> Int -> m (ReleaseKey, Win32Window)
 createWin32Window ws title left top width height = internalCreateWin32Window ws title left top width height False
 
-createLayeredWin32Window :: MonadResource m => Win32WindowSystem -> T.Text -> Int -> Int -> Int -> Int -> m (ReleaseKey, Win32Window)
+createLayeredWin32Window :: ResourceIO m => Win32WindowSystem -> T.Text -> Int -> Int -> Int -> Int -> m (ReleaseKey, Win32Window)
 createLayeredWin32Window ws title left top width height = internalCreateWin32Window ws title left top width height True
 
-internalCreateWin32Window :: MonadResource m => Win32WindowSystem -> T.Text -> Int -> Int -> Int -> Int -> Bool -> m (ReleaseKey, Win32Window)
+internalCreateWin32Window :: ResourceIO m => Win32WindowSystem -> T.Text -> Int -> Int -> Int -> Int -> Bool -> m (ReleaseKey, Win32Window)
 internalCreateWin32Window ws title left top width height layered = allocate create destroy where
 	create = invokeWin32WindowSystem ws $ mfix $ \w -> do
 		-- create callback

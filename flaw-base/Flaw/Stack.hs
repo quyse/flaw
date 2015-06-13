@@ -13,7 +13,6 @@ module Flaw.Stack
 	, scope
 	) where
 
-import Control.Applicative
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Class
 

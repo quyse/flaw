@@ -17,7 +17,6 @@ module Flaw.Graphics.DirectX11.Internal
 import qualified Control.Exception.Lifted as Lifted
 import Control.Monad
 import Control.Monad.IO.Class
-import Control.Monad.Trans.Resource
 import Data.Array.IO
 import Data.Bits
 import qualified Data.ByteString as BS
@@ -46,6 +45,7 @@ import Flaw.Graphics.Program.Internal
 import Flaw.Graphics.Sampler
 import Flaw.Graphics.Texture
 import Flaw.Math
+import Flaw.Resource
 import Flaw.Window
 import Flaw.Window.Win32
 
@@ -354,7 +354,7 @@ instance Device Dx11Device where
 		release resourceReleaseKey
 
 		-- make combine release key
-		releaseKey <- register $ do
+		releaseKey <- registerRelease $ do
 			release rtvReleaseKey
 			release srvReleaseKey
 
@@ -456,14 +456,14 @@ instance Device Dx11Device where
 		release resourceReleaseKey
 
 		-- make combined release key
-		releaseKey <- register $ do
+		releaseKey <- registerRelease $ do
 			release dsvReleaseKey
 			release srvReleaseKey
 
 		return (releaseKey, Dx11DepthStencilTargetId dsvInterface, Dx11TextureId srvInterface)
 
 	createFrameBuffer _device renderTargets depthStencilTarget = do
-		releaseKey <- register $ return ()
+		releaseKey <- registerRelease $ return ()
 		return (releaseKey, Dx11FrameBufferId renderTargets depthStencilTarget)
 
 	createStaticVertexBuffer Dx11Device
@@ -662,7 +662,7 @@ instance Device Dx11Device where
 				(inputLayoutReleaseKey, inputLayoutInterface) <- createInputLayout attributes vertexShaderByteCode
 				(vertexShaderReleaseKey, vertexShaderInterface) <- createVertexShader vertexShaderByteCode
 				(pixelShaderReleaseKey, pixelShaderInterface) <- createPixelShader =<< (liftIO $ compileShader pixelShader)
-				releaseKey <- register $ do
+				releaseKey <- registerRelease $ do
 					_ <- release inputLayoutReleaseKey
 					_ <- release vertexShaderReleaseKey
 					_ <- release pixelShaderReleaseKey
@@ -693,7 +693,7 @@ instance Device Dx11Device where
 		return (releaseKey, Dx11UniformBufferId bufferInterface)
 
 -- | Create DirectX11 device.
-dx11CreateDevice :: (MonadResource m, MonadBaseControl IO m) => DeviceId DXGISystem -> m (ReleaseKey, Dx11Device, Dx11Context)
+dx11CreateDevice :: ResourceIO m => DeviceId DXGISystem -> m (ReleaseKey, Dx11Device, Dx11Context)
 dx11CreateDevice (DXGIDeviceId system adapter) = describeException "failed to create DirectX11 graphics device" $ do
 	-- create function
 	let create = alloca $ \devicePtr -> alloca $ \deviceContextPtr -> do
@@ -1126,7 +1126,7 @@ dx11ResizePresenter Dx11Presenter
 		, dx11PresenterHeight = height
 		}
 
-dx11CreatePresenter :: (MonadResource m, MonadBaseControl IO m) => Dx11Device -> Win32Window -> Maybe (DisplayModeId DXGISystem) -> Bool -> m (ReleaseKey, Dx11Presenter)
+dx11CreatePresenter :: ResourceIO m => Dx11Device -> Win32Window -> Maybe (DisplayModeId DXGISystem) -> Bool -> m (ReleaseKey, Dx11Presenter)
 dx11CreatePresenter device@Dx11Device
 	{ dx11DeviceSystem = DXGISystem
 		{ dxgiSystemFactory = factoryInterface
@@ -1195,7 +1195,7 @@ dx11CreatePresenter device@Dx11Device
 	-- set mode
 	liftIO $ setPresenterMode presenter maybeDisplayMode
 
-	releaseKey <- register $ do
+	releaseKey <- registerRelease $ do
 		invokeWin32WindowSystem windowSystem $ do
 			-- set that presenter is invalid
 			writeIORef presenterValidRef False

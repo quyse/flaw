@@ -35,7 +35,7 @@ library
     if os(windows)
       exposed-modules:
         Flaw.Window.Win32
-      build-depends:       flaw-ffi, resourcet
+      build-depends:       flaw-base, flaw-ffi
       includes:          "flaw_windows.h"
       c-sources:
         cbits/win32_window_system.c

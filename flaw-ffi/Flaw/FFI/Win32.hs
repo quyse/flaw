@@ -47,7 +47,6 @@ import qualified Data.ByteString.Builder as BSB
 import qualified Data.ByteString.Lazy as BL
 import Data.Bits
 import Data.Int
-import Data.Monoid
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import Data.UUID

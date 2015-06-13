@@ -36,9 +36,7 @@ module Flaw.Graphics.Internal
 	) where
 
 import Control.Monad.Trans.Class
-import Control.Monad.Trans.Control
 import Control.Monad.Trans.Reader
-import Control.Monad.Trans.Resource
 import qualified Data.ByteString as BS
 import qualified Data.Text as T
 import Foreign.Ptr
@@ -47,6 +45,7 @@ import Flaw.Graphics.Program.Internal
 import Flaw.Graphics.Sampler
 import Flaw.Graphics.Texture
 import Flaw.Math
+import Flaw.Resource
 import Flaw.Stack
 
 -- | Class of graphics system.
@@ -61,9 +60,9 @@ class System s where
 	-- | Type for id of display mode.
 	data DisplayModeId s :: *
 	-- | Get list of graphics devices installed in system.
-	getInstalledDevices :: (MonadResource m, MonadBaseControl IO m) => s -> m (ReleaseKey, [(DeviceId s, DeviceInfo s)])
+	getInstalledDevices :: ResourceIO m => s -> m (ReleaseKey, [(DeviceId s, DeviceInfo s)])
 	-- | Create custom display mode (with specified width and height) for specified display.
-	createDisplayMode :: (MonadResource m, MonadBaseControl IO m)
+	createDisplayMode :: ResourceIO m
 		=> s
 		-> DisplayId s -- ^ Display id.
 		-> Int -- ^ Width.
@@ -107,34 +106,34 @@ class Device d where
 	nullUniformBuffer :: UniformBufferId d
 
 	-- | Create deferred context.
-	createDeferredContext :: (MonadResource m, MonadBaseControl IO m, Context (DeferredContext d) d) => d -> m (ReleaseKey, DeferredContext d)
+	createDeferredContext :: (ResourceIO m, Context (DeferredContext d) d) => d -> m (ReleaseKey, DeferredContext d)
 	-- | Create static texture.
-	createStaticTexture :: (MonadResource m, MonadBaseControl IO m) => d -> TextureInfo -> BS.ByteString -> m (ReleaseKey, TextureId d)
+	createStaticTexture :: ResourceIO m => d -> TextureInfo -> BS.ByteString -> m (ReleaseKey, TextureId d)
 	-- | Create sampler state.
-	createSamplerState :: (MonadResource m, MonadBaseControl IO m) => d -> SamplerStateInfo -> m (ReleaseKey, SamplerStateId d)
+	createSamplerState :: ResourceIO m => d -> SamplerStateInfo -> m (ReleaseKey, SamplerStateId d)
 	-- | Create readable render target.
-	createReadableRenderTarget :: (MonadResource m, MonadBaseControl IO m) => d -> Int -> Int -> TextureFormat -> m (ReleaseKey, RenderTargetId d, TextureId d)
+	createReadableRenderTarget :: ResourceIO m => d -> Int -> Int -> TextureFormat -> m (ReleaseKey, RenderTargetId d, TextureId d)
 	-- | Create depth stencil target.
-	createDepthStencilTarget :: (MonadResource m, MonadBaseControl IO m) => d -> Int -> Int -> m (ReleaseKey, DepthStencilTargetId d)
+	createDepthStencilTarget :: ResourceIO m => d -> Int -> Int -> m (ReleaseKey, DepthStencilTargetId d)
 	-- | Create readable depth stencil target.
-	createReadableDepthStencilTarget :: (MonadResource m, MonadBaseControl IO m) => d -> Int -> Int -> m (ReleaseKey, DepthStencilTargetId d, TextureId d)
+	createReadableDepthStencilTarget :: ResourceIO m => d -> Int -> Int -> m (ReleaseKey, DepthStencilTargetId d, TextureId d)
 	-- | Create framebuffer.
-	createFrameBuffer :: (MonadResource m, MonadBaseControl IO m) => d -> [RenderTargetId d] -> DepthStencilTargetId d -> m (ReleaseKey, FrameBufferId d)
+	createFrameBuffer :: ResourceIO m => d -> [RenderTargetId d] -> DepthStencilTargetId d -> m (ReleaseKey, FrameBufferId d)
 	-- | Create vertex buffer.
-	createStaticVertexBuffer :: (MonadResource m, MonadBaseControl IO m)
+	createStaticVertexBuffer :: ResourceIO m
 		=> d -- ^ Device.
 		-> BS.ByteString -- ^ Buffer
 		-> Int -- ^ Stride in bytes.
 		-> m (ReleaseKey, VertexBufferId d)
 	-- | Create index buffer.
-	createStaticIndexBuffer :: (MonadResource m, MonadBaseControl IO m) => d -> BS.ByteString -> Bool -> m (ReleaseKey, IndexBufferId d)
+	createStaticIndexBuffer :: ResourceIO m => d -> BS.ByteString -> Bool -> m (ReleaseKey, IndexBufferId d)
 	-- | Create program.
-	createProgram :: (MonadResource m, MonadBaseControl IO m)
+	createProgram :: ResourceIO m
 		=> d -- ^ Device.
 		-> Program () -- ^ Program contents.
 		-> m (ReleaseKey, ProgramId d)
 	-- | Create uniform buffer.
-	createUniformBuffer :: (MonadResource m, MonadBaseControl IO m) => d -> Int -> m (ReleaseKey, UniformBufferId d)
+	createUniformBuffer :: ResourceIO m => d -> Int -> m (ReleaseKey, UniformBufferId d)
 
 -- | Class of graphics context.
 -- Performs actual render operations.

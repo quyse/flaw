@@ -31,6 +31,6 @@ library
       Flaw.FFI.Win32
     other-modules:
       Flaw.FFI.COM.Internal
-    build-depends: bytestring, resourcet, text, uuid
+    build-depends: bytestring, flaw-base, text, uuid
     extra-libraries:
       ole32

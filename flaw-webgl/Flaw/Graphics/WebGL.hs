@@ -18,8 +18,6 @@ module Flaw.Graphics.WebGL
 import Control.Concurrent.MVar
 import Control.Monad
 import Control.Monad.IO.Class
-import Control.Monad.Trans.Control
-import Control.Monad.Trans.Resource
 import Data.Array.IO as A
 import Data.Bits
 import qualified Data.ByteString as B
@@ -40,6 +38,7 @@ import Flaw.Graphics.Program.Internal
 import Flaw.Graphics.WebGL.FFI
 import Flaw.Graphics.WebGL.GLSL
 import Flaw.Math
+import Flaw.Resource
 
 -- | Graphics system.
 data WebGLSystem
@@ -539,7 +538,7 @@ foreign import javascript unsafe "( \
 	\ window.msRequestAnimationFrame \
 	\ )($1);" js_requestAnimationFrame :: JSFun (IO ()) -> IO ()
 
-webglInit :: (MonadResource m, MonadBaseControl IO m) => DOM.Element -> Bool -> m (ReleaseKey, WebGLDevice, WebGLContext, WebGLPresenter)
+webglInit :: ResourceIO m => DOM.Element -> Bool -> m (ReleaseKey, WebGLDevice, WebGLContext, WebGLPresenter)
 webglInit canvas needDepth = do
 	-- get context
 	jsCanvas <- liftIO $ toJSRef canvas
@@ -573,7 +572,7 @@ webglInit canvas needDepth = do
 		}
 
 	-- return
-	releaseKey <- register $ return ()
+	releaseKey <- registerRelease $ return ()
 	return (releaseKey, device, context, presenter)
 
 webglAllocateId :: WebGLDevice -> IO Int
@@ -759,7 +758,7 @@ webglUpdateContext WebGLContext
 				_ -> undefined
 			js_vertexAttribPointer jsContext i s t False stride offset
 
-loadWebGLTexture2DFromURL :: (MonadResource m, MonadBaseControl IO m) => WebGLDevice -> T.Text -> m (ReleaseKey, TextureId WebGLDevice)
+loadWebGLTexture2DFromURL :: ResourceIO m => WebGLDevice -> T.Text -> m (ReleaseKey, TextureId WebGLDevice)
 loadWebGLTexture2DFromURL device@WebGLDevice
 	{ webglDeviceContext = jsContext
 	} url = describeException "failed to load WebGL texture from URL" $ liftIO $ do

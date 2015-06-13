@@ -19,11 +19,11 @@ module Flaw.Game
 
 import Control.Exception
 import Control.Monad.IO.Class
-import Control.Monad.Trans.Resource
 import qualified Data.Text as T
 import Data.Time
 import Data.Typeable
 
+import Flaw.Resource
 
 #if defined(ghcjs_HOST_OS)
 
@@ -58,7 +58,7 @@ type GameInputManager = Win32InputManager
 #endif
 
 
-initGame :: (MonadResource m, MonadBaseControl IO m) => T.Text -> Int -> Int -> Bool
+initGame :: ResourceIO m => T.Text -> Int -> Int -> Bool
 	-> m
 		( ReleaseKey
 		, (GameWindow, GameGraphicsDevice, GameGraphicsContext, GameGraphicsPresenter, GameInputManager)
@@ -88,7 +88,7 @@ initGame title width height needDepth = do
 	(graphicsDeviceReleaseKey, graphicsDevice, graphicsContext) <- dx11CreateDevice $ fst $ head graphicsDevices
 	(presenterReleaseKey, presenter) <- dx11CreatePresenter graphicsDevice window Nothing needDepth
 
-	releaseKey <- register $ do
+	releaseKey <- registerRelease $ do
 		release windowSystemReleaseKey
 		release windowReleaseKey
 		release graphicsSystemReleaseKey

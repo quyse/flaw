@@ -19,7 +19,6 @@ module Flaw.Graphics.DXGI.Internal
 import qualified Control.Exception.Lifted as Lifted
 import Control.Monad
 import Control.Monad.IO.Class
-import Control.Monad.Trans.Resource
 import Data.Ratio
 import qualified Data.Text as T
 import Foreign.Marshal.Alloc
@@ -35,13 +34,14 @@ import Flaw.FFI.Win32
 import Flaw.Graphics
 import Flaw.Graphics.DXGI.FFI
 import Flaw.Graphics.Texture
+import Flaw.Resource
 
 -- | DXGI graphics system.
 data DXGISystem = DXGISystem
 	{ dxgiSystemFactory :: IDXGIFactory
 	}
 
-dxgiCreateSystem :: (MonadResource m, MonadBaseControl IO m) => m (ReleaseKey, DXGISystem)
+dxgiCreateSystem :: ResourceIO m => m (ReleaseKey, DXGISystem)
 dxgiCreateSystem = describeException "failed to create DXGI system" $ do
 	(releaseKey, factoryInterface) <- allocateCOMObject createDXGIFactory
 	return (releaseKey, DXGISystem
@@ -91,7 +91,7 @@ instance System DXGISystem where
 					}))
 			outputs <- mapM makeOutputIdInfo =<< enumerateOutput 0
 			-- create adapter compound release key
-			adapterCompoundReleaseKey <- register $ do
+			adapterCompoundReleaseKey <- registerRelease $ do
 				release adapterReleaseKey
 				mapM_ (release . fst) outputs
 			-- return adapter pair
@@ -101,7 +101,7 @@ instance System DXGISystem where
 				}))
 		adapters <- mapM makeAdapterIdInfo =<< enumerateAdapter 0
 		-- create compound release key
-		compoundReleaseKey <- register $ mapM_ (release . fst) adapters
+		compoundReleaseKey <- registerRelease $ mapM_ (release . fst) adapters
 		-- return adapters
 		return (compoundReleaseKey, map snd adapters)
 	createDisplayMode _system (DXGIDisplayId _adapter output) width height = describeException "failed to try create DirectX11 display mode" $ do
@@ -144,7 +144,7 @@ getDXGIDisplayModeDesc maybeDisplayMode width height = case maybeDisplayMode of
 			{ f_DXGI_RATIONAL_Numerator = 0
 			, f_DXGI_RATIONAL_Denominator = 0
 			}
-		, f_DXGI_MODE_DESC_Format = DXGI_FORMAT_R8G8B8A8_UNORM
+		, f_DXGI_MODE_DESC_Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB
 		, f_DXGI_MODE_DESC_ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED
 		, f_DXGI_MODE_DESC_Scaling = DXGI_MODE_SCALING_UNSPECIFIED
 		}
