@@ -51,6 +51,7 @@ module Flaw.Math
 	, Mat3x1u, Mat3x2u, Mat3x3u, Mat3x4u
 	, Mat4x1u, Mat4x2u, Mat4x3u, Mat4x4u
 	, Quaternion(..)
+	, Quaternionf, Quaterniond
 	) where
 
 import Control.Monad
@@ -517,6 +518,9 @@ let
 		gen aName bName cName $ funD 'mul [clause [aPat, bPat] (normalB cElems) []]
 	in liftM concat $ sequence [genVecMatMuls, genMatVecMuls, genMatMatMuls]
 
+-- | Quaternion type.
+newtype Quaternion a = Quaternion (Vec4 a)
+
 -- Generate type synonyms for frequently used types
 do
 	let vecSynonym n elemType elemChar = let name = "Vec" ++ [intToDigit n] in
@@ -525,10 +529,9 @@ do
 	let matSynonym n m elemType elemChar = let name = "Mat" ++ [intToDigit n, 'x', intToDigit m] in
 		tySynD (mkName $ name ++ [elemChar]) [] [t| $(conT $ mkName name) $elemType |]
 	matSynonyms <- sequence [matSynonym n m (conT t) c | n <- [1..maxVecDimension], m <- [1..maxVecDimension], (t, c) <- mathTypeNamesWithChar]
-	return $ vecSynonyms ++ matSynonyms
-
--- | Quaternion type.
-newtype Quaternion a = Quaternion (Vec4 a)
+	let quaternionSynonym elemType elemChar = tySynD (mkName $ "Quaternion" ++ [elemChar]) [] [t| Quaternion $elemType |]
+	quaternionSynonyms <- sequence [quaternionSynonym (conT t) c | (t, c) <- mathTypeNamesWithChar]
+	return $ vecSynonyms ++ matSynonyms ++ quaternionSynonyms
 
 -- | Cross.
 instance Num a => Cross (Vec3 a) where
