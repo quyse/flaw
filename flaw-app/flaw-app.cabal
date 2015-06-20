@@ -1,4 +1,4 @@
-name:                flaw-game
+name:                flaw-app
 version:             0.1.0.0
 -- synopsis:            
 -- description:         
@@ -15,12 +15,12 @@ cabal-version:       >=1.10
 source-repository head
   type: git
   location: https://github.com/quyse/flaw.git
-  subdir: flaw-game
+  subdir: flaw-app
 
 library
   exposed-modules:
-    Flaw.Game
-    Flaw.Game.Texture
+    Flaw.App
+    Flaw.App.Texture
   other-modules:
   -- other-extensions:    
   build-depends:       base, flaw-base, flaw-build, flaw-graphics, flaw-input, flaw-window, template-haskell, text, time, transformers

@@ -1,20 +1,20 @@
 {-|
-Module: Flaw.Game
-Description: Abstract from platform for game initialization.
+Module: Flaw.App
+Description: Abstract from platform for app initialization.
 License: MIT
 -}
 
 {-# LANGUAGE CPP, FlexibleContexts, RecursiveDo #-}
 
-module Flaw.Game
-	( initGame
-	, runGame
-	, exitGame
-	, GameWindow
-	, GameGraphicsDevice
-	, GameGraphicsContext
-	, GameGraphicsPresenter
-	, GameInputManager
+module Flaw.App
+	( initApp
+	, runApp
+	, exitApp
+	, AppWindow
+	, AppGraphicsDevice
+	, AppGraphicsContext
+	, AppGraphicsPresenter
+	, AppInputManager
 	) where
 
 import Control.Exception
@@ -31,11 +31,11 @@ import qualified Flaw.Window.Web.Canvas as Web
 import Flaw.Graphics.WebGL
 import Flaw.Input.Web
 
-type GameWindow = Web.Canvas
-type GameGraphicsDevice = WebGLDevice
-type GameGraphicsContext = WebGLContext
-type GameGraphicsPresenter = WebGLPresenter
-type GameInputManager = WebInputManager
+type AppWindow = Web.Canvas
+type AppGraphicsDevice = WebGLDevice
+type AppGraphicsContext = WebGLContext
+type AppGraphicsPresenter = WebGLPresenter
+type AppInputManager = WebInputManager
 
 #else
 
@@ -47,23 +47,23 @@ import Flaw.Graphics.DXGI
 import Flaw.Input.Win32
 import Flaw.Window.Win32
 
-type GameWindow = Win32Window
-type GameGraphicsDevice = Dx11Device
-type GameGraphicsContext = Dx11Context
-type GameGraphicsPresenter = Dx11Presenter
-type GameInputManager = Win32InputManager
+type AppWindow = Win32Window
+type AppGraphicsDevice = Dx11Device
+type AppGraphicsContext = Dx11Context
+type AppGraphicsPresenter = Dx11Presenter
+type AppInputManager = Win32InputManager
 
 #endif
 
 #endif
 
 
-initGame :: ResourceIO m => T.Text -> Int -> Int -> Bool
+initApp :: ResourceIO m => T.Text -> Int -> Int -> Bool
 	-> m
 		( ReleaseKey
-		, (GameWindow, GameGraphicsDevice, GameGraphicsContext, GameGraphicsPresenter, GameInputManager)
+		, (AppWindow, AppGraphicsDevice, AppGraphicsContext, AppGraphicsPresenter, AppInputManager)
 		)
-initGame title width height needDepth = do
+initApp title width height needDepth = do
 #if defined(ghcjs_HOST_OS)
 
 	window@Web.Canvas
@@ -102,21 +102,21 @@ initGame title width height needDepth = do
 
 	return (releaseKey, (window, graphicsDevice, graphicsContext, presenter, inputManager))
 
--- | Run game loop.
--- To exit loop, call `exitGame`.
-runGame :: a -> (Float -> a -> IO a) -> IO ()
-runGame firstState step = mdo
+-- | Run app loop.
+-- To exit loop, call `exitApp`.
+runApp :: a -> (Float -> a -> IO a) -> IO ()
+runApp firstState step = mdo
 	let f lastTime state = do
 		currentTime <- getCurrentTime
 		let frameTime = fromRational $ toRational $ diffUTCTime currentTime lastTime
 		newState <- step frameTime state
 		f currentTime newState
 	veryFirstTime <- getCurrentTime
-	catch (f veryFirstTime firstState) $ \ExitGameException -> return ()
+	catch (f veryFirstTime firstState) $ \ExitAppException -> return ()
 
-exitGame :: IO ()
-exitGame = throwIO ExitGameException
+exitApp :: IO ()
+exitApp = throwIO ExitAppException
 
-data ExitGameException = ExitGameException deriving (Show, Typeable)
+data ExitAppException = ExitAppException deriving (Show, Typeable)
 
-instance Exception ExitGameException
+instance Exception ExitAppException

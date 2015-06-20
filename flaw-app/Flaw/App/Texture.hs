@@ -1,12 +1,12 @@
 {-|
-Module: Flaw.Game.Texture
+Module: Flaw.App.Texture
 Description: Texture loading.
 License: MIT
 -}
 
 {-# LANGUAGE CPP, TemplateHaskell #-}
 
-module Flaw.Game.Texture
+module Flaw.App.Texture
 	( loadTextureExp
 	) where
 
@@ -41,7 +41,7 @@ genEmbed ''TextureInfo
 
 -- | Create expression for loading texture.
 -- Expression will be of type:
--- :: (MonadResource m, MonadBaseControl IO m) => GameGraphicsDevice -> m (ReleaseKey, TextureId GameGraphicsDevice)
+-- :: (MonadResource m, MonadBaseControl IO m) => AppGraphicsDevice -> m (ReleaseKey, TextureId AppGraphicsDevice)
 loadTextureExp :: FilePath -> Q Exp
 loadTextureExp filePath = do
 
