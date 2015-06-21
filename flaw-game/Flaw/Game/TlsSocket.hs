@@ -16,7 +16,6 @@ import Control.Concurrent.STM
 import Data.Default.Class
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
-import Data.Monoid
 import qualified Network.TLS as TLS
 import qualified Network.TLS.Extra.Cipher as TLS
 import System.X509
@@ -75,23 +74,8 @@ runTlsSocket params (getReceivingChan, send) = do
 		{ TLS.backendFlush = return ()
 		, TLS.backendClose = atomically $ send B.empty
 		, TLS.backendSend = \bytes -> atomically $ send bytes
-		, TLS.backendRecv = \len -> atomically $ recv len
-		} where
-		recv len = do
-			bytes <- readTChan receivingChan
-			let bytesLength = B.length bytes
-			-- if it's end of stream, exit
-			if bytesLength == 0 then return bytes
-			-- else if it's not enough bytes, read more
-			else if bytesLength < len then do
-				restBytes <- recv $ len - bytesLength
-				return $ bytes <> restBytes
-			-- else if it's too many bytes, put them back
-			else if bytesLength > len then do
-				let (neededBytes, restBytes) = B.splitAt len bytes
-				unGetTChan receivingChan restBytes
-				return neededBytes
-			else return bytes
+		, TLS.backendRecv = \len -> atomically $ recvChan receivingChan len
+		}
 
 	-- create context
 	context <- TLS.contextNew backend params

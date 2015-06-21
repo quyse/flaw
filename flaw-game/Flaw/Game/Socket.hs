@@ -7,12 +7,14 @@ License: MIT
 module Flaw.Game.Socket
 	( SocketProcess
 	, processSocket
+	, recvChan
 	) where
 
 import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Exception
 import qualified Data.ByteString as B
+import Data.Monoid
 import qualified Network.Socket as N hiding (send, sendTo, recv, recvFrom)
 import qualified Network.Socket.ByteString as N
 
@@ -57,3 +59,21 @@ processSocket socket = do
 		finally loop $ N.shutdown socket N.ShutdownBoth
 
 	return (dupTChan receivingChan, writeTQueue sendingQueue)
+
+-- | Read specified amount of bytes.
+recvChan :: TChan B.ByteString -> Int -> STM B.ByteString
+recvChan chan len = do
+	bytes <- readTChan chan
+	let bytesLength = B.length bytes
+	-- if it's end of stream, exit
+	if bytesLength == 0 then return bytes
+	-- else if it's not enough bytes, read more
+	else if bytesLength < len then do
+		restBytes <- recvChan chan $ len - bytesLength
+		return $ bytes <> restBytes
+	-- else if it's too many bytes, put them back
+	else if bytesLength > len then do
+		let (neededBytes, restBytes) = B.splitAt len bytes
+		unGetTChan chan restBytes
+		return neededBytes
+	else return bytes
