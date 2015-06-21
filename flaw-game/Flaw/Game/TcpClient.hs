@@ -34,5 +34,5 @@ connectTcpClient host port = do
 				socket <- N.socket addrFamily N.Stream addrProtocol
 				N.connect socket addrAddress
 				return socket
-			
+
 	processSocket =<< tryConnect addrs
