@@ -16,34 +16,34 @@ import qualified Network.Socket as N
 import Flaw.Exception
 import Flaw.Game.Socket
 
-runTcpServer :: String -> Int -> IO (STM (TChan SocketProcess))
+runTcpServer :: String -> Int -> IO (TBQueue QueueSocket)
 runTcpServer host port = do
 	-- resolve host name
 	addrs <- N.getAddrInfo (Just N.defaultHints
 		{ N.addrFlags = [N.AI_NUMERICSERV, N.AI_ADDRCONFIG]
 		}) (Just host) (Just $ show port)
 
-	socket <- case addrs of
+	listeningSocket <- case addrs of
 		(N.AddrInfo
 			{ N.addrFamily = addrFamily
 			, N.addrProtocol = addrProtocol
 			, N.addrAddress = addrAddress
 			}) : _restAddrs -> do
-			socket <- N.socket addrFamily N.Stream addrProtocol
-			N.bind socket addrAddress
-			N.listen socket 5
-			return socket
+			listeningSocket <- N.socket addrFamily N.Stream addrProtocol
+			N.bind listeningSocket addrAddress
+			N.listen listeningSocket 5
+			return listeningSocket
 		_ -> throwIO $ DescribeFirstException "failed to resolve host name"
 
-	-- create chan for sockets
-	chan <- newBroadcastTChanIO
+	-- create queue for sockets
+	queue <- newTBQueueIO 16
 
 	-- accept clients in separate thread
 	let work = do
-		(clientSocket, _clientAddr) <- N.accept socket
-		process <- processSocket clientSocket
-		atomically $ writeTChan chan process
+		(clientSocket, _clientAddr) <- N.accept listeningSocket
+		socket <- processNetworkSocket clientSocket 16 16
+		atomically $ writeTBQueue queue socket
 		work
-	_ <- forkIO $ onException work (N.close socket)
+	_ <- forkIO $ finally work $ N.close listeningSocket
 
-	return $ dupTChan chan
+	return queue

@@ -8,23 +8,22 @@ module Flaw.Game.TcpClient
 	( connectTcpClient
 	) where
 
-import Control.Concurrent.STM
 import Control.Exception
-import qualified Data.ByteString as B
 import qualified Network.Socket as N
 
 import Flaw.Exception
 import Flaw.Game.Socket
 
-connectTcpClient :: String -> Int -> IO (STM (TChan B.ByteString), B.ByteString -> STM ())
+connectTcpClient :: String -> Int -> IO QueueSocket
 connectTcpClient host port = do
 	-- resolve host name
 	addrs <- N.getAddrInfo (Just N.defaultHints
 		{ N.addrFlags = [N.AI_NUMERICSERV, N.AI_ADDRCONFIG]
 		}) (Just host) (Just $ show port)
+
 	-- try to connect
 	let
-		tryConnect [] = throwIO $ DescribeFirstException "unable to connect any IP address for host"
+		tryConnect [] = throwIO $ DescribeFirstException "unable to connect host"
 		tryConnect (N.AddrInfo
 			{ N.addrFamily = addrFamily
 			, N.addrProtocol = addrProtocol
@@ -35,4 +34,5 @@ connectTcpClient host port = do
 				N.connect socket addrAddress
 				return socket
 
-	processSocket =<< tryConnect addrs
+	socket <- tryConnect addrs
+	processNetworkSocket socket 16 16

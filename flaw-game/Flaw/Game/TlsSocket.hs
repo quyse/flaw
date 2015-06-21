@@ -65,16 +65,14 @@ initTlsClientParams = do
 		, TLS.clientSupported = tlsSupported
 		}
 
-runTlsSocket :: (TLS.TLSParams p, Show p) => p -> SocketProcess -> IO SocketProcess
-runTlsSocket params (getReceivingChan, send) = do
-	-- get receiving chan
-	receivingChan <- atomically $ getReceivingChan
+runTlsSocket :: (TLS.TLSParams p, Socket s) => p -> s -> IO QueueSocket
+runTlsSocket params underlyingSocket = do
 	-- create backend
 	let backend = TLS.Backend
 		{ TLS.backendFlush = return ()
-		, TLS.backendClose = atomically $ send B.empty
-		, TLS.backendSend = \bytes -> atomically $ send bytes
-		, TLS.backendRecv = \len -> atomically $ recvChan receivingChan len
+		, TLS.backendClose = atomically $ send underlyingSocket B.empty
+		, TLS.backendSend = \bytes -> atomically $ send underlyingSocket bytes
+		, TLS.backendRecv = \len -> atomically $ receiveBytes underlyingSocket len
 		}
 
 	-- create context
@@ -82,10 +80,10 @@ runTlsSocket params (getReceivingChan, send) = do
 	-- do handshake
 	TLS.handshake context
 
-	-- create new receiving chan
-	tlsReceivingChan <- newBroadcastTChanIO
+	-- create new receiving queue
+	receiveQueue <- newTBQueueIO 16
 	-- create new sending queue
-	tlsSendingQueue <- newTQueueIO
+	sendQueue <- newTBQueueIO 16
 
 	-- run receiving thread
 	_ <- forkIO $ do
@@ -93,18 +91,18 @@ runTlsSocket params (getReceivingChan, send) = do
 			bytes <- TLS.recvData context
 			if B.null bytes then return ()
 			else do
-				atomically $ writeTChan tlsReceivingChan bytes
+				atomically $ writeTBQueue receiveQueue bytes
 				loop
 		finally loop $ do
-			-- signal sending thread to end
-			atomically $ writeTQueue tlsSendingQueue B.empty
+			-- make sending thread to finish
+			atomically $ writeTBQueue sendQueue B.empty
 			-- signal receivers about end
-			atomically $ writeTChan tlsReceivingChan B.empty
+			atomically $ writeTBQueue receiveQueue B.empty
 
 	-- run sending thread
 	_ <- forkIO $ do
 		let loop = do
-			bytes <- atomically $ readTQueue tlsSendingQueue
+			bytes <- atomically $ readTBQueue sendQueue
 			if B.null bytes then return ()
 			else do
 				TLS.sendData context $ BL.fromStrict bytes
@@ -112,7 +110,7 @@ runTlsSocket params (getReceivingChan, send) = do
 		finally loop $ do
 			-- shutdown TLS connection
 			TLS.bye context
-			-- signal underlying socket to end
-			atomically $ send B.empty
+			-- shutdown underlying socket
+			atomically $ send underlyingSocket B.empty
 
-	return (dupTChan tlsReceivingChan, writeTQueue tlsSendingQueue)
+	return $ QueueSocket receiveQueue sendQueue
