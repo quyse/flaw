@@ -16,7 +16,7 @@ import qualified Network.Socket as N
 import Flaw.Exception
 import Flaw.Game.Socket
 
-runTcpServer :: String -> Int -> IO (TBQueue QueueSocket)
+runTcpServer :: String -> Int -> IO (STM BoundedReceiveQueueSocket)
 runTcpServer host port = do
 	-- resolve host name
 	addrs <- N.getAddrInfo (Just N.defaultHints
@@ -41,9 +41,9 @@ runTcpServer host port = do
 	-- accept clients in separate thread
 	let work = do
 		(clientSocket, _clientAddr) <- N.accept listeningSocket
-		socket <- processNetworkSocket clientSocket 16 16
+		socket <- processNetworkSocket clientSocket 16
 		atomically $ writeTBQueue queue socket
 		work
 	_ <- forkIO $ finally work $ N.close listeningSocket
 
-	return queue
+	return $ readTBQueue queue

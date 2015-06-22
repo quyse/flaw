@@ -6,7 +6,8 @@ License: MIT
 
 module Flaw.Game.Socket
 	( Socket(..)
-	, QueueSocket(..)
+	, BoundedQueueSocket(..)
+	, BoundedReceiveQueueSocket(..)
 	, processNetworkSocket
 	, receiveBytes
 	, receiveSerialize
@@ -17,7 +18,7 @@ import Control.Concurrent.STM
 import Control.Exception
 import qualified Data.ByteString as B
 import Data.Monoid
-import Data.Serialize
+import qualified Data.Serialize as S
 import qualified Network.Socket as N hiding (send, sendTo, recv, recvFrom)
 import qualified Network.Socket.ByteString as N
 
@@ -26,22 +27,29 @@ class Socket s where
 	receive :: s -> STM B.ByteString
 	unreceive :: s -> B.ByteString -> STM ()
 
-data QueueSocket = QueueSocket (TBQueue B.ByteString) (TBQueue B.ByteString)
+data BoundedQueueSocket = BoundedQueueSocket (TBQueue B.ByteString) (TBQueue B.ByteString)
 
-instance Socket QueueSocket where
-	send (QueueSocket _receiveQueue sendQueue) bytes = writeTBQueue sendQueue bytes
-	receive (QueueSocket receiveQueue _sendQueue) = readTBQueue receiveQueue
-	unreceive (QueueSocket receiveQueue _sendQueue) bytes = unGetTBQueue receiveQueue bytes
+instance Socket BoundedQueueSocket where
+	send (BoundedQueueSocket _receiveQueue sendQueue) bytes = writeTBQueue sendQueue bytes
+	receive (BoundedQueueSocket receiveQueue _sendQueue) = readTBQueue receiveQueue
+	unreceive (BoundedQueueSocket receiveQueue _sendQueue) bytes = unGetTBQueue receiveQueue bytes
 
-processNetworkSocket :: N.Socket -> Int -> Int -> IO QueueSocket
-processNetworkSocket socket receiveQueueSize sendQueueSize = do
+data BoundedReceiveQueueSocket = BoundedReceiveQueueSocket (TBQueue B.ByteString) (TQueue B.ByteString)
+
+instance Socket BoundedReceiveQueueSocket where
+	send (BoundedReceiveQueueSocket _receiveQueue sendQueue) bytes = writeTQueue sendQueue bytes
+	receive (BoundedReceiveQueueSocket receiveQueue _sendQueue) = readTBQueue receiveQueue
+	unreceive (BoundedReceiveQueueSocket receiveQueue _sendQueue) bytes = unGetTBQueue receiveQueue bytes
+
+processNetworkSocket :: N.Socket -> Int -> IO BoundedReceiveQueueSocket
+processNetworkSocket socket receiveQueueSize = do
 	-- eliminate latency
 	N.setSocketOption socket N.NoDelay 1
 
 	-- create receiving queue
 	receiveQueue <- newTBQueueIO receiveQueueSize
 	-- create sending queue
-	sendQueue <- newTBQueueIO sendQueueSize
+	sendQueue <- newTQueueIO
 
 	-- run receiving thread
 	_ <- forkIO $ do
@@ -53,7 +61,7 @@ processNetworkSocket socket receiveQueueSize sendQueueSize = do
 				work
 		finally work $ do
 			-- signal sending thread to end
-			atomically $ writeTBQueue sendQueue B.empty
+			atomically $ writeTQueue sendQueue B.empty
 			-- signal receivers about end
 			atomically $ writeTBQueue receiveQueue B.empty
 
@@ -64,14 +72,14 @@ processNetworkSocket socket receiveQueueSize sendQueueSize = do
 			if sent == B.length bytes then return ()
 			else doSend $ B.drop sent bytes
 		let loop = do
-			bytes <- atomically $ readTBQueue sendQueue
+			bytes <- atomically $ readTQueue sendQueue
 			if B.null bytes then return ()
 			else do
 				doSend bytes
 				loop
 		finally loop $ N.shutdown socket N.ShutdownBoth
 
-	return $ QueueSocket receiveQueue sendQueue
+	return $ BoundedReceiveQueueSocket receiveQueue sendQueue
 
 -- | Read specified amount of bytes.
 receiveBytes :: Socket s => s -> Int -> STM B.ByteString
@@ -92,17 +100,17 @@ receiveBytes socket len = do
 	else return bytes
 
 -- | Read serializable data.
-receiveSerialize :: (Socket s, Serialize a) => s -> STM (Either String a)
-receiveSerialize socket = loop $ runGetPartial get where
+receiveSerialize :: (Socket s, S.Serialize a) => s -> S.Get a -> STM (Either String a)
+receiveSerialize socket g = loop $ S.runGetPartial g where
 	loop parse = do
 		bytes <- receive socket
 		case parse bytes of
-			Fail err rest -> do
+			S.Fail err rest -> do
 				if B.null rest then return ()
 				else unreceive socket rest
 				return $ Left err
-			Partial nextParse -> loop nextParse
-			Done result rest -> do
+			S.Partial nextParse -> loop nextParse
+			S.Done result rest -> do
 				if B.null rest then return ()
 				else unreceive socket rest
 				return $ Right result

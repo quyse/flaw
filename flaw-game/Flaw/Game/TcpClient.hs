@@ -14,7 +14,7 @@ import qualified Network.Socket as N
 import Flaw.Exception
 import Flaw.Game.Socket
 
-connectTcpClient :: String -> Int -> IO QueueSocket
+connectTcpClient :: String -> Int -> IO BoundedReceiveQueueSocket
 connectTcpClient host port = do
 	-- resolve host name
 	addrs <- N.getAddrInfo (Just N.defaultHints
@@ -35,4 +35,4 @@ connectTcpClient host port = do
 				return socket
 
 	socket <- tryConnect addrs
-	processNetworkSocket socket 16 16
+	processNetworkSocket socket 16

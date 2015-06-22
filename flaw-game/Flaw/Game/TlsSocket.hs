@@ -65,7 +65,7 @@ initTlsClientParams = do
 		, TLS.clientSupported = tlsSupported
 		}
 
-runTlsSocket :: (TLS.TLSParams p, Socket s) => p -> s -> IO QueueSocket
+runTlsSocket :: (TLS.TLSParams p, Socket s) => p -> s -> IO BoundedQueueSocket
 runTlsSocket params underlyingSocket = do
 	-- create backend
 	let backend = TLS.Backend
@@ -113,4 +113,4 @@ runTlsSocket params underlyingSocket = do
 			-- shutdown underlying socket
 			atomically $ send underlyingSocket B.empty
 
-	return $ QueueSocket receiveQueue sendQueue
+	return $ BoundedQueueSocket receiveQueue sendQueue
