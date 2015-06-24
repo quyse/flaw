@@ -14,7 +14,7 @@ import qualified Network.Socket as N
 import Flaw.Exception
 import Flaw.Game.Socket
 
-connectTcpClient :: String -> Int -> IO BoundedReceiveQueueSocket
+connectTcpClient :: String -> Int -> IO NetworkSocket
 connectTcpClient host port = do
 	-- resolve host name
 	addrs <- N.getAddrInfo (Just N.defaultHints

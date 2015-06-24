@@ -7,6 +7,7 @@ License: MIT
 module Flaw.Game.TlsSocket
 	( loadTlsServerParams
 	, initTlsClientParams
+	, TlsSocket
 	, runTlsSocket
 	) where
 
@@ -65,7 +66,9 @@ initTlsClientParams = do
 		, TLS.clientSupported = tlsSupported
 		}
 
-runTlsSocket :: (TLS.TLSParams p, Socket s) => p -> s -> IO BoundedQueueSocket
+type TlsSocket = SendReceiveSocket TBQueue TBQueue B.ByteString
+
+runTlsSocket :: (TLS.TLSParams p, SendSocket s, ReceiveSocket s, UnreceiveSocket s) => p -> s B.ByteString -> IO TlsSocket
 runTlsSocket params underlyingSocket = do
 	-- create backend
 	let backend = TLS.Backend
@@ -80,24 +83,8 @@ runTlsSocket params underlyingSocket = do
 	-- do handshake
 	TLS.handshake context
 
-	-- create new receiving queue
-	receiveQueue <- newTBQueueIO 16
 	-- create new sending queue
 	sendQueue <- newTBQueueIO 16
-
-	-- run receiving thread
-	_ <- forkIO $ do
-		let loop = do
-			bytes <- TLS.recvData context
-			if B.null bytes then return ()
-			else do
-				atomically $ writeTBQueue receiveQueue bytes
-				loop
-		finally loop $ do
-			-- make sending thread to finish
-			atomically $ writeTBQueue sendQueue B.empty
-			-- signal receivers about end
-			atomically $ writeTBQueue receiveQueue B.empty
 
 	-- run sending thread
 	_ <- forkIO $ do
@@ -113,4 +100,21 @@ runTlsSocket params underlyingSocket = do
 			-- shutdown underlying socket
 			atomically $ send underlyingSocket B.empty
 
-	return $ BoundedQueueSocket receiveQueue sendQueue
+	-- create new receiving queue
+	receiveQueue <- newTBQueueIO 16
+
+	-- run receiving thread
+	_ <- forkIO $ do
+		let loop = do
+			bytes <- TLS.recvData context
+			if B.null bytes then return ()
+			else do
+				atomically $ writeTBQueue receiveQueue bytes
+				loop
+		finally loop $ do
+			-- make sending thread to finish
+			atomically $ writeTBQueue sendQueue B.empty
+			-- signal receivers about end
+			atomically $ writeTBQueue receiveQueue B.empty
+
+	return $ SendReceiveSocket sendQueue receiveQueue

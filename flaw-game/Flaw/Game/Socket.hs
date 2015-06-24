@@ -5,9 +5,11 @@ License: MIT
 -}
 
 module Flaw.Game.Socket
-	( Socket(..)
-	, BoundedQueueSocket(..)
-	, BoundedReceiveQueueSocket(..)
+	( SendSocket(..)
+	, ReceiveSocket(..)
+	, UnreceiveSocket(..)
+	, SendReceiveSocket(..)
+	, NetworkSocket
 	, processNetworkSocket
 	, receiveBytes
 	, receiveSerialize
@@ -22,48 +24,56 @@ import qualified Data.Serialize as S
 import qualified Network.Socket as N hiding (send, sendTo, recv, recvFrom)
 import qualified Network.Socket.ByteString as N
 
-class Socket s where
-	send :: s -> B.ByteString -> STM ()
-	receive :: s -> STM B.ByteString
-	unreceive :: s -> B.ByteString -> STM ()
+class SendSocket s where
+	send :: s a -> a -> STM ()
 
-data BoundedQueueSocket = BoundedQueueSocket (TBQueue B.ByteString) (TBQueue B.ByteString)
+class ReceiveSocket s where
+	receive :: s a -> STM a
 
-instance Socket BoundedQueueSocket where
-	send (BoundedQueueSocket _receiveQueue sendQueue) bytes = writeTBQueue sendQueue bytes
-	receive (BoundedQueueSocket receiveQueue _sendQueue) = readTBQueue receiveQueue
-	unreceive (BoundedQueueSocket receiveQueue _sendQueue) bytes = unGetTBQueue receiveQueue bytes
+class UnreceiveSocket s where
+	unreceive :: s a -> a -> STM ()
 
-data BoundedReceiveQueueSocket = BoundedReceiveQueueSocket (TBQueue B.ByteString) (TQueue B.ByteString)
+instance SendSocket TQueue where
+	send = writeTQueue
 
-instance Socket BoundedReceiveQueueSocket where
-	send (BoundedReceiveQueueSocket _receiveQueue sendQueue) bytes = writeTQueue sendQueue bytes
-	receive (BoundedReceiveQueueSocket receiveQueue _sendQueue) = readTBQueue receiveQueue
-	unreceive (BoundedReceiveQueueSocket receiveQueue _sendQueue) bytes = unGetTBQueue receiveQueue bytes
+instance ReceiveSocket TQueue where
+	receive = readTQueue
 
-processNetworkSocket :: N.Socket -> Int -> IO BoundedReceiveQueueSocket
+instance UnreceiveSocket TQueue where
+	unreceive = unGetTQueue
+
+instance SendSocket TBQueue where
+	send = writeTBQueue
+
+instance ReceiveSocket TBQueue where
+	receive = readTBQueue
+
+instance UnreceiveSocket TBQueue where
+	unreceive = unGetTBQueue
+
+data SendReceiveSocket s r a = SendReceiveSocket (s a) (r a)
+
+instance SendSocket s => SendSocket (SendReceiveSocket s r) where
+	send (SendReceiveSocket s _r) = send s
+
+instance ReceiveSocket r => ReceiveSocket (SendReceiveSocket s r) where
+	receive (SendReceiveSocket _s r) = receive r
+
+instance UnreceiveSocket r => UnreceiveSocket (SendReceiveSocket s r) where
+	unreceive (SendReceiveSocket _s r) = unreceive r
+
+instance ReceiveSocket STM where
+	receive = id
+
+type NetworkSocket = SendReceiveSocket TQueue TBQueue B.ByteString
+
+processNetworkSocket :: N.Socket -> Int -> IO NetworkSocket
 processNetworkSocket socket receiveQueueSize = do
 	-- eliminate latency
 	N.setSocketOption socket N.NoDelay 1
 
-	-- create receiving queue
-	receiveQueue <- newTBQueueIO receiveQueueSize
 	-- create sending queue
 	sendQueue <- newTQueueIO
-
-	-- run receiving thread
-	_ <- forkIO $ do
-		let work = do
-			bytes <- N.recv socket 4096
-			if B.null bytes then return ()
-			else do
-				atomically $ writeTBQueue receiveQueue bytes
-				work
-		finally work $ do
-			-- signal sending thread to end
-			atomically $ writeTQueue sendQueue B.empty
-			-- signal receivers about end
-			atomically $ writeTBQueue receiveQueue B.empty
 
 	-- run sending thread
 	_ <- forkIO $ do
@@ -79,10 +89,27 @@ processNetworkSocket socket receiveQueueSize = do
 				loop
 		finally loop $ N.shutdown socket N.ShutdownBoth
 
-	return $ BoundedReceiveQueueSocket receiveQueue sendQueue
+	-- create receiving queue
+	receiveQueue <- newTBQueueIO receiveQueueSize
+
+	-- run receiving thread
+	_ <- forkIO $ do
+		let work = do
+			bytes <- N.recv socket 4096
+			if B.null bytes then return ()
+			else do
+				atomically $ writeTBQueue receiveQueue bytes
+				work
+		finally work $ do
+			-- signal sending thread to end
+			atomically $ writeTQueue sendQueue B.empty
+			-- signal receivers about end
+			atomically $ writeTBQueue receiveQueue B.empty
+
+	return $ SendReceiveSocket sendQueue receiveQueue
 
 -- | Read specified amount of bytes.
-receiveBytes :: Socket s => s -> Int -> STM B.ByteString
+receiveBytes :: (ReceiveSocket s, UnreceiveSocket s) => s B.ByteString -> Int -> STM B.ByteString
 receiveBytes socket len = do
 	bytes <- receive socket
 	let bytesLength = B.length bytes
@@ -100,7 +127,7 @@ receiveBytes socket len = do
 	else return bytes
 
 -- | Read serializable data.
-receiveSerialize :: (Socket s, S.Serialize a) => s -> S.Get a -> STM (Either String a)
+receiveSerialize :: (ReceiveSocket s, UnreceiveSocket s, S.Serialize a) => s B.ByteString -> S.Get a -> STM (Either String a)
 receiveSerialize socket g = loop $ S.runGetPartial g where
 	loop parse = do
 		bytes <- receive socket

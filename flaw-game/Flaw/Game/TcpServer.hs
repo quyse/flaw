@@ -16,7 +16,7 @@ import qualified Network.Socket as N
 import Flaw.Exception
 import Flaw.Game.Socket
 
-runTcpServer :: String -> Int -> IO (STM BoundedReceiveQueueSocket)
+runTcpServer :: String -> Int -> IO (STM NetworkSocket)
 runTcpServer host port = do
 	-- resolve host name
 	addrs <- N.getAddrInfo (Just N.defaultHints
