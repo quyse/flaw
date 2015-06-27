@@ -131,7 +131,7 @@ receiveSerialize :: (ReceiveSocket s, UnreceiveSocket s, S.Serialize a) => s B.B
 receiveSerialize socket g = loop $ S.runGetPartial g where
 	loop parse = do
 		bytes <- receive socket
-		if B.null bytes then fail "receiveSerialize failed: socket ended suddenly"
+		if B.null bytes then return $ Left "socket ended suddenly"
 		else case parse bytes of
 			S.Fail err rest -> do
 				if B.null rest then return ()
