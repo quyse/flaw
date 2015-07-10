@@ -7,9 +7,10 @@ License: MIT
 {-# LANGUAGE FlexibleContexts #-}
 
 module Flaw.Graphics.Font.FreeType
-	( FreeTypeLibrary
+	( ftErrorCheck
+	, FreeTypeLibrary(..)
 	, initFreeType
-	, FreeTypeFont
+	, FreeTypeFont(..)
 	, loadFreeTypeFont
 	, createFreeTypeGlyphs
 	) where
@@ -22,39 +23,35 @@ import qualified Data.Vector as V
 import qualified Data.Vector.Storable as VS
 import qualified Data.Vector.Storable.Mutable as VSM
 import Data.Word
+import Foreign.C.Types
 import Foreign.Marshal.Alloc
 import Foreign.Marshal.Array
 import Foreign.Ptr
 import Foreign.Storable
-import qualified Graphics.Rendering.FreeType.Internal as FT
-import qualified Graphics.Rendering.FreeType.Internal.Bitmap as FT
-import qualified Graphics.Rendering.FreeType.Internal.Face as FT
-import qualified Graphics.Rendering.FreeType.Internal.GlyphSlot as FT
-import qualified Graphics.Rendering.FreeType.Internal.Library as FT
-import qualified Graphics.Rendering.FreeType.Internal.PrimitiveTypes as FT
 
 import Flaw.Graphics.Font
+import Flaw.Graphics.Font.FreeType.FFI
 import Flaw.Resource
 
-ftErrorCheck :: String -> FT.FT_Error -> IO ()
+ftErrorCheck :: String -> FT_Error -> IO ()
 ftErrorCheck errorMessage errorCode = do
 	if errorCode == 0 then return ()
 	else fail $ show ("FreeType error", errorMessage, errorCode)
 
-newtype FreeTypeLibrary = FreeTypeLibrary FT.FT_Library
+newtype FreeTypeLibrary = FreeTypeLibrary FT_Library
 
 initFreeType :: ResourceIO m => m (ReleaseKey, FreeTypeLibrary)
 initFreeType = allocate create destroy where
 	create = alloca $ \ptrLibrary -> do
-		ftErrorCheck "ft_Init_FreeType" =<< FT.ft_Init_FreeType ptrLibrary
+		ftErrorCheck "FT_Init_FreeType" =<< ft_Init_FreeType ptrLibrary
 		liftM FreeTypeLibrary $ peek ptrLibrary
 	destroy (FreeTypeLibrary ftLibrary) = do
-		_ <- FT.ft_Done_FreeType ftLibrary
+		_ <- ft_Done_FreeType ftLibrary
 		return ()
 
 data FreeTypeFont = FreeTypeFont
-	{ ftFontFace :: !FT.FT_Face
-	, ftFontFaceMemory :: !(Ptr FT.FT_Byte)
+	{ ftFontFace :: !FT_Face
+	, ftFontFaceMemory :: !(Ptr CUChar)
 	}
 
 loadFreeTypeFont :: ResourceIO m => FreeTypeLibrary -> B.ByteString -> m (ReleaseKey, FreeTypeFont)
@@ -68,7 +65,7 @@ loadFreeTypeFont (FreeTypeLibrary ftLibrary) bytes = allocate create destroy whe
 			return (castPtr memory, fromIntegral bytesLen)
 
 		-- create freetype face
-		ftErrorCheck "ft_New_Memory_Face" =<< FT.ft_New_Memory_Face ftLibrary memory memoryLen 0 ptrFtFace
+		ftErrorCheck "FT_New_Memory_Face" =<< ft_New_Memory_Face ftLibrary memory memoryLen 0 ptrFtFace
 		ftFace <- peek ptrFtFace
 
 		return $ FreeTypeFont
@@ -77,7 +74,7 @@ loadFreeTypeFont (FreeTypeLibrary ftLibrary) bytes = allocate create destroy whe
 			}
 
 	destroy (FreeTypeFont ftFace memory) = do
-		_ <- FT.ft_Done_Face ftFace
+		_ <- ft_Done_Face ftFace
 		free memory
 		return ()
 
@@ -85,30 +82,30 @@ createFreeTypeGlyphs :: FreeTypeFont -> Int -> Int -> Int -> IO (V.Vector (Image
 createFreeTypeGlyphs (FreeTypeFont ftFace _memory) size halfScaleX halfScaleY = do
 
 	-- set pixel size with scale
-	ftErrorCheck "ft_Set_Pixel_Sizes" =<< FT.ft_Set_Pixel_Sizes ftFace
+	ftErrorCheck "FT_Set_Pixel_Sizes" =<< ft_Set_Pixel_Sizes ftFace
 		(fromIntegral $ size * (halfScaleX * 2 + 1))
 		(fromIntegral $ size * (halfScaleY * 2 + 1))
 
 	-- get number of glyphs
-	glyphsCount <- peek $ FT.num_glyphs ftFace
+	glyphsCount <- flaw_ft_get_num_glyphs ftFace
 
 	-- create glyph images and infos
 	V.generateM (fromIntegral glyphsCount) $ \glyphIndex -> do
 
 		-- load and render glyph
 		do
-			ftErrorCheck (show ("ft_Load_Glyph", glyphIndex)) =<< FT.ft_Load_Glyph ftFace (fromIntegral glyphIndex) FT.ft_LOAD_NO_HINTING
-			glyphSlot <- peek $ FT.glyph ftFace
-			ftErrorCheck "ft_Render_Glyph" =<< FT.ft_Render_Glyph glyphSlot FT.ft_RENDER_MODE_NORMAL
+			ftErrorCheck "FT_Load_Glyph" =<< ft_Load_Glyph ftFace (fromIntegral glyphIndex) ft_LOAD_NO_HINTING
+			ftGlyphSlot <- flaw_ft_get_glyph_slot ftFace
+			ftErrorCheck "ft_Render_Glyph" =<< ft_Render_Glyph ftGlyphSlot ft_RENDER_MODE_NORMAL
 
 		-- read bitmap info
-		glyphSlot <- peek $ FT.glyph ftFace
-		FT.FT_Bitmap
-			{ FT.rows = bitmapRowsCInt
-			, FT.width = bitmapWidthCInt
-			, FT.pitch = bitmapPitchCInt
-			, FT.buffer = bitmapBuffer
-			} <- peek $ FT.bitmap glyphSlot
+		ftGlyphSlot <- flaw_ft_get_glyph_slot ftFace
+		FT_Bitmap
+			{ f_FT_Bitmap_rows = bitmapRowsCInt
+			, f_FT_Bitmap_width = bitmapWidthCInt
+			, f_FT_Bitmap_pitch = bitmapPitchCInt
+			, f_FT_Bitmap_buffer = bitmapBuffer
+			} <- peek =<< flaw_ft_get_bitmap ftGlyphSlot
 		let bitmapRows = fromIntegral bitmapRowsCInt
 		let bitmapWidth = fromIntegral bitmapWidthCInt
 		let bitmapPitch = fromIntegral bitmapPitchCInt
@@ -144,8 +141,8 @@ createFreeTypeGlyphs (FreeTypeFont ftFace _memory) size halfScaleX halfScaleY = 
 		freezedPixels <- VS.unsafeFreeze blurredPixels
 
 		-- return glyph
-		bitmapLeft <- peek $ FT.bitmap_left glyphSlot
-		bitmapTop <- peek $ FT.bitmap_top glyphSlot
+		bitmapLeft <- flaw_ft_get_bitmap_left ftGlyphSlot
+		bitmapTop <- flaw_ft_get_bitmap_top ftGlyphSlot
 		return
 			( Image
 				{ imageWidth = width

@@ -7,10 +7,14 @@ License: MIT
 module Flaw.Graphics.Font
 	( Glyphs(..)
 	, GlyphInfo(..)
+	, FontShaper(..)
 	) where
 
 import Codec.Picture
+import qualified Data.Text as T
 import qualified Data.Vector as V
+
+import Flaw.Math
 
 data Glyphs = Glyphs
 	{ glyphsImage :: !(Image Pixel8)
@@ -27,3 +31,6 @@ data GlyphInfo = GlyphInfo
 	, glyphOffsetX :: !Int
 	, glyphOffsetY :: !Int
 	}
+
+class FontShaper a where
+	shapeText :: a -> T.Text -> IO (V.Vector (Vec2f, Int), Vec2f)

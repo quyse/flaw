@@ -21,9 +21,81 @@ library
   exposed-modules:
     Flaw.Graphics.Font
     Flaw.Graphics.Font.FreeType
+    Flaw.Graphics.Font.Harfbuzz
     Flaw.Graphics.Font.Util
   other-modules:
+    Flaw.Graphics.Font.FreeType.FFI
   -- other-extensions:    
-  build-depends:       base, bytestring, flaw-base, flaw-graphics, freetype2, JuicyPixels, vector
+  build-depends:       base, bytestring, flaw-base, flaw-ffi, flaw-graphics, flaw-math, JuicyPixels, mtl, text, vector
   -- hs-source-dirs:      
   default-language:    Haskell2010
+  c-sources:
+    -- FreeType
+    src/freetype/src/autofit/autofit.c
+    src/freetype/src/base/ftbase.c
+    src/freetype/src/base/ftinit.c
+    src/freetype/src/base/ftsystem.c
+    src/freetype/src/base/ftbitmap.c
+    src/freetype/src/bdf/bdf.c
+    src/freetype/src/bzip2/ftbzip2.c
+    src/freetype/src/cache/ftcache.c
+    src/freetype/src/cff/cff.c
+    src/freetype/src/cid/type1cid.c
+    src/freetype/src/gxvalid/gxvalid.c
+    src/freetype/src/gzip/ftgzip.c
+    src/freetype/src/lzw/ftlzw.c
+    src/freetype/src/otvalid/otvalid.c
+    src/freetype/src/pcf/pcf.c
+    src/freetype/src/pfr/pfr.c
+    src/freetype/src/psaux/psaux.c
+    src/freetype/src/pshinter/pshinter.c
+    src/freetype/src/psnames/psnames.c
+    src/freetype/src/raster/raster.c
+    src/freetype/src/sfnt/sfnt.c
+    src/freetype/src/smooth/smooth.c
+    src/freetype/src/truetype/truetype.c
+    src/freetype/src/type1/type1.c
+    src/freetype/src/type42/type42.c
+    src/freetype/src/winfonts/winfnt.c
+    -- Harfbuzz
+    src/harfbuzz/src/hb-blob.cc
+    src/harfbuzz/src/hb-buffer-serialize.cc
+    src/harfbuzz/src/hb-buffer.cc
+    src/harfbuzz/src/hb-common.cc
+    -- src/harfbuzz/src/hb-coretext.cc
+    src/harfbuzz/src/hb-face.cc
+    src/harfbuzz/src/hb-fallback-shape.cc
+    src/harfbuzz/src/hb-font.cc
+    src/harfbuzz/src/hb-set.cc
+    src/harfbuzz/src/hb-shape.cc
+    src/harfbuzz/src/hb-shape-plan.cc
+    src/harfbuzz/src/hb-shaper.cc
+    -- src/harfbuzz/src/hb-tt-font.cc
+    src/harfbuzz/src/hb-ucdn.cc
+    src/harfbuzz/src/hb-unicode.cc
+    -- FreeType
+    src/harfbuzz/src/hb-ft.cc
+    -- OpenType
+    src/harfbuzz/src/hb-ot-layout.cc
+    src/harfbuzz/src/hb-ot-map.cc
+    src/harfbuzz/src/hb-ot-shape.cc
+    src/harfbuzz/src/hb-ot-shape-complex-arabic.cc
+    src/harfbuzz/src/hb-ot-shape-complex-default.cc
+    src/harfbuzz/src/hb-ot-shape-complex-hangul.cc
+    src/harfbuzz/src/hb-ot-shape-complex-hebrew.cc
+    src/harfbuzz/src/hb-ot-shape-complex-indic-table.cc
+    src/harfbuzz/src/hb-ot-shape-complex-indic.cc
+    src/harfbuzz/src/hb-ot-shape-complex-myanmar.cc
+    src/harfbuzz/src/hb-ot-shape-complex-sea.cc
+    src/harfbuzz/src/hb-ot-shape-complex-thai.cc
+    src/harfbuzz/src/hb-ot-shape-complex-tibetan.cc
+    src/harfbuzz/src/hb-ot-shape-fallback.cc
+    src/harfbuzz/src/hb-ot-shape-normalize.cc
+    src/harfbuzz/src/hb-ot-tag.cc
+    -- UCDN
+    src/ucdn/ucdn.c
+    -- Helpers
+    src/flaw-ft.c
+  include-dirs:        src/freetype/include, src/harfbuzz-generated, src/harfbuzz/src, src/harfbuzz/src/hb-ucdn, src/ucdn
+  cc-options:          -DFT2_BUILD_LIBRARY -DHAVE_OT -DHAVE_UCDN
+  extra-libraries:     stdc++
