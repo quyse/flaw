@@ -22,6 +22,7 @@ library
     Flaw.Graphics.Font
     Flaw.Graphics.Font.FreeType
     Flaw.Graphics.Font.Harfbuzz
+    Flaw.Graphics.Font.Render
     Flaw.Graphics.Font.Util
   other-modules:
     Flaw.Graphics.Font.FreeType.FFI
@@ -36,6 +37,7 @@ library
     src/freetype/src/base/ftinit.c
     src/freetype/src/base/ftsystem.c
     src/freetype/src/base/ftbitmap.c
+    src/freetype/src/base/ftglyph.c
     src/freetype/src/bdf/bdf.c
     src/freetype/src/bzip2/ftbzip2.c
     src/freetype/src/cache/ftcache.c
