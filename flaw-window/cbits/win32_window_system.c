@@ -1,5 +1,6 @@
 #include "flaw_windows.h"
 #include <winuser.h>
+#include <stdlib.h>
 #include <stdint.h>
 
 const TCHAR wndClassName[] = TEXT("wc");
