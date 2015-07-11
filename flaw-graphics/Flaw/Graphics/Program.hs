@@ -9,6 +9,7 @@ License: MIT
 module Flaw.Graphics.Program
 	( Program
 	, AttributeFormat(..)
+	, Node
 	, cnst
 	, constf, const2f, const3f, const4f
 	, attribute
@@ -32,7 +33,10 @@ module Flaw.Graphics.Program
 	, rasterize
 	, colorTarget
 	, depthTarget
+	, (!)
 	, min_, max_
+	, ddx, ddy
+	, instanceId
 	) where
 
 import Control.Monad.Reader
@@ -87,10 +91,7 @@ uniformBufferSlot slot = do
 		}
 
 uniform :: (OfValueType a, Storable a) => UniformBufferSlot -> IO (Node a)
-uniform = uniformArray 0
-
-uniformArray :: (OfValueType a, Storable a) => Int -> UniformBufferSlot -> IO (Node a)
-uniformArray size UniformBufferSlot
+uniform UniformBufferSlot
 	{ uniformBufferSlotIndex = slot
 	, uniformBufferSlotSizeRef = sizeRef
 	} = withUndefined func where
@@ -100,7 +101,26 @@ uniformArray size UniformBufferSlot
 		bufferSize <- readIORef sizeRef
 		let align = alignment u
 		let alignedBufferSize = ((bufferSize + align - 1) `div` align) * align
-		writeIORef sizeRef $ alignedBufferSize + (sizeOf u) * (if size > 0 then size else 1)
+		writeIORef sizeRef $ alignedBufferSize + sizeOf u
+		return $ UniformNode Uniform
+			{ uniformSlot = slot
+			, uniformOffset = alignedBufferSize
+			, uniformSize = 0
+			, uniformType = valueType u
+			}
+
+uniformArray :: (OfValueType a, Storable a) => Int -> UniformBufferSlot -> IO (Node [a])
+uniformArray size UniformBufferSlot
+	{ uniformBufferSlotIndex = slot
+	, uniformBufferSlotSizeRef = sizeRef
+	} = withUndefined func where
+	withUndefined :: (a -> IO (Node [a])) -> IO (Node [a])
+	withUndefined f = f undefined
+	func u = do
+		bufferSize <- readIORef sizeRef
+		let align = alignment u
+		let alignedBufferSize = ((bufferSize + align - 1) `div` align) * align
+		writeIORef sizeRef $ alignedBufferSize + (sizeOf u) * size
 		return $ UniformNode Uniform
 			{ uniformSlot = slot
 			, uniformOffset = alignedBufferSize
@@ -282,8 +302,20 @@ samplerCube3f slot = sampler slot SamplerCube
 samplerCube4f :: Int -> SamplerNode Vec4f Vec3f
 samplerCube4f slot = sampler slot SamplerCube
 
+(!) :: (OfValueType a, OfValueType b, Integral b) => Node [a] -> Node b -> Node a
+a ! b = IndexNode (nodeArrayValueType a) (nodeValueType b) a b
+
 min_ :: OfValueType a => Node a -> Node a -> Node a
 min_ a b = MinNode (nodeValueType a) a b
 
 max_ :: OfValueType a => Node a -> Node a -> Node a
 max_ a b = MaxNode (nodeValueType a) a b
+
+ddx :: OfValueType a => Node a -> Node a
+ddx a = DdxNode (nodeValueType a) a
+
+ddy :: OfValueType a => Node a -> Node a
+ddy a = DdyNode (nodeValueType a) a
+
+instanceId :: Node Word
+instanceId = InstanceIdNode

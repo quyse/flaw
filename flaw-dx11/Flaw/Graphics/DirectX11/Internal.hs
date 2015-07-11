@@ -838,14 +838,20 @@ instance Context Dx11Context Dx11Device where
 		, dx11ContextDesiredState = Dx11ContextState
 			{ dx11ContextStateIndexBuffer = indexBufferRef
 			}
-		} indicesCount = do
+		} instancesCount indicesCount = do
 		dx11UpdateContext context
 		indexBuffer <- readIORef indexBufferRef
 		case indexBuffer of
 			Dx11IndexBufferId _indexBufferInterface _format _primitiveTopology -> do
-				m_ID3D11DeviceContext_DrawIndexed contextInterface (fromIntegral indicesCount) 0 0
+				if instancesCount > 1 then
+					m_ID3D11DeviceContext_DrawIndexedInstanced contextInterface (fromIntegral indicesCount) (fromIntegral instancesCount) 0 0 0
+				else
+					m_ID3D11DeviceContext_DrawIndexed contextInterface (fromIntegral indicesCount) 0 0
 			Dx11NullIndexBufferId _primitiveTopology -> do
-				m_ID3D11DeviceContext_Draw contextInterface (fromIntegral indicesCount) 0
+				if instancesCount > 1 then
+					m_ID3D11DeviceContext_DrawInstanced contextInterface (fromIntegral indicesCount) (fromIntegral instancesCount) 0 0
+				else
+					m_ID3D11DeviceContext_Draw contextInterface (fromIntegral indicesCount) 0
 
 	-- TODO
 	contextPlay = undefined

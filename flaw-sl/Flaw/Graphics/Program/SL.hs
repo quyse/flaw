@@ -25,6 +25,7 @@ nodeInfo node = case node of
 	UniformNode u -> ([], [], [u], [])
 	TempNode t -> ([t], [], [], [])
 	ConstNode _ _ -> emptyNodeInfo
+	IndexNode _ _ a b -> mergeNodeInfo (nodeInfo a) (nodeInfo b)
 	AddNode _ a b -> mergeNodeInfo (nodeInfo a) (nodeInfo b)
 	SubtractNode _ a b -> mergeNodeInfo (nodeInfo a) (nodeInfo b)
 	MultiplyNode _ a b -> mergeNodeInfo (nodeInfo a) (nodeInfo b)

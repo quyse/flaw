@@ -28,6 +28,7 @@ module Flaw.Graphics.Program.Internal
 	, Node(..)
 	, SamplerNode(..)
 	, nodeValueType
+	, nodeArrayValueType
 	, Program
 	, runProgram
 	) where
@@ -291,6 +292,7 @@ data Node a where
 	UniformNode :: Uniform -> Node a
 	TempNode :: Int -> Node a
 	ConstNode :: OfValueType a => ValueType -> a -> Node a
+	IndexNode :: (OfValueType a, OfValueType b, Integral b) => ValueType -> ValueType -> Node [a] -> Node b -> Node a
 	AddNode :: (OfValueType a, Num a) => ValueType -> Node a -> Node a -> Node a
 	SubtractNode :: (OfValueType a, Num a) => ValueType -> Node a -> Node a -> Node a
 	MultiplyNode :: (OfValueType a, Num a) => ValueType -> Node a -> Node a -> Node a
@@ -324,6 +326,8 @@ data Node a where
 	NormNode :: (OfVectorType v, OfScalarType (VecElement v), Norm v) => ValueType -> ValueType -> Node v -> Node (VecElement v)
 	Norm2Node :: (OfVectorType v, OfScalarType (VecElement v), Norm v) => ValueType -> ValueType -> Node v -> Node (VecElement v)
 	NormalizeNode :: (OfVectorType v, Normalize v) => ValueType -> Node v -> Node v
+	DdxNode :: OfValueType a => ValueType -> Node a -> Node a
+	DdyNode :: OfValueType a => ValueType -> Node a -> Node a
 	InstanceIdNode :: Node Word
 	ComponentNode :: OfVectorType v => ValueType -> ValueType -> Char -> Node v -> Node (VecElement v)
 	SwizzleNode :: (OfVectorType a, OfVectorType b) => ValueType -> ValueType -> String -> Node a -> Node b
@@ -345,6 +349,9 @@ newtype SamplerNode s c = SamplerNode Sampler deriving Show
 
 nodeValueType :: OfValueType a => Node a -> ValueType
 nodeValueType node = valueType $ (undefined :: (Node a -> a)) node
+
+nodeArrayValueType :: OfValueType a => Node [a] -> ValueType
+nodeArrayValueType node = valueType $ (undefined :: (Node [a] -> a)) node
 
 instance OfVectorType v => Vec (Node v) where
 	type VecElement (Node v) = Node (VecElement v)

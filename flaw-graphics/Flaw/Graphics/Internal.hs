@@ -30,6 +30,7 @@ module Flaw.Graphics.Internal
 	, renderClearDepthStencil
 	, renderUploadUniformBuffer
 	, renderDraw
+	, renderDrawInstanced
 	, renderPlay
 	, render
 	, present
@@ -149,8 +150,11 @@ class Device d => Context c d | c -> d where
 	contextClearDepthStencil :: c -> Float -> Int -> IO ()
 	-- | Upload data to uniform buffer.
 	contextUploadUniformBuffer :: c -> UniformBufferId d -> Ptr () -> Int -> IO ()
-	-- | Draw.
-	contextDraw :: c -> Int -> IO ()
+	-- | Draw (instanced).
+	contextDraw :: c
+		-> Int -- ^ Instances count (1 for non-instanced).
+		-> Int -- ^ Indices count.
+		-> IO ()
 	-- | Replay deferred context on immediate context.
 	contextPlay :: Context dc d => c -> dc -> IO ()
 	-- | Perform offscreen rendering. Initial state is context's default state.
@@ -202,7 +206,7 @@ data DisplayModeInfo = DisplayModeInfo
 	} deriving Show
 
 -- | Rendering monad.
-type Render c a = StackT (ReaderT c IO) a
+type Render c = StackT (ReaderT c IO)
 
 renderSetup :: (forall a. c -> IO a -> IO a) -> Render c ()
 renderSetup setup = StackT $ \q -> do
@@ -266,12 +270,16 @@ renderClearDepthStencil :: Context c d => Float -> Int -> Render c ()
 renderClearDepthStencil depth stencil = renderAction $ \c -> contextClearDepthStencil c depth stencil
 
 -- | Upload data to uniform buffer.
-renderUploadUniformBuffer :: Context c d => UniformBufferId d -> ((Ptr () -> Int -> IO ()) -> IO ()) -> Render c ()
+renderUploadUniformBuffer :: Context c d => UniformBufferId d -> ((Ptr () -> Int -> IO ()) -> IO a) -> Render c a
 renderUploadUniformBuffer ub f = renderAction $ \c -> f $ contextUploadUniformBuffer c ub
 
 -- | Draw.
 renderDraw :: Context c d => Int -> Render c ()
-renderDraw indicesCount = renderAction $ \c -> contextDraw c indicesCount
+renderDraw = renderDrawInstanced 1
+
+-- | Draw instanced.
+renderDrawInstanced :: Context c d => Int -> Int -> Render c ()
+renderDrawInstanced instancesCount indicesCount = renderAction $ \c -> contextDraw c instancesCount indicesCount
 
 -- | Play deferred context on immediate context.
 renderPlay :: (Context c d, Context dc d) => dc -> Render c ()

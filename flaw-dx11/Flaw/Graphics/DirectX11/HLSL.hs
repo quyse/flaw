@@ -274,6 +274,7 @@ nodeSource node = case node of
 			VectorValueType _ _ -> concat $ intersperse ", " s
 			MatrixValueType _ _ _ -> concat $ intersperse ", " s
 		in valueTypeSource t <> "(" <> fromString content <> ")"
+	IndexNode _ _ a b -> "(" <> nodeSource a <> ")[" <> nodeSource b <> "]"
 	AddNode _ a b -> binaryOpSource '+' a b
 	SubtractNode _ a b -> binaryOpSource '-' a b
 	MultiplyNode _ a b -> binaryOpSource '*' a b

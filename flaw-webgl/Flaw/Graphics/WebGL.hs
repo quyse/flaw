@@ -373,15 +373,19 @@ instance Context WebGLContext WebGLDevice where
 		, webglContextDesiredState = WebGLContextState
 			{ webglContextStateIndexBuffer = indexBufferRef
 			}
-		} indicesCount = do
+		} instancesCount indicesCount = do
 		webglUpdateContext context
 		WebGLIndexBufferId
 			{ webglIndexBufferBuffer = jsBuffer
 			, webglIndexBufferMode = mode
 			, webglIndexBufferFormat = format
 			} <- readIORef indexBufferRef
-		if isNull jsBuffer then js_drawArrays jsContext mode 0 indicesCount
-		else js_drawElements jsContext mode indicesCount format 0
+		if instancesCount > 1 then
+			if isNull jsBuffer then js_drawArraysInstanced jsContext mode 0 indicesCount instancesCount
+			else js_drawElementsInstanced jsContext mode indicesCount format 0 instancesCount
+		else
+			if isNull jsBuffer then js_drawArrays jsContext mode 0 indicesCount
+			else js_drawElements jsContext mode indicesCount format 0
 
 	contextPlay = undefined
 

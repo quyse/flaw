@@ -66,6 +66,8 @@ module Flaw.Graphics.WebGL.FFI
 	, js_viewport
 	, js_drawArrays
 	, js_drawElements
+	, js_drawArraysInstanced
+	, js_drawElementsInstanced
 	, js_loadImage
 	, webgl_DEPTH_BUFFER_BIT
 	, webgl_STENCIL_BUFFER_BIT
@@ -457,6 +459,8 @@ foreign import javascript unsafe "$1.clear($2)" js_clear :: JSRef JS_WebGLContex
 foreign import javascript unsafe "$1.viewport($2, $3, $4, $5)" js_viewport :: JSRef JS_WebGLContext -> GLint -> GLint -> GLsizei -> GLsizei -> IO ()
 foreign import javascript unsafe "$1.drawArrays($2, $3, $4)" js_drawArrays :: JSRef JS_WebGLContext -> GLenum -> GLint -> GLsizei -> IO ()
 foreign import javascript unsafe "$1.drawElements($2, $3, $4, $5)" js_drawElements :: JSRef JS_WebGLContext -> GLenum -> GLsizei -> GLenum -> GLintptr -> IO ()
+foreign import javascript unsafe "$1.drawArraysInstanced($2, $3, $4, $5)" js_drawArraysInstanced :: JSRef JS_WebGLContext -> GLenum -> GLint -> GLsizei -> GLsizei -> IO ()
+foreign import javascript unsafe "$1.drawElementsInstanced($2, $3, $4, $5, $6)" js_drawElementsInstanced :: JSRef JS_WebGLContext -> GLenum -> GLsizei -> GLenum -> GLintptr -> GLsizei -> IO ()
 
 -- Helpers.
 
