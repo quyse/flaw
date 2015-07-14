@@ -59,6 +59,8 @@ nodeInfo node = case node of
 	NormNode _ _ a -> nodeInfo a
 	Norm2Node _ _ a -> nodeInfo a
 	NormalizeNode _ a -> nodeInfo a
+	DdxNode _ a -> nodeInfo a
+	DdyNode _ a -> nodeInfo a
 	InstanceIdNode -> emptyNodeInfo
 	ComponentNode _ _ _ a -> nodeInfo a
 	SwizzleNode _ _ _ a -> nodeInfo a

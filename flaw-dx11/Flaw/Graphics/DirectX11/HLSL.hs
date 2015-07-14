@@ -115,7 +115,7 @@ hlslShader stage (temps, _, uniforms, samplers, targets) inputs outputs interpol
 		} = "\t" <> valueTypeSource t <> " " <> name <> " : " <> semantic <> ";\n"
 	uniformsSource = foldr mappend mempty $ map uniformBufferSource $ groupBy (\a b -> uniformSlot a == uniformSlot b) uniforms
 	samplersSource = foldr mappend mempty $ map samplerSource samplers
-	codeSource = "Output " <> entryPoint <> "(Input input)\n{\n\tOutput output;\n" <> tempsSource <> targetsSource <> interpolantsSource <> "\treturn output;\n}\n"
+	codeSource = "Output " <> entryPoint <> "(Input input, uint sI : SV_InstanceID)\n{\n\tOutput output;\n" <> tempsSource <> targetsSource <> interpolantsSource <> "\treturn output;\n}\n"
 	tempsSource = foldr mappend mempty $ map tempSource temps
 	tempSource Temp
 		{ tempIndex = i
@@ -311,6 +311,8 @@ nodeSource node = case node of
 	NormNode _ _ a -> func1Source "length" a
 	Norm2Node _ _ a -> func1Source "length2" a
 	NormalizeNode _ a -> func1Source "normalize" a
+	DdxNode _ a -> func1Source "ddx" a
+	DdyNode _ a -> func1Source "ddy" a
 	InstanceIdNode -> "sI"
 	ComponentNode _ _ c a -> "(" <> nodeSource a <> ")." <> singleton c
 	SwizzleNode _ _ s a ->  "(" <> nodeSource a <> ")." <> fromString s

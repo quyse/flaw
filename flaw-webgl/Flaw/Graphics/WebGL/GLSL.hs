@@ -296,6 +296,8 @@ nodeSource node = case node of
 	NormNode _ _ a -> func1Source "length" a
 	Norm2Node _ _ a -> func1Source "length2" a
 	NormalizeNode _ a -> func1Source "normalize" a
+	DdxNode _ a -> func1Source "ddx" a
+	DdyNode _ a -> func1Source "ddy" a
 	InstanceIdNode -> "sI"
 	ComponentNode _ _ c a -> "(" <> nodeSource a <> ")." <> singleton c
 	SwizzleNode _ _ s a ->  "(" <> nodeSource a <> ")." <> fromString s
