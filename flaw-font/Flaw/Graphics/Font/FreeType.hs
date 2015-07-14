@@ -76,7 +76,6 @@ loadFreeTypeFont (FreeTypeLibrary ftLibrary) bytes = allocate create destroy whe
 	destroy (FreeTypeFont ftFace memory) = do
 		_ <- ft_Done_Face ftFace
 		free memory
-		return ()
 
 createFreeTypeGlyphs :: FreeTypeFont -> Int -> Int -> Int -> IO (V.Vector (Image Pixel8, GlyphInfo))
 createFreeTypeGlyphs (FreeTypeFont ftFace _memory) size halfScaleX halfScaleY = do

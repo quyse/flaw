@@ -47,14 +47,14 @@ instance FontShaper HarfbuzzShaper where
 	shapeText (HarfbuzzShaper hbFont hbBuffer) text = do
 		hb_buffer_set_direction hbBuffer hB_DIRECTION_LTR
 		B.unsafeUseAsCStringLen (T.encodeUtf8 text) $ \(textPtr, textLen) -> do
-			hb_buffer_add_utf8 hbBuffer textPtr textLen 0 textLen
+			hb_buffer_add_utf8 hbBuffer textPtr (fromIntegral textLen) 0 (fromIntegral textLen)
 		hb_shape hbFont hbBuffer nullPtr 0
 
 		(hbGlyphInfos, hbGlyphPositions, glyphCount) <- alloca $ \glyphCountPtr -> do
 			hbGlyphInfos <- hb_buffer_get_glyph_infos hbBuffer glyphCountPtr
 			hbGlyphPositions <- hb_buffer_get_glyph_positions hbBuffer glyphCountPtr
 			glyphCount <- peek glyphCountPtr
-			return (hbGlyphInfos, hbGlyphPositions, glyphCount)
+			return (hbGlyphInfos, hbGlyphPositions, fromIntegral glyphCount)
 
 		let f = V.generateM glyphCount $ \i -> do
 			let hbGlyphPositionPtr = plusPtr hbGlyphPositions $ i * hb_glyph_position_t_size
@@ -87,11 +87,11 @@ foreign import ccall unsafe hb_font_destroy :: Ptr Hb_font_t -> IO ()
 foreign import ccall unsafe hb_buffer_create :: IO (Ptr Hb_buffer_t)
 foreign import ccall unsafe hb_buffer_destroy :: Ptr Hb_buffer_t -> IO ()
 foreign import ccall unsafe hb_buffer_set_direction :: Ptr Hb_buffer_t -> Int -> IO ()
-foreign import ccall unsafe hb_buffer_add_utf8 :: Ptr Hb_buffer_t -> Ptr CChar -> Int -> Int -> Int -> IO ()
+foreign import ccall unsafe hb_buffer_add_utf8 :: Ptr Hb_buffer_t -> Ptr CChar -> CInt -> CUInt -> CInt -> IO ()
 foreign import ccall unsafe hb_buffer_clear_contents :: Ptr Hb_buffer_t -> IO ()
-foreign import ccall unsafe hb_shape :: Ptr Hb_font_t -> Ptr Hb_buffer_t -> Ptr () -> Int -> IO ()
-foreign import ccall unsafe hb_buffer_get_glyph_infos :: Ptr Hb_buffer_t -> Ptr Int -> IO (Ptr Hb_glyph_info_t)
-foreign import ccall unsafe hb_buffer_get_glyph_positions :: Ptr Hb_buffer_t -> Ptr Int -> IO (Ptr Hb_glyph_position_t)
+foreign import ccall unsafe hb_shape :: Ptr Hb_font_t -> Ptr Hb_buffer_t -> Ptr () -> CUInt -> IO ()
+foreign import ccall unsafe hb_buffer_get_glyph_infos :: Ptr Hb_buffer_t -> Ptr CUInt -> IO (Ptr Hb_glyph_info_t)
+foreign import ccall unsafe hb_buffer_get_glyph_positions :: Ptr Hb_buffer_t -> Ptr CUInt -> IO (Ptr Hb_glyph_position_t)
 
 hb_x_advance :: Ptr Hb_glyph_position_t -> Ptr Hb_position_t
 hb_x_advance = castPtr
