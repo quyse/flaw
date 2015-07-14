@@ -36,6 +36,7 @@ import Flaw.Exception
 import Flaw.FFI
 import Flaw.FFI.Win32
 import Flaw.FFI.COM
+import Flaw.Graphics.Blend
 import Flaw.Graphics.DirectX11.FFI
 import Flaw.Graphics.DirectX11.HLSL
 import Flaw.Graphics.DXGI.FFI
@@ -72,6 +73,10 @@ instance Device Dx11Device where
 		= Dx11SamplerStateId ID3D11SamplerState
 		| Dx11NullSamplerStateId
 		deriving Eq
+	data BlendStateId Dx11Device
+		= Dx11BlendStateId ID3D11BlendState
+		| Dx11NullBlendStateId
+		deriving Eq
 	newtype RenderTargetId Dx11Device
 		= Dx11RenderTargetId ID3D11RenderTargetView
 		deriving Eq
@@ -101,6 +106,7 @@ instance Device Dx11Device where
 
 	nullTexture = Dx11NullTextureId
 	nullSamplerState = Dx11NullSamplerStateId
+	nullBlendState = Dx11NullBlendStateId
 	nullDepthStencilTarget = Dx11NullDepthStencilTargetId
 	nullIndexBuffer = Dx11NullIndexBufferId D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST
 	nullUniformBuffer = Dx11NullUniformBufferId
@@ -317,6 +323,70 @@ instance Device Dx11Device where
 			createCOMObjectViaPtr $ m_ID3D11Device_CreateSamplerState deviceInterface descPtr
 
 		return (releaseKey, Dx11SamplerStateId ssInterface)
+
+	createBlendState Dx11Device
+		{ dx11DeviceInterface = deviceInterface
+		} blendStateInfo@BlendStateInfo
+		{ blendSourceColor = sourceColor
+		, blendDestColor = destColor
+		, blendColorOperation = colorOperation
+		, blendSourceAlpha = sourceAlpha
+		, blendDestAlpha = destAlpha
+		, blendAlphaOperation = alphaOperation
+		} = describeException ("failed to create DirectX11 blend state", blendStateInfo) $ do
+		-- conversion functions
+		let convertColorSource colorSource = case colorSource of
+			ColorSourceZero -> D3D11_BLEND_ZERO
+			ColorSourceOne -> D3D11_BLEND_ONE
+			ColorSourceSrc -> D3D11_BLEND_SRC_COLOR
+			ColorSourceInvSrc -> D3D11_BLEND_INV_SRC_COLOR
+			ColorSourceSrcAlpha -> D3D11_BLEND_SRC_ALPHA
+			ColorSourceInvSrcAlpha -> D3D11_BLEND_INV_SRC_ALPHA
+			ColorSourceDest -> D3D11_BLEND_DEST_COLOR
+			ColorSourceInvDest -> D3D11_BLEND_INV_DEST_COLOR
+			ColorSourceDestAlpha -> D3D11_BLEND_DEST_ALPHA
+			ColorSourceInvDestAlpha -> D3D11_BLEND_INV_DEST_ALPHA
+			ColorSourceSecondSrc -> D3D11_BLEND_SRC1_COLOR
+			ColorSourceInvSecondSrc -> D3D11_BLEND_INV_SRC1_COLOR
+			ColorSourceSecondSrcAlpha -> D3D11_BLEND_SRC1_ALPHA
+			ColorSourceInvSecondSrcAlpha -> D3D11_BLEND_INV_SRC1_ALPHA
+		let convertAlphaSource alphaSource = case alphaSource of
+			AlphaSourceZero -> D3D11_BLEND_ZERO
+			AlphaSourceOne -> D3D11_BLEND_ONE
+			AlphaSourceSrc -> D3D11_BLEND_SRC_ALPHA
+			AlphaSourceInvSrc -> D3D11_BLEND_INV_SRC_ALPHA
+			AlphaSourceDest -> D3D11_BLEND_DEST_ALPHA
+			AlphaSourceInvDest -> D3D11_BLEND_INV_DEST_ALPHA
+			AlphaSourceSecondSrc -> D3D11_BLEND_SRC1_ALPHA
+			AlphaSourceInvSecondSrc -> D3D11_BLEND_INV_SRC1_ALPHA
+		let convertOperation operation = case operation of
+			BlendOperationAdd -> D3D11_BLEND_OP_ADD
+			BlendOperationSubtractAB -> D3D11_BLEND_OP_REV_SUBTRACT
+			BlendOperationSubtractBA -> D3D11_BLEND_OP_SUBTRACT
+			BlendOperationMin -> D3D11_BLEND_OP_MIN
+			BlendOperationMax -> D3D11_BLEND_OP_MAX
+
+		-- desc
+		let desc = D3D11_BLEND_DESC
+			{ f_D3D11_BLEND_DESC_AlphaToCoverageEnable = False
+			, f_D3D11_BLEND_DESC_IndependentBlendEnable = False
+			, f_D3D11_BLEND_DESC_RenderTarget = replicate 8 D3D11_RENDER_TARGET_BLEND_DESC
+				{ f_D3D11_RENDER_TARGET_BLEND_DESC_BlendEnable = True
+				, f_D3D11_RENDER_TARGET_BLEND_DESC_SrcBlend = convertColorSource sourceColor
+				, f_D3D11_RENDER_TARGET_BLEND_DESC_DestBlend = convertColorSource destColor
+				, f_D3D11_RENDER_TARGET_BLEND_DESC_BlendOp = convertOperation colorOperation
+				, f_D3D11_RENDER_TARGET_BLEND_DESC_SrcBlendAlpha = convertAlphaSource sourceAlpha
+				, f_D3D11_RENDER_TARGET_BLEND_DESC_DestBlendAlpha = convertAlphaSource destAlpha
+				, f_D3D11_RENDER_TARGET_BLEND_DESC_BlendOpAlpha = convertOperation alphaOperation
+				, f_D3D11_RENDER_TARGET_BLEND_DESC_RenderTargetWriteMask = 15 -- D3D11_COLOR_WRITE_ENABLE_ALL
+				}
+			}
+
+		-- create
+		(releaseKey, bsInterface) <- allocateCOMObject $ with desc $ \descPtr -> do
+			createCOMObjectViaPtr $ m_ID3D11Device_CreateBlendState deviceInterface descPtr
+
+		return (releaseKey, Dx11BlendStateId bsInterface)
 
 	createReadableRenderTarget Dx11Device
 		{ dx11DeviceInterface = deviceInterface
@@ -746,6 +816,7 @@ data Dx11ContextState = Dx11ContextState
 	, dx11ContextStateIndexBuffer :: !(IORef (IndexBufferId Dx11Device))
 	, dx11ContextStateUniformBuffers :: !(IOArray Int (UniformBufferId Dx11Device))
 	, dx11ContextStateSamplers :: !(IOArray Int (TextureId Dx11Device, SamplerStateId Dx11Device))
+	, dx11ContextStateBlendState :: !(IORef (BlendStateId Dx11Device))
 	, dx11ContextStateProgram :: !(IORef (ProgramId Dx11Device))
 	}
 
@@ -767,6 +838,7 @@ dx11CreateContextState = do
 	indexBuffer <- newIORef $ Dx11NullIndexBufferId D3D11_PRIMITIVE_TOPOLOGY_UNDEFINED
 	uniformBuffers <- newArray (0, 7) Dx11NullUniformBufferId
 	samplers <- newArray (0, 7) (Dx11NullTextureId, Dx11NullSamplerStateId)
+	blendState <- newIORef $ Dx11NullBlendStateId
 	program <- newIORef Dx11NullProgramId
 	return Dx11ContextState
 		{ dx11ContextStateFrameBuffer = frameBuffer
@@ -775,6 +847,7 @@ dx11CreateContextState = do
 		, dx11ContextStateIndexBuffer = indexBuffer
 		, dx11ContextStateUniformBuffers = uniformBuffers
 		, dx11ContextStateSamplers = samplers
+		, dx11ContextStateBlendState = blendState
 		, dx11ContextStateProgram = program
 		}
 
@@ -786,6 +859,7 @@ dx11SetDefaultContextState Dx11ContextState
 	, dx11ContextStateIndexBuffer = indexBufferRef
 	, dx11ContextStateUniformBuffers = uniformBuffersArray
 	, dx11ContextStateSamplers = samplersArray
+	, dx11ContextStateBlendState = blendStateRef
 	, dx11ContextStateProgram = programRef
 	} = do
 	writeIORef frameBufferRef $ Dx11FrameBufferId [] Dx11NullDepthStencilTargetId
@@ -797,6 +871,7 @@ dx11SetDefaultContextState Dx11ContextState
 	forM_ (range uniformBuffersBounds) $ \i -> writeArray uniformBuffersArray i Dx11NullUniformBufferId
 	samplersBounds <- getBounds samplersArray
 	forM_ (range samplersBounds) $ \i -> writeArray samplersArray i (Dx11NullTextureId, Dx11NullSamplerStateId)
+	writeIORef blendStateRef Dx11NullBlendStateId
 	writeIORef programRef Dx11NullProgramId
 
 instance Context Dx11Context Dx11Device where
@@ -932,6 +1007,17 @@ instance Context Dx11Context Dx11Device where
 		writeArray samplersArray i (texture, samplerState)
 		r <- scope
 		writeArray samplersArray i oldSampler
+		return r
+
+	contextSetBlendState Dx11Context
+		{ dx11ContextDesiredState = Dx11ContextState
+			{ dx11ContextStateBlendState = blendStateRef
+			}
+		} blendState scope = do
+		oldBlendState <- readIORef blendStateRef
+		writeIORef blendStateRef blendState
+		r <- scope
+		writeIORef blendStateRef oldBlendState
 		return r
 
 	contextSetProgram Dx11Context
@@ -1253,6 +1339,7 @@ dx11UpdateContext Dx11Context
 		, dx11ContextStateIndexBuffer = actualIndexBufferRef
 		, dx11ContextStateUniformBuffers = actualUniformBuffersArray
 		, dx11ContextStateSamplers = actualSamplersArray
+		, dx11ContextStateBlendState = actualBlendStateRef
 		, dx11ContextStateProgram = actualProgramRef
 		}
 	, dx11ContextDesiredState = Dx11ContextState
@@ -1262,6 +1349,7 @@ dx11UpdateContext Dx11Context
 		, dx11ContextStateIndexBuffer = desiredIndexBufferRef
 		, dx11ContextStateUniformBuffers = desiredUniformBuffersArray
 		, dx11ContextStateSamplers = desiredSamplersArray
+		, dx11ContextStateBlendState = desiredBlendStateRef
 		, dx11ContextStateProgram = desiredProgramRef
 		}
 	} = do
@@ -1359,6 +1447,13 @@ dx11UpdateContext Dx11Context
 		withArray ssInterfaces $ \ssInterfacesPtr -> do
 			m_ID3D11DeviceContext_VSSetSamplers contextInterface 0 samplersCount ssInterfacesPtr
 			m_ID3D11DeviceContext_PSSetSamplers contextInterface 0 samplersCount ssInterfacesPtr
+
+	-- blend state
+	refSetup actualBlendStateRef desiredBlendStateRef $ \desiredBlendState -> do
+		let blendStateInterfacePtr = case desiredBlendState of
+			Dx11BlendStateId blendStateInterface -> pokeCOMObject blendStateInterface
+			Dx11NullBlendStateId -> nullPtr
+		m_ID3D11DeviceContext_OMSetBlendState contextInterface blendStateInterfacePtr nullPtr 0xffffffff
 
 	-- program (shaders, input layout)
 	refSetup actualProgramRef desiredProgramRef $ \desiredProgram -> do
