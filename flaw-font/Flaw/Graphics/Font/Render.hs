@@ -33,6 +33,7 @@ import Foreign.Ptr
 import Foreign.Storable
 
 import Flaw.Graphics
+import Flaw.Graphics.Blend
 import Flaw.Graphics.Font
 import Flaw.Graphics.Program
 import Flaw.Graphics.Sampler
@@ -46,6 +47,7 @@ data GlyphRenderer d = GlyphRenderer
 	, glyphRendererIndexBuffer :: !(IndexBufferId d)
 	, glyphRendererUniformBuffer :: !(UniformBufferId d)
 	, glyphRendererSamplerState :: !(SamplerStateId d)
+	, glyphRendererBlendState :: !(BlendStateId d)
 	, glyphRendererProgram :: !(ProgramId d)
 	, glyphRendererCapacity :: !Int
 	, glyphRendererBuffer :: !(VSM.IOVector Vec4f)
@@ -86,6 +88,23 @@ initGlyphRenderer device subpixelMode = do
 		, samplerWrapV = SamplerWrapClamp
 		, samplerWrapW = SamplerWrapClamp
 		}
+
+	let nonSubpixelBlendStateInfo = defaultBlendStateInfo
+		{ blendSourceColor = ColorSourceSrcAlpha
+		, blendDestColor = ColorSourceInvSrcAlpha
+		, blendColorOperation = BlendOperationAdd
+		}
+	let subpixelBlendStateInfo = defaultBlendStateInfo
+		{ blendSourceColor = ColorSourceSecondSrc
+		, blendDestColor = ColorSourceInvSecondSrc
+		, blendColorOperation = BlendOperationAdd
+		}
+	(rkbs, bs) <- createBlendState device $ case subpixelMode of
+		GlyphSubpixelModeNone -> nonSubpixelBlendStateInfo
+		GlyphSubpixelModeHorizontalRGB -> subpixelBlendStateInfo
+		GlyphSubpixelModeHorizontalBGR -> subpixelBlendStateInfo
+		GlyphSubpixelModeVerticalRGB -> subpixelBlendStateInfo
+		GlyphSubpixelModeVerticalBGR -> subpixelBlendStateInfo
 
 	ubs <- liftIO $ uniformBufferSlot 0
 	uPositions <- liftIO (uniformArray capacity ubs :: IO (Node [Vec4f]))
@@ -135,6 +154,7 @@ initGlyphRenderer device subpixelMode = do
 		release rkvb
 		release rkub
 		release rkss
+		release rkbs
 		release rkProgram
 
 	return (rk, GlyphRenderer
@@ -142,6 +162,7 @@ initGlyphRenderer device subpixelMode = do
 		, glyphRendererIndexBuffer = ib
 		, glyphRendererUniformBuffer = ub
 		, glyphRendererSamplerState = ss
+		, glyphRendererBlendState = bs
 		, glyphRendererProgram = program
 		, glyphRendererCapacity = capacity
 		, glyphRendererBuffer = buffer
@@ -230,6 +251,7 @@ renderGlyphs GlyphRenderer
 	, glyphRendererIndexBuffer = ib
 	, glyphRendererUniformBuffer = ub
 	, glyphRendererSamplerState = ss
+	, glyphRendererBlendState = bs
 	, glyphRendererProgram = program
 	, glyphRendererCapacity = capacity
 	, glyphRendererBuffer = buffer
@@ -245,6 +267,7 @@ renderGlyphs GlyphRenderer
 	renderIndexBuffer ib
 	renderUniformBuffer 0 ub
 	renderSampler 0 textureId ss
+	renderBlendState bs
 	renderProgram program
 
 	let flush = do
