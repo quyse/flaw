@@ -23,6 +23,7 @@ module Flaw.Graphics.Internal
 	, renderIndexBuffer
 	, renderUniformBuffer
 	, renderSampler
+	, renderBlendState
 	, renderProgram
 	, renderClearColor
 	, renderClearDepth
@@ -42,6 +43,7 @@ import qualified Data.ByteString as BS
 import qualified Data.Text as T
 import Foreign.Ptr
 
+import Flaw.Graphics.Blend
 import Flaw.Graphics.Program.Internal
 import Flaw.Graphics.Sampler
 import Flaw.Graphics.Texture
@@ -80,6 +82,8 @@ class Device d where
 	data TextureId d :: *
 	-- | Type for sampler state id.
 	data SamplerStateId d :: *
+	-- | Type for blend state id.
+	data BlendStateId d :: *
 	-- | Type for render target id.
 	data RenderTargetId d :: *
 	-- | Type for depth stencil target id.
@@ -99,6 +103,8 @@ class Device d where
 	nullTexture :: TextureId d
 	-- | Null sampler state.
 	nullSamplerState :: SamplerStateId d
+	-- | Null blend state.
+	nullBlendState :: BlendStateId d
 	-- | Null depth stencil target.
 	nullDepthStencilTarget :: DepthStencilTargetId d
 	-- | Null index buffer.
@@ -112,6 +118,8 @@ class Device d where
 	createStaticTexture :: ResourceIO m => d -> TextureInfo -> BS.ByteString -> m (ReleaseKey, TextureId d)
 	-- | Create sampler state.
 	createSamplerState :: ResourceIO m => d -> SamplerStateInfo -> m (ReleaseKey, SamplerStateId d)
+	-- | Create blend state.
+	createBlendState :: ResourceIO m => d -> BlendStateInfo -> m (ReleaseKey, BlendStateId d)
 	-- | Create readable render target.
 	createReadableRenderTarget :: ResourceIO m => d -> Int -> Int -> TextureFormat -> m (ReleaseKey, RenderTargetId d, TextureId d)
 	-- | Create depth stencil target.
@@ -174,6 +182,8 @@ class Device d => Context c d | c -> d where
 	contextSetUniformBuffer :: c -> Int -> UniformBufferId d -> IO a -> IO a
 	-- | Set sampler.
 	contextSetSampler :: c -> Int -> TextureId d -> SamplerStateId d -> IO a -> IO a
+	-- | Set blend state.
+	contextSetBlendState :: c -> BlendStateId d -> IO a -> IO a
 	-- | Set program.
 	contextSetProgram :: c -> ProgramId d -> IO a -> IO a
 
@@ -248,6 +258,10 @@ renderUniformBuffer i ub = renderSetup $ \c q -> contextSetUniformBuffer c i ub 
 -- | Set sampler.
 renderSampler :: Context c d => Int -> TextureId d -> SamplerStateId d -> Render c ()
 renderSampler i t s = renderSetup $ \c q -> contextSetSampler c i t s q
+
+-- | Set blend state.
+renderBlendState :: Context c d => BlendStateId d -> Render c ()
+renderBlendState b = renderSetup $ \c q -> contextSetBlendState c b q
 
 -- | Set current program.
 renderProgram :: Context c d => ProgramId d -> Render c ()

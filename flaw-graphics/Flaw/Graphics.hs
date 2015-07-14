@@ -21,6 +21,7 @@ module Flaw.Graphics
 	, renderIndexBuffer
 	, renderUniformBuffer
 	, renderSampler
+	, renderBlendState
 	, renderProgram
 	, renderClearColor
 	, renderClearDepth
