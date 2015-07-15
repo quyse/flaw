@@ -100,7 +100,7 @@ Win32WindowSystem* initWin32WindowSystem()
 	wndClass.hInstance = GetModuleHandle(NULL);
 	wndClass.hIcon = LoadIcon(NULL, IDI_APPLICATION);
 	wndClass.hCursor = LoadCursor(NULL, IDC_ARROW);
-	wndClass.hbrBackground = (HBRUSH)COLOR_WINDOW;
+	wndClass.hbrBackground = GetStockBrush(BLACK_BRUSH);
 	wndClass.lpszClassName = wndClassName;
 	RegisterClass(&wndClass);
 
