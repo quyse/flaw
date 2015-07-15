@@ -13,6 +13,7 @@ module Flaw.Graphics.Font.Util
 import Codec.Picture
 import Control.Monad
 import qualified Data.Vector as V
+import qualified Data.Vector.Mutable as VM
 import qualified Data.Vector.Storable as VS
 import qualified Data.Vector.Storable.Mutable as VSM
 import Data.List
@@ -89,11 +90,12 @@ unite images GlyphUnionConfig
 	rawResultHeight = if lastRowHeight > 0 then lastCurrentY + lastRowHeight + border else lastCurrentY
 	resultHeight = if heightIsPowerOfTwo then powerOfTwo rawResultHeight 1 else rawResultHeight
 	powerOfTwo n p = if n <= p then p else powerOfTwo n $ p * 2
-	-- create united image
 	result = do
+		-- create united image and reorder positions to initial (unsorted) order
 		resultImageData <- VSM.replicate (resultWidth * resultHeight) 0
+		resultPositions <- VM.new (V.length images)
 		VSM.unsafeWith resultImageData $ \resultPtr -> do
-			forM_ (zip sortedImages positions) $ \(imageIndex, (positionX, positionY)) -> do
+			forM_ (zip sortedImages positions) $ \(imageIndex, position@(positionX, positionY)) -> do
 				let Image
 					{ imageWidth = width
 					, imageHeight = height
@@ -106,9 +108,12 @@ unite images GlyphUnionConfig
 							(advancePtr resultPtr ((positionY + i) * resultWidth + positionX)) -- destination
 							(advancePtr sourcePtr (i * width)) -- source
 							width -- count
+				VM.write resultPositions imageIndex position
 		freezedResultImageData <- VS.unsafeFreeze resultImageData
+		freezedResultPositions <- V.unsafeFreeze resultPositions
+
 		return (Image
 			{ imageWidth = resultWidth
 			, imageHeight = resultHeight
 			, imageData = freezedResultImageData
-			}, V.fromList positions)
+			}, freezedResultPositions)
