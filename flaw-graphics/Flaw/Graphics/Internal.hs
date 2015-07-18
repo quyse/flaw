@@ -48,7 +48,6 @@ import Flaw.Graphics.Program.Internal
 import Flaw.Graphics.Sampler
 import Flaw.Graphics.Texture
 import Flaw.Math
-import Flaw.Resource
 import Flaw.Stack
 
 -- | Class of graphics system.
@@ -63,14 +62,14 @@ class System s where
 	-- | Type for id of display mode.
 	data DisplayModeId s :: *
 	-- | Get list of graphics devices installed in system.
-	getInstalledDevices :: ResourceIO m => s -> m (ReleaseKey, [(DeviceId s, DeviceInfo s)])
+	getInstalledDevices :: s -> IO ([(DeviceId s, DeviceInfo s)], IO ())
 	-- | Create custom display mode (with specified width and height) for specified display.
-	createDisplayMode :: ResourceIO m
-		=> s
+	createDisplayMode
+		:: s
 		-> DisplayId s -- ^ Display id.
 		-> Int -- ^ Width.
 		-> Int -- ^ Height.
-		-> m (ReleaseKey, (DisplayModeId s, DisplayModeInfo))
+		-> IO ((DisplayModeId s, DisplayModeInfo), IO ())
 
 -- | Class of graphics device.
 -- Graphics device performs managing of resources.
@@ -113,36 +112,36 @@ class Device d where
 	nullUniformBuffer :: UniformBufferId d
 
 	-- | Create deferred context.
-	createDeferredContext :: (ResourceIO m, Context (DeferredContext d) d) => d -> m (ReleaseKey, DeferredContext d)
+	createDeferredContext :: Context (DeferredContext d) d => d -> IO (DeferredContext d, IO ())
 	-- | Create static texture.
-	createStaticTexture :: ResourceIO m => d -> TextureInfo -> BS.ByteString -> m (ReleaseKey, TextureId d)
+	createStaticTexture :: d -> TextureInfo -> BS.ByteString -> IO (TextureId d, IO ())
 	-- | Create sampler state.
-	createSamplerState :: ResourceIO m => d -> SamplerStateInfo -> m (ReleaseKey, SamplerStateId d)
+	createSamplerState :: d -> SamplerStateInfo -> IO (SamplerStateId d, IO ())
 	-- | Create blend state.
-	createBlendState :: ResourceIO m => d -> BlendStateInfo -> m (ReleaseKey, BlendStateId d)
+	createBlendState :: d -> BlendStateInfo -> IO (BlendStateId d, IO ())
 	-- | Create readable render target.
-	createReadableRenderTarget :: ResourceIO m => d -> Int -> Int -> TextureFormat -> m (ReleaseKey, RenderTargetId d, TextureId d)
+	createReadableRenderTarget :: d -> Int -> Int -> TextureFormat -> IO ((RenderTargetId d, TextureId d), IO ())
 	-- | Create depth stencil target.
-	createDepthStencilTarget :: ResourceIO m => d -> Int -> Int -> m (ReleaseKey, DepthStencilTargetId d)
+	createDepthStencilTarget :: d -> Int -> Int -> IO (DepthStencilTargetId d, IO ())
 	-- | Create readable depth stencil target.
-	createReadableDepthStencilTarget :: ResourceIO m => d -> Int -> Int -> m (ReleaseKey, DepthStencilTargetId d, TextureId d)
+	createReadableDepthStencilTarget :: d -> Int -> Int -> IO ((DepthStencilTargetId d, TextureId d), IO ())
 	-- | Create framebuffer.
-	createFrameBuffer :: ResourceIO m => d -> [RenderTargetId d] -> DepthStencilTargetId d -> m (ReleaseKey, FrameBufferId d)
+	createFrameBuffer :: d -> [RenderTargetId d] -> DepthStencilTargetId d -> IO (FrameBufferId d, IO ())
 	-- | Create vertex buffer.
-	createStaticVertexBuffer :: ResourceIO m
-		=> d -- ^ Device.
+	createStaticVertexBuffer
+		:: d -- ^ Device.
 		-> BS.ByteString -- ^ Buffer
 		-> Int -- ^ Stride in bytes.
-		-> m (ReleaseKey, VertexBufferId d)
+		-> IO (VertexBufferId d, IO ())
 	-- | Create index buffer.
-	createStaticIndexBuffer :: ResourceIO m => d -> BS.ByteString -> Bool -> m (ReleaseKey, IndexBufferId d)
+	createStaticIndexBuffer :: d -> BS.ByteString -> Bool -> IO (IndexBufferId d, IO ())
 	-- | Create program.
-	createProgram :: ResourceIO m
-		=> d -- ^ Device.
+	createProgram
+		:: d -- ^ Device.
 		-> Program () -- ^ Program contents.
-		-> m (ReleaseKey, ProgramId d)
+		-> IO (ProgramId d, IO ())
 	-- | Create uniform buffer.
-	createUniformBuffer :: ResourceIO m => d -> Int -> m (ReleaseKey, UniformBufferId d)
+	createUniformBuffer :: d -> Int -> IO (UniformBufferId d, IO ())
 
 -- | Class of graphics context.
 -- Performs actual render operations.

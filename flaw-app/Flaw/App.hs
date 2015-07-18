@@ -4,7 +4,7 @@ Description: Abstract from platform for app initialization.
 License: MIT
 -}
 
-{-# LANGUAGE CPP, FlexibleContexts, RecursiveDo #-}
+{-# LANGUAGE CPP, RecursiveDo #-}
 
 module Flaw.App
 	( initApp
@@ -18,12 +18,11 @@ module Flaw.App
 	) where
 
 import Control.Exception
-import Control.Monad.IO.Class
 import qualified Data.Text as T
 import Data.Time
 import Data.Typeable
 
-import Flaw.Resource
+import Flaw.Book
 
 #if defined(ghcjs_HOST_OS)
 
@@ -58,49 +57,44 @@ type AppInputManager = Win32InputManager
 #endif
 
 
-initApp :: ResourceIO m => T.Text -> Int -> Int -> Bool
-	-> m
-		( ReleaseKey
-		, (AppWindow, AppGraphicsDevice, AppGraphicsContext, AppGraphicsPresenter, AppInputManager)
+initApp :: T.Text -> Int -> Int -> Bool
+	-> IO
+		( (AppWindow, AppGraphicsDevice, AppGraphicsContext, AppGraphicsPresenter, AppInputManager)
+		, IO ()
 		)
 initApp title width height needDepth = do
+
+	bk <- newBook
+
 #if defined(ghcjs_HOST_OS)
 
 	window@Web.Canvas
 		{ Web.canvasElement = domCanvas
-		} <- liftIO $ Web.initCanvas title
+		} <- Web.initCanvas title
 
-	inputManager <- liftIO $ initWebInput window
+	inputManager <- initWebInput window
 
-	(releaseKey, graphicsDevice, graphicsContext, presenter) <- webglInit domCanvas needDepth
+	(graphicsDevice, graphicsContext, presenter) <- book bk $ webglInit domCanvas needDepth
 
 #else
 
 #if defined(mingw32_HOST_OS)
 
-	(windowSystemReleaseKey, windowSystem) <- initWin32WindowSystem
-	(windowReleaseKey, window) <- createWin32Window windowSystem title 0 0 width height
+	windowSystem <- book bk $ initWin32WindowSystem
+	window <- book bk $ createWin32Window windowSystem title 0 0 width height
 
-	inputManager <- liftIO $ initWin32Input window
+	inputManager <- initWin32Input window
 
-	(graphicsSystemReleaseKey, graphicsSystem) <- dxgiCreateSystem
-	(graphicsDevicesReleaseKey, graphicsDevices) <- getInstalledDevices graphicsSystem
-	(graphicsDeviceReleaseKey, graphicsDevice, graphicsContext) <- dx11CreateDevice $ fst $ head graphicsDevices
-	(presenterReleaseKey, presenter) <- dx11CreatePresenter graphicsDevice window Nothing needDepth
-
-	releaseKey <- registerRelease $ do
-		release windowSystemReleaseKey
-		release windowReleaseKey
-		release graphicsSystemReleaseKey
-		release graphicsDevicesReleaseKey
-		release graphicsDeviceReleaseKey
-		release presenterReleaseKey
+	graphicsSystem <- book bk $ dxgiCreateSystem
+	graphicsDevices <- book bk $ getInstalledDevices graphicsSystem
+	(graphicsDevice, graphicsContext) <- book bk $ dx11CreateDevice $ fst $ head graphicsDevices
+	presenter <- book bk $ dx11CreatePresenter graphicsDevice window Nothing needDepth
 
 #endif
 
 #endif
 
-	return (releaseKey, (window, graphicsDevice, graphicsContext, presenter, inputManager))
+	return ((window, graphicsDevice, graphicsContext, presenter, inputManager), freeBook bk)
 
 -- | Run app loop.
 -- To exit loop, call `exitApp`.

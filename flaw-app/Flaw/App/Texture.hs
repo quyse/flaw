@@ -41,7 +41,7 @@ genEmbed ''TextureInfo
 
 -- | Create expression for loading texture.
 -- Expression will be of type:
--- :: (MonadResource m, MonadBaseControl IO m) => AppGraphicsDevice -> m (ReleaseKey, TextureId AppGraphicsDevice)
+-- :: AppGraphicsDevice -> IO (TextureId AppGraphicsDevice, IO ())
 loadTextureExp :: FilePath -> Q Exp
 loadTextureExp filePath = do
 

@@ -4,8 +4,6 @@ Description: FreeType fonts.
 License: MIT
 -}
 
-{-# LANGUAGE FlexibleContexts #-}
-
 module Flaw.Graphics.Font.FreeType
 	( ftErrorCheck
 	, FreeTypeLibrary(..)
@@ -31,7 +29,6 @@ import Foreign.Storable
 
 import Flaw.Graphics.Font
 import Flaw.Graphics.Font.FreeType.FFI
-import Flaw.Resource
 
 ftErrorCheck :: String -> FT_Error -> IO ()
 ftErrorCheck errorMessage errorCode = do
@@ -40,42 +37,42 @@ ftErrorCheck errorMessage errorCode = do
 
 newtype FreeTypeLibrary = FreeTypeLibrary FT_Library
 
-initFreeType :: ResourceIO m => m (ReleaseKey, FreeTypeLibrary)
-initFreeType = allocate create destroy where
-	create = alloca $ \ptrLibrary -> do
+initFreeType :: IO (FreeTypeLibrary, IO ())
+initFreeType = do
+	ftLibrary <- alloca $ \ptrLibrary -> do
 		ftErrorCheck "FT_Init_FreeType" =<< ft_Init_FreeType ptrLibrary
-		liftM FreeTypeLibrary $ peek ptrLibrary
-	destroy (FreeTypeLibrary ftLibrary) = do
+		peek ptrLibrary
+	let destroy = do
 		_ <- ft_Done_FreeType ftLibrary
 		return ()
+	return (FreeTypeLibrary ftLibrary, destroy)
 
 data FreeTypeFont = FreeTypeFont
 	{ ftFontFace :: !FT_Face
 	, ftFontFaceMemory :: !(Ptr CUChar)
 	}
 
-loadFreeTypeFont :: ResourceIO m => FreeTypeLibrary -> B.ByteString -> m (ReleaseKey, FreeTypeFont)
-loadFreeTypeFont (FreeTypeLibrary ftLibrary) bytes = allocate create destroy where
-	create = alloca $ \ptrFtFace -> do
+loadFreeTypeFont :: FreeTypeLibrary -> B.ByteString -> IO (FreeTypeFont, IO ())
+loadFreeTypeFont (FreeTypeLibrary ftLibrary) bytes = do
+	-- copy bytes into new buffer, as FT_New_Memory_Face keeps pointer to memory given
+	(memory, memoryLen) <- B.unsafeUseAsCStringLen bytes $ \(bytesPtr, bytesLen) -> do
+		memory <- mallocArray bytesLen
+		copyArray memory bytesPtr bytesLen
+		return (castPtr memory, fromIntegral bytesLen)
 
-		-- copy bytes into new buffer, as FT_New_Memory_Face keeps pointer to memory given
-		(memory, memoryLen) <- B.unsafeUseAsCStringLen bytes $ \(bytesPtr, bytesLen) -> do
-			memory <- mallocArray bytesLen
-			copyArray memory bytesPtr bytesLen
-			return (castPtr memory, fromIntegral bytesLen)
-
-		-- create freetype face
+	-- create freetype face
+	ftFace <- alloca $ \ptrFtFace -> do
 		ftErrorCheck "FT_New_Memory_Face" =<< ft_New_Memory_Face ftLibrary memory memoryLen 0 ptrFtFace
-		ftFace <- peek ptrFtFace
+		peek ptrFtFace
 
-		return $ FreeTypeFont
-			{ ftFontFace = ftFace
-			, ftFontFaceMemory = memory
-			}
-
-	destroy (FreeTypeFont ftFace memory) = do
+	let destroy = do
 		_ <- ft_Done_Face ftFace
 		free memory
+
+	return (FreeTypeFont
+		{ ftFontFace = ftFace
+		, ftFontFaceMemory = memory
+		}, destroy)
 
 createFreeTypeGlyphs :: FreeTypeFont -> Int -> Int -> Int -> IO (V.Vector (Image Pixel8, GlyphInfo))
 createFreeTypeGlyphs (FreeTypeFont ftFace _memory) size halfScaleX halfScaleY = do

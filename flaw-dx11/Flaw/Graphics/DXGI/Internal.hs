@@ -4,7 +4,7 @@ Description: Internals of graphics implementation for DXGI.
 License: MIT
 -}
 
-{-# LANGUAGE FlexibleContexts, TypeFamilies #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Flaw.Graphics.DXGI.Internal
 	( DXGISystem(..)
@@ -16,9 +16,8 @@ module Flaw.Graphics.DXGI.Internal
 	, getDXGIFormat
 	) where
 
-import qualified Control.Exception.Lifted as Lifted
+import Control.Exception
 import Control.Monad
-import Control.Monad.IO.Class
 import Data.Ratio
 import qualified Data.Text as T
 import Foreign.Marshal.Alloc
@@ -27,6 +26,7 @@ import Foreign.Marshal.Utils
 import Foreign.Ptr
 import Foreign.Storable
 
+import Flaw.Book
 import Flaw.Exception
 import Flaw.FFI
 import Flaw.FFI.COM
@@ -34,19 +34,18 @@ import Flaw.FFI.Win32
 import Flaw.Graphics
 import Flaw.Graphics.DXGI.FFI
 import Flaw.Graphics.Texture
-import Flaw.Resource
 
 -- | DXGI graphics system.
 data DXGISystem = DXGISystem
 	{ dxgiSystemFactory :: IDXGIFactory
 	}
 
-dxgiCreateSystem :: ResourceIO m => m (ReleaseKey, DXGISystem)
+dxgiCreateSystem :: IO (DXGISystem, IO ())
 dxgiCreateSystem = describeException "failed to create DXGI system" $ do
-	(releaseKey, factoryInterface) <- allocateCOMObject createDXGIFactory
-	return (releaseKey, DXGISystem
+	(factoryInterface, releaseFactoryInterface) <- allocateCOMObject createDXGIFactory
+	return (DXGISystem
 		{ dxgiSystemFactory = factoryInterface
-		})
+		}, releaseFactoryInterface)
 
 instance System DXGISystem where
 	data DeviceId DXGISystem = DXGIDeviceId DXGISystem IDXGIAdapter
@@ -55,28 +54,29 @@ instance System DXGISystem where
 	getInstalledDevices system@DXGISystem
 		{ dxgiSystemFactory = factoryInterface
 		} = describeException "failed to get installed DirectX11 devices" $ do
-		-- enumerate adapters with release keys
-		let enumerateAdapter i = Lifted.handle (\(FailedHRESULT _hr) -> return []) $ do
-			releaseKeyAndAdapter <- allocateCOMObject $ createCOMObjectViaPtr $ m_IDXGIFactory_EnumAdapters factoryInterface i
+		bk <- newBook
+		-- enumerate adapters
+		let enumerateAdapter i = handle (\(FailedHRESULT _hr) -> return []) $ do
+			adapter <- book bk $ allocateCOMObject $ createCOMObjectViaPtr $ m_IDXGIFactory_EnumAdapters factoryInterface i
 			rest <- enumerateAdapter $ i + 1
-			return $ releaseKeyAndAdapter : rest
+			return $ adapter : rest
 		-- make id-info adapter pairs
-		let makeAdapterIdInfo (adapterReleaseKey, adapter) = do
+		let makeAdapterIdInfo adapter = do
 			-- device id
 			let deviceId = DXGIDeviceId system adapter
 			-- get adapter desc
-			adapterDesc <- liftIO $ createCOMValueViaPtr $ m_IDXGIAdapter_GetDesc adapter
+			adapterDesc <- createCOMValueViaPtr $ m_IDXGIAdapter_GetDesc adapter
 			-- enumerate outputs
-			let enumerateOutput i = Lifted.handle (\(FailedHRESULT _hr) -> return []) $ do
-				releaseKeyAndOutput <- allocateCOMObject $ createCOMObjectViaPtr $ m_IDXGIAdapter_EnumOutputs adapter i
+			let enumerateOutput i = handle (\(FailedHRESULT _hr) -> return []) $ do
+				output <- book bk $ allocateCOMObject $ createCOMObjectViaPtr $ m_IDXGIAdapter_EnumOutputs adapter i
 				rest <- enumerateOutput $ i + 1
-				return $ releaseKeyAndOutput : rest
+				return $ output : rest
 			-- make id-info output pairs
-			let makeOutputIdInfo (outputReleaseKey, output) = do
+			let makeOutputIdInfo output = do
 				-- get output desc
-				outputDesc <- liftIO $ createCOMValueViaPtr $ m_IDXGIOutput_GetDesc output
+				outputDesc <- createCOMValueViaPtr $ m_IDXGIOutput_GetDesc output
 				-- enumerate modes
-				modeDescs <- liftIO $ alloca $ \modesCountPtr -> do
+				modeDescs <- alloca $ \modesCountPtr -> do
 					hresultCheck =<< m_IDXGIOutput_GetDisplayModeList output (wrapEnum DXGI_FORMAT_R8G8B8A8_UNORM) 0 modesCountPtr nullPtr
 					modesCount <- liftM fromIntegral $ peek modesCountPtr
 					allocaArray modesCount $ \modeDescsPtr -> do
@@ -85,42 +85,32 @@ instance System DXGISystem where
 				-- make id-info output pairs
 				let modes = [(DXGIDisplayModeId modeDesc, displayModeInfoFromDesc modeDesc) | modeDesc <- modeDescs]
 				-- return output pair
-				return (outputReleaseKey, (DXGIDisplayId deviceId output, DisplayInfo
+				return (DXGIDisplayId deviceId output, DisplayInfo
 					{ displayName = winUTF16ToText $ f_DXGI_OUTPUT_DESC_DeviceName outputDesc
 					, displayModes = modes
-					}))
+					})
 			outputs <- mapM makeOutputIdInfo =<< enumerateOutput 0
-			-- create adapter compound release key
-			adapterCompoundReleaseKey <- registerRelease $ do
-				release adapterReleaseKey
-				mapM_ (release . fst) outputs
 			-- return adapter pair
-			return (adapterCompoundReleaseKey, (deviceId, DeviceInfo
+			return (deviceId, DeviceInfo
 				{ deviceName = winUTF16ToText $ f_DXGI_ADAPTER_DESC_Description adapterDesc
-				, deviceDisplays = map snd outputs
-				}))
+				, deviceDisplays = outputs
+				})
 		adapters <- mapM makeAdapterIdInfo =<< enumerateAdapter 0
-		-- create compound release key
-		compoundReleaseKey <- registerRelease $ mapM_ (release . fst) adapters
-		-- return adapters
-		return (compoundReleaseKey, map snd adapters)
+		return (adapters, freeBook bk)
 	createDisplayMode _system (DXGIDisplayId _adapter output) width height = describeException "failed to try create DirectX11 display mode" $ do
-		let create = do
-			let desc = DXGI_MODE_DESC
-				{ f_DXGI_MODE_DESC_Width = fromIntegral width
-				, f_DXGI_MODE_DESC_Height = fromIntegral height
-				, f_DXGI_MODE_DESC_RefreshRate = DXGI_RATIONAL
-					{ f_DXGI_RATIONAL_Numerator = 0
-					, f_DXGI_RATIONAL_Denominator = 0
-					}
-				, f_DXGI_MODE_DESC_Format = DXGI_FORMAT_R8G8B8A8_UNORM
-				, f_DXGI_MODE_DESC_ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED
-				, f_DXGI_MODE_DESC_Scaling = DXGI_MODE_SCALING_UNSPECIFIED
+		let desc = DXGI_MODE_DESC
+			{ f_DXGI_MODE_DESC_Width = fromIntegral width
+			, f_DXGI_MODE_DESC_Height = fromIntegral height
+			, f_DXGI_MODE_DESC_RefreshRate = DXGI_RATIONAL
+				{ f_DXGI_RATIONAL_Numerator = 0
+				, f_DXGI_RATIONAL_Denominator = 0
 				}
-			closestDesc <- with desc $ \descPtr -> createCOMValueViaPtr $ \closestDescPtr -> m_IDXGIOutput_FindClosestMatchingMode output descPtr closestDescPtr nullPtr
-			return (DXGIDisplayModeId closestDesc, displayModeInfoFromDesc closestDesc)
-		let destroy (_id, _info) = return ()
-		allocate create destroy
+			, f_DXGI_MODE_DESC_Format = DXGI_FORMAT_R8G8B8A8_UNORM
+			, f_DXGI_MODE_DESC_ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED
+			, f_DXGI_MODE_DESC_Scaling = DXGI_MODE_SCALING_UNSPECIFIED
+			}
+		closestDesc <- with desc $ \descPtr -> createCOMValueViaPtr $ \closestDescPtr -> m_IDXGIOutput_FindClosestMatchingMode output descPtr closestDescPtr nullPtr
+		return ((DXGIDisplayModeId closestDesc, displayModeInfoFromDesc closestDesc), return ())
 
 -- | Convert DXGI_MODE_DESC to DisplayModeInfo.
 displayModeInfoFromDesc :: DXGI_MODE_DESC -> DisplayModeInfo

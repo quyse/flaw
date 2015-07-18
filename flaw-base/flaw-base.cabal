@@ -19,10 +19,10 @@ source-repository head
 
 library
   exposed-modules:
+    Flaw.Book
     Flaw.Exception
-    Flaw.Resource
     Flaw.Stack
   -- other-extensions:    
-  build-depends:       base, lifted-base, monad-control, resourcet, transformers
+  build-depends:       base, transformers
   -- hs-source-dirs:      
   default-language:    Haskell2010

@@ -4,8 +4,6 @@ Description: Shader program support.
 License: MIT
 -}
 
-{-# LANGUAGE FlexibleContexts #-}
-
 module Flaw.Graphics.Program
 	( Program
 	, AttributeFormat(..)
@@ -47,7 +45,6 @@ import Foreign.Storable
 import Flaw.Graphics.Internal
 import Flaw.Graphics.Program.Internal
 import Flaw.Math
-import Flaw.Resource
 
 cnst :: OfValueType a => a -> Node a
 cnst value = ConstNode (valueType value) value
@@ -128,22 +125,22 @@ uniformArray size UniformBufferSlot
 			, uniformType = valueType u
 			}
 
-createUniformStorage :: (ResourceIO m, Device d) => d -> UniformBufferSlot -> m (ReleaseKey, UniformStorage d)
+createUniformStorage :: Device d => d -> UniformBufferSlot -> IO (UniformStorage d, IO ())
 createUniformStorage device UniformBufferSlot
 	{ uniformBufferSlotIndex = slot
 	, uniformBufferSlotSizeRef = sizeRef
 	} = do
-	size <- liftIO $ readIORef sizeRef
+	size <- readIORef sizeRef
 	-- align just in case
 	let alignedSize = ((size + 15) `div` 16) * 16
-	(releaseKey, uniformBuffer) <- createUniformBuffer device alignedSize
-	bytes <- liftIO $ mallocForeignPtrBytes alignedSize
-	return (releaseKey, UniformStorage
+	(uniformBuffer, release) <- createUniformBuffer device alignedSize
+	bytes <- mallocForeignPtrBytes alignedSize
+	return (UniformStorage
 		{ uniformStorageSlot = slot
 		, uniformStorageBufferId = uniformBuffer
 		, uniformStorageBytes = bytes
 		, uniformStorageSize = alignedSize
-		})
+		}, release)
 
 setUniform :: (OfValueType a, Storable a) => UniformStorage d -> Node a -> a -> IO ()
 setUniform UniformStorage

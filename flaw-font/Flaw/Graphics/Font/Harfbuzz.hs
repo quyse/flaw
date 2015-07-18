@@ -4,8 +4,6 @@ Description: Harfbuzz text shaping.
 License: MIT
 -}
 
-{-# LANGUAGE FlexibleContexts #-}
-
 module Flaw.Graphics.Font.Harfbuzz
 	( createHarfbuzzShaper
 	) where
@@ -26,22 +24,20 @@ import Flaw.Graphics.Font
 import Flaw.Graphics.Font.FreeType
 import Flaw.Graphics.Font.FreeType.FFI
 import Flaw.Math
-import Flaw.Resource
 
 data HarfbuzzShaper = HarfbuzzShaper (Ptr Hb_font_t) (Ptr Hb_buffer_t)
 
-createHarfbuzzShaper :: ResourceIO m => FreeTypeFont -> Int -> m (ReleaseKey, HarfbuzzShaper)
+createHarfbuzzShaper :: FreeTypeFont -> Int -> IO (HarfbuzzShaper, IO ())
 createHarfbuzzShaper FreeTypeFont
 	{ ftFontFace = ftFace
-	} size = allocate create destroy where
-	create = do
-		ftErrorCheck "ft_Set_Pixel_Sizes" =<< ft_Set_Pixel_Sizes ftFace (fromIntegral size) (fromIntegral size)
-		hbFont <- hb_ft_font_create ftFace nullPtr
-		hbBuffer <- hb_buffer_create
-		return $ HarfbuzzShaper hbFont hbBuffer
-	destroy (HarfbuzzShaper hbFont hbBuffer) = do
+	} size = do
+	ftErrorCheck "ft_Set_Pixel_Sizes" =<< ft_Set_Pixel_Sizes ftFace (fromIntegral size) (fromIntegral size)
+	hbFont <- hb_ft_font_create ftFace nullPtr
+	hbBuffer <- hb_buffer_create
+	let destroy = do
 		hb_font_destroy hbFont
 		hb_buffer_destroy hbBuffer
+	return (HarfbuzzShaper hbFont hbBuffer, destroy)
 
 instance FontShaper HarfbuzzShaper where
 	shapeText (HarfbuzzShaper hbFont hbBuffer) text = do

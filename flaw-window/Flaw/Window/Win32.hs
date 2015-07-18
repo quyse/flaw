@@ -4,7 +4,7 @@ Description: Win32 window framework.
 License: MIT
 -}
 
-{-# LANGUAGE FlexibleContexts, GADTs, TypeFamilies #-}
+{-# LANGUAGE GADTs, TypeFamilies #-}
 
 module Flaw.Window.Win32
 	( Win32WindowSystem()
@@ -34,7 +34,6 @@ import Foreign.Storable
 
 import Flaw.Window
 import Flaw.FFI.Win32
-import Flaw.Resource
 
 data Win32WindowSystem = Win32WindowSystem
 	{ wsHandle :: Ptr () -- ^ Opaque handle for C side.
@@ -67,32 +66,32 @@ instance Window Win32Window where
 		{ wEventsChan = eventsChan
 		} = dupTChan eventsChan
 
-initWin32WindowSystem :: ResourceIO m => m (ReleaseKey, Win32WindowSystem)
-initWin32WindowSystem = allocate initialize shutdown where
-	initialize = do
-		-- create vars
-		handleVar <- newEmptyMVar
-		shutdownVar <- newEmptyMVar
+initWin32WindowSystem :: IO (Win32WindowSystem, IO ())
+initWin32WindowSystem = do
+	-- create vars
+	handleVar <- newEmptyMVar
+	shutdownVar <- newEmptyMVar
 
-		-- create OS thread for window loop
-		threadId <- forkOS $ do
-			-- initialize window system, get a thread handle
-			h <- c_initWin32WindowSystem
-			-- send handles to the original thread
-			putMVar handleVar h
-			-- run window system
-			c_runWin32WindowSystem h
-			-- notify that window system quit
-			putMVar shutdownVar ()
-		-- wait for handle
-		h <- readMVar handleVar
-		-- return window system
-		return Win32WindowSystem
-			{ wsHandle = h
-			, wsThreadId = threadId
-			, wsShutdownVar = shutdownVar
-			}
-	shutdown ws = do
+	-- create OS thread for window loop
+	threadId <- forkOS $ do
+		-- initialize window system, get a thread handle
+		h <- c_initWin32WindowSystem
+		-- send handles to the original thread
+		putMVar handleVar h
+		-- run window system
+		c_runWin32WindowSystem h
+		-- notify that window system quit
+		putMVar shutdownVar ()
+	-- wait for handle
+	h <- readMVar handleVar
+
+	let ws = Win32WindowSystem
+		{ wsHandle = h
+		, wsThreadId = threadId
+		, wsShutdownVar = shutdownVar
+		}
+
+	let shutdown = do
 		-- send a message to stop window loop
 		invokeWin32WindowSystem_ ws $ c_stopWin32WindowSystem
 		-- wait for actual completion
@@ -100,15 +99,17 @@ initWin32WindowSystem = allocate initialize shutdown where
 		-- free resources
 		c_shutdownWin32WindowSystem $ wsHandle ws
 
-createWin32Window :: ResourceIO m => Win32WindowSystem -> T.Text -> Int -> Int -> Int -> Int -> m (ReleaseKey, Win32Window)
+	return (ws, shutdown)
+
+createWin32Window :: Win32WindowSystem -> T.Text -> Int -> Int -> Int -> Int -> IO (Win32Window, IO ())
 createWin32Window ws title left top width height = internalCreateWin32Window ws title left top width height False
 
-createLayeredWin32Window :: ResourceIO m => Win32WindowSystem -> T.Text -> Int -> Int -> Int -> Int -> m (ReleaseKey, Win32Window)
+createLayeredWin32Window :: Win32WindowSystem -> T.Text -> Int -> Int -> Int -> Int -> IO (Win32Window, IO ())
 createLayeredWin32Window ws title left top width height = internalCreateWin32Window ws title left top width height True
 
-internalCreateWin32Window :: ResourceIO m => Win32WindowSystem -> T.Text -> Int -> Int -> Int -> Int -> Bool -> m (ReleaseKey, Win32Window)
-internalCreateWin32Window ws title left top width height layered = allocate create destroy where
-	create = invokeWin32WindowSystem ws $ mfix $ \w -> do
+internalCreateWin32Window :: Win32WindowSystem -> T.Text -> Int -> Int -> Int -> Int -> Bool -> IO (Win32Window, IO ())
+internalCreateWin32Window ws title left top width height layered = do
+	w <- invokeWin32WindowSystem ws $ mfix $ \w -> do
 		-- create callback
 		userCallbacksRef <- newIORef []
 		messagesChan <- newBroadcastTChanIO
@@ -138,16 +139,15 @@ internalCreateWin32Window ws title left top width height layered = allocate crea
 		hwnd <- withCWString (T.unpack title) $ \titleCString ->
 			c_createWin32Window (wsHandle ws) titleCString left top width height callback (if layered then 1 else 0)
 		if hwnd == nullPtr then error "cannot create Win32Window"
-		else do
-			return $ Win32Window
-				{ wWindowSystem = ws
-				, wHandle = hwnd
-				, wCallback = callback
-				, wUserCallbacksRef = userCallbacksRef
-				, wMessagesChan = messagesChan
-				, wEventsChan = eventsChan
-				}
-	destroy Win32Window { wHandle = hwnd } = invokeWin32WindowSystem_ ws $ c_destroyWin32Window hwnd
+		else return Win32Window
+			{ wWindowSystem = ws
+			, wHandle = hwnd
+			, wCallback = callback
+			, wUserCallbacksRef = userCallbacksRef
+			, wMessagesChan = messagesChan
+			, wEventsChan = eventsChan
+			}
+	return (w, invokeWin32WindowSystem_ ws $ c_destroyWin32Window $ wHandle w)
 
 updateLayeredWin32Window :: Win32Window -> IO ()
 updateLayeredWin32Window w = invokeWin32WindowSystem_ (wWindowSystem w) $ c_updateLayeredWin32Window $ wHandle w
@@ -179,7 +179,7 @@ invokeWin32WindowSystem ws io = do
 	invokeWithMaybeResultVar (Just resultVar) ws io
 	result <- takeMVar resultVar
 	case result of
-		Left e -> throw e
+		Left e -> throwIO e
 		Right r -> return r
 
 addWin32WindowCallback :: Win32Window -> WindowCallback -> IO ()

@@ -38,7 +38,6 @@ import Foreign.Storable
 import Flaw.FFI.COM.Internal
 import Flaw.FFI.COM.TH
 import Flaw.FFI.Win32
-import Flaw.Resource
 
 genCOMInterface "IUnknown" "00000000-0000-0000-C000-000000000046" []
 	[ ([t| Ptr UUID -> Ptr (Ptr ()) -> IO HRESULT |], "QueryInterface")
@@ -85,7 +84,10 @@ createCOMObjectViaPtr :: COMInterface a => (Ptr (Ptr a) -> IO HRESULT) -> IO a
 createCOMObjectViaPtr create = peekCOMObject =<< createCOMValueViaPtr create
 
 -- | Allocate COM object in ResourceT.
-allocateCOMObject :: (ResourceIO m, IUnknown_Class a) => IO a -> m (ReleaseKey, a)
-allocateCOMObject create = allocate create $ \o -> do
-	_ <- m_IUnknown_Release o
-	return ()
+allocateCOMObject :: IUnknown_Class a => IO a -> IO (a, IO ())
+allocateCOMObject create = do
+	object <- create
+	let destroy = do
+		_ <- m_IUnknown_Release object
+		return ()
+	return (object, destroy)

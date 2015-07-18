@@ -4,7 +4,7 @@ Description: WebGL graphics implementation.
 License: MIT
 -}
 
-{-# LANGUAGE FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, TypeFamilies #-}
+{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, TypeFamilies #-}
 
 module Flaw.Graphics.WebGL
 	( WebGLSystem()
@@ -17,7 +17,6 @@ module Flaw.Graphics.WebGL
 
 import Control.Concurrent.MVar
 import Control.Monad
-import Control.Monad.IO.Class
 import Data.Array.IO as A
 import Data.Bits
 import qualified Data.ByteString as B
@@ -38,7 +37,6 @@ import Flaw.Graphics.Program.Internal
 import Flaw.Graphics.WebGL.FFI
 import Flaw.Graphics.WebGL.GLSL
 import Flaw.Math
-import Flaw.Resource
 
 -- | Graphics system.
 data WebGLSystem
@@ -115,9 +113,9 @@ instance Device WebGLDevice where
 
 	createStaticTexture _ _ = fail "not implemented"
 
-	createSamplerState _device _samplerInfo = describeException "failed to create WebGL sampler state" $ liftIO $ do
+	createSamplerState _device _samplerInfo = describeException "failed to create WebGL sampler state" $ do
 		-- TODO
-		return (undefined, WebGLSamplerStateId)
+		return (WebGLSamplerStateId, undefined)
 
 	createReadableRenderTarget _ _ _ _ = fail "not implemented"
 
@@ -129,39 +127,39 @@ instance Device WebGLDevice where
 
 	createStaticVertexBuffer device@WebGLDevice
 		{ webglDeviceContext = jsContext
-		} bytes stride = describeException "failed to create WebGL static vertex buffer" $ liftIO $ do
+		} bytes stride = describeException "failed to create WebGL static vertex buffer" $ do
 		bufferId <- webglAllocateId device
 		jsBuffer <- js_createBuffer jsContext
 		js_bindBuffer jsContext webgl_ARRAY_BUFFER jsBuffer
 		jsArrayBuffer <- convertToArrayBuffer bytes
 		js_bufferData jsContext webgl_ARRAY_BUFFER jsArrayBuffer webgl_STATIC_DRAW
-		return (undefined, WebGLVertexBufferId
+		return (WebGLVertexBufferId
 			{ webglVertexBufferId = bufferId
 			, webglVertexBufferBuffer = jsBuffer
 			, webglVertexBufferStride = stride
-			})
+			}, undefined)
 
 	createStaticIndexBuffer device@WebGLDevice
 		{ webglDeviceContext = jsContext
-		} bytes is32Bit = describeException "failed to create WebGL static index buffer" $ liftIO $ do
+		} bytes is32Bit = describeException "failed to create WebGL static index buffer" $ do
 		bufferId <- webglAllocateId device
 		jsBuffer <- js_createBuffer jsContext
 		js_bindBuffer jsContext webgl_ELEMENT_ARRAY_BUFFER jsBuffer
 		jsArrayBuffer <- convertToArrayBuffer bytes
 		js_bufferData jsContext webgl_ELEMENT_ARRAY_BUFFER jsArrayBuffer webgl_STATIC_DRAW
 		let format = if is32Bit then webgl_UNSIGNED_INT else webgl_UNSIGNED_SHORT
-		return (undefined, WebGLIndexBufferId
+		return (WebGLIndexBufferId
 			{ webglIndexBufferId = bufferId
 			, webglIndexBufferBuffer = jsBuffer
 			, webglIndexBufferMode = webgl_TRIANGLES
 			, webglIndexBufferFormat = format
-			})
+			}, undefined)
 
 	createProgram device@WebGLDevice
 		{ webglDeviceContext = jsContext
 		} program = describeException "failed to create WebGL program" $ do
 
-		let createShader (GlslShader source) shaderType = describeException "failed to create WebGL shader" $ liftIO $ do
+		let createShader (GlslShader source) shaderType = describeException "failed to create WebGL shader" $ do
 			jsShader <- js_createShader jsContext shaderType
 			js_shaderSource jsContext jsShader $ toJSString source
 			js_compileShader jsContext jsShader
@@ -173,9 +171,9 @@ instance Device WebGLDevice where
 				fail $ show ("failed to compile shader", (fromJSString jsLog) :: T.Text)
 
 		-- generate GLSL
-		glslProgram <- liftIO $ liftM generateProgram $ runProgram program
+		glslProgram <- liftM generateProgram $ runProgram program
 		case glslProgram of
-			GlslVertexPixelProgram attributes uniforms samplers vertexShader pixelShader -> liftIO $ do
+			GlslVertexPixelProgram attributes uniforms samplers vertexShader pixelShader -> do
 				-- create program
 				jsProgram <- js_createProgram jsContext
 
@@ -218,20 +216,20 @@ instance Device WebGLDevice where
 						}
 
 				programId <- webglAllocateId device
-				return (undefined, WebGLProgramId
+				return (WebGLProgramId
 					{ webglProgramId = programId
 					, webglProgramProgram = jsProgram
 					, webglProgramAttributes = map glslAttributeInfo attributes
 					, webglProgramUniforms = programUniforms
-					})
+					}, undefined)
 
-	createUniformBuffer device size = describeException "failed to create WebGL uniform buffer" $ liftIO $ do
+	createUniformBuffer device size = describeException "failed to create WebGL uniform buffer" $ do
 		bufferId <- webglAllocateId device
 		ptr <- mallocForeignPtrBytes size
-		return (undefined, WebGLUniformBufferId
+		return (WebGLUniformBufferId
 			{ webglUniformBufferId = bufferId
 			, webglUniformBufferPtr = ptr
-			})
+			}, undefined)
 
 data WebGLContext = WebGLContext
 	{ webglContextContext :: JSRef JS_WebGLContext
@@ -542,42 +540,41 @@ foreign import javascript unsafe "( \
 	\ window.msRequestAnimationFrame \
 	\ )($1);" js_requestAnimationFrame :: JSFun (IO ()) -> IO ()
 
-webglInit :: ResourceIO m => DOM.Element -> Bool -> m (ReleaseKey, WebGLDevice, WebGLContext, WebGLPresenter)
+webglInit :: DOM.Element -> Bool -> IO ((WebGLDevice, WebGLContext, WebGLPresenter), IO ())
 webglInit canvas needDepth = do
 	-- get context
-	jsCanvas <- liftIO $ toJSRef canvas
-	jsContext <- liftIO $ js_getWebGLContext jsCanvas needDepth
+	jsCanvas <- toJSRef canvas
+	jsContext <- js_getWebGLContext jsCanvas needDepth
 	if isNull jsContext then fail "cannot get WebGL context"
 	else return ()
 	-- create device
-	createIdRef <- liftIO $ newIORef 1
+	createIdRef <- newIORef 1
 	let device = WebGLDevice
 		{ webglDeviceContext = jsContext
 		, webglDeviceCreateId = createIdRef
 		}
 	-- create context
-	actualContextState <- liftIO $ webglCreateContextState
-	desiredContextState <- liftIO $ webglCreateContextState
+	actualContextState <- webglCreateContextState
+	desiredContextState <- webglCreateContextState
 	let context = WebGLContext
 		{ webglContextContext = jsContext
 		, webglContextActualState = actualContextState
 		, webglContextDesiredState = desiredContextState
 		}
 	-- set front face mode
-	liftIO $ js_frontFace jsContext webgl_CW
+	js_frontFace jsContext webgl_CW
 	-- enable culling
-	liftIO $ js_enable jsContext webgl_CULL_FACE
-	liftIO $ js_cullFace jsContext webgl_BACK
+	js_enable jsContext webgl_CULL_FACE
+	js_cullFace jsContext webgl_BACK
 	-- enable depth test
-	liftIO $ js_enable jsContext webgl_DEPTH_TEST
+	js_enable jsContext webgl_DEPTH_TEST
 	-- create presenter
 	let presenter = WebGLPresenter
 		{ webglPresenterCanvas = canvas
 		}
 
 	-- return
-	releaseKey <- registerRelease $ return ()
-	return (releaseKey, device, context, presenter)
+	return ((device, context, presenter), return ())
 
 webglAllocateId :: WebGLDevice -> IO Int
 webglAllocateId WebGLDevice
@@ -762,10 +759,10 @@ webglUpdateContext WebGLContext
 				_ -> undefined
 			js_vertexAttribPointer jsContext i s t False stride offset
 
-loadWebGLTexture2DFromURL :: ResourceIO m => WebGLDevice -> T.Text -> m (ReleaseKey, TextureId WebGLDevice)
+loadWebGLTexture2DFromURL :: WebGLDevice -> T.Text -> IO (TextureId WebGLDevice, IO ())
 loadWebGLTexture2DFromURL device@WebGLDevice
 	{ webglDeviceContext = jsContext
-	} url = describeException "failed to load WebGL texture from URL" $ liftIO $ do
+	} url = describeException "failed to load WebGL texture from URL" $ do
 	image <- js_loadImage $ toJSString url
 	jsTexture <- js_createTexture jsContext
 	js_bindTexture jsContext webgl_TEXTURE_2D jsTexture
@@ -775,10 +772,10 @@ loadWebGLTexture2DFromURL device@WebGLDevice
 	js_texParameteri jsContext webgl_TEXTURE_2D webgl_TEXTURE_MIN_FILTER $ fromIntegral webgl_LINEAR
 	js_texParameteri jsContext webgl_TEXTURE_2D webgl_TEXTURE_MAG_FILTER $ fromIntegral webgl_LINEAR
 	textureId <- webglAllocateId device
-	return (undefined, WebGLTextureId
+	return (WebGLTextureId
 		{ webglTextureId = textureId
 		, webglTextureTexture = jsTexture
-		})
+		}, return ())
 
 convertToArrayBuffer :: B.ByteString -> IO (JSRef ())
 convertToArrayBuffer bytes = do

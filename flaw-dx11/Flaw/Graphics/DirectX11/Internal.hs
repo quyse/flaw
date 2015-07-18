@@ -4,7 +4,7 @@ Description: Internals of graphics implementation for DirectX 11.
 License: MIT
 -}
 
-{-# LANGUAGE FlexibleContexts, MultiParamTypeClasses, TypeFamilies #-}
+{-# LANGUAGE MultiParamTypeClasses, TypeFamilies #-}
 
 module Flaw.Graphics.DirectX11.Internal
 	( Dx11Device(..)
@@ -14,9 +14,8 @@ module Flaw.Graphics.DirectX11.Internal
 	, dx11CreatePresenter
 	) where
 
-import qualified Control.Exception.Lifted as Lifted
+import Control.Exception
 import Control.Monad
-import Control.Monad.IO.Class
 import Data.Array.IO
 import Data.Bits
 import qualified Data.ByteString as BS
@@ -32,6 +31,7 @@ import Foreign.Marshal.Utils
 import Foreign.Ptr
 import Foreign.Storable
 
+import Flaw.Book
 import Flaw.Exception
 import Flaw.FFI
 import Flaw.FFI.Win32
@@ -46,7 +46,6 @@ import Flaw.Graphics.Program.Internal
 import Flaw.Graphics.Sampler
 import Flaw.Graphics.Texture
 import Flaw.Math
-import Flaw.Resource
 import Flaw.Window
 import Flaw.Window.Win32
 
@@ -114,9 +113,9 @@ instance Device Dx11Device where
 	createDeferredContext Dx11Device
 		{ dx11DeviceInterface = deviceInterface
 		} = describeException "failed to create DirectX11 deferred context" $ do
-		(releaseKey, contextInterface) <- allocateCOMObject $ createCOMObjectViaPtr $ m_ID3D11Device_CreateDeferredContext deviceInterface 0
-		context <- liftIO $ dx11CreateContextFromInterface contextInterface
-		return (releaseKey, context)
+		(contextInterface, destroy) <- allocateCOMObject $ createCOMObjectViaPtr $ m_ID3D11Device_CreateDeferredContext deviceInterface 0
+		context <- dx11CreateContextFromInterface contextInterface
+		return (context, destroy)
 
 	createStaticTexture Dx11Device
 		{ dx11DeviceInterface = deviceInterface
@@ -153,7 +152,7 @@ instance Device Dx11Device where
 			-- if it's 3D texture
 			if depth > 0 then do
 				-- arrays of 3D textures not supported
-				if count > 0 then Lifted.throwIO $ DescribeFirstException "array of 3D textures is not supported"
+				if count > 0 then throwIO $ DescribeFirstException "array of 3D textures is not supported"
 				else return ()
 				-- texture desc
 				let desc = D3D11_TEXTURE3D_DESC
@@ -261,14 +260,14 @@ instance Device Dx11Device where
 				return (createResource, srvDesc)
 
 		-- create ID3D11Resource
-		(resourceReleaseKey, resourceInterface) <- allocateCOMObject $ BS.unsafeUseAsCString bytes createResource
+		(resourceInterface, releaseResourceInterface) <- allocateCOMObject $ BS.unsafeUseAsCString bytes createResource
 		-- create ID3D11ShaderResourceView
-		(srvReleaseKey, srvInterface) <- allocateCOMObject $ with srvDesc $ \srvDescPtr -> do
+		(srvInterface, releaseSrvInterface) <- allocateCOMObject $ with srvDesc $ \srvDescPtr -> do
 			createCOMObjectViaPtr $ m_ID3D11Device_CreateShaderResourceView deviceInterface (pokeCOMObject resourceInterface) srvDescPtr
 		-- release resource interface
-		release resourceReleaseKey
+		releaseResourceInterface
 
-		return (srvReleaseKey, Dx11TextureId srvInterface)
+		return (Dx11TextureId srvInterface, releaseSrvInterface)
 
 	createSamplerState Dx11Device
 		{ dx11DeviceInterface = deviceInterface
@@ -319,10 +318,10 @@ instance Device Dx11Device where
 			}
 
 		-- create
-		(releaseKey, ssInterface) <- allocateCOMObject $ with desc $ \descPtr -> do
+		(ssInterface, releaseSsInterface) <- allocateCOMObject $ with desc $ \descPtr -> do
 			createCOMObjectViaPtr $ m_ID3D11Device_CreateSamplerState deviceInterface descPtr
 
-		return (releaseKey, Dx11SamplerStateId ssInterface)
+		return (Dx11SamplerStateId ssInterface, releaseSsInterface)
 
 	createBlendState Dx11Device
 		{ dx11DeviceInterface = deviceInterface
@@ -383,10 +382,10 @@ instance Device Dx11Device where
 			}
 
 		-- create
-		(releaseKey, bsInterface) <- allocateCOMObject $ with desc $ \descPtr -> do
+		(bsInterface, releaseBsInterface) <- allocateCOMObject $ with desc $ \descPtr -> do
 			createCOMObjectViaPtr $ m_ID3D11Device_CreateBlendState deviceInterface descPtr
 
-		return (releaseKey, Dx11BlendStateId bsInterface)
+		return (Dx11BlendStateId bsInterface, releaseBsInterface)
 
 	createReadableRenderTarget Dx11Device
 		{ dx11DeviceInterface = deviceInterface
@@ -411,24 +410,23 @@ instance Device Dx11Device where
 			, f_D3D11_TEXTURE2D_DESC_MiscFlags = 0
 			}
 		-- create resource
-		(resourceReleaseKey, resourceInterface) <- allocateCOMObject $ with desc $ \descPtr -> do
+		(resourceInterface, releaseResourceInterface) <- allocateCOMObject $ with desc $ \descPtr -> do
 			liftM com_get_ID3D11Resource $ createCOMObjectViaPtr $ m_ID3D11Device_CreateTexture2D deviceInterface descPtr nullPtr
 
 		-- create render target view
-		(rtvReleaseKey, rtvInterface) <- allocateCOMObject $ createCOMObjectViaPtr $ m_ID3D11Device_CreateRenderTargetView deviceInterface (pokeCOMObject resourceInterface) nullPtr
+		(rtvInterface, releaseRtvInterface) <- allocateCOMObject $ createCOMObjectViaPtr $ m_ID3D11Device_CreateRenderTargetView deviceInterface (pokeCOMObject resourceInterface) nullPtr
 
 		-- create shader resource view
-		(srvReleaseKey, srvInterface) <- allocateCOMObject $ createCOMObjectViaPtr $ m_ID3D11Device_CreateShaderResourceView deviceInterface (pokeCOMObject resourceInterface) nullPtr
+		(srvInterface, releaseSrvInterface) <- allocateCOMObject $ createCOMObjectViaPtr $ m_ID3D11Device_CreateShaderResourceView deviceInterface (pokeCOMObject resourceInterface) nullPtr
 
 		-- release resource interface
-		release resourceReleaseKey
+		releaseResourceInterface
 
-		-- make combine release key
-		releaseKey <- registerRelease $ do
-			release rtvReleaseKey
-			release srvReleaseKey
+		let destroy = do
+			releaseRtvInterface
+			releaseSrvInterface
 
-		return (releaseKey, Dx11RenderTargetId rtvInterface, Dx11TextureId srvInterface)
+		return ((Dx11RenderTargetId rtvInterface, Dx11TextureId srvInterface), destroy)
 
 	createDepthStencilTarget Dx11Device
 		{ dx11DeviceInterface = deviceInterface
@@ -451,7 +449,7 @@ instance Device Dx11Device where
 			, f_D3D11_TEXTURE2D_DESC_MiscFlags = 0
 			}
 		-- create resource
-		(resourceReleaseKey, resourceInterface) <- allocateCOMObject $ with desc $ \descPtr -> do
+		(resourceInterface, releaseResourceInterface) <- allocateCOMObject $ with desc $ \descPtr -> do
 			liftM com_get_ID3D11Resource $ createCOMObjectViaPtr $ m_ID3D11Device_CreateTexture2D deviceInterface descPtr nullPtr
 
 		-- DSV desc
@@ -464,13 +462,13 @@ instance Device Dx11Device where
 				}
 			}
 		-- create depth stencil view
-		(dsvReleaseKey, dsvInterface) <- allocateCOMObject $ with dsvDesc $ \dsvDescPtr -> do
+		(dsvInterface, releaseDsvInterface) <- allocateCOMObject $ with dsvDesc $ \dsvDescPtr -> do
 			createCOMObjectViaPtr $ m_ID3D11Device_CreateDepthStencilView deviceInterface (pokeCOMObject resourceInterface) dsvDescPtr
 
 		-- release resource interface
-		release resourceReleaseKey
+		releaseResourceInterface
 
-		return (dsvReleaseKey, Dx11DepthStencilTargetId dsvInterface)
+		return (Dx11DepthStencilTargetId dsvInterface, releaseDsvInterface)
 
 	createReadableDepthStencilTarget Dx11Device
 		{ dx11DeviceInterface = deviceInterface
@@ -493,7 +491,7 @@ instance Device Dx11Device where
 			, f_D3D11_TEXTURE2D_DESC_MiscFlags = 0
 			}
 		-- create resource
-		(resourceReleaseKey, resourceInterface) <- allocateCOMObject $ with desc $ \descPtr -> do
+		(resourceInterface, releaseResourceInterface) <- allocateCOMObject $ with desc $ \descPtr -> do
 			liftM com_get_ID3D11Resource $ createCOMObjectViaPtr $ m_ID3D11Device_CreateTexture2D deviceInterface descPtr nullPtr
 
 		-- DSV desc
@@ -506,7 +504,7 @@ instance Device Dx11Device where
 				}
 			}
 		-- create depth stencil view
-		(dsvReleaseKey, dsvInterface) <- allocateCOMObject $ with dsvDesc $ \dsvDescPtr -> do
+		(dsvInterface, releaseDsvInterface) <- allocateCOMObject $ with dsvDesc $ \dsvDescPtr -> do
 			createCOMObjectViaPtr $ m_ID3D11Device_CreateDepthStencilView deviceInterface (pokeCOMObject resourceInterface) dsvDescPtr
 
 		-- SRV desc
@@ -519,22 +517,20 @@ instance Device Dx11Device where
 				}
 			}
 		-- create shader resource view
-		(srvReleaseKey, srvInterface) <- allocateCOMObject $ with srvDesc $ \srvDescPtr -> do
+		(srvInterface, releaseSrvInterface) <- allocateCOMObject $ with srvDesc $ \srvDescPtr -> do
 			createCOMObjectViaPtr $ m_ID3D11Device_CreateShaderResourceView deviceInterface (pokeCOMObject resourceInterface) srvDescPtr
 
 		-- release resource interface
-		release resourceReleaseKey
+		releaseResourceInterface
 
-		-- make combined release key
-		releaseKey <- registerRelease $ do
-			release dsvReleaseKey
-			release srvReleaseKey
+		let destroy = do
+			releaseDsvInterface
+			releaseSrvInterface
 
-		return (releaseKey, Dx11DepthStencilTargetId dsvInterface, Dx11TextureId srvInterface)
+		return ((Dx11DepthStencilTargetId dsvInterface, Dx11TextureId srvInterface), destroy)
 
 	createFrameBuffer _device renderTargets depthStencilTarget = do
-		releaseKey <- registerRelease $ return ()
-		return (releaseKey, Dx11FrameBufferId renderTargets depthStencilTarget)
+		return (Dx11FrameBufferId renderTargets depthStencilTarget, return ())
 
 	createStaticVertexBuffer Dx11Device
 		{ dx11DeviceInterface = deviceInterface
@@ -555,12 +551,12 @@ instance Device Dx11Device where
 			, f_D3D11_SUBRESOURCE_DATA_SysMemSlicePitch = 0
 			}
 		-- create
-		(releaseKey, bufferInterface) <- allocateCOMObject $ with desc $ \descPtr -> do
+		(bufferInterface, releaseBufferInterface) <- allocateCOMObject $ with desc $ \descPtr -> do
 			BS.unsafeUseAsCString bytes $ \bytesPtr -> do
 				with (subresourceData $ castPtr bytesPtr) $ \subresourceDataPtr -> do
 					createCOMObjectViaPtr $ m_ID3D11Device_CreateBuffer deviceInterface descPtr subresourceDataPtr
 
-		return (releaseKey, Dx11VertexBufferId bufferInterface stride)
+		return (Dx11VertexBufferId bufferInterface stride, releaseBufferInterface)
 
 	createStaticIndexBuffer Dx11Device
 		{ dx11DeviceInterface = deviceInterface
@@ -581,12 +577,15 @@ instance Device Dx11Device where
 			, f_D3D11_SUBRESOURCE_DATA_SysMemSlicePitch = 0
 			}
 		-- create
-		(releaseKey, bufferInterface) <- allocateCOMObject $ with desc $ \descPtr -> do
+		(bufferInterface, releaseBufferInterface) <- allocateCOMObject $ with desc $ \descPtr -> do
 			BS.unsafeUseAsCString bytes $ \bytesPtr -> do
 				with (subresourceData $ castPtr bytesPtr) $ \subresourceDataPtr -> do
 					createCOMObjectViaPtr $ m_ID3D11Device_CreateBuffer deviceInterface descPtr subresourceDataPtr
 
-		return (releaseKey, Dx11IndexBufferId bufferInterface (if is32bit then DXGI_FORMAT_R32_UINT else DXGI_FORMAT_R16_UINT) D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST)
+		return
+			( (Dx11IndexBufferId bufferInterface (if is32bit then DXGI_FORMAT_R32_UINT else DXGI_FORMAT_R16_UINT) D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST)
+			, releaseBufferInterface
+			)
 
 	createProgram Dx11Device
 		{ dx11DeviceInterface = deviceInterface
@@ -723,21 +722,18 @@ instance Device Dx11Device where
 					createCOMObjectViaPtr $ m_ID3D11Device_CreatePixelShader deviceInterface (castPtr ptr) (fromIntegral len) nullPtr
 
 		-- generate HLSL
-		hlslProgram <- liftIO $ liftM generateProgram $ runProgram program
+		hlslProgram <- liftM generateProgram $ runProgram program
+
+		bk <- newBook
 
 		-- select on type of the program
 		case hlslProgram of
 			HlslVertexPixelProgram attributes vertexShader pixelShader -> do
-				vertexShaderByteCode <- liftIO $ compileShader vertexShader
-				(inputLayoutReleaseKey, inputLayoutInterface) <- createInputLayout attributes vertexShaderByteCode
-				(vertexShaderReleaseKey, vertexShaderInterface) <- createVertexShader vertexShaderByteCode
-				(pixelShaderReleaseKey, pixelShaderInterface) <- createPixelShader =<< (liftIO $ compileShader pixelShader)
-				releaseKey <- registerRelease $ do
-					_ <- release inputLayoutReleaseKey
-					_ <- release vertexShaderReleaseKey
-					_ <- release pixelShaderReleaseKey
-					return ()
-				return (releaseKey, Dx11VertexPixelProgramId inputLayoutInterface vertexShaderInterface pixelShaderInterface)
+				vertexShaderByteCode <- compileShader vertexShader
+				inputLayoutInterface <- book bk $ createInputLayout attributes vertexShaderByteCode
+				vertexShaderInterface <- book bk $ createVertexShader vertexShaderByteCode
+				pixelShaderInterface <- book bk $ createPixelShader =<< compileShader pixelShader
+				return (Dx11VertexPixelProgramId inputLayoutInterface vertexShaderInterface pixelShaderInterface, freeBook bk)
 
 	createUniformBuffer Dx11Device
 		{ dx11DeviceInterface = deviceInterface
@@ -757,48 +753,44 @@ instance Device Dx11Device where
 			}
 
 		-- create
-		(releaseKey, bufferInterface) <- allocateCOMObject $ with desc $ \descPtr -> do
+		(bufferInterface, releaseBufferInterface) <- allocateCOMObject $ with desc $ \descPtr -> do
 			createCOMObjectViaPtr $ m_ID3D11Device_CreateBuffer deviceInterface descPtr nullPtr
 
-		return (releaseKey, Dx11UniformBufferId bufferInterface)
+		return (Dx11UniformBufferId bufferInterface, releaseBufferInterface)
 
 -- | Create DirectX11 device.
-dx11CreateDevice :: ResourceIO m => DeviceId DXGISystem -> m (ReleaseKey, Dx11Device, Dx11Context)
+dx11CreateDevice :: DeviceId DXGISystem -> IO ((Dx11Device, Dx11Context), IO ())
 dx11CreateDevice (DXGIDeviceId system adapter) = describeException "failed to create DirectX11 graphics device" $ do
-	-- create function
-	let create = alloca $ \devicePtr -> alloca $ \deviceContextPtr -> do
+
+	(deviceInterface, contextInterface) <- alloca $ \devicePtr -> alloca $ \deviceContextPtr -> do
 		let featureLevels = [D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_1, D3D_FEATURE_LEVEL_10_0]
 		withArray featureLevels $ \featureLevelsPtr -> alloca $ \realFeatureLevelPtr -> do
 			describeException "failed to create D3D11 device" $ do
 				-- driver type is required to be D3D_DRIVER_TYPE_UNKNOWN, because adapter is not null
 				-- see http://msdn.microsoft.com/en-us/library/ff476082 (remarks)
 				hresultCheck =<< d3d11CreateDevice (pokeCOMObject adapter) (wrapEnum D3D_DRIVER_TYPE_UNKNOWN) nullPtr 0 featureLevelsPtr (fromIntegral $ length featureLevels) d3d11SdkVersion devicePtr realFeatureLevelPtr deviceContextPtr
+
 		deviceInterface <- peekCOMObject =<< peek devicePtr
 		contextInterface <- peekCOMObject =<< peek deviceContextPtr
-		d3dCompileProc <- liftM mkD3DCompile $ loadLibraryAndGetProcAddress "D3DCompiler_43.dll" "D3DCompile"
 
-		context <- dx11CreateContextFromInterface contextInterface
+		return (deviceInterface, contextInterface)
 
-		return (Dx11Device
-			{ dx11DeviceSystem = system
-			, dx11DeviceInterface = deviceInterface
-			, dx11DeviceImmediateContext = contextInterface
-			, dx11DeviceD3DCompile = d3dCompileProc
-			}, context)
+	d3dCompileProc <- liftM mkD3DCompile $ loadLibraryAndGetProcAddress "D3DCompiler_43.dll" "D3DCompile"
+
+	context <- dx11CreateContextFromInterface contextInterface
 
 	-- destroy function
-	let destroy (Dx11Device
-		{ dx11DeviceInterface = deviceInterface
-		}, Dx11Context
-		{ dx11ContextInterface = contextInterface
-		}) = do
-			_ <- m_IUnknown_Release deviceInterface
-			_ <- m_IUnknown_Release contextInterface
-			return ()
+	let destroy = do
+		_ <- m_IUnknown_Release deviceInterface
+		_ <- m_IUnknown_Release contextInterface
+		return ()
 
-	-- perform creation
-	(releaseKey, (device, context)) <- allocate create destroy
-	return (releaseKey, device, context)
+	return ((Dx11Device
+		{ dx11DeviceSystem = system
+		, dx11DeviceInterface = deviceInterface
+		, dx11DeviceImmediateContext = contextInterface
+		, dx11DeviceD3DCompile = d3dCompileProc
+		}, context), destroy)
 
 -- | DirectX11 graphics context.
 data Dx11Context = Dx11Context
@@ -1218,7 +1210,7 @@ dx11ResizePresenter Dx11Presenter
 		, dx11PresenterHeight = height
 		}
 
-dx11CreatePresenter :: ResourceIO m => Dx11Device -> Win32Window -> Maybe (DisplayModeId DXGISystem) -> Bool -> m (ReleaseKey, Dx11Presenter)
+dx11CreatePresenter :: Dx11Device -> Win32Window -> Maybe (DisplayModeId DXGISystem) -> Bool -> IO (Dx11Presenter, IO ())
 dx11CreatePresenter device@Dx11Device
 	{ dx11DeviceSystem = DXGISystem
 		{ dxgiSystemFactory = factoryInterface
@@ -1230,7 +1222,7 @@ dx11CreatePresenter device@Dx11Device
 	} maybeDisplayMode needDepthStencil = do
 
 	-- window client size
-	(initialWidth, initialHeight) <- liftIO $ getWindowClientSize window
+	(initialWidth, initialHeight) <- getWindowClientSize window
 
 	-- swap chain desc
 	let desc = DXGI_SWAP_CHAIN_DESC
@@ -1248,12 +1240,12 @@ dx11CreatePresenter device@Dx11Device
 		}
 
 	-- create swap chain
-	(swapChainReleaseKey, swapChainInterface) <- allocateCOMObject $ do
+	(swapChainInterface, releaseSwapChainInterface) <- allocateCOMObject $ do
 		with desc $ \descPtr -> do
 			createCOMObjectViaPtr $ m_IDXGIFactory_CreateSwapChain factoryInterface (pokeCOMObject $ com_get_IUnknown deviceInterface) descPtr
 
 	-- presenter state ref
-	stateRef <- liftIO $ newIORef Dx11PresenterState
+	stateRef <- newIORef Dx11PresenterState
 		{ dx11PresenterMaybeRTV = Nothing
 		, dx11PresenterMaybeDSV = Nothing
 		, dx11PresenterMaybeDisplayMode = Nothing
@@ -1271,10 +1263,10 @@ dx11CreatePresenter device@Dx11Device
 		}
 
 	-- create ioref for window callback
-	presenterValidRef <- liftIO $ newIORef True
+	presenterValidRef <- newIORef True
 
 	-- set window callback
-	liftIO $ addWin32WindowCallback window $ \msg _wParam lParam -> do
+	addWin32WindowCallback window $ \msg wParam lParam -> do
 		case msg of
 			0x0005 {- WM_SIZE -} -> do
 				presenterValid <- readIORef presenterValidRef
@@ -1285,9 +1277,9 @@ dx11CreatePresenter device@Dx11Device
 			_ -> return ()
 
 	-- set mode
-	liftIO $ setPresenterMode presenter maybeDisplayMode
+	setPresenterMode presenter maybeDisplayMode
 
-	releaseKey <- registerRelease $ do
+	let destroy = do
 		invokeWin32WindowSystem windowSystem $ do
 			-- set that presenter is invalid
 			writeIORef presenterValidRef False
@@ -1310,9 +1302,9 @@ dx11CreatePresenter device@Dx11Device
 						{ dx11PresenterMaybeDSV = Nothing
 						}
 				Nothing -> return ()
-		release swapChainReleaseKey
+		releaseSwapChainInterface
 
-	return (releaseKey, presenter)
+	return (presenter, destroy)
 
 -- | Helper method to clear depth and/or stencil.
 dx11ClearDepthStencil :: Dx11Context -> Float -> Int -> Int -> IO ()

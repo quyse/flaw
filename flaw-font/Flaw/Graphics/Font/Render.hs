@@ -4,7 +4,7 @@ Description: Font rendering.
 License: MIT
 -}
 
-{-# LANGUAGE FlexibleContexts, RankNTypes #-}
+{-# LANGUAGE RankNTypes #-}
 
 module Flaw.Graphics.Font.Render
 	( GlyphRenderer
@@ -25,13 +25,11 @@ import qualified Data.Text as T
 import qualified Data.Vector as V
 import qualified Data.Vector.Storable as VS
 import qualified Data.Vector.Storable.Mutable as VSM
-import Foreign.ForeignPtr
-import Foreign.ForeignPtr.Unsafe
-import Foreign.Marshal.Alloc
 import Foreign.Marshal.Array
 import Foreign.Ptr
 import Foreign.Storable
 
+import Flaw.Book
 import Flaw.Graphics
 import Flaw.Graphics.Blend
 import Flaw.Graphics.Font
@@ -39,7 +37,6 @@ import Flaw.Graphics.Program
 import Flaw.Graphics.Sampler
 import Flaw.Graphics.Texture
 import Flaw.Math
-import Flaw.Resource
 
 -- | Glyph renderer keeps resources needed to render glyphs on a graphics device.
 data GlyphRenderer d = GlyphRenderer
@@ -61,26 +58,25 @@ data GlyphSubpixelMode
 	| GlyphSubpixelModeVerticalRGB
 	| GlyphSubpixelModeVerticalBGR
 
-initGlyphRenderer :: (Device d, ResourceIO m) => d -> GlyphSubpixelMode -> m (ReleaseKey, GlyphRenderer d)
+initGlyphRenderer :: Device d => d -> GlyphSubpixelMode -> IO (GlyphRenderer d, IO ())
 initGlyphRenderer device subpixelMode = do
+	bk <- newBook
+
 	let vbStride = sizeOf (undefined :: Vec4f)
-	(rkvb, vb) <- do
-		ptr <- liftIO $ newArray
-			[ Vec4 0 1 1 0 :: Vec4f
-			, Vec4 1 1 0 0
-			, Vec4 1 0 0 1
-			, Vec4 0 1 1 0
-			, Vec4 1 0 0 1
-			, Vec4 0 0 1 1
-			]
-		bytes <- liftIO $ B.unsafePackCStringLen (castPtr ptr, vbStride * 6)
-		q <- createStaticVertexBuffer device bytes vbStride
-		liftIO $ free ptr
-		return q
+	vb <- book bk $ withArray
+		[ Vec4 0 1 1 0 :: Vec4f
+		, Vec4 1 1 0 0
+		, Vec4 1 0 0 1
+		, Vec4 0 1 1 0
+		, Vec4 1 0 0 1
+		, Vec4 0 0 1 1
+		] $ \ptr -> do
+		bytes <- B.unsafePackCStringLen (castPtr ptr, vbStride * 6)
+		createStaticVertexBuffer device bytes vbStride
 	let ib = nullIndexBuffer
 	let capacity = 256;
-	(rkub, ub) <- createUniformBuffer device (capacity * 3 * sizeOf (undefined :: Vec4f))
-	(rkss, ss) <- createSamplerState device defaultSamplerStateInfo
+	ub <- book bk $ createUniformBuffer device (capacity * 3 * sizeOf (undefined :: Vec4f))
+	ss <- book bk $ createSamplerState device defaultSamplerStateInfo
 		{ samplerMinFilter = SamplerLinearFilter
 		, samplerMipFilter = SamplerPointFilter
 		, samplerMagFilter = SamplerLinearFilter
@@ -99,18 +95,18 @@ initGlyphRenderer device subpixelMode = do
 		, blendDestColor = ColorSourceInvSecondSrc
 		, blendColorOperation = BlendOperationAdd
 		}
-	(rkbs, bs) <- createBlendState device $ case subpixelMode of
+	bs <- book bk $ createBlendState device $ case subpixelMode of
 		GlyphSubpixelModeNone -> nonSubpixelBlendStateInfo
 		GlyphSubpixelModeHorizontalRGB -> subpixelBlendStateInfo
 		GlyphSubpixelModeHorizontalBGR -> subpixelBlendStateInfo
 		GlyphSubpixelModeVerticalRGB -> subpixelBlendStateInfo
 		GlyphSubpixelModeVerticalBGR -> subpixelBlendStateInfo
 
-	ubs <- liftIO $ uniformBufferSlot 0
-	uPositions <- liftIO (uniformArray capacity ubs :: IO (Node [Vec4f]))
-	uTexcoords <- liftIO (uniformArray capacity ubs :: IO (Node [Vec4f]))
-	uColors <- liftIO (uniformArray capacity ubs :: IO (Node [Vec4f]))
-	(rkProgram, program) <- createProgram device $ do
+	ubs <- uniformBufferSlot 0
+	uPositions <- uniformArray capacity ubs :: IO (Node [Vec4f])
+	uTexcoords <- uniformArray capacity ubs :: IO (Node [Vec4f])
+	uColors <- uniformArray capacity ubs :: IO (Node [Vec4f])
+	program <- book bk $ createProgram device $ do
 		aCorner <- attribute 0 0 0 (AttributeVec4 AttributeFloat32)
 		position <- temp $ uPositions ! instanceId
 		texcoordCoefs <- temp $ uTexcoords ! instanceId
@@ -148,16 +144,9 @@ initGlyphRenderer device subpixelMode = do
 						, constf 1
 						)
 
-	buffer <- liftIO $ VSM.new $ capacity * 3
+	buffer <- VSM.new $ capacity * 3
 
-	rk <- registerRelease $ do
-		release rkvb
-		release rkub
-		release rkss
-		release rkbs
-		release rkProgram
-
-	return (rk, GlyphRenderer
+	return (GlyphRenderer
 		{ glyphRendererVertexBuffer = vb
 		, glyphRendererIndexBuffer = ib
 		, glyphRendererUniformBuffer = ub
@@ -166,7 +155,7 @@ initGlyphRenderer device subpixelMode = do
 		, glyphRendererProgram = program
 		, glyphRendererCapacity = capacity
 		, glyphRendererBuffer = buffer
-		})
+		}, freeBook bk)
 
 -- | Runtime data about glyph of particular font.
 data RenderableGlyph = RenderableGlyph
@@ -180,7 +169,7 @@ data RenderableFont d = RenderableFont
 	, renderableFontGlyphs :: !(V.Vector RenderableGlyph)
 	}
 
-createRenderableFont :: (Device d, ResourceIO m) => d -> Glyphs -> m (ReleaseKey, RenderableFont d)
+createRenderableFont :: Device d => d -> Glyphs -> IO (RenderableFont d, IO ())
 createRenderableFont device Glyphs
 	{ glyphsImage = Image
 		{ imageWidth = width
@@ -191,10 +180,10 @@ createRenderableFont device Glyphs
 	, glyphsScaleX = scaleX
 	, glyphsScaleY = scaleY
 	} = do
-		-- create texture
-		let (pixelsPtr, pixelsLen) = VS.unsafeToForeignPtr0 pixels
-		pixelsBytes <- liftIO $ B.unsafePackCStringLen (unsafeForeignPtrToPtr $ castForeignPtr pixelsPtr, pixelsLen)
-		(rkTexture, textureId) <- createStaticTexture device TextureInfo
+	-- create texture
+	(textureId, destroy) <- VS.unsafeWith pixels $ \pixelsPtr -> do
+		pixelsBytes <- B.unsafePackCStringLen (castPtr pixelsPtr, VS.length pixels)
+		createStaticTexture device TextureInfo
 			{ textureWidth = width
 			, textureHeight = height
 			, textureDepth = 0
@@ -207,34 +196,33 @@ createRenderableFont device Glyphs
 				}
 			, textureCount = 0
 			} pixelsBytes
-		liftIO $ touchForeignPtr pixelsPtr
 
-		-- create glyphs
-		let invSize = xyxy__ $ Vec2 (1 / fromIntegral width) (1 / fromIntegral height)
-		let invScale = xyxy__ $ Vec2 (1 / fromIntegral scaleX) (1 / fromIntegral scaleY)
-		let f GlyphInfo
-			{ glyphWidth = gw
-			, glyphHeight = gh
-			, glyphLeftTopX = gltx
-			, glyphLeftTopY = glty
-			, glyphOffsetX = gox
-			, glyphOffsetY = goy
-			} = RenderableGlyph
-			{ renderableGlyphUV = Vec4 ltx (lty + h) (ltx + w) lty * invSize
-			, renderableGlyphOffset = Vec4 ox (oy + h) (ox + w) oy * invScale
-			} where
-			w = fromIntegral gw
-			h = fromIntegral gh
-			ltx = fromIntegral gltx
-			lty = fromIntegral glty
-			ox = fromIntegral gox
-			oy = fromIntegral goy
-		let glyphs = V.map f infos
+	-- create glyphs
+	let invSize = xyxy__ $ Vec2 (1 / fromIntegral width) (1 / fromIntegral height)
+	let invScale = xyxy__ $ Vec2 (1 / fromIntegral scaleX) (1 / fromIntegral scaleY)
+	let f GlyphInfo
+		{ glyphWidth = gw
+		, glyphHeight = gh
+		, glyphLeftTopX = gltx
+		, glyphLeftTopY = glty
+		, glyphOffsetX = gox
+		, glyphOffsetY = goy
+		} = RenderableGlyph
+		{ renderableGlyphUV = Vec4 ltx (lty + h) (ltx + w) lty * invSize
+		, renderableGlyphOffset = Vec4 ox (oy + h) (ox + w) oy * invScale
+		} where
+		w = fromIntegral gw
+		h = fromIntegral gh
+		ltx = fromIntegral gltx
+		lty = fromIntegral glty
+		ox = fromIntegral gox
+		oy = fromIntegral goy
+	let glyphs = V.map f infos
 
-		return (rkTexture, RenderableFont
-			{ renderableFontTexture = textureId
-			, renderableFontGlyphs = glyphs
-			})
+	return (RenderableFont
+		{ renderableFontTexture = textureId
+		, renderableFontGlyphs = glyphs
+		}, destroy)
 
 data GlyphToRender = GlyphToRender
 	{ glyphToRenderPosition :: !Vec2f
