@@ -21,6 +21,7 @@ import Data.Bits
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString.Unsafe as B
+import qualified Data.HashMap.Strict as HM
 import Data.IORef
 import Data.Maybe
 import qualified Data.Text as T
@@ -110,12 +111,13 @@ instance Device Dx11Device where
 	nullIndexBuffer = Dx11NullIndexBufferId D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST
 	nullUniformBuffer = Dx11NullUniformBufferId
 
-	createDeferredContext Dx11Device
+	createDeferredContext device@Dx11Device
 		{ dx11DeviceInterface = deviceInterface
 		} = describeException "failed to create DirectX11 deferred context" $ do
-		(contextInterface, destroy) <- allocateCOMObject $ createCOMObjectViaPtr $ m_ID3D11Device_CreateDeferredContext deviceInterface 0
-		context <- dx11CreateContextFromInterface contextInterface
-		return (context, destroy)
+		bk <- newBook
+		contextInterface <- book bk $ allocateCOMObject $ createCOMObjectViaPtr $ m_ID3D11Device_CreateDeferredContext deviceInterface 0
+		context <- book bk $ dx11CreateContextFromInterface device contextInterface
+		return (context, freeBook bk)
 
 	createStaticTexture Dx11Device
 		{ dx11DeviceInterface = deviceInterface
@@ -795,28 +797,34 @@ dx11CreateDevice (DXGIDeviceId system adapter) = describeException "failed to cr
 
 	d3dCompileProc <- liftM mkD3DCompile $ loadLibraryAndGetProcAddress "D3DCompiler_43.dll" "D3DCompile"
 
-	context <- dx11CreateContextFromInterface contextInterface
-
-	-- destroy function
-	let destroy = do
-		_ <- m_IUnknown_Release deviceInterface
-		_ <- m_IUnknown_Release contextInterface
-		return ()
-
-	return ((Dx11Device
+	let device = Dx11Device
 		{ dx11DeviceSystem = system
 		, dx11DeviceInterface = deviceInterface
 		, dx11DeviceImmediateContext = contextInterface
 		, dx11DeviceD3DCompile = d3dCompileProc
-		}, context), destroy)
+		}
+
+	(context, destroyContext) <- dx11CreateContextFromInterface device contextInterface
+
+	-- destroy function
+	let destroy = do
+		destroyContext
+		_ <- m_IUnknown_Release deviceInterface
+		_ <- m_IUnknown_Release contextInterface
+		return ()
+
+	return ((device, context), destroy)
 
 -- | DirectX11 graphics context.
 data Dx11Context = Dx11Context
-	{ dx11ContextInterface :: ID3D11DeviceContext
+	{ dx11ContextDevice :: Dx11Device
+	, dx11ContextInterface :: ID3D11DeviceContext
 	-- | Context state corresponding to the ID3D11DeviceContext state.
-	, dx11ContextActualState :: Dx11ContextState
+	, dx11ContextActualState :: !Dx11ContextState
 	-- | Desired context state set by user.
-	, dx11ContextDesiredState :: Dx11ContextState
+	, dx11ContextDesiredState :: !Dx11ContextState
+	-- | Cache of depth stencil states. Not in device, to be able to use IORef for performance.
+	, dx11ContextDepthStencilStateCache :: !(IORef (HM.HashMap Int ID3D11DepthStencilState))
 	}
 
 data Dx11ContextState = Dx11ContextState
@@ -827,18 +835,28 @@ data Dx11ContextState = Dx11ContextState
 	, dx11ContextStateUniformBuffers :: !(IOArray Int (UniformBufferId Dx11Device))
 	, dx11ContextStateSamplers :: !(IOArray Int (TextureId Dx11Device, SamplerStateId Dx11Device))
 	, dx11ContextStateBlendState :: !(IORef (BlendStateId Dx11Device))
+	, dx11ContextStateDepthTestFunc :: !(IORef DepthTestFunc)
+	, dx11ContextStateDepthWrite :: !(IORef Bool)
 	, dx11ContextStateProgram :: !(IORef (ProgramId Dx11Device))
 	}
 
-dx11CreateContextFromInterface :: ID3D11DeviceContext -> IO Dx11Context
-dx11CreateContextFromInterface contextInterface = do
+dx11CreateContextFromInterface :: Dx11Device -> ID3D11DeviceContext -> IO (Dx11Context, IO ())
+dx11CreateContextFromInterface device contextInterface = do
 	actualContextState <- dx11CreateContextState
 	desiredContextState <- dx11CreateContextState
-	return Dx11Context
-		{ dx11ContextInterface = contextInterface
+	depthStencilStateCacheRef <- newIORef HM.empty
+	let destroy = do
+		depthStencilStateCache <- readIORef depthStencilStateCacheRef
+		forM_ (HM.toList depthStencilStateCache) $ \(_code, depthStencilStateInterface) -> do
+			m_IUnknown_Release depthStencilStateInterface
+		writeIORef depthStencilStateCacheRef HM.empty
+	return (Dx11Context
+		{ dx11ContextDevice = device
+		, dx11ContextInterface = contextInterface
 		, dx11ContextActualState = actualContextState
 		, dx11ContextDesiredState = desiredContextState
-		}
+		, dx11ContextDepthStencilStateCache = depthStencilStateCacheRef
+		}, destroy)
 
 dx11CreateContextState :: IO Dx11ContextState
 dx11CreateContextState = do
@@ -849,6 +867,8 @@ dx11CreateContextState = do
 	uniformBuffers <- newArray (0, 7) Dx11NullUniformBufferId
 	samplers <- newArray (0, 7) (Dx11NullTextureId, Dx11NullSamplerStateId)
 	blendState <- newIORef $ Dx11NullBlendStateId
+	depthTestFunc <- newIORef $ DepthTestFuncLess
+	depthWrite <- newIORef True
 	program <- newIORef Dx11NullProgramId
 	return Dx11ContextState
 		{ dx11ContextStateFrameBuffer = frameBuffer
@@ -858,6 +878,8 @@ dx11CreateContextState = do
 		, dx11ContextStateUniformBuffers = uniformBuffers
 		, dx11ContextStateSamplers = samplers
 		, dx11ContextStateBlendState = blendState
+		, dx11ContextStateDepthTestFunc = depthTestFunc
+		, dx11ContextStateDepthWrite = depthWrite
 		, dx11ContextStateProgram = program
 		}
 
@@ -870,6 +892,8 @@ dx11SetDefaultContextState Dx11ContextState
 	, dx11ContextStateUniformBuffers = uniformBuffersArray
 	, dx11ContextStateSamplers = samplersArray
 	, dx11ContextStateBlendState = blendStateRef
+	, dx11ContextStateDepthTestFunc = depthTestFuncRef
+	, dx11ContextStateDepthWrite = depthWriteRef
 	, dx11ContextStateProgram = programRef
 	} = do
 	writeIORef frameBufferRef $ Dx11FrameBufferId [] Dx11NullDepthStencilTargetId
@@ -882,6 +906,8 @@ dx11SetDefaultContextState Dx11ContextState
 	samplersBounds <- getBounds samplersArray
 	forM_ (range samplersBounds) $ \i -> writeArray samplersArray i (Dx11NullTextureId, Dx11NullSamplerStateId)
 	writeIORef blendStateRef Dx11NullBlendStateId
+	writeIORef depthTestFuncRef DepthTestFuncLess
+	writeIORef depthWriteRef True
 	writeIORef programRef Dx11NullProgramId
 
 instance Context Dx11Context Dx11Device where
@@ -1025,6 +1051,28 @@ instance Context Dx11Context Dx11Device where
 		writeIORef blendStateRef blendState
 		r <- scope
 		writeIORef blendStateRef oldBlendState
+		return r
+
+	contextSetDepthTestFunc Dx11Context
+		{ dx11ContextDesiredState = Dx11ContextState
+			{ dx11ContextStateDepthTestFunc = depthTestFuncRef
+			}
+		} depthTestFunc scope = do
+		oldDepthTestFunc <- readIORef depthTestFuncRef
+		writeIORef depthTestFuncRef depthTestFunc
+		r <- scope
+		writeIORef depthTestFuncRef oldDepthTestFunc
+		return r
+
+	contextSetDepthWrite Dx11Context
+		{ dx11ContextDesiredState = Dx11ContextState
+			{ dx11ContextStateDepthWrite = depthWriteRef
+			}
+		} depthWrite scope = do
+		oldDepthWrite <- readIORef depthWriteRef
+		writeIORef depthWriteRef depthWrite
+		r <- scope
+		writeIORef depthWriteRef oldDepthWrite
 		return r
 
 	contextSetProgram Dx11Context
@@ -1347,9 +1395,55 @@ dx11UploadBuffer Dx11Context
 	B.unsafeUseAsCStringLen bytes $ \(bytesPtr, bytesLen) -> copyBytes bufferPtr (castPtr bytesPtr) bytesLen
 	m_ID3D11DeviceContext_Unmap contextInterface resourceInterfacePtr 0
 
+dx11DepthTestFunc :: DepthTestFunc -> D3D11_COMPARISON_FUNC
+dx11DepthTestFunc depthTestFunc = case depthTestFunc of
+	DepthTestFuncNever -> D3D11_COMPARISON_NEVER
+	DepthTestFuncLess -> D3D11_COMPARISON_LESS
+	DepthTestFuncLessOrEqual -> D3D11_COMPARISON_LESS_EQUAL
+	DepthTestFuncEqual -> D3D11_COMPARISON_EQUAL
+	DepthTestFuncNonEqual -> D3D11_COMPARISON_NOT_EQUAL
+	DepthTestFuncGreaterOrEqual -> D3D11_COMPARISON_GREATER_EQUAL
+	DepthTestFuncGreater -> D3D11_COMPARISON_GREATER
+	DepthTestFuncAlways -> D3D11_COMPARISON_ALWAYS
+
+dx11CalcDepthStencilStateCode :: D3D11_COMPARISON_FUNC -> Bool -> Int
+dx11CalcDepthStencilStateCode comparisonFunc depthWrite = (fromEnum comparisonFunc) .|. (if depthWrite then 8 else 0)
+
+dx11GetDepthStencilState :: Dx11Context -> D3D11_COMPARISON_FUNC -> Bool -> Int -> IO ID3D11DepthStencilState
+dx11GetDepthStencilState Dx11Context
+	{ dx11ContextDevice = Dx11Device
+		{ dx11DeviceInterface = deviceInterface
+		}
+	, dx11ContextDepthStencilStateCache = depthStencilStateCacheRef
+	} comparisonFunc depthWrite code = do
+	depthStencilStateCache <- readIORef depthStencilStateCacheRef
+	case HM.lookup code depthStencilStateCache of
+		Just depthStencilInterface -> return depthStencilInterface
+		Nothing -> do
+			let stencilOpDesc = D3D11_DEPTH_STENCILOP_DESC
+				{ f_D3D11_DEPTH_STENCILOP_DESC_StencilFailOp = D3D11_STENCIL_OP_KEEP
+				, f_D3D11_DEPTH_STENCILOP_DESC_StencilDepthFailOp = D3D11_STENCIL_OP_KEEP
+				, f_D3D11_DEPTH_STENCILOP_DESC_StencilPassOp = D3D11_STENCIL_OP_KEEP
+				, f_D3D11_DEPTH_STENCILOP_DESC_StencilFunc = D3D11_COMPARISON_ALWAYS
+				}
+			let desc = D3D11_DEPTH_STENCIL_DESC
+				{ f_D3D11_DEPTH_STENCIL_DESC_DepthEnable = comparisonFunc /= D3D11_COMPARISON_ALWAYS || depthWrite
+				, f_D3D11_DEPTH_STENCIL_DESC_DepthWriteMask = if depthWrite then D3D11_DEPTH_WRITE_MASK_ALL else D3D11_DEPTH_WRITE_MASK_ZERO
+				, f_D3D11_DEPTH_STENCIL_DESC_DepthFunc = comparisonFunc
+				, f_D3D11_DEPTH_STENCIL_DESC_StencilEnable = False
+				, f_D3D11_DEPTH_STENCIL_DESC_StencilReadMask = 0
+				, f_D3D11_DEPTH_STENCIL_DESC_StencilWriteMask = 0
+				, f_D3D11_DEPTH_STENCIL_DESC_FrontFace = stencilOpDesc
+				, f_D3D11_DEPTH_STENCIL_DESC_BackFace = stencilOpDesc
+				}
+			depthStencilInterface <- with desc $ \descPtr -> do
+				createCOMObjectViaPtr $ m_ID3D11Device_CreateDepthStencilState deviceInterface descPtr
+			writeIORef depthStencilStateCacheRef $ HM.insert code depthStencilInterface depthStencilStateCache
+			return depthStencilInterface
+
 -- | Update context.
 dx11UpdateContext :: Dx11Context -> IO ()
-dx11UpdateContext Dx11Context
+dx11UpdateContext context@Dx11Context
 	{ dx11ContextInterface = contextInterface
 	, dx11ContextActualState = Dx11ContextState
 		{ dx11ContextStateFrameBuffer = actualFrameBufferRef
@@ -1359,6 +1453,8 @@ dx11UpdateContext Dx11Context
 		, dx11ContextStateUniformBuffers = actualUniformBuffersArray
 		, dx11ContextStateSamplers = actualSamplersArray
 		, dx11ContextStateBlendState = actualBlendStateRef
+		, dx11ContextStateDepthTestFunc = actualDepthTestFuncRef
+		, dx11ContextStateDepthWrite = actualDepthWriteRef
 		, dx11ContextStateProgram = actualProgramRef
 		}
 	, dx11ContextDesiredState = Dx11ContextState
@@ -1369,6 +1465,8 @@ dx11UpdateContext Dx11Context
 		, dx11ContextStateUniformBuffers = desiredUniformBuffersArray
 		, dx11ContextStateSamplers = desiredSamplersArray
 		, dx11ContextStateBlendState = desiredBlendStateRef
+		, dx11ContextStateDepthTestFunc = desiredDepthTestFuncRef
+		, dx11ContextStateDepthWrite = desiredDepthWriteRef
 		, dx11ContextStateProgram = desiredProgramRef
 		}
 	} = do
@@ -1473,6 +1571,21 @@ dx11UpdateContext Dx11Context
 			Dx11BlendStateId blendStateInterface -> pokeCOMObject blendStateInterface
 			Dx11NullBlendStateId -> nullPtr
 		m_ID3D11DeviceContext_OMSetBlendState contextInterface blendStateInterfacePtr nullPtr 0xffffffff
+
+	-- depth-stencil state
+	do
+		actualDepthTestFunc <- readIORef actualDepthTestFuncRef
+		actualDepthWrite <- readIORef actualDepthWriteRef
+		desiredDepthTestFunc <- readIORef desiredDepthTestFuncRef
+		desiredDepthWrite <- readIORef desiredDepthWriteRef
+		if actualDepthTestFunc /= desiredDepthTestFunc || actualDepthWrite /= desiredDepthWrite then do
+			let comparisonFunc = dx11DepthTestFunc desiredDepthTestFunc
+			let code = dx11CalcDepthStencilStateCode comparisonFunc desiredDepthWrite
+			depthStencilInterface <- dx11GetDepthStencilState context comparisonFunc desiredDepthWrite code
+			m_ID3D11DeviceContext_OMSetDepthStencilState contextInterface (pokeCOMObject depthStencilInterface) 0
+			writeIORef actualDepthTestFuncRef desiredDepthTestFunc
+			writeIORef actualDepthWriteRef desiredDepthWrite
+		else return ()
 
 	-- program (shaders, input layout)
 	refSetup actualProgramRef desiredProgramRef $ \desiredProgram -> do

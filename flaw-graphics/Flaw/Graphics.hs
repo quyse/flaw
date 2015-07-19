@@ -12,6 +12,7 @@ module Flaw.Graphics
 	, DeviceInfo(..)
 	, DisplayInfo(..)
 	, DisplayModeInfo(..)
+	, DepthTestFunc(..)
 	, Render
 	, renderScope
 	, renderFrameBuffer
@@ -22,6 +23,8 @@ module Flaw.Graphics
 	, renderUniformBuffer
 	, renderSampler
 	, renderBlendState
+	, renderDepthTestFunc
+	, renderDepthWrite
 	, renderProgram
 	, renderClearColor
 	, renderClearDepth

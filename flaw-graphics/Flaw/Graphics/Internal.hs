@@ -14,6 +14,7 @@ module Flaw.Graphics.Internal
 	, DeviceInfo(..)
 	, DisplayInfo(..)
 	, DisplayModeInfo(..)
+	, DepthTestFunc(..)
 	, Render
 	, renderScope
 	, renderFrameBuffer
@@ -24,6 +25,8 @@ module Flaw.Graphics.Internal
 	, renderUniformBuffer
 	, renderSampler
 	, renderBlendState
+	, renderDepthTestFunc
+	, renderDepthWrite
 	, renderProgram
 	, renderClearColor
 	, renderClearDepth
@@ -191,6 +194,10 @@ class Device d => Context c d | c -> d where
 	contextSetSampler :: c -> Int -> TextureId d -> SamplerStateId d -> IO a -> IO a
 	-- | Set blend state.
 	contextSetBlendState :: c -> BlendStateId d -> IO a -> IO a
+	-- | Set depth-test function.
+	contextSetDepthTestFunc :: c -> DepthTestFunc -> IO a -> IO a
+	-- | Set depth write flag.
+	contextSetDepthWrite :: c -> Bool -> IO a -> IO a
 	-- | Set program.
 	contextSetProgram :: c -> ProgramId d -> IO a -> IO a
 
@@ -221,6 +228,18 @@ data DisplayModeInfo = DisplayModeInfo
 	, displayModeHeight :: Int
 	, displayModeRefreshRate :: Rational
 	} deriving Show
+
+-- | Depth test function.
+data DepthTestFunc
+	= DepthTestFuncNever
+	| DepthTestFuncLess
+	| DepthTestFuncLessOrEqual
+	| DepthTestFuncEqual
+	| DepthTestFuncNonEqual
+	| DepthTestFuncGreaterOrEqual
+	| DepthTestFuncGreater
+	| DepthTestFuncAlways
+	deriving Eq
 
 -- | Rendering monad.
 type Render c = StackT (ReaderT c IO)
@@ -269,6 +288,14 @@ renderSampler i t s = renderSetup $ \c q -> contextSetSampler c i t s q
 -- | Set blend state.
 renderBlendState :: Context c d => BlendStateId d -> Render c ()
 renderBlendState b = renderSetup $ \c q -> contextSetBlendState c b q
+
+-- | Set depth test function.
+renderDepthTestFunc :: Context c d => DepthTestFunc -> Render c ()
+renderDepthTestFunc f = renderSetup $ \c q -> contextSetDepthTestFunc c f q
+
+-- | Set depth write flag.
+renderDepthWrite :: Context c d => Bool -> Render c ()
+renderDepthWrite f = renderSetup $ \c q -> contextSetDepthWrite c f q
 
 -- | Set current program.
 renderProgram :: Context c d => ProgramId d -> Render c ()
