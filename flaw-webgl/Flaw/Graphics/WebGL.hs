@@ -20,11 +20,13 @@ import Control.Monad
 import Data.Array.IO as A
 import Data.Bits
 import qualified Data.ByteString as B
+import qualified Data.ByteString.Unsafe as B
 import Data.IORef
 import Data.Primitive.ByteArray
 import qualified Data.Text as T
 import Foreign.ForeignPtr
 import Foreign.Marshal.Utils
+import Foreign.Ptr
 import Foreign.Storable
 import qualified GHCJS.DOM.Element as DOM
 import GHCJS.Foreign
@@ -363,8 +365,8 @@ instance Context WebGLContext WebGLDevice where
 
 	contextUploadUniformBuffer _context WebGLUniformBufferId
 		{ webglUniformBufferPtr = foreignPtr
-		} ptr size = withForeignPtr foreignPtr $ \bufferPtr -> do
-		copyBytes bufferPtr ptr size
+		} bytes = withForeignPtr foreignPtr $ \bufferPtr -> B.unsafeUseAsCStringLen bytes $ \(bytesPtr, bytesLen) -> do
+		copyBytes bufferPtr (castPtr bytesPtr) bytesLen
 
 	contextDraw context@WebGLContext
 		{ webglContextContext = jsContext

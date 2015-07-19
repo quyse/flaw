@@ -18,9 +18,9 @@ import Control.Exception
 import Control.Monad
 import Data.Array.IO
 import Data.Bits
-import qualified Data.ByteString as BS
-import qualified Data.ByteString.Char8 as BSC
-import qualified Data.ByteString.Unsafe as BS
+import qualified Data.ByteString as B
+import qualified Data.ByteString.Char8 as BC
+import qualified Data.ByteString.Unsafe as B
 import Data.IORef
 import Data.Maybe
 import qualified Data.Text as T
@@ -260,7 +260,7 @@ instance Device Dx11Device where
 				return (createResource, srvDesc)
 
 		-- create ID3D11Resource
-		(resourceInterface, releaseResourceInterface) <- allocateCOMObject $ BS.unsafeUseAsCString bytes createResource
+		(resourceInterface, releaseResourceInterface) <- allocateCOMObject $ B.unsafeUseAsCString bytes createResource
 		-- create ID3D11ShaderResourceView
 		(srvInterface, releaseSrvInterface) <- allocateCOMObject $ with srvDesc $ \srvDescPtr -> do
 			createCOMObjectViaPtr $ m_ID3D11Device_CreateShaderResourceView deviceInterface (pokeCOMObject resourceInterface) srvDescPtr
@@ -534,10 +534,10 @@ instance Device Dx11Device where
 
 	createStaticVertexBuffer Dx11Device
 		{ dx11DeviceInterface = deviceInterface
-		} bytes stride = describeException "failed to create DirectX11 vertex buffer" $ do
+		} bytes stride = describeException "failed to create DirectX11 static vertex buffer" $ do
 		-- desc
 		let desc = D3D11_BUFFER_DESC
-			{ f_D3D11_BUFFER_DESC_ByteWidth = fromIntegral $ BS.length bytes
+			{ f_D3D11_BUFFER_DESC_ByteWidth = fromIntegral $ B.length bytes
 			, f_D3D11_BUFFER_DESC_Usage = D3D11_USAGE_IMMUTABLE
 			, f_D3D11_BUFFER_DESC_BindFlags = fromIntegral $ fromEnum D3D11_BIND_VERTEX_BUFFER
 			, f_D3D11_BUFFER_DESC_CPUAccessFlags = 0
@@ -552,7 +552,7 @@ instance Device Dx11Device where
 			}
 		-- create
 		(bufferInterface, releaseBufferInterface) <- allocateCOMObject $ with desc $ \descPtr -> do
-			BS.unsafeUseAsCString bytes $ \bytesPtr -> do
+			B.unsafeUseAsCString bytes $ \bytesPtr -> do
 				with (subresourceData $ castPtr bytesPtr) $ \subresourceDataPtr -> do
 					createCOMObjectViaPtr $ m_ID3D11Device_CreateBuffer deviceInterface descPtr subresourceDataPtr
 
@@ -563,7 +563,7 @@ instance Device Dx11Device where
 		} bytes is32bit = describeException "failed to create DirectX11 index buffer" $ do
 		-- desc
 		let desc = D3D11_BUFFER_DESC
-			{ f_D3D11_BUFFER_DESC_ByteWidth = fromIntegral $ BS.length bytes
+			{ f_D3D11_BUFFER_DESC_ByteWidth = fromIntegral $ B.length bytes
 			, f_D3D11_BUFFER_DESC_Usage = D3D11_USAGE_IMMUTABLE
 			, f_D3D11_BUFFER_DESC_BindFlags = fromIntegral $ fromEnum D3D11_BIND_INDEX_BUFFER
 			, f_D3D11_BUFFER_DESC_CPUAccessFlags = 0
@@ -578,7 +578,7 @@ instance Device Dx11Device where
 			}
 		-- create
 		(bufferInterface, releaseBufferInterface) <- allocateCOMObject $ with desc $ \descPtr -> do
-			BS.unsafeUseAsCString bytes $ \bytesPtr -> do
+			B.unsafeUseAsCString bytes $ \bytesPtr -> do
 				with (subresourceData $ castPtr bytesPtr) $ \subresourceDataPtr -> do
 					createCOMObjectViaPtr $ m_ID3D11Device_CreateBuffer deviceInterface descPtr subresourceDataPtr
 
@@ -593,7 +593,7 @@ instance Device Dx11Device where
 		} program = describeException "failed to create DirectX11 program" $ do
 
 		-- function to create input layout
-		let createInputLayout attributes vertexShaderByteCode = allocateCOMObject $ BS.unsafeUseAsCStringLen vertexShaderByteCode $ \(byteCodePtr, byteCodeSize) -> let
+		let createInputLayout attributes vertexShaderByteCode = allocateCOMObject $ B.unsafeUseAsCStringLen vertexShaderByteCode $ \(byteCodePtr, byteCodeSize) -> let
 			inputElementDescs (HlslAttribute
 				{ hlslAttributeSemantic = semantic
 				, hlslAttributeInfo = Attribute
@@ -603,7 +603,7 @@ instance Device Dx11Device where
 					, attributeType = atype
 					}
 				} : restAttributes) descs = do
-				BS.useAsCString (T.encodeUtf8 semantic) $ \semanticPtr -> do
+				B.useAsCString (T.encodeUtf8 semantic) $ \semanticPtr -> do
 					let format = convertFormat atype
 					if format == DXGI_FORMAT_UNKNOWN then fail $ "wrong attribute format for " ++ T.unpack semantic
 					else return ()
@@ -675,9 +675,9 @@ instance Device Dx11Device where
 			let flags = fromIntegral $ (fromEnum D3DCOMPILE_ENABLE_STRICTNESS) .|. (fromEnum D3DCOMPILE_PACK_MATRIX_COLUMN_MAJOR)
 				.|. (if debug then fromEnum D3DCOMPILE_DEBUG else 0)
 				.|. (if optimize then fromEnum D3DCOMPILE_OPTIMIZATION_LEVEL3 else (fromEnum D3DCOMPILE_OPTIMIZATION_LEVEL0) .|. (fromEnum D3DCOMPILE_SKIP_OPTIMIZATION))
-			(hr, shaderData, errorsData) <- BS.unsafeUseAsCStringLen (T.encodeUtf8 source) $ \(sourcePtr, sourceLen) -> do
-				BS.useAsCString (T.encodeUtf8 entryPoint) $ \entryPointPtr -> do
-					BS.useAsCString (T.encodeUtf8 profile) $ \profilePtr -> do
+			(hr, shaderData, errorsData) <- B.unsafeUseAsCStringLen (T.encodeUtf8 source) $ \(sourcePtr, sourceLen) -> do
+				B.useAsCString (T.encodeUtf8 entryPoint) $ \entryPointPtr -> do
+					B.useAsCString (T.encodeUtf8 profile) $ \profilePtr -> do
 						alloca $ \shaderBlobPtrPtr -> do
 							alloca $ \errorsBlobPtrPtr -> do
 								hr <- d3dCompile
@@ -695,7 +695,7 @@ instance Device Dx11Device where
 								-- retrieve blobs
 								let getBlobData blobPtrPtr = do
 									blobPtr <- peek blobPtrPtr
-									if blobPtr == nullPtr then return BS.empty
+									if blobPtr == nullPtr then return B.empty
 									else do
 										blobInterface <- peekCOMObject blobPtr
 										dataPtr <- m_ID3DBlob_GetBufferPointer blobInterface
@@ -703,21 +703,21 @@ instance Device Dx11Device where
 										dataCopyPtr <- mallocBytes dataSize
 										copyArray dataCopyPtr (castPtr dataPtr) dataSize
 										_ <- m_IUnknown_Release blobInterface
-										BS.unsafePackMallocCStringLen (dataCopyPtr, dataSize)
+										B.unsafePackMallocCStringLen (dataCopyPtr, dataSize)
 								shaderData <- getBlobData shaderBlobPtrPtr
 								errorsData <- getBlobData errorsBlobPtrPtr
 								return (hr, shaderData, errorsData)
-			if hresultFailed hr then fail $ "failed to compile shader: " ++ BSC.unpack errorsData
+			if hresultFailed hr then fail $ "failed to compile shader: " ++ BC.unpack errorsData
 			else return shaderData
 
 		-- function to create vertex shader
 		let createVertexShader bytecode = allocateCOMObject $ do
-			BS.unsafeUseAsCStringLen bytecode $ \(ptr, len) -> do
+			B.unsafeUseAsCStringLen bytecode $ \(ptr, len) -> do
 				describeException "failed to create vertex shader" $ do
 					createCOMObjectViaPtr $ m_ID3D11Device_CreateVertexShader deviceInterface (castPtr ptr) (fromIntegral len) nullPtr
 		-- function to create pixel shader
 		let createPixelShader bytecode = allocateCOMObject $ do
-			BS.unsafeUseAsCStringLen bytecode $ \(ptr, len) -> do
+			B.unsafeUseAsCStringLen bytecode $ \(ptr, len) -> do
 				describeException "failed to create pixel shader" $ do
 					createCOMObjectViaPtr $ m_ID3D11Device_CreatePixelShader deviceInterface (castPtr ptr) (fromIntegral len) nullPtr
 
@@ -887,17 +887,9 @@ instance Context Dx11Context Dx11Device where
 	contextClearDepthStencil context depth stencil = do
 		dx11ClearDepthStencil context depth stencil ((fromEnum D3D11_CLEAR_DEPTH) .|. (fromEnum D3D11_CLEAR_STENCIL))
 
-	contextUploadUniformBuffer Dx11Context
-		{ dx11ContextInterface = contextInterface
-		} uniformBuffer ptr size = do
+	contextUploadUniformBuffer context uniformBuffer bytes = do
 		case uniformBuffer of
-			Dx11UniformBufferId bufferInterface -> do
-				let resourceInterfacePtr = castPtr $ pokeCOMObject bufferInterface
-				D3D11_MAPPED_SUBRESOURCE
-					{ f_D3D11_MAPPED_SUBRESOURCE_pData = bufferPtr
-					} <- createCOMValueViaPtr $ m_ID3D11DeviceContext_Map contextInterface resourceInterfacePtr 0 (wrapEnum D3D11_MAP_WRITE_DISCARD) 0
-				copyBytes bufferPtr ptr size
-				m_ID3D11DeviceContext_Unmap contextInterface resourceInterfacePtr 0
+			Dx11UniformBufferId bufferInterface -> dx11UploadBuffer context bufferInterface bytes
 			Dx11NullUniformBufferId -> return ()
 
 	contextDraw context@Dx11Context
@@ -1266,7 +1258,7 @@ dx11CreatePresenter device@Dx11Device
 	presenterValidRef <- newIORef True
 
 	-- set window callback
-	addWin32WindowCallback window $ \msg wParam lParam -> do
+	addWin32WindowCallback window $ \msg _wParam lParam -> do
 		case msg of
 			0x0005 {- WM_SIZE -} -> do
 				presenterValid <- readIORef presenterValidRef
@@ -1319,6 +1311,18 @@ dx11ClearDepthStencil Dx11Context
 		Dx11DepthStencilTargetId dsvInterface -> do
 			m_ID3D11DeviceContext_ClearDepthStencilView contextInterface (pokeCOMObject dsvInterface) (fromIntegral flags) depth (fromIntegral stencil)
 		Dx11NullDepthStencilTargetId -> return ()
+
+-- | Helper method to upload bytes to buffer.
+dx11UploadBuffer :: ID3D11Resource_Class b => Dx11Context -> b -> B.ByteString -> IO ()
+dx11UploadBuffer Dx11Context
+	{ dx11ContextInterface = contextInterface
+	} resource bytes = do
+	let resourceInterfacePtr = pokeCOMObject $ com_get_ID3D11Resource resource
+	D3D11_MAPPED_SUBRESOURCE
+		{ f_D3D11_MAPPED_SUBRESOURCE_pData = bufferPtr
+		} <- createCOMValueViaPtr $ m_ID3D11DeviceContext_Map contextInterface resourceInterfacePtr 0 (wrapEnum D3D11_MAP_WRITE_DISCARD) 0
+	B.unsafeUseAsCStringLen bytes $ \(bytesPtr, bytesLen) -> copyBytes bufferPtr (castPtr bytesPtr) bytesLen
+	m_ID3D11DeviceContext_Unmap contextInterface resourceInterfacePtr 0
 
 -- | Update context.
 dx11UpdateContext :: Dx11Context -> IO ()

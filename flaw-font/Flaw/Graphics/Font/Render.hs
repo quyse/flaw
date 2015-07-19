@@ -25,6 +25,8 @@ import qualified Data.Text as T
 import qualified Data.Vector as V
 import qualified Data.Vector.Storable as VS
 import qualified Data.Vector.Storable.Mutable as VSM
+import Foreign.ForeignPtr
+import Foreign.ForeignPtr.Unsafe
 import Foreign.Marshal.Array
 import Foreign.Ptr
 import Foreign.Storable
@@ -262,9 +264,10 @@ renderGlyphs GlyphRenderer
 		count <- liftIO $ readIORef bufferIndexRef
 		if count > 0 then do
 			-- upload data to uniform buffer
-			renderUploadUniformBuffer ub $ \f -> do
-				VSM.unsafeWith buffer $ \ptr -> do
-					f (castPtr ptr) $ capacity * 3 * sizeOf (undefined :: Vec4f)
+			let (foreignPtr, size) = VSM.unsafeToForeignPtr0 buffer
+			bytes <- liftIO $ B.unsafePackCStringLen (castPtr $ unsafeForeignPtrToPtr foreignPtr, size)
+			renderUploadUniformBuffer ub bytes
+			liftIO $ touchForeignPtr foreignPtr
 			-- render batch
 			renderDrawInstanced count 6
 		else return ()

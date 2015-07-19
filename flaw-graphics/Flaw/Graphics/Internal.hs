@@ -39,9 +39,8 @@ module Flaw.Graphics.Internal
 
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Reader
-import qualified Data.ByteString as BS
+import qualified Data.ByteString as B
 import qualified Data.Text as T
-import Foreign.Ptr
 
 import Flaw.Graphics.Blend
 import Flaw.Graphics.Program.Internal
@@ -114,7 +113,7 @@ class Device d where
 	-- | Create deferred context.
 	createDeferredContext :: Context (DeferredContext d) d => d -> IO (DeferredContext d, IO ())
 	-- | Create static texture.
-	createStaticTexture :: d -> TextureInfo -> BS.ByteString -> IO (TextureId d, IO ())
+	createStaticTexture :: d -> TextureInfo -> B.ByteString -> IO (TextureId d, IO ())
 	-- | Create sampler state.
 	createSamplerState :: d -> SamplerStateInfo -> IO (SamplerStateId d, IO ())
 	-- | Create blend state.
@@ -127,14 +126,14 @@ class Device d where
 	createReadableDepthStencilTarget :: d -> Int -> Int -> IO ((DepthStencilTargetId d, TextureId d), IO ())
 	-- | Create framebuffer.
 	createFrameBuffer :: d -> [RenderTargetId d] -> DepthStencilTargetId d -> IO (FrameBufferId d, IO ())
-	-- | Create vertex buffer.
+	-- | Create static vertex buffer.
 	createStaticVertexBuffer
 		:: d -- ^ Device.
-		-> BS.ByteString -- ^ Buffer
+		-> B.ByteString -- ^ Buffer.
 		-> Int -- ^ Stride in bytes.
 		-> IO (VertexBufferId d, IO ())
 	-- | Create index buffer.
-	createStaticIndexBuffer :: d -> BS.ByteString -> Bool -> IO (IndexBufferId d, IO ())
+	createStaticIndexBuffer :: d -> B.ByteString -> Bool -> IO (IndexBufferId d, IO ())
 	-- | Create program.
 	createProgram
 		:: d -- ^ Device.
@@ -156,7 +155,7 @@ class Device d => Context c d | c -> d where
 	-- | Clear depth and stencil.
 	contextClearDepthStencil :: c -> Float -> Int -> IO ()
 	-- | Upload data to uniform buffer.
-	contextUploadUniformBuffer :: c -> UniformBufferId d -> Ptr () -> Int -> IO ()
+	contextUploadUniformBuffer :: c -> UniformBufferId d -> B.ByteString -> IO ()
 	-- | Draw (instanced).
 	contextDraw :: c
 		-> Int -- ^ Instances count (1 for non-instanced).
@@ -283,8 +282,8 @@ renderClearDepthStencil :: Context c d => Float -> Int -> Render c ()
 renderClearDepthStencil depth stencil = renderAction $ \c -> contextClearDepthStencil c depth stencil
 
 -- | Upload data to uniform buffer.
-renderUploadUniformBuffer :: Context c d => UniformBufferId d -> ((Ptr () -> Int -> IO ()) -> IO a) -> Render c a
-renderUploadUniformBuffer ub f = renderAction $ \c -> f $ contextUploadUniformBuffer c ub
+renderUploadUniformBuffer :: Context c d => UniformBufferId d -> B.ByteString -> Render c ()
+renderUploadUniformBuffer ub bytes = renderAction $ \c -> contextUploadUniformBuffer c ub bytes
 
 -- | Draw.
 renderDraw :: Context c d => Int -> Render c ()

@@ -38,8 +38,11 @@ module Flaw.Graphics.Program
 	) where
 
 import Control.Monad.Reader
+import qualified Data.ByteString.Unsafe as B
 import Data.IORef
 import Foreign.ForeignPtr
+import Foreign.ForeignPtr.Unsafe
+import Foreign.Ptr
 import Foreign.Storable
 
 import Flaw.Graphics.Internal
@@ -160,7 +163,10 @@ renderUploadUniformStorage UniformStorage
 	{ uniformStorageBufferId = uniformBuffer
 	, uniformStorageBytes = bytes
 	, uniformStorageSize = size
-	} = renderUploadUniformBuffer uniformBuffer $ \f -> withForeignPtr bytes $ \ptr -> f ptr size
+	} = do
+	bs <- liftIO $ B.unsafePackCStringLen (castPtr $ unsafeForeignPtrToPtr bytes, size)
+	renderUploadUniformBuffer uniformBuffer bs
+	liftIO $ touchForeignPtr bytes
 
 renderUniformStorage :: Context c d => UniformStorage d -> Render c ()
 renderUniformStorage UniformStorage
