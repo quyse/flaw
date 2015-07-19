@@ -30,6 +30,7 @@ module Flaw.Graphics.Internal
 	, renderClearStencil
 	, renderClearDepthStencil
 	, renderUploadUniformBuffer
+	, renderUploadVertexBuffer
 	, renderDraw
 	, renderDrawInstanced
 	, renderPlay
@@ -132,6 +133,12 @@ class Device d where
 		-> B.ByteString -- ^ Buffer.
 		-> Int -- ^ Stride in bytes.
 		-> IO (VertexBufferId d, IO ())
+	-- | Create dynamic vertex buffer.
+	createDynamicVertexBuffer
+		:: d -- ^ Device.
+		-> Int -- ^ Size in bytes.
+		-> Int -- ^ Stride in bytes.
+		-> IO (VertexBufferId d, IO ())
 	-- | Create index buffer.
 	createStaticIndexBuffer :: d -> B.ByteString -> Bool -> IO (IndexBufferId d, IO ())
 	-- | Create program.
@@ -156,6 +163,8 @@ class Device d => Context c d | c -> d where
 	contextClearDepthStencil :: c -> Float -> Int -> IO ()
 	-- | Upload data to uniform buffer.
 	contextUploadUniformBuffer :: c -> UniformBufferId d -> B.ByteString -> IO ()
+	-- | Upload data to dynamic vertex buffer.
+	contextUploadVertexBuffer :: c -> VertexBufferId d -> B.ByteString -> IO ()
 	-- | Draw (instanced).
 	contextDraw :: c
 		-> Int -- ^ Instances count (1 for non-instanced).
@@ -284,6 +293,10 @@ renderClearDepthStencil depth stencil = renderAction $ \c -> contextClearDepthSt
 -- | Upload data to uniform buffer.
 renderUploadUniformBuffer :: Context c d => UniformBufferId d -> B.ByteString -> Render c ()
 renderUploadUniformBuffer ub bytes = renderAction $ \c -> contextUploadUniformBuffer c ub bytes
+
+-- | Upload data to dynamic vertex buffer.
+renderUploadVertexBuffer :: Context c d => VertexBufferId d -> B.ByteString -> Render c ()
+renderUploadVertexBuffer vb bytes = renderAction $ \c -> contextUploadVertexBuffer c vb bytes
 
 -- | Draw.
 renderDraw :: Context c d => Int -> Render c ()

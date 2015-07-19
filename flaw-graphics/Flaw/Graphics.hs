@@ -28,6 +28,7 @@ module Flaw.Graphics
 	, renderClearStencil
 	, renderClearDepthStencil
 	, renderUploadUniformBuffer
+	, renderUploadVertexBuffer
 	, renderDraw
 	, renderDrawInstanced
 	, renderPlay

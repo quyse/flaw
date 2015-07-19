@@ -558,6 +558,24 @@ instance Device Dx11Device where
 
 		return (Dx11VertexBufferId bufferInterface stride, releaseBufferInterface)
 
+	createDynamicVertexBuffer Dx11Device
+		{ dx11DeviceInterface = deviceInterface
+		} size stride = describeException "failed to create DirectX11 dynamic vertex buffer" $ do
+		-- desc
+		let desc = D3D11_BUFFER_DESC
+			{ f_D3D11_BUFFER_DESC_ByteWidth = fromIntegral size
+			, f_D3D11_BUFFER_DESC_Usage = D3D11_USAGE_DYNAMIC
+			, f_D3D11_BUFFER_DESC_BindFlags = fromIntegral $ fromEnum D3D11_BIND_VERTEX_BUFFER
+			, f_D3D11_BUFFER_DESC_CPUAccessFlags = fromIntegral $ fromEnum D3D11_CPU_ACCESS_WRITE
+			, f_D3D11_BUFFER_DESC_MiscFlags = 0
+			, f_D3D11_BUFFER_DESC_StructureByteStride = 0
+			}
+		-- create
+		(bufferInterface, releaseBufferInterface) <- allocateCOMObject $ with desc $ \descPtr -> do
+			createCOMObjectViaPtr $ m_ID3D11Device_CreateBuffer deviceInterface descPtr nullPtr
+
+		return (Dx11VertexBufferId bufferInterface stride, releaseBufferInterface)
+
 	createStaticIndexBuffer Dx11Device
 		{ dx11DeviceInterface = deviceInterface
 		} bytes is32bit = describeException "failed to create DirectX11 index buffer" $ do
@@ -891,6 +909,11 @@ instance Context Dx11Context Dx11Device where
 		case uniformBuffer of
 			Dx11UniformBufferId bufferInterface -> dx11UploadBuffer context bufferInterface bytes
 			Dx11NullUniformBufferId -> return ()
+
+	contextUploadVertexBuffer context vertexBuffer bytes = do
+		case vertexBuffer of
+			Dx11VertexBufferId bufferInterface _stride -> dx11UploadBuffer context bufferInterface bytes
+			Dx11NullVertexBufferId -> return ()
 
 	contextDraw context@Dx11Context
 		{ dx11ContextInterface = contextInterface
