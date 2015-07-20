@@ -264,8 +264,8 @@ renderGlyphs GlyphRenderer
 		count <- liftIO $ readIORef bufferIndexRef
 		if count > 0 then do
 			-- upload data to uniform buffer
-			let (foreignPtr, size) = VSM.unsafeToForeignPtr0 buffer
-			bytes <- liftIO $ B.unsafePackCStringLen (castPtr $ unsafeForeignPtrToPtr foreignPtr, size)
+			let (foreignPtr, len) = VSM.unsafeToForeignPtr0 buffer
+			bytes <- liftIO $ B.unsafePackCStringLen (castPtr $ unsafeForeignPtrToPtr foreignPtr, len * sizeOf (undefined :: Vec4f))
 			renderUploadUniformBuffer ub bytes
 			liftIO $ touchForeignPtr foreignPtr
 			-- render batch
