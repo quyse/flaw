@@ -16,6 +16,8 @@ module Flaw.Asset.Collada
 	, parseTriangles
 	, parseMesh
 	, parseGeometry
+	, chunks3
+	, chunks3stride
 	) where
 
 import Control.Monad
@@ -191,8 +193,8 @@ parseArray element = catchError withId withoutId where
 				return result
 	withoutId _err = parseArrayUncached element
 
--- | Parse "source" tag. Right now it just returns contents of underlying array.
-parseSource :: Parse a v => XML.Element -> ColladaM (V.Vector (v a))
+-- | Parse "source" tag. Right now it just returns underlying array with stride.
+parseSource :: Parse a v => XML.Element -> ColladaM (v a, Int)
 parseSource element@XML.Element
 	{ XML.elName = XML.QName
 		{ XML.qName = name
@@ -211,10 +213,9 @@ parseSource element@XML.Element
 		sourceRef <- getElementAttr "source" accessorElement
 		arrayElement <- resolveElement sourceRef
 		values <- parseArray arrayElement
-		let gr v = let (a, b) = VG.splitAt stride v in a : gr b
-		return $ VG.fromList $ take count $ gr values
+		return (VG.take (count * stride) values, stride)
 
-type VertexConstructor q = ColladaSettings -> (forall a v. Parse a v => String -> ColladaM [[a]]) -> ColladaM [q]
+type VertexConstructor q = ColladaSettings -> (forall a v. Parse a v => String -> ColladaM (v a, Int)) -> ColladaM (V.Vector q)
 
 parseTriangles :: VertexConstructor q -> XML.Element -> ColladaM (V.Vector q)
 parseTriangles f element = do
@@ -230,18 +231,23 @@ parseTriangles f element = do
 		sourceRef <- getElementAttr "source" inputElement
 		sourceElement <- resolveElement sourceRef
 		return (semantic, offset, sourceElement)
-	-- calculate stride
+	-- calculate stride and count
 	let stride = 1 + (maximum $ map (\(_s, o, _se) -> o) inputs)
+	let count = VG.length indices `div` stride
 	-- calculate vertices
 	ColladaCache { ccSettings = settings } <- get
 	vertices <- f settings $ \semantic -> do
 		case find (\(s, _o, _se) -> s == semantic) inputs of
 			Just (_s, o, se) -> do
-				a <- parseSource se
-				return $ map (\i -> VG.toList $ a VG.! (indices VG.! i)) [o, (o + stride)..]
+				(a, as) <- parseSource se
+				--return $ map (\i -> VG.toList $ a VG.! (indices VG.! i)) [o, (o + stride)..]
+				let r = VG.generate (count * as) $ \q -> let
+					(i, j) = q `divMod` as
+					in a VG.! ((indices VG.! (i * stride + o)) * as + j)
+				return (r, as)
 			Nothing -> throwError $ show ("missing semantic", semantic)
 	-- take enough and flip triangles
-	return $ VG.fromList $ flipTriangles $ take (triangleCount * 3) vertices
+	return $ flipTriangles $ V.take (triangleCount * 3) vertices
 
 parseMesh :: VertexConstructor v -> XML.Element -> ColladaM (V.Vector v)
 parseMesh f element = parseTriangles f =<< getSingleChildWithTag "triangles" element
@@ -249,8 +255,24 @@ parseMesh f element = parseTriangles f =<< getSingleChildWithTag "triangles" ele
 parseGeometry :: VertexConstructor v -> XML.Element -> ColladaM (V.Vector v)
 parseGeometry f element = parseMesh f =<< getSingleChildWithTag "mesh" element
 
+-- | Split vector into triples.
+chunks3 :: VG.Vector v a => v a -> V.Vector (a, a, a)
+chunks3 v = r where
+	(len, 0) = (VG.length v) `divMod` 3
+	r = V.generate len $ \i -> let k = i * 3 in (v VG.! k, v VG.! (k + 1), v VG.! (k + 2))
+
+-- | Split vector with stride into triples (and check that stride is 3).
+chunks3stride :: VG.Vector v a => (v a, Int) -> V.Vector (a, a, a)
+chunks3stride (v, 3) = chunks3 v
+chunks3stride (_, _) = error "stride is not 3"
+
 -- | Flip triangles.
-flipTriangles :: [v] -> [v]
-flipTriangles (v0:v1:v2:vs) = v1:v0:v2:flipTriangles vs
-flipTriangles [] = []
-flipTriangles _ = undefined
+flipTriangles :: VG.Vector v a => v a -> v a
+flipTriangles v = if len `mod` 3 == 0 then VG.generate len f else error "flipTriangles: not multiply of 3" where
+	len = VG.length v
+	f k = let (i, j) = k `divMod` 3 in v VG.! (i * 3 + p j)
+	p j = case j of
+		0 -> 1
+		1 -> 0
+		2 -> 2
+		_ -> undefined
