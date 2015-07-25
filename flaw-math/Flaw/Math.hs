@@ -51,6 +51,7 @@ module Flaw.Math
 	, Mat3x1u, Mat3x2u, Mat3x3u, Mat3x4u
 	, Mat4x1u, Mat4x2u, Mat4x3u, Mat4x4u
 	, Quaternion(..)
+	, Conjugate(..)
 	, Quaternionf, Quaterniond
 	) where
 
@@ -94,12 +95,12 @@ class Cross v where
 	cross :: v -> v -> v
 
 -- | Class for norm operation.
-class Dot v => Norm v where
+class Vec v => Norm v where
 	norm :: v -> VecElement v
 	norm2 :: v -> VecElement v
 
 -- | Class for normalize operation.
-class Norm v => Normalize v where
+class Normalize v where
 	normalize :: v -> v
 
 -- | General matrix class.
@@ -520,6 +521,40 @@ let
 
 -- | Quaternion type.
 newtype Quaternion a = Quaternion (Vec4 a)
+
+instance Vec (Quaternion a) where
+	type VecElement (Quaternion a) = a
+	vecLength _ = 4
+	vecToList (Quaternion v) = vecToList v
+	vecFromScalar a = Quaternion (vecFromScalar a)
+
+instance Floating a => Norm (Quaternion a) where
+	norm (Quaternion v) = norm v
+	norm2 (Quaternion v) = norm2 v
+
+instance Floating a => Normalize (Quaternion a) where
+	normalize (Quaternion v) = Quaternion (normalize v)
+
+-- | Num for quaternions.
+instance Num a => Num (Quaternion a) where
+	(Quaternion v1) + (Quaternion v2) = Quaternion (v1 + v2)
+	(Quaternion v1) - (Quaternion v2) = Quaternion (v1 - v2)
+	(Quaternion (Vec4 x1 y1 z1 w1)) * (Quaternion (Vec4 x2 y2 z2 w2)) = Quaternion (Vec4
+		(w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2)
+		(w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2)
+		(w1 * z2 - x1 * y2 - y1 * x2 + z1 * w2)
+		(w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2))
+	negate (Quaternion v) = Quaternion (negate v)
+	abs (Quaternion v) = Quaternion (abs v)
+	signum = undefined
+	fromInteger = undefined
+
+-- | Conjugation.
+class Conjugate q where
+	conjugate :: q -> q
+
+instance Num a => Conjugate (Quaternion a) where
+	conjugate (Quaternion (Vec4 x y z w)) = Quaternion (Vec4 (-x) (-y) (-z) w)
 
 -- Generate type synonyms for frequently used types
 do

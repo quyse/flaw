@@ -21,6 +21,7 @@ library
   exposed-modules:
     Flaw.Math
     Flaw.Math.Geometry
+    Flaw.Math.Transform
   other-modules:
     Flaw.Math.Internal
   -- other-extensions:    
