@@ -4,7 +4,7 @@ Description: Collada support.
 License: MIT
 -}
 
-{-# LANGUAGE FunctionalDependencies, MultiParamTypeClasses, RankNTypes #-}
+{-# LANGUAGE FlexibleInstances, FunctionalDependencies, MultiParamTypeClasses, RankNTypes #-}
 
 module Flaw.Asset.Collada
 	( Parse()
@@ -13,9 +13,13 @@ module Flaw.Asset.Collada
 	, runCollada
 	, initColladaCache
 	, getElementById
+	, getAllElementsByTag
 	, parseTriangles
 	, parseMesh
 	, parseGeometry
+	, parseNode
+	, parseAnimation
+	, animateNode
 	, chunks3
 	, chunks3stride
 	) where
@@ -25,37 +29,47 @@ import Control.Monad.Except
 import Control.Monad.State
 import qualified Data.ByteString.Lazy as BL
 import Data.List
-import qualified Data.Map.Lazy as Map
+import qualified Data.Map.Strict as Map
 import qualified Data.Text as T
 import qualified Data.Vector as V
 import qualified Data.Vector.Generic as VG
 import qualified Data.Vector.Unboxed as VU
 import qualified Text.XML.Light as XML
 
+import Flaw.Math
+import Flaw.Math.Transform
+
 data ColladaCache = ColladaCache
-	{ ccSettings :: ColladaSettings
+	{ ccSettings :: !ColladaSettings
 	, ccContents :: [XML.Content]
-	, ccElementsById :: Map.Map String XML.Element
-	, ccIntArrays :: Map.Map String (VU.Vector Int)
-	, ccFloatArrays :: Map.Map String (VU.Vector Float)
-	, ccNameArrays :: Map.Map String (V.Vector T.Text)
+	, ccElementsById :: !(Map.Map String XML.Element)
+	, ccIntArrays :: !(Map.Map String (VU.Vector Int))
+	, ccFloatArrays :: !(Map.Map String (VU.Vector Float))
+	, ccNameArrays :: !(Map.Map String (V.Vector T.Text))
 	}
 
 data ColladaSettings = ColladaSettings
-	{ colladaUnit :: Float
+	{ csUnit :: Float
 	}
 
 type ColladaM a = StateT ColladaCache (Either String) a
 
 -------- XML helpers.
 
--- | Get attribute of element.
-getElementAttr :: String -> XML.Element -> ColladaM String
-getElementAttr attrName XML.Element
+tryGetElementAttr :: String -> XML.Element -> ColladaM (Maybe String)
+tryGetElementAttr attrName XML.Element
 	{ XML.elAttribs = attribs
 	} = case filter (\XML.Attr { XML.attrKey = XML.QName { XML.qName = name } } -> name == attrName) attribs of
-	[XML.Attr { XML.attrVal = val }] -> return val
-	_ -> throwError $ show ("no exactly one attribute", attrName)
+	[XML.Attr { XML.attrVal = val }] -> return $ Just val
+	_ -> return Nothing
+
+-- | Get attribute of element.
+getElementAttr :: String -> XML.Element -> ColladaM String
+getElementAttr attrName element = do
+	maybeAttr <- tryGetElementAttr attrName element
+	case maybeAttr of
+		Just attr -> return attr
+		Nothing -> throwError $ show ("no exactly one attribute", attrName)
 
 -- | Get "id" attribute of element.
 getElementId :: XML.Element -> ColladaM String
@@ -103,7 +117,7 @@ initColladaCache fileData = do
 					{ ccSettings = settings
 					} -> ((), cache
 					{ ccSettings = settings
-						{ colladaUnit = read unit
+						{ csUnit = read unit
 						}
 					})
 			else return ()
@@ -121,7 +135,7 @@ initColladaCache fileData = do
 		fileContents = XML.parseXML fileData
 	put ColladaCache
 		{ ccSettings = ColladaSettings
-			{ colladaUnit = 1
+			{ csUnit = 1
 			}
 		, ccContents = fileContents
 		, ccElementsById = Map.empty
@@ -144,6 +158,24 @@ resolveElement :: String -> ColladaM XML.Element
 resolveElement name = case name of
 	('#' : elementId) -> getElementById elementId
 	_ -> throwError "local addresses not implemented yet" -- TODO: local addresses
+
+-- | Get all elements by tag.
+getAllElementsByTag :: String -> ColladaM [XML.Element]
+getAllElementsByTag tag = do
+	ColladaCache
+		{ ccContents = rootContents
+		} <- get
+	let traverseContents contents = liftM concat $ forM contents $ \content -> case content of
+		XML.Elem element@XML.Element
+			{ XML.elName = XML.QName
+				{ XML.qName = elementName
+				}
+			, XML.elContent = elementContents
+			} -> do
+			subElements <- traverseContents elementContents
+			return $ if elementName == tag then element : subElements else subElements
+		_ -> return []
+	traverseContents rootContents
 
 class VG.Vector v a => Parse a v | a -> v where
 	parse :: String -> a
@@ -215,6 +247,26 @@ parseSource element@XML.Element
 		values <- parseArray arrayElement
 		return (VG.take (count * stride) values, stride)
 
+-- | "Input" tag structure.
+data ColladaInputTag = ColladaInputTag
+	{ citSemantic :: String
+	, citOffset :: Int
+	, citSourceElement :: XML.Element
+	}
+
+-- | Parse "input" tag.
+parseInput :: XML.Element -> ColladaM ColladaInputTag
+parseInput inputElement = do
+	semantic <- getElementAttr "semantic" inputElement
+	offset <- liftM (maybe 0 parse) $ tryGetElementAttr "offset" inputElement
+	sourceRef <- getElementAttr "source" inputElement
+	sourceElement <- resolveElement sourceRef
+	return ColladaInputTag
+		{ citSemantic = semantic
+		, citOffset = offset
+		, citSourceElement = sourceElement
+		}
+
 type VertexConstructor q = ColladaSettings -> (forall a v. Parse a v => String -> ColladaM (v a, Int)) -> ColladaM (V.Vector q)
 
 parseTriangles :: VertexConstructor q -> XML.Element -> ColladaM (V.Vector q)
@@ -225,27 +277,24 @@ parseTriangles f element = do
 	indices <- parseArray =<< getSingleChildWithTag "p" element
 	-- parse inputs
 	inputElements <- getChildrenWithTag "input" element
-	inputs <- forM inputElements $ \inputElement -> do
-		semantic <- getElementAttr "semantic" inputElement
-		offset <- liftM parse $ getElementAttr "offset" inputElement
-		sourceRef <- getElementAttr "source" inputElement
-		sourceElement <- resolveElement sourceRef
-		return (semantic, offset, sourceElement)
+	inputs <- mapM parseInput inputElements
 	-- calculate stride and count
-	let stride = 1 + (maximum $ map (\(_s, o, _se) -> o) inputs)
+	let stride = 1 + (maximum $ map citOffset inputs)
 	let count = VG.length indices `div` stride
 	-- calculate vertices
 	ColladaCache { ccSettings = settings } <- get
 	vertices <- f settings $ \semantic -> do
-		case find (\(s, _o, _se) -> s == semantic) inputs of
-			Just (_s, o, se) -> do
-				(a, as) <- parseSource se
-				--return $ map (\i -> VG.toList $ a VG.! (indices VG.! i)) [o, (o + stride)..]
-				let r = VG.generate (count * as) $ \q -> let
-					(i, j) = q `divMod` as
-					in a VG.! ((indices VG.! (i * stride + o)) * as + j)
-				return (r, as)
-			Nothing -> throwError $ show ("missing semantic", semantic)
+		case filter (\i -> citSemantic i == semantic) inputs of
+			[ColladaInputTag
+				{ citOffset = offset
+				, citSourceElement = sourceElement
+				}] -> do
+				(values, valuesStride) <- parseSource sourceElement
+				let r = VG.generate (count * valuesStride) $ \k -> let
+					(i, j) = k `divMod` valuesStride
+					in values VG.! ((indices VG.! (i * stride + offset)) * valuesStride + j)
+				return (r, valuesStride)
+			_ -> throwError $ show ("parseTriangles: wrong semantic", semantic)
 	-- take enough and flip triangles
 	return $ flipTriangles $ V.take (triangleCount * 3) vertices
 
@@ -254,6 +303,207 @@ parseMesh f element = parseTriangles f =<< getSingleChildWithTag "triangles" ele
 
 parseGeometry :: VertexConstructor v -> XML.Element -> ColladaM (V.Vector v)
 parseGeometry f element = parseMesh f =<< getSingleChildWithTag "mesh" element
+
+-- | Transform.
+data ColladaTransformTag
+	= ColladaTranslateTag Vec3f
+	| ColladaRotateTag Vec3f Float
+	deriving Show
+
+-- | Node.
+data ColladaNodeTag = ColladaNodeTag
+	{ cntID :: String
+	, cntSID :: String
+	, cntTransforms :: [(Maybe String, ColladaTransformTag)]
+	, cntSubnodes :: [ColladaNodeTag]
+	} deriving Show
+
+parseNode :: XML.Element -> ColladaM ColladaNodeTag
+parseNode element@XML.Element
+	{ XML.elContent = contents
+	} = do
+	nodeId <- getElementId element
+	sid <- getElementAttr "sid" element
+	-- traverse sub elements
+	let f node@ColladaNodeTag
+		{ cntTransforms = transforms
+		, cntSubnodes = subnodes
+		} content = do
+		case content of
+			XML.Elem subElement@XML.Element
+				{ XML.elName = XML.QName
+					{ XML.qName = subElementName
+					}
+				} -> do
+				case subElementName of
+					"node" -> do
+						subnode <- parseNode subElement
+						return node
+							{ cntSubnodes = subnodes ++ [subnode]
+							}
+					"translate" -> do
+						maybeTransformSID <- tryGetElementAttr "sid" subElement
+						[x, y, z] <- liftM VG.toList $ parseArray subElement
+						return node
+							{ cntTransforms = transforms ++ [(maybeTransformSID, ColladaTranslateTag ((Vec3 x y z) :: Vec3f))]
+							}
+					"rotate" -> do
+						maybeTransformSID <- tryGetElementAttr "sid" subElement
+						[x, y, z, a] <- liftM VG.toList $ parseArray subElement
+						return node
+							{ cntTransforms = transforms ++ [(maybeTransformSID, ColladaRotateTag (Vec3 x y z) (a * pi / 180 :: Float))]
+							}
+					_ -> return node
+			_ -> return node
+	foldM f ColladaNodeTag
+		{ cntID = nodeId
+		, cntSID = sid
+		, cntTransforms = []
+		, cntSubnodes = []
+		} contents
+
+data ColladaSkeletonNode t = ColladaSkeletonNode
+	{ csnElementId :: String
+	, csnElementSID :: String
+	, csnParentId :: Int
+	, csnTransform :: Float -> t
+	}
+
+data ColladaSkeleton t = ColladaSkeleton (V.Vector (ColladaSkeletonNode t))
+
+-- | Parse "sampler" tag.
+-- Essentially just resolves INPUT and OUTPUT sources.
+parseSampler :: (Parse i vi, Parse o vo) => XML.Element -> ColladaM ((vi i, Int), (vo o, Int))
+parseSampler element = do
+	inputElements <- getChildrenWithTag "input" element
+	inputs <- mapM parseInput inputElements
+	let getInput semantic = case filter (\i -> citSemantic i == semantic) inputs of
+		[ColladaInputTag
+			{ citOffset = 0
+			, citSourceElement = sourceElement
+			}] -> parseSource sourceElement
+		_ -> throwError $ show ("parseSampler: wrong semantic", semantic)
+	resultInputs <- getInput "INPUT"
+	resultOutputs <- getInput "OUTPUT"
+	return (resultInputs, resultOutputs)
+
+-- | "Channel" tag structure.
+data ColladaChannelTag = ColladaChannelTag
+	{ cctTarget :: String
+	, cctSamplerElement :: XML.Element
+	} deriving Show
+
+-- | Parse "animation" tag, i.e. return list of channels.
+parseAnimation :: XML.Element -> ColladaM [ColladaChannelTag]
+parseAnimation element = do
+	channelElements <- getChildrenWithTag "channel" element
+	forM channelElements $ \channelElement -> do
+		sourceRef <- getElementAttr "source" channelElement
+		samplerElement <- resolveElement sourceRef
+		target <- getElementAttr "target" channelElement
+		return ColladaChannelTag
+			{ cctTarget = target
+			, cctSamplerElement = samplerElement
+			}
+
+
+-- | Create animation function for node.
+animateNode :: Transform t => ColladaNodeTag -> [ColladaChannelTag] -> ColladaM (Float -> t Float)
+animateNode ColladaNodeTag
+	{ cntID = nodeId
+	, cntTransforms = transformTags
+	} channels = do
+
+	-- list of animators (one per transform tag)
+	transformTagAnimators <- forM transformTags $ \(maybeName, initialTransformTag) -> do
+
+		-- if transform tag is named, there might be some channels affecting it
+		transformTagAnimator <- case maybeName of
+
+			Just name -> do
+				-- list of transform combinators for channels affecting transform
+				channelAnimators <- liftM concat $ forM channels $ \ColladaChannelTag
+					{ cctTarget = target
+					, cctSamplerElement = samplerElement
+					} -> case stripPrefix (nodeId ++ "/" ++ name) target of
+						Just path -> case initialTransformTag of
+							ColladaTranslateTag _initialOffset -> case path of
+
+								"" -> do
+									a <- animateSampler samplerElement
+									return [\(ColladaTranslateTag _offset) time -> ColladaTranslateTag $ a time]
+
+								".X" -> do
+									a <- animateSampler samplerElement
+									return [\(ColladaTranslateTag (Vec3 _x y z)) time -> ColladaTranslateTag $ Vec3 (a time) y z]
+
+								".Y" -> do
+									a <- animateSampler samplerElement
+									return [\(ColladaTranslateTag (Vec3 x _y z)) time -> ColladaTranslateTag $ Vec3 x (a time) z]
+
+								".Z" -> do
+									a <- animateSampler samplerElement
+									return [\(ColladaTranslateTag (Vec3 x y _z)) time -> ColladaTranslateTag $ Vec3 x y (a time)]
+
+								_ -> throwError $ "unknown path for translate tag: " ++ path
+
+							ColladaRotateTag _initialAxis _initialAngle -> case path of
+
+								".ANGLE" -> do
+									a <- animateSampler samplerElement
+									return [\(ColladaRotateTag axis _angle) time -> ColladaRotateTag axis (a time)]
+
+								_ -> throwError $ "unknown path for rotate tag: " ++ path
+
+						Nothing -> return []
+				-- resulting animation function
+				return $ \time -> foldl' (\transformTag channelAnimator -> channelAnimator transformTag time) initialTransformTag channelAnimators
+
+			Nothing -> return $ const initialTransformTag
+
+		-- convert transform tag to transform
+		return $ \time -> case transformTagAnimator time of
+			ColladaTranslateTag offset -> transformTranslation offset
+			ColladaRotateTag axis angle -> transformAxisRotation axis angle
+
+	-- resulting function combines transforms from all transform animators
+	return $ \time ->
+		foldr (\transformTagAnimator transform ->
+			combineTransform (transformTagAnimator time) transform) identityTransform transformTagAnimators
+
+class Animatable a where
+	animatableStride :: a -> Int
+	animatableConstructor :: VU.Vector Float -> Int -> a
+	interpolateAnimatable :: Float -> a -> a -> a
+
+instance Animatable Float where
+	animatableStride _ = 1
+	animatableConstructor v offset = v VG.! offset
+	interpolateAnimatable t a b = a * (1 - t) + b * t
+
+instance Animatable (Vec3 Float) where
+	animatableStride _ = 3
+	animatableConstructor v offset = Vec3 (v VG.! offset) (v VG.! (offset + 1)) (v VG.! (offset + 2))
+	interpolateAnimatable t a b = a * vecFromScalar (1 - t) + b * vecFromScalar t
+
+animateSampler :: Animatable a => XML.Element -> ColladaM (Float -> a)
+animateSampler element = do
+	((inputs, 1), (outputs, outputStride)) <- parseSampler element
+	let len = VG.length inputs
+	let search time left right = if left + 1 < right then let
+		mid = (left + right) `div` 2
+		midTime = inputs VG.! mid
+		in if time >= midTime then search time mid right else search time left mid
+		else left
+	return $ \time -> let
+		offset = search time 0 len
+		offset2 = offset + 1
+		input = inputs VG.! offset
+		input2 = inputs VG.! offset2
+		output = animatableConstructor outputs $ offset * outputStride
+		output2 = animatableConstructor outputs $ offset2 * outputStride
+		t = (time - input) / (input2 - input)
+		in if offset + 1 >= len then output else interpolateAnimatable t output output2
 
 -- | Split vector into triples.
 chunks3 :: VG.Vector v a => v a -> V.Vector (a, a, a)
