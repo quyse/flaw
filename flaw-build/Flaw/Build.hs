@@ -29,6 +29,7 @@ import Foreign.Ptr
 import Foreign.Storable
 import Language.Haskell.TH
 import Language.Haskell.TH.Syntax(qAddDependentFile)
+import System.IO.Unsafe
 
 -- | Load file and add it as a dependency.
 loadFile :: FilePath -> Q BL.ByteString
@@ -59,6 +60,12 @@ instance Embed T.Text where
 
 instance Embed Name where
 	embedExp n = [| mkName $(litE $ stringL $ (maybe "" (++ ".") $ nameModule n) ++ nameBase n) |]
+
+instance Embed B.ByteString where
+	embedExp bytes = [| unsafePerformIO $(embedIOExp bytes) |]
+
+instance Embed BL.ByteString where
+	embedExp bytes = [| unsafePerformIO $(embedIOExp bytes) |]
 
 instance Embed a => Embed [a] where
 	embedExp a = listE $ map embedExp a
