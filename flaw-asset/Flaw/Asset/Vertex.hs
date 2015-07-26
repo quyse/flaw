@@ -13,6 +13,7 @@ module Flaw.Asset.Vertex
 	) where
 
 import Control.Monad
+import Control.Monad.State
 import qualified Data.Vector as V
 import qualified Text.XML.Light as XML
 
@@ -21,7 +22,7 @@ import Flaw.FFI
 import Flaw.Math
 
 class ColladaVertexConstructor q where
-	colladaVertexConstructor :: ColladaSettings -> (forall a v. Parse a v => String -> ColladaM (v a, Int)) -> ColladaM (V.Vector q)
+	colladaVertexConstructor :: (forall a v. Parse a v => String -> ColladaM (v a, Int)) -> ColladaM (V.Vector q)
 
 loadColladaVertices :: ColladaVertexConstructor a => XML.Element -> ColladaM (V.Vector a)
 loadColladaVertices element = parseGeometry colladaVertexConstructor element
@@ -36,9 +37,8 @@ deriving instance Eq VertexPNT
 deriving instance Ord VertexPNT
 
 instance ColladaVertexConstructor VertexPNT where
-	colladaVertexConstructor ColladaSettings
-		{ csUnit = unit
-		} f = do
+	colladaVertexConstructor f = do
+		unit <- liftM (csUnit . ccSettings) get
 		positions <- liftM chunks3stride $ f "VERTEX"
 		normals <- liftM chunks3stride $ f "NORMAL"
 		texcoords <- liftM chunks3stride $ f "TEXCOORD"
