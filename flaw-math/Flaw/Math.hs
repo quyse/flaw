@@ -520,7 +520,7 @@ let
 	in liftM concat $ sequence [genVecMatMuls, genMatVecMuls, genMatMatMuls]
 
 -- | Quaternion type.
-newtype Quaternion a = Quaternion (Vec4 a)
+newtype Quaternion a = Quaternion (Vec4 a) deriving Show
 
 instance Vec (Quaternion a) where
 	type VecElement (Quaternion a) = a
