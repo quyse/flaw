@@ -24,21 +24,24 @@ module Flaw.Asset.Collada
 	, ColladaSkeleton()
 	, parseSkeleton
 	, animateSkeleton
-	, chunks3
-	, chunks3stride
+	, ColladaSkin()
+	, parseSkin
 	) where
 
 import Control.Monad
 import Control.Monad.Except
+import Control.Monad.ST
 import Control.Monad.State
 import qualified Data.ByteString.Lazy as BL
 import Data.List
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as T
 import qualified Data.Vector as V
+import qualified Data.Vector.Algorithms.Intro as VAI
 import qualified Data.Vector.Generic as VG
 import qualified Data.Vector.Mutable as VM
 import qualified Data.Vector.Unboxed as VU
+import qualified Data.Vector.Unboxed.Mutable as VUM
 import qualified Text.XML.Light as XML
 
 import Flaw.Math
@@ -75,10 +78,6 @@ getElementAttr attrName element = do
 	case maybeAttr of
 		Just attr -> return attr
 		Nothing -> throwError $ show ("no exactly one attribute", attrName)
-
--- | Get "id" attribute of element.
-getElementId :: XML.Element -> ColladaM String
-getElementId = getElementAttr "id"
 
 -- | Get children elements with specified tag.
 getChildrenWithTag :: String -> XML.Element -> ColladaM [XML.Element]
@@ -127,7 +126,7 @@ initColladaCache fileData = do
 					})
 			else return ()
 			ignoreErrors $ do
-				elementId <- getElementId element
+				elementId <- getElementAttr "id" element
 				cache <- get
 				put $ cache
 					{ ccElementsById = Map.insert elementId element $ ccElementsById cache
@@ -220,7 +219,7 @@ parseArrayUncached element = case XML.elContent element of
 parseArray :: Parse a v => XML.Element -> ColladaM (v a)
 parseArray element = catchError withId withoutId where
 	withId = do
-		elementId <- getElementId element
+		elementId <- getElementAttr "id" element
 		arrays <- getParsedArrays
 		case Map.lookup elementId arrays of
 			Just result -> return result
@@ -239,16 +238,14 @@ parseSource element@XML.Element
 	} = do
 	if name == "vertices" then do
 		inputElement <- getSingleChildWithTag "input" element
-		sourceRef <- getElementAttr "source" inputElement
-		sourceElement <- resolveElement sourceRef
+		sourceElement <- resolveElement =<< getElementAttr "source" inputElement
 		parseSource sourceElement
 	else do
 		techniqueElement <- getSingleChildWithTag "technique_common" element
 		accessorElement <- getSingleChildWithTag "accessor" techniqueElement
 		count <- liftM parse $ getElementAttr "count" accessorElement
 		stride <- liftM parse $ getElementAttr "stride" accessorElement
-		sourceRef <- getElementAttr "source" accessorElement
-		arrayElement <- resolveElement sourceRef
+		arrayElement <- resolveElement =<< getElementAttr "source" accessorElement
 		values <- parseArray arrayElement
 		return (VG.take (count * stride) values, stride)
 
@@ -264,54 +261,86 @@ parseInput :: XML.Element -> ColladaM ColladaInputTag
 parseInput inputElement = do
 	semantic <- getElementAttr "semantic" inputElement
 	offset <- liftM (maybe 0 parse) $ tryGetElementAttr "offset" inputElement
-	sourceRef <- getElementAttr "source" inputElement
-	sourceElement <- resolveElement sourceRef
+	sourceElement <- resolveElement =<< getElementAttr "source" inputElement
 	return ColladaInputTag
 		{ citSemantic = semantic
 		, citOffset = offset
 		, citSourceElement = sourceElement
 		}
 
-type VertexConstructor q = (forall a v. Parse a v => String -> ColladaM (v a, Int)) -> ColladaM (V.Vector q)
+data ColladaVerticesData = ColladaVerticesData
+	{ cvdPositionIndices :: ColladaM (VU.Vector Int)
+	, cvdPositions :: ColladaM (V.Vector Vec3f)
+	, cvdNormals :: ColladaM (V.Vector Vec3f)
+	, cvdTexcoords :: ColladaM (V.Vector Vec2f)
+	, cvdBones :: ColladaM (V.Vector Vec4i)
+	, cvdWeights :: ColladaM (V.Vector Vec4f)
+	}
 
-parseTriangles :: VertexConstructor q -> XML.Element -> ColladaM (V.Vector q)
-parseTriangles f element = do
+parseTriangles :: XML.Element -> ColladaM ColladaVerticesData
+parseTriangles element = do
 	-- get count
-	triangleCount <- liftM parse $ getElementAttr "count" element
+	trianglesCount <- liftM parse $ getElementAttr "count" element
 	-- parse indices
 	indices <- parseArray =<< getSingleChildWithTag "p" element
 	-- parse inputs
-	inputElements <- getChildrenWithTag "input" element
-	inputs <- mapM parseInput inputElements
+	inputs <- mapM parseInput =<< getChildrenWithTag "input" element
 	-- calculate stride and count
 	let stride = 1 + (maximum $ map citOffset inputs)
-	let count = VG.length indices `div` stride
-	-- calculate vertices
-	vertices <- f $ \semantic -> do
-		case filter (\i -> citSemantic i == semantic) inputs of
-			[ColladaInputTag
-				{ citOffset = offset
-				, citSourceElement = sourceElement
-				}] -> do
-				(values, valuesStride) <- parseSource sourceElement
-				let r = VG.generate (count * valuesStride) $ \k -> let
-					(i, j) = k `divMod` valuesStride
-					in values VG.! ((indices VG.! (i * stride + offset)) * valuesStride + j)
-				return (r, valuesStride)
-			_ -> throwError $ show ("parseTriangles: wrong semantic", semantic)
-	-- take enough and flip triangles
-	return $ flipTriangles $ V.take (triangleCount * 3) vertices
+	let count = VU.length indices `div` stride
 
-parseMesh :: VertexConstructor v -> XML.Element -> ColladaM (V.Vector v)
-parseMesh f element = parseTriangles f =<< getSingleChildWithTag "triangles" element
+	-- check
+	if count * 3 /= trianglesCount
+		then throwError "wrong number of triangles or indices"
+		else return ()
 
-parseGeometry :: VertexConstructor v -> XML.Element -> ColladaM (V.Vector v)
-parseGeometry f element = parseMesh f =<< getSingleChildWithTag "mesh" element
+	-- flip indices to fix vertex order in triangles
+	let flippedIndices = VU.generate (count * stride) $ \i -> let
+		(p, q) = i `divMod` stride
+		(pp, pq) = p `divMod` 3
+		f k = case k of
+			0 -> 1
+			1 -> 0
+			2 -> 2
+			_ -> undefined
+		in indices VU.! ((pp + f pq) * stride + q)
+
+	let stream semantic = case filter (\i -> citSemantic i == semantic) inputs of
+		[ColladaInputTag
+			{ citOffset = offset
+			, citSourceElement = sourceElement
+			}] -> do
+			values <- parseStridables =<< parseSource sourceElement
+			return $ VG.generate count $ \i -> values VG.! (flippedIndices VU.! (i * stride + offset))
+		[] -> return VG.empty
+		_ -> throwError $ show ("parseTriangles: wrong semantic", semantic)
+
+	let positionIndices = case filter (\i -> citSemantic i == "VERTEX") inputs of
+		[ColladaInputTag
+			{ citOffset = offset
+			}] -> return $ VU.generate count $ \i -> flippedIndices VU.! (i * stride + offset)
+		_ -> throwError $ "no position indices"
+
+	return ColladaVerticesData
+		{ cvdPositionIndices = positionIndices
+		, cvdPositions = stream "VERTEX"
+		, cvdNormals = stream "NORMAL"
+		, cvdTexcoords = stream "TEXCOORD"
+		, cvdBones = return V.empty
+		, cvdWeights = return V.empty
+		}
+
+parseMesh :: XML.Element -> ColladaM ColladaVerticesData
+parseMesh element = parseTriangles =<< getSingleChildWithTag "triangles" element
+
+parseGeometry :: XML.Element -> ColladaM ColladaVerticesData
+parseGeometry element = parseMesh =<< getSingleChildWithTag "mesh" element
 
 -- | Transform.
 data ColladaTransformTag
 	= ColladaTranslateTag Vec3f
 	| ColladaRotateTag Vec3f Float
+	| ColladaMatrixTag Mat4x4f
 	deriving Show
 
 -- | Node.
@@ -326,8 +355,8 @@ parseNode :: XML.Element -> ColladaM ColladaNodeTag
 parseNode element@XML.Element
 	{ XML.elContent = contents
 	} = do
-	nodeId <- getElementId element
-	sid <- getElementAttr "sid" element
+	nodeId <- liftM (maybe "" id) $ tryGetElementAttr "id" element
+	sid <- liftM (maybe "" id) $ tryGetElementAttr "sid" element
 
 	unit <- liftM (csUnit . ccSettings) get
 
@@ -348,6 +377,15 @@ parseNode element@XML.Element
 						return node
 							{ cntSubnodes = subnodes ++ [subnode]
 							}
+						{-
+						-- ignore nodes without id and sid
+						let f = do
+							subnode <- parseNode subElement
+							return node
+								{ cntSubnodes = subnodes ++ [subnode]
+								}
+						catchError f $ \_e -> return node
+						-}
 					"translate" -> do
 						maybeTransformSID <- tryGetElementAttr "sid" subElement
 						[x, y, z] <- liftM VG.toList $ parseArray subElement
@@ -359,6 +397,12 @@ parseNode element@XML.Element
 						[x, y, z, a] <- liftM VG.toList $ parseArray subElement
 						return node
 							{ cntTransforms = transforms ++ [(maybeTransformSID, ColladaRotateTag (Vec3 x y z) (a * pi / 180 :: Float))]
+							}
+					"matrix" -> do
+						maybeTransformSID <- tryGetElementAttr "sid" subElement
+						mat <- liftM ((flip constructStridable) 0) $ parseArray subElement
+						return node
+							{ cntTransforms = transforms ++ [(maybeTransformSID, ColladaMatrixTag mat)]
 							}
 					_ -> return node
 			_ -> return node
@@ -399,8 +443,7 @@ parseAnimation :: XML.Element -> ColladaM ColladaAnimation
 parseAnimation element = do
 	channelElements <- getChildrenWithTag "channel" element
 	liftM ColladaAnimation $ forM channelElements $ \channelElement -> do
-		sourceRef <- getElementAttr "source" channelElement
-		samplerElement <- resolveElement sourceRef
+		samplerElement <- resolveElement =<< getElementAttr "source" channelElement
 		target <- getElementAttr "target" channelElement
 		return ColladaChannelTag
 			{ cctTarget = target
@@ -457,6 +500,10 @@ animateNode ColladaNodeTag
 
 								_ -> throwError $ "unknown path for rotate tag: " ++ path
 
+							ColladaMatrixTag _initialMat -> case path of
+
+								_ -> throwError $ "unknown path for matrix tag: " ++ path
+
 						Nothing -> return []
 				-- resulting animation function
 				return $ \time -> foldl' (\transformTag channelAnimator -> channelAnimator transformTag time) initialTransformTag channelAnimators
@@ -467,11 +514,52 @@ animateNode ColladaNodeTag
 		return $ \time -> case transformTagAnimator time of
 			ColladaTranslateTag offset -> transformTranslation offset
 			ColladaRotateTag axis angle -> transformAxisRotation axis angle
+			ColladaMatrixTag mat -> transformFromMatrix mat
 
 	-- resulting function combines transforms from all transform animators
 	return $ \time ->
 		foldr (\transformTagAnimator transform ->
 			combineTransform (transformTagAnimator time) transform) identityTransform transformTagAnimators
+
+class Stridable s where
+	stridableStride :: s a -> Int
+	constructStridable :: VG.Vector v a => v a -> Int -> s a
+
+instance Stridable Vec2 where
+	stridableStride _ = 2
+	constructStridable v i = Vec2 (q 0) (q 1) where q j = v VG.! (i + j)
+
+instance Stridable Vec3 where
+	stridableStride _ = 3
+	constructStridable v i = Vec3 (q 0) (q 1) (q 2) where q j = v VG.! (i + j)
+
+instance Stridable Vec4 where
+	stridableStride _ = 4
+	constructStridable v i = Vec4 (q 0) (q 1) (q 2) (q 3) where q j = v VG.! (i + j)
+
+instance Stridable Mat4x4 where
+	stridableStride _ = 16
+	constructStridable v i = Mat4x4
+		(q 0) (q 1) (q 2) (q 3)
+		(q 4) (q 5) (q 6) (q 7)
+		(q 8) (q 9) (q 10) (q 11)
+		(q 12) (q 13) (q 14) (q 15)
+		where q j = v VG.! (i + j)
+
+-- | Convert vector of primitive values to vector of Stridables.
+stridableStream :: (Stridable s, VG.Vector v a) => v a -> V.Vector (s a)
+stridableStream q = f undefined q where
+	f :: (Stridable s, VG.Vector v a) => s a -> v a -> V.Vector (s a)
+	f u v = V.generate (VG.length v `div` stride) $ \i -> constructStridable v $ i * stride where
+		stride = stridableStride u
+
+parseStridables :: (Stridable s, VG.Vector v a) => (v a, Int) -> ColladaM (V.Vector (s a))
+parseStridables (q, stride) = f undefined q where
+	f :: (Stridable s, VG.Vector v a) => s a -> v a -> ColladaM (V.Vector (s a))
+	f u v = do
+		if stride == stridableStride u
+			then return $ stridableStream v
+			else throwError "wrong stride"
 
 class Animatable a where
 	animatableStride :: a -> Int
@@ -480,12 +568,12 @@ class Animatable a where
 
 instance Animatable Float where
 	animatableStride _ = 1
-	animatableConstructor v offset = v VG.! offset
+	animatableConstructor v i = v VG.! i
 	interpolateAnimatable t a b = a * (1 - t) + b * t
 
 instance Animatable (Vec3 Float) where
 	animatableStride _ = 3
-	animatableConstructor v offset = Vec3 (v VG.! offset) (v VG.! (offset + 1)) (v VG.! (offset + 2))
+	animatableConstructor v i = Vec3 (v VG.! i) (v VG.! (i + 1)) (v VG.! (i + 2))
 	interpolateAnimatable t a b = a * vecFromScalar (1 - t) + b * vecFromScalar t
 
 animateSampler :: Animatable a => XML.Element -> ColladaM (Float -> a)
@@ -550,24 +638,103 @@ animateSkeleton (ColladaSkeleton nodes) animation = do
 			VM.write transforms i $ combineTransform parentTransform $ (nodeAnimators V.! i) time
 		return transforms
 
--- | Split vector into triples.
-chunks3 :: VG.Vector v a => v a -> V.Vector (a, a, a)
-chunks3 v = r where
-	(len, 0) = (VG.length v) `divMod` 3
-	r = V.generate len $ \i -> let k = i * 3 in (v VG.! k, v VG.! (k + 1), v VG.! (k + 2))
+data ColladaSkin t = ColladaSkin t
+	{
+	-- | Bones used in skinning, in order corresponding to bone indices in mesh.
+	  cskinBones :: !(V.Vector (ColladaBone t))
+	}
 
--- | Split vector with stride into triples (and check that stride is 3).
-chunks3stride :: VG.Vector v a => (v a, Int) -> V.Vector (a, a, a)
-chunks3stride (v, 3) = chunks3 v
-chunks3stride (_, _) = error "stride is not 3"
+data ColladaBone t = ColladaBone t
+	{
+	-- | Index of bone in skeleton.
+	  cboneSkeletonIndex :: !Int
+	-- | Inverse bind transform.
+	, cboneInvBindTransform :: !t
+	}
 
--- | Flip triangles.
-flipTriangles :: VG.Vector v a => v a -> v a
-flipTriangles v = if len `mod` 3 == 0 then VG.generate len f else error "flipTriangles: not multiply of 3" where
-	len = VG.length v
-	f k = let (i, j) = k `divMod` 3 in v VG.! (i * 3 + p j)
-	p j = case j of
-		0 -> 1
-		1 -> 0
-		2 -> 2
-		_ -> undefined
+parseSkin :: XML.Element -> ColladaSkeleton -> ColladaM ColladaVerticesData
+parseSkin skinElement skeleton = do
+	bindShapeTransform <- liftM (transformFromMatrix . (flip constructStridable) 0) (parseArray =<< getSingleChildWithTag "bind_shape_matrix" skinElement)
+
+	jointsElement <- getSingleChildWithTag "joints" skinElement
+	jointsInputs <- mapM parseInput =<< getChildrenWithTag "input" jointsElement
+
+	let findInput inputs semantic parent = case filter (\input -> citSemantic input == semantic) jointsInputs of
+		[input] -> return input :: ColladaM ColladaInputTag
+		_ -> throwError $ "no single " ++ parent ++ " input with " ++ semantic ++ " semantic"
+
+	jointsJointInput <- findInput jointsInputs "JOINT" "joints"
+	jointsJointNames <- liftM fst $ parseSource $ citSourceElement jointsJointInput
+	jointsInvBindMatrixInput <- findInput jointsInputs "INV_BIND_MATRIX" "joints"
+	jointsInvBindMatrices <- parseStridables =<< (parseSource $ citSourceElement jointsInvBindMatrixInput) :: ColladaM (V.Vector Mat4x4f)
+	let joints = Map.fromList $ zip (V.toList jointsJointNames) $ zip [0..] $ V.toList jointsInvBindMatrices
+
+	vertexWeightsElement <- getSingleChildWithTag "vertex_weights" skinElement
+	vertexWeightsInputs <- mapM parseInput =<< getChildrenWithTag "input" vertexWeightsElement
+	let vertexWeightsStride = length vertexWeightsInputs
+
+	vertexWeightsJointInput <- findInput vertexWeightsInputs "JOINT" "vertex_weights"
+	vertexWeightsJointNames <- liftM fst $ parseSource $ citSourceElement vertexWeightsJointInput
+	let vertexWeightsJointOffset = citOffset vertexWeightsJointInput
+
+	vertexWeightsWeightInput <- findInput vertexWeightsInputs "WEIGHT" "vertex_weights"
+	vertexWeightsWeights <- liftM fst $ parseSource $ citSourceElement vertexWeightsWeightInput
+	let vertexWeightsWeightOffset = citOffset vertexWeightsWeightInput
+
+	count <- liftM parse $ getElementAttr "count" vertexWeightsElement
+	vcount <- parseArray =<< getSingleChildWithTag "vcount" vertexWeightsElement
+	v <- parseArray =<< getSingleChildWithTag "v" vertexWeightsElement
+
+	-- constant
+	let bonesPerVertex = 4
+
+	let (resultWeights, resultBones) = runST $ do
+		weights <- VUM.new $ count * bonesPerVertex
+		bones <- VUM.new $ count * bonesPerVertex
+		let
+			sums ps (s:ss) = ps : sums (ps + s) ss
+			sums _ [] = []
+		let is = [0..(count - 1)]
+		let vcountList = VU.toList vcount
+		-- loop for vertices
+		forM_ (zip3 is vcountList $ sums 0 vcountList) $ \(i, bonesCount, j) -> do
+
+			weightJointPairs <- VM.new bonesCount
+
+			-- loop for bones of vertex
+			forM_ [0..(bonesCount - 1)] $ \k -> do
+				let o = (j + k) * vertexWeightsStride
+				let jointIndex = v VU.! (o + vertexWeightsJointOffset)
+				let weightIndex = v VU.! (o + vertexWeightsWeightOffset)
+				VM.write weightJointPairs k (vertexWeightsWeights VU.! weightIndex, vertexWeightsJointNames V.! jointIndex)
+
+			-- sort weight-joint pairs
+			VAI.sort weightJointPairs
+
+			-- pick up most weighted
+			freezedWeightJointPairs <- V.unsafeFreeze weightJointPairs
+			let len = V.length freezedWeightJointPairs
+			let bestWeightJointPairs =
+				if len >= bonesPerVertex then V.drop (len - bonesPerVertex) freezedWeightJointPairs
+				else freezedWeightJointPairs V.++ (V.fromList $ replicate (bonesPerVertex - len) (0, T.pack ""))
+
+			-- calc sum of weights to normalize
+			let weightSum = V.sum $ V.map fst bestWeightJointPairs
+
+			-- write weights and bones
+			forM_ [0..(bonesPerVertex - 1)] $ \k -> do
+				let (weight, joint) = bestWeightJointPairs V.! k
+				VUM.write weights (i * bonesPerVertex + k) weight
+				case Map.lookup joint joints of
+					Just (bone, _invBindMatrix) -> VUM.write bones (i * bonesPerVertex + k) bone
+					Nothing -> return () -- throwError $ "no joint " ++ T.unpack joint
+
+		freezedWeights <- VU.unsafeFreeze weights
+		freezedBones <- VU.unsafeFreeze bones
+		return (stridableStream freezedWeights, stridableStream freezedBones)
+
+	verticesData <- parseGeometry =<< resolveElement =<< getElementAttr "source" skinElement
+	return verticesData
+		{ cvdWeights = return resultWeights
+		, cvdBones = return resultBones
+		}
