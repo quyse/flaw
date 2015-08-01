@@ -17,6 +17,7 @@ class Transform t where
 	applyTransform :: Num a => t a -> Vec3 a -> Vec3 a
 	combineTransform :: Num a => t a -> t a -> t a
 	transformToMatrix :: Num a => t a -> Mat4x4 a
+	transformFromMatrix :: Num a => Mat4x4 a -> t a
 	transformTranslation :: Fractional a => Vec3 a -> t a
 	transformAxisRotation :: Floating a => Vec3 a -> a -> t a
 
@@ -30,12 +31,13 @@ instance Transform Mat4x4 where
 		Vec4 rx ry rz _rw = mul m (Vec4 x y z 1)
 	combineTransform = mul
 	transformToMatrix = id
+	transformFromMatrix = id
 	transformTranslation (Vec3 x y z) = Mat4x4
 		1 0 0 x
 		0 1 0 y
 		0 0 1 z
 		0 0 0 1
-	transformAxisRotation = undefined
+	transformAxisRotation axis angle = transformToMatrix $ QuatOffset (quaternionAxisRotation axis angle) (Vec3 0 0 0)
 
 quaternionAxisRotation :: Floating a => Vec3 a -> a -> Quaternion a
 quaternionAxisRotation (Vec3 x y z) angle = r where
@@ -68,6 +70,7 @@ instance Transform QuatOffset where
 			(xy2 + wz2) (ww - xx + yy - zz) (yz2 - wx2) py
 			(xz2 - wy2) (yz2 + wx2) (ww - xx - yy + zz) pz
 			0 0 0 1
+	transformFromMatrix = undefined
 	transformTranslation p = QuatOffset (Quaternion (Vec4 0 0 0 1)) p
 	transformAxisRotation axis angle = QuatOffset (quaternionAxisRotation axis angle) (Vec3 0 0 0)
 
@@ -96,5 +99,6 @@ instance Transform DualQuaternion where
 		a = DualQuaternion (Quaternion (Vec4 0 0 0 1)) (Quaternion (Vec4 x y z 0))
 	combineTransform q2 q1 = q2 * q1
 	transformToMatrix = undefined
+	transformFromMatrix = undefined
 	transformTranslation (Vec3 x y z) = DualQuaternion (Quaternion (Vec4 0 0 0 1)) (Quaternion (Vec4 (x * 0.5) (y * 0.5) (z * 0.5) 0))
 	transformAxisRotation axis angle = DualQuaternion (quaternionAxisRotation axis angle) (Quaternion (Vec4 0 0 0 0))
