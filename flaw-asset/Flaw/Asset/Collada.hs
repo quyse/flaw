@@ -15,6 +15,7 @@ module Flaw.Asset.Collada
 	, initColladaCache
 	, getElementById
 	, getAllElementsByTag
+	, ColladaVerticesData(..)
 	, parseTriangles
 	, parseMesh
 	, parseGeometry
@@ -269,10 +270,11 @@ parseInput inputElement = do
 		}
 
 data ColladaVerticesData = ColladaVerticesData
-	{ cvdPositionIndices :: ColladaM (VU.Vector Int)
+	{ cvdCount :: !Int
+	, cvdPositionIndices :: ColladaM (VU.Vector Int)
 	, cvdPositions :: ColladaM (V.Vector Vec3f)
 	, cvdNormals :: ColladaM (V.Vector Vec3f)
-	, cvdTexcoords :: ColladaM (V.Vector Vec2f)
+	, cvdTexcoords :: ColladaM (V.Vector Vec3f)
 	, cvdBones :: ColladaM (V.Vector Vec4i)
 	, cvdWeights :: ColladaM (V.Vector Vec4f)
 	}
@@ -290,7 +292,7 @@ parseTriangles element = do
 	let count = VU.length indices `div` stride
 
 	-- check
-	if count * 3 /= trianglesCount
+	if trianglesCount * 3 /= count
 		then throwError "wrong number of triangles or indices"
 		else return ()
 
@@ -303,7 +305,7 @@ parseTriangles element = do
 			1 -> 0
 			2 -> 2
 			_ -> undefined
-		in indices VU.! ((pp + f pq) * stride + q)
+		in indices VU.! ((pp * 3 + f pq) * stride + q)
 
 	let stream semantic = case filter (\i -> citSemantic i == semantic) inputs of
 		[ColladaInputTag
@@ -319,11 +321,14 @@ parseTriangles element = do
 		[ColladaInputTag
 			{ citOffset = offset
 			}] -> return $ VU.generate count $ \i -> flippedIndices VU.! (i * stride + offset)
-		_ -> throwError $ "no position indices"
+		_ -> throwError "no position indices"
+
+	unit <- liftM (csUnit . ccSettings) get
 
 	return ColladaVerticesData
-		{ cvdPositionIndices = positionIndices
-		, cvdPositions = stream "VERTEX"
+		{ cvdCount = count
+		, cvdPositionIndices = positionIndices
+		, cvdPositions = liftM (V.map (* vecFromScalar unit)) $ stream "VERTEX"
 		, cvdNormals = stream "NORMAL"
 		, cvdTexcoords = stream "TEXCOORD"
 		, cvdBones = return V.empty
@@ -359,6 +364,17 @@ parseNode element@XML.Element
 	sid <- liftM (maybe "" id) $ tryGetElementAttr "sid" element
 
 	unit <- liftM (csUnit . ccSettings) get
+	let unitMat = Mat4x4
+		unit 0 0 0
+		0 unit 0 0
+		0 0 unit 0
+		0 0 0 1
+	let invUnit = 1 / unit
+	let invUnitMat = Mat4x4
+		invUnit 0 0 0
+		0 invUnit 0 0
+		0 0 invUnit 0
+		0 0 0 1
 
 	-- traverse sub elements
 	let f node@ColladaNodeTag
@@ -377,15 +393,6 @@ parseNode element@XML.Element
 						return node
 							{ cntSubnodes = subnodes ++ [subnode]
 							}
-						{-
-						-- ignore nodes without id and sid
-						let f = do
-							subnode <- parseNode subElement
-							return node
-								{ cntSubnodes = subnodes ++ [subnode]
-								}
-						catchError f $ \_e -> return node
-						-}
 					"translate" -> do
 						maybeTransformSID <- tryGetElementAttr "sid" subElement
 						[x, y, z] <- liftM VG.toList $ parseArray subElement
@@ -402,7 +409,7 @@ parseNode element@XML.Element
 						maybeTransformSID <- tryGetElementAttr "sid" subElement
 						mat <- liftM ((flip constructStridable) 0) $ parseArray subElement
 						return node
-							{ cntTransforms = transforms ++ [(maybeTransformSID, ColladaMatrixTag mat)]
+							{ cntTransforms = transforms ++ [(maybeTransformSID, ColladaMatrixTag (unitMat `mul` (mat :: Mat4x4f) `mul` invUnitMat))]
 							}
 					_ -> return node
 			_ -> return node
@@ -638,13 +645,13 @@ animateSkeleton (ColladaSkeleton nodes) animation = do
 			VM.write transforms i $ combineTransform parentTransform $ (nodeAnimators V.! i) time
 		return transforms
 
-data ColladaSkin t = ColladaSkin t
+data ColladaSkin t = ColladaSkin
 	{
 	-- | Bones used in skinning, in order corresponding to bone indices in mesh.
 	  cskinBones :: !(V.Vector (ColladaBone t))
 	}
 
-data ColladaBone t = ColladaBone t
+data ColladaBone t = ColladaBone
 	{
 	-- | Index of bone in skeleton.
 	  cboneSkeletonIndex :: !Int
@@ -652,22 +659,35 @@ data ColladaBone t = ColladaBone t
 	, cboneInvBindTransform :: !t
 	}
 
-parseSkin :: XML.Element -> ColladaSkeleton -> ColladaM ColladaVerticesData
-parseSkin skinElement skeleton = do
+parseSkin :: Transform t => XML.Element -> ColladaSkeleton -> ColladaM (ColladaVerticesData, ColladaSkin (t Float))
+parseSkin skinElement (ColladaSkeleton nodes) = do
 	bindShapeTransform <- liftM (transformFromMatrix . (flip constructStridable) 0) (parseArray =<< getSingleChildWithTag "bind_shape_matrix" skinElement)
 
 	jointsElement <- getSingleChildWithTag "joints" skinElement
 	jointsInputs <- mapM parseInput =<< getChildrenWithTag "input" jointsElement
 
-	let findInput inputs semantic parent = case filter (\input -> citSemantic input == semantic) jointsInputs of
+	let findInput inputs semantic parent = case filter (\input -> citSemantic input == semantic) inputs of
 		[input] -> return input :: ColladaM ColladaInputTag
 		_ -> throwError $ "no single " ++ parent ++ " input with " ++ semantic ++ " semantic"
 
 	jointsJointInput <- findInput jointsInputs "JOINT" "joints"
 	jointsJointNames <- liftM fst $ parseSource $ citSourceElement jointsJointInput
 	jointsInvBindMatrixInput <- findInput jointsInputs "INV_BIND_MATRIX" "joints"
-	jointsInvBindMatrices <- parseStridables =<< (parseSource $ citSourceElement jointsInvBindMatrixInput) :: ColladaM (V.Vector Mat4x4f)
-	let joints = Map.fromList $ zip (V.toList jointsJointNames) $ zip [0..] $ V.toList jointsInvBindMatrices
+	jointsInvBindTransforms <- liftM (V.map transformFromMatrix) $ parseStridables =<< (parseSource $ citSourceElement jointsInvBindMatrixInput)
+
+	skinBones <- forM (V.zip jointsJointNames jointsInvBindTransforms) $ \(jointName, jointInvBindTransform) -> do
+		case V.findIndex (\ColladaSkeletonNode
+			{ csklnNodeTag = ColladaNodeTag
+				{ cntSID = sid
+				}
+			} -> T.pack sid == jointName) nodes of
+			Just nodeIndex -> return ColladaBone
+				{ cboneSkeletonIndex = nodeIndex
+				, cboneInvBindTransform = combineTransform bindShapeTransform jointInvBindTransform
+				}
+			Nothing -> throwError $ "missing skeleton node for joint " ++ T.unpack jointName
+
+	let namedBones = Map.fromList $ zip (V.toList jointsJointNames) [0..]
 
 	vertexWeightsElement <- getSingleChildWithTag "vertex_weights" skinElement
 	vertexWeightsInputs <- mapM parseInput =<< getChildrenWithTag "input" vertexWeightsElement
@@ -676,6 +696,9 @@ parseSkin skinElement skeleton = do
 	vertexWeightsJointInput <- findInput vertexWeightsInputs "JOINT" "vertex_weights"
 	vertexWeightsJointNames <- liftM fst $ parseSource $ citSourceElement vertexWeightsJointInput
 	let vertexWeightsJointOffset = citOffset vertexWeightsJointInput
+	vertexWeightsJointBones <- V.forM vertexWeightsJointNames $ \jointName -> case Map.lookup jointName namedBones of
+		Just bone -> return bone
+		Nothing -> throwError $ "missing bone for joint " ++ T.unpack jointName
 
 	vertexWeightsWeightInput <- findInput vertexWeightsInputs "WEIGHT" "vertex_weights"
 	vertexWeightsWeights <- liftM fst $ parseSource $ citSourceElement vertexWeightsWeightInput
@@ -706,7 +729,7 @@ parseSkin skinElement skeleton = do
 				let o = (j + k) * vertexWeightsStride
 				let jointIndex = v VU.! (o + vertexWeightsJointOffset)
 				let weightIndex = v VU.! (o + vertexWeightsWeightOffset)
-				VM.write weightJointPairs k (vertexWeightsWeights VU.! weightIndex, vertexWeightsJointNames V.! jointIndex)
+				VM.write weightJointPairs k (vertexWeightsWeights VU.! weightIndex, vertexWeightsJointBones V.! jointIndex)
 
 			-- sort weight-joint pairs
 			VAI.sort weightJointPairs
@@ -716,25 +739,25 @@ parseSkin skinElement skeleton = do
 			let len = V.length freezedWeightJointPairs
 			let bestWeightJointPairs =
 				if len >= bonesPerVertex then V.drop (len - bonesPerVertex) freezedWeightJointPairs
-				else freezedWeightJointPairs V.++ (V.fromList $ replicate (bonesPerVertex - len) (0, T.pack ""))
+				else freezedWeightJointPairs V.++ (V.fromList $ replicate (bonesPerVertex - len) (0, 0))
 
 			-- calc sum of weights to normalize
 			let weightSum = V.sum $ V.map fst bestWeightJointPairs
 
 			-- write weights and bones
 			forM_ [0..(bonesPerVertex - 1)] $ \k -> do
-				let (weight, joint) = bestWeightJointPairs V.! k
-				VUM.write weights (i * bonesPerVertex + k) weight
-				case Map.lookup joint joints of
-					Just (bone, _invBindMatrix) -> VUM.write bones (i * bonesPerVertex + k) bone
-					Nothing -> return () -- throwError $ "no joint " ++ T.unpack joint
+				let (weight, bone) = bestWeightJointPairs V.! k
+				VUM.write weights (i * bonesPerVertex + k) $ weight / weightSum
+				VUM.write bones (i * bonesPerVertex + k) bone
 
 		freezedWeights <- VU.unsafeFreeze weights
 		freezedBones <- VU.unsafeFreeze bones
 		return (stridableStream freezedWeights, stridableStream freezedBones)
 
 	verticesData <- parseGeometry =<< resolveElement =<< getElementAttr "source" skinElement
-	return verticesData
+	return (verticesData
 		{ cvdWeights = return resultWeights
 		, cvdBones = return resultBones
-		}
+		}, ColladaSkin
+		{ cskinBones = skinBones
+		})
