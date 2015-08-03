@@ -15,6 +15,8 @@ module Flaw.Math.Internal
 	, genSwizzleVariants
 	) where
 
+import Data.Int
+import Data.Word
 import Language.Haskell.TH
 
 maxVecDimension :: Int
@@ -28,7 +30,7 @@ vecComponents = "xyzw"
 mathTypeNames :: [Name]
 mathTypeNames = map fst mathTypeNamesWithChar
 mathTypeNamesWithChar :: [(Name, Char)]
-mathTypeNamesWithChar = [(''Float, 'f'), (''Double, 'd'), (''Int, 'i'), (''Word, 'u')]
+mathTypeNamesWithChar = [(''Float, 'f'), (''Double, 'd'), (''Int32, 'i'), (''Word32, 'u')]
 
 swizzleVariantFilter :: String -> String -> Bool
 swizzleVariantFilter components variant = all (\c -> elem c components) variant && elem (last components) variant
