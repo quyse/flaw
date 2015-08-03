@@ -7,6 +7,7 @@ License: MIT
 module Flaw.Graphics.Program
 	( Program
 	, AttributeFormat(..)
+	, Normalization(..)
 	, Node
 	, cnst
 	, constf, const2f, const3f, const4f
@@ -19,6 +20,7 @@ module Flaw.Graphics.Program
 	, createUniformStorage
 	, setUniform
 	, renderUniform
+	, renderIndexedUniform
 	, renderUploadUniformStorage
 	, renderUniformStorage
 	, sampler
@@ -157,6 +159,19 @@ setUniform _ _ _ = undefined
 
 renderUniform :: (OfValueType a, Storable a) => UniformStorage d -> Node a -> a -> Render c ()
 renderUniform uniformStorage node value = liftIO $ setUniform uniformStorage node value
+
+setIndexedUniform :: (OfValueType a, Storable a) => UniformStorage d -> Node [a] -> Int -> a -> IO ()
+setIndexedUniform UniformStorage
+	{ uniformStorageBytes = bytes
+	} (UniformNode Uniform
+	{ uniformOffset = offset
+	}) i value = do
+	withForeignPtr bytes $ \ptr -> do
+		pokeElemOff (ptr `plusPtr` offset) i value
+setIndexedUniform _ _ _ _ = undefined
+
+renderIndexedUniform :: (OfValueType a, Storable a) => UniformStorage d -> Node [a] -> Int -> a -> Render c ()
+renderIndexedUniform uniformStorage node i value = liftIO $ setIndexedUniform uniformStorage node i value
 
 renderUploadUniformStorage :: Context c d => UniformStorage d -> Render c ()
 renderUploadUniformStorage UniformStorage
