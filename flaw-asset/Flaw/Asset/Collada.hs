@@ -11,6 +11,7 @@ module Flaw.Asset.Collada
 	, ColladaM()
 	, ColladaCache(..)
 	, ColladaSettings(..)
+	, getSingleChildWithTag
 	, runCollada
 	, initColladaCache
 	, getElementById
@@ -25,7 +26,8 @@ module Flaw.Asset.Collada
 	, ColladaSkeleton()
 	, parseSkeleton
 	, animateSkeleton
-	, ColladaSkin()
+	, ColladaSkin(..)
+	, ColladaBone(..)
 	, parseSkin
 	) where
 
@@ -59,6 +61,8 @@ data ColladaCache = ColladaCache
 
 data ColladaSettings = ColladaSettings
 	{ csUnit :: Float
+	, csUnitMat :: Mat4x4f
+	, csInvUnitMat :: Mat4x4f
 	}
 
 type ColladaM a = StateT ColladaCache (Either String) a
@@ -117,12 +121,23 @@ initColladaCache fileData = do
 			if tag == "COLLADA" then ignoreErrors $ do
 				assetElement <- getSingleChildWithTag "asset" element
 				unitElement <- getSingleChildWithTag "unit" assetElement
-				unit <- getElementAttr "meter" unitElement
+				unit <- liftM read $ getElementAttr "meter" unitElement
+				let invUnit = 1 / unit
 				state $ \cache@ColladaCache
 					{ ccSettings = settings
 					} -> ((), cache
 					{ ccSettings = settings
-						{ csUnit = read unit
+						{ csUnit = unit
+						, csUnitMat = Mat4x4
+							unit 0 0 0
+							0 unit 0 0
+							0 0 unit 0
+							0 0 0 1
+						, csInvUnitMat = Mat4x4
+							invUnit 0 0 0
+							0 invUnit 0 0
+							0 0 invUnit 0
+							0 0 0 1
 						}
 					})
 			else return ()
@@ -141,6 +156,8 @@ initColladaCache fileData = do
 	put ColladaCache
 		{ ccSettings = ColladaSettings
 			{ csUnit = 1
+			, csUnitMat = identityTransform
+			, csInvUnitMat = identityTransform
 			}
 		, ccContents = fileContents
 		, ccElementsById = Map.empty
@@ -363,18 +380,10 @@ parseNode element@XML.Element
 	nodeId <- liftM (maybe "" id) $ tryGetElementAttr "id" element
 	sid <- liftM (maybe "" id) $ tryGetElementAttr "sid" element
 
-	unit <- liftM (csUnit . ccSettings) get
-	let unitMat = Mat4x4
-		unit 0 0 0
-		0 unit 0 0
-		0 0 unit 0
-		0 0 0 1
-	let invUnit = 1 / unit
-	let invUnitMat = Mat4x4
-		invUnit 0 0 0
-		0 invUnit 0 0
-		0 0 invUnit 0
-		0 0 0 1
+	settings <- liftM ccSettings get
+	let unit = csUnit settings
+	let unitMat = csUnitMat settings
+	let invUnitMat = csInvUnitMat settings
 
 	-- traverse sub elements
 	let f node@ColladaNodeTag
@@ -649,7 +658,7 @@ data ColladaSkin t = ColladaSkin
 	{
 	-- | Bones used in skinning, in order corresponding to bone indices in mesh.
 	  cskinBones :: !(V.Vector (ColladaBone t))
-	}
+	} deriving Show
 
 data ColladaBone t = ColladaBone
 	{
@@ -657,11 +666,15 @@ data ColladaBone t = ColladaBone
 	  cboneSkeletonIndex :: !Int
 	-- | Inverse bind transform.
 	, cboneInvBindTransform :: !t
-	}
+	} deriving Show
 
-parseSkin :: Transform t => XML.Element -> ColladaSkeleton -> ColladaM (ColladaVerticesData, ColladaSkin (t Float))
-parseSkin skinElement (ColladaSkeleton nodes) = do
-	bindShapeTransform <- liftM (transformFromMatrix . (flip constructStridable) 0) (parseArray =<< getSingleChildWithTag "bind_shape_matrix" skinElement)
+parseSkin :: Transform t => ColladaSkeleton -> XML.Element -> ColladaM (ColladaVerticesData, ColladaSkin (t Float))
+parseSkin (ColladaSkeleton nodes) skinElement = do
+	settings <- liftM ccSettings get
+	let unitMat = csUnitMat settings
+	let invUnitMat = csInvUnitMat settings
+
+	bindShapeTransform <- liftM (\v -> transformFromMatrix $ unitMat `mul` (constructStridable v 0 :: Mat4x4f) `mul` invUnitMat) (parseArray =<< getSingleChildWithTag "bind_shape_matrix" skinElement)
 
 	jointsElement <- getSingleChildWithTag "joints" skinElement
 	jointsInputs <- mapM parseInput =<< getChildrenWithTag "input" jointsElement
@@ -673,7 +686,7 @@ parseSkin skinElement (ColladaSkeleton nodes) = do
 	jointsJointInput <- findInput jointsInputs "JOINT" "joints"
 	jointsJointNames <- liftM fst $ parseSource $ citSourceElement jointsJointInput
 	jointsInvBindMatrixInput <- findInput jointsInputs "INV_BIND_MATRIX" "joints"
-	jointsInvBindTransforms <- liftM (V.map transformFromMatrix) $ parseStridables =<< (parseSource $ citSourceElement jointsInvBindMatrixInput)
+	jointsInvBindTransforms <- liftM (V.map $ \mat -> transformFromMatrix $ unitMat `mul` (mat :: Mat4x4f) `mul` invUnitMat) $ parseStridables =<< (parseSource $ citSourceElement jointsInvBindMatrixInput)
 
 	skinBones <- forM (V.zip jointsJointNames jointsInvBindTransforms) $ \(jointName, jointInvBindTransform) -> do
 		case V.findIndex (\ColladaSkeletonNode
@@ -696,7 +709,7 @@ parseSkin skinElement (ColladaSkeleton nodes) = do
 	vertexWeightsJointInput <- findInput vertexWeightsInputs "JOINT" "vertex_weights"
 	vertexWeightsJointNames <- liftM fst $ parseSource $ citSourceElement vertexWeightsJointInput
 	let vertexWeightsJointOffset = citOffset vertexWeightsJointInput
-	vertexWeightsJointBones <- V.forM vertexWeightsJointNames $ \jointName -> case Map.lookup jointName namedBones of
+	vertexWeightsJointBones <- liftM V.convert $ V.forM vertexWeightsJointNames $ \jointName -> case Map.lookup jointName namedBones of
 		Just bone -> return bone
 		Nothing -> throwError $ "missing bone for joint " ++ T.unpack jointName
 
@@ -711,7 +724,7 @@ parseSkin skinElement (ColladaSkeleton nodes) = do
 	-- constant
 	let bonesPerVertex = 4
 
-	let (resultWeights, resultBones) = runST $ do
+	let (rawWeights, rawBones) = runST $ do
 		weights <- VUM.new $ count * bonesPerVertex
 		bones <- VUM.new $ count * bonesPerVertex
 		let
@@ -729,7 +742,7 @@ parseSkin skinElement (ColladaSkeleton nodes) = do
 				let o = (j + k) * vertexWeightsStride
 				let jointIndex = v VU.! (o + vertexWeightsJointOffset)
 				let weightIndex = v VU.! (o + vertexWeightsWeightOffset)
-				VM.write weightJointPairs k (vertexWeightsWeights VU.! weightIndex, vertexWeightsJointBones V.! jointIndex)
+				VM.write weightJointPairs k (vertexWeightsWeights VU.! weightIndex, vertexWeightsJointBones VU.! jointIndex)
 
 			-- sort weight-joint pairs
 			VAI.sort weightJointPairs
@@ -755,9 +768,12 @@ parseSkin skinElement (ColladaSkeleton nodes) = do
 		return (stridableStream freezedWeights, stridableStream freezedBones)
 
 	verticesData <- parseGeometry =<< resolveElement =<< getElementAttr "source" skinElement
+
+	positionIndices <- cvdPositionIndices verticesData
+
 	return (verticesData
-		{ cvdWeights = return resultWeights
-		, cvdBones = return resultBones
+		{ cvdBones = return $ V.generate (VU.length positionIndices) $ \i -> rawBones V.! (positionIndices VU.! i)
+		, cvdWeights = return $ V.generate (VU.length positionIndices) $ \i -> rawWeights V.! (positionIndices VU.! i)
 		}, ColladaSkin
 		{ cskinBones = skinBones
 		})

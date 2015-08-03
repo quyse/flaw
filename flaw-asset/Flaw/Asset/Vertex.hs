@@ -8,12 +8,11 @@ License: MIT
 
 module Flaw.Asset.Vertex
 	( ColladaVertex(..)
-	, loadColladaVertices
 	, VertexPNT(..)
+	, VertexPNTBW(..)
 	) where
 
 import qualified Data.Vector as V
-import qualified Text.XML.Light as XML
 
 import Flaw.Asset.Collada
 import Flaw.FFI
@@ -21,9 +20,6 @@ import Flaw.Math
 
 class ColladaVertex q where
 	createColladaVertices :: ColladaVerticesData -> ColladaM (V.Vector q)
-
-loadColladaVertices :: ColladaVertex a => XML.Element -> ColladaM (V.Vector a)
-loadColladaVertices element = createColladaVertices =<< parseGeometry element
 
 genStruct "VertexPNT"
 	[ ([t| Vec3f |], "position")
@@ -43,4 +39,30 @@ instance ColladaVertex VertexPNT where
 			{ f_VertexPNT_position = positions V.! i
 			, f_VertexPNT_normal = normals V.! i
 			, f_VertexPNT_texcoord = xy__ $ texcoords V.! i
+			}
+
+genStruct "VertexPNTBW"
+	[ ([t| Vec3f |], "position")
+	, ([t| Vec3f |], "normal")
+	, ([t| Vec2f |], "texcoord")
+	, ([t| Vec4i |], "bones")
+	, ([t| Vec4f |], "weights")
+	]
+
+deriving instance Eq VertexPNTBW
+deriving instance Ord VertexPNTBW
+
+instance ColladaVertex VertexPNTBW where
+	createColladaVertices verticesData = do
+		positions <- cvdPositions verticesData
+		normals <- cvdNormals verticesData
+		texcoords <- cvdTexcoords verticesData
+		bones <- cvdBones verticesData
+		weights <- cvdWeights verticesData
+		return $ V.generate (cvdCount verticesData) $ \i -> VertexPNTBW
+			{ f_VertexPNTBW_position = positions V.! i
+			, f_VertexPNTBW_normal = normals V.! i
+			, f_VertexPNTBW_texcoord = xy__ $ texcoords V.! i
+			, f_VertexPNTBW_bones = bones V.! i
+			, f_VertexPNTBW_weights = weights V.! i
 			}
