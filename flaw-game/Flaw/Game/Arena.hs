@@ -62,7 +62,7 @@ class Arena a where
 	-- Does not return until account leaves arena.
 	playArena :: (SendSocket s, ReceiveSocket s, UnreceiveSocket s) => a -> AccountId -> ArenaPass a -> s B.ByteString -> IO ()
 	-- | Kick account.
-	kickAccountFromArena :: AccountId -> STM ()
+	kickAccountFromArena :: a -> AccountId -> STM ()
 
 -- | Run arena server.
 serveArena ::
@@ -84,6 +84,8 @@ serveArena ::
 serveArena socketSocket ticketWitness newArena = do
 	-- create map of arenas
 	arenasVar <- newTVarIO M.empty -- :: TVar (Map ArenaId Arena)
+	-- create map of accounts
+	accountsVar <- newTVarIO M.empty -- :: TVar (Map AccountId (ArenaId, STM ()))
 
 	-- loop for incoming clients
 	forever $ do
@@ -91,7 +93,8 @@ serveArena socketSocket ticketWitness newArena = do
 		socket <- atomically $ receive socketSocket
 
 		-- helper function to send packet to client
-		let reply message = atomically $ send socket $ S.encode message
+		let reply message = send socket $ S.encode message
+		let replyIO message = atomically $ reply message
 		-- helper function to receive packet from client
 		let listen = atomically $ receiveSerialize socket S.get
 
@@ -99,19 +102,21 @@ serveArena socketSocket ticketWitness newArena = do
 		let joinArena (accountId, arenaId, arenaPass) = do
 			let play arena = do
 				reply ServerArenaStartedPacket
-				playArena arena accountId arenaPass socket
+				return $ playArena arena accountId arenaPass socket
 			action <- atomically $ do
-				-- get arena, create new if needed
+				-- kick account if logged into different arena
+				-- look for existing arena
 				arenas <- readTVar arenasVar
 				case M.lookup arenaId arenas of
-					Just arena -> return $ play arena
+					Just arena -> play arena
 					Nothing -> do
 						arena <- newArena arenaId
 						writeTVar arenasVar $ M.insert arenaId arena arenas
+						playAction <- play arena
 						return $ do
 							_ <- forkIO $ finally (runArena arena) $ do
 								atomically $ modifyTVar' arenasVar $ M.delete arenaId
-							play arena
+							playAction
 			action
 
 		-- fork thread for client
@@ -121,14 +126,14 @@ serveArena socketSocket ticketWitness newArena = do
 			case eitherHandshakePacket of
 				Right (ClientHandshakePacket protocolVersion ticketBytes) -> do
 					-- check version
-					if protocolVersion /= currentProtocolVersion then reply $ ServerVersionMismatchPacket currentProtocolVersion
+					if protocolVersion /= currentProtocolVersion then replyIO $ ServerVersionMismatchPacket currentProtocolVersion
 					else case S.decode ticketBytes of
 						Right ticket -> do
 							case verifyTicket ticketWitness ticket of
 								Just aap -> joinArena aap
-								Nothing -> reply ServerAuthErrorPacket
-						Left _ -> reply ServerFormatErrorPacket
-				Left _ -> reply ServerFormatErrorPacket
+								Nothing -> replyIO ServerAuthErrorPacket
+						Left _ -> replyIO ServerFormatErrorPacket
+				Left _ -> replyIO ServerFormatErrorPacket
 
 		_ <- forkIO $ finally work $ atomically $ send socket B.empty
 		return ()
