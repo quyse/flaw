@@ -21,6 +21,7 @@ library
   exposed-modules:
     Flaw.Game.Arena
     Flaw.Game.Socket
+    Flaw.Game.State.Lockstep
     Flaw.Game.TcpClient
     Flaw.Game.TcpServer
     Flaw.Game.Ticket
