@@ -42,3 +42,7 @@ library
       extra-libraries:
         gdi32
         ole32
+    else
+      exposed-modules:
+        Flaw.Window.Sdl
+      build-depends:       bytestring, flaw-sdl, sdl2, unordered-containers

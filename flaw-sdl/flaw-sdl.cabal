@@ -1,4 +1,4 @@
-name:                flaw-input
+name:                flaw-sdl
 version:             0.1.0.0
 -- synopsis:            
 -- description:         
@@ -15,28 +15,13 @@ cabal-version:       >=1.10
 source-repository head
   type: git
   location: https://github.com/quyse/flaw.git
-  subdir: flaw-graphics
+  subdir: flaw-sdl
 
 library
   exposed-modules:
-    Flaw.Input
-    Flaw.Input.Mouse
-    Flaw.Input.Keyboard
+    Flaw.Sdl
   other-modules:
-    Flaw.Input.Basic
   -- other-extensions:    
-  build-depends:       array, base, flaw-base, flaw-ffi, flaw-window, stm
+  build-depends:       base, sdl2
   -- hs-source-dirs:      
   default-language:    Haskell2010
-  if impl(ghcjs)
-    exposed-modules:
-      Flaw.Input.Web
-    build-depends:       ghcjs-base, ghcjs-dom
-  else
-    if os(windows)
-      exposed-modules:
-        Flaw.Input.Win32
-    else
-      exposed-modules:
-        Flaw.Input.Sdl
-      build-depends:       bytestring, sdl2, text
