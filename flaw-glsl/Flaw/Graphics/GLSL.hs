@@ -1,12 +1,12 @@
 {-|
-Module: Flaw.Graphics.WebGL.GLSL
+Module: Flaw.Graphics.GLSL
 Description: GLSL generator for WebGL graphics.
 License: MIT
 -}
 
 {-# LANGUAGE GADTs, OverloadedStrings, TypeFamilies #-}
 
-module Flaw.Graphics.WebGL.GLSL
+module Flaw.Graphics.GLSL
 	( GlslAttribute(..)
 	, GlslUniform(..)
 	, GlslSampler(..)

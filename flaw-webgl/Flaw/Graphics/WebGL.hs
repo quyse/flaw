@@ -35,9 +35,9 @@ import GHCJS.Types
 
 import Flaw.Exception
 import Flaw.Graphics
+import Flaw.Graphics.GLSL
 import Flaw.Graphics.Program.Internal
 import Flaw.Graphics.WebGL.FFI
-import Flaw.Graphics.WebGL.GLSL
 import Flaw.Math
 
 -- | Graphics system.
