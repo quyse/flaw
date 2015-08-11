@@ -32,3 +32,5 @@ library
     build-depends:       bytestring, flaw-asset
     if os(windows)
       build-depends:       flaw-dx11
+    else
+      build-depends:       flaw-gl, sdl2

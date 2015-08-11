@@ -52,6 +52,22 @@ type AppGraphicsContext = Dx11Context
 type AppGraphicsPresenter = Dx11Presenter
 type AppInputManager = Win32InputManager
 
+#else
+
+import qualified Graphics.UI.SDL.Basic as SDL
+import qualified Graphics.UI.SDL.Enum as SDL
+
+import Flaw.Graphics
+import Flaw.Graphics.OpenGL
+import Flaw.Input.Sdl
+import Flaw.Window.Sdl
+
+type AppWindow = SdlWindow
+type AppGraphicsDevice = GlDevice
+type AppGraphicsContext = GlContext
+type AppGraphicsPresenter = GlPresenter
+type AppInputManager = SdlInputManager
+
 #endif
 
 #endif
@@ -89,6 +105,23 @@ initApp title width height needDepth = do
 	graphicsDevices <- book bk $ getInstalledDevices graphicsSystem
 	(graphicsDevice, graphicsContext) <- book bk $ dx11CreateDevice $ fst $ head graphicsDevices
 	presenter <- book bk $ dx11CreatePresenter graphicsDevice window Nothing needDepth
+
+#else
+
+	_ <- book bk $ do
+		r <- SDL.init SDL.SDL_INIT_VIDEO
+		return (r, SDL.quit)
+
+	windowSystem <- book bk $ initSdlWindowSystem
+	window <- book bk $ createSdlWindow windowSystem title 0 0 width height
+
+	inputManager <- initSdlInput window
+
+	graphicsSystem <- book bk $ createGlSystem
+	graphicsDevices <- book bk $ getInstalledDevices graphicsSystem
+	graphicsContext <- book bk $ createGlContext (fst $ head graphicsDevices) window
+	let graphicsDevice = graphicsContext
+	let presenter = graphicsContext
 
 #endif
 
