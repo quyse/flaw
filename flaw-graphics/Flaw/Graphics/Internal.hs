@@ -211,22 +211,22 @@ class (System s, Context c d) => Presenter p s c d | p -> s c d where
 
 -- | Device information structure.
 data DeviceInfo device = DeviceInfo
-	{ deviceName :: T.Text
+	{ deviceName :: !T.Text
 	, deviceDisplays :: [(DisplayId device, DisplayInfo device)]
 	}
 
 -- | Display information structure.
 data DisplayInfo device = DisplayInfo
-	{ displayName :: T.Text
+	{ displayName :: !T.Text
 	, displayModes :: [(DisplayModeId device, DisplayModeInfo)]
 	}
 
 -- | Display mode information structure.
 data DisplayModeInfo = DisplayModeInfo
-	{ displayModeName :: T.Text
-	, displayModeWidth :: Int
-	, displayModeHeight :: Int
-	, displayModeRefreshRate :: Rational
+	{ displayModeName :: !T.Text
+	, displayModeWidth :: !Int
+	, displayModeHeight :: !Int
+	, displayModeRefreshRate :: !Rational
 	} deriving Show
 
 -- | Depth test function.
