@@ -22,16 +22,19 @@ import Data.Bits
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Unsafe as B
 import Data.IORef
-import Data.Primitive.ByteArray
 import qualified Data.Text as T
 import Foreign.ForeignPtr
 import Foreign.Marshal.Utils
 import Foreign.Ptr
 import Foreign.Storable
+import qualified GHCJS.Buffer
 import qualified GHCJS.DOM.Element as DOM
 import GHCJS.Foreign
+import GHCJS.Foreign.Callback
 import GHCJS.Marshal
+import GHCJS.Marshal.Pure
 import GHCJS.Types
+import Unsafe.Coerce
 
 import Flaw.Exception
 import Flaw.Graphics
@@ -133,8 +136,8 @@ instance Device WebGLDevice where
 		bufferId <- webglAllocateId device
 		jsBuffer <- js_createBuffer jsContext
 		js_bindBuffer jsContext webgl_ARRAY_BUFFER jsBuffer
-		jsArrayBuffer <- convertToArrayBuffer bytes
-		js_bufferData jsContext webgl_ARRAY_BUFFER jsArrayBuffer webgl_STATIC_DRAW
+		jsDataBuffer <- convertToJsBuffer bytes
+		js_bufferData jsContext webgl_ARRAY_BUFFER jsDataBuffer webgl_STATIC_DRAW
 		return (WebGLVertexBufferId
 			{ webglVertexBufferId = bufferId
 			, webglVertexBufferBuffer = jsBuffer
@@ -147,8 +150,8 @@ instance Device WebGLDevice where
 		bufferId <- webglAllocateId device
 		jsBuffer <- js_createBuffer jsContext
 		js_bindBuffer jsContext webgl_ELEMENT_ARRAY_BUFFER jsBuffer
-		jsArrayBuffer <- convertToArrayBuffer bytes
-		js_bufferData jsContext webgl_ELEMENT_ARRAY_BUFFER jsArrayBuffer webgl_STATIC_DRAW
+		jsDataBuffer <- convertToJsBuffer bytes
+		js_bufferData jsContext webgl_ELEMENT_ARRAY_BUFFER jsDataBuffer webgl_STATIC_DRAW
 		let format = if is32Bit then webgl_UNSIGNED_INT else webgl_UNSIGNED_SHORT
 		return (WebGLIndexBufferId
 			{ webglIndexBufferId = bufferId
@@ -163,14 +166,14 @@ instance Device WebGLDevice where
 
 		let createShader (GlslShader source) shaderType = describeException "failed to create WebGL shader" $ do
 			jsShader <- js_createShader jsContext shaderType
-			js_shaderSource jsContext jsShader $ toJSString source
+			js_shaderSource jsContext jsShader $ pToJSRef source
 			js_compileShader jsContext jsShader
 			jsStatus <- js_getShaderParameter jsContext jsShader webgl_COMPILE_STATUS
-			if fromJSBool' jsStatus then return jsShader
+			if pFromJSRef jsStatus then return jsShader
 			else do
 				jsLog <- js_getShaderInfoLog jsContext jsShader
 				putStrLn $ T.unpack source
-				fail $ show ("failed to compile shader", (fromJSString jsLog) :: T.Text)
+				fail $ show ("failed to compile shader", (pFromJSRef jsLog) :: T.Text)
 
 		-- generate GLSL
 		glslProgram <- liftM generateProgram $ runProgram program
@@ -186,14 +189,14 @@ instance Device WebGLDevice where
 				-- bind attributes
 				forM_ (zip attributes [0..]) $ \(GlslAttribute
 					{ glslAttributeName = name
-					}, i) -> js_bindAttribLocation jsContext jsProgram i $ toJSString name
+					}, i) -> js_bindAttribLocation jsContext jsProgram i $ pToJSRef name
 
 				-- TODO: bind targets
 
 				-- link program
 				js_linkProgram jsContext jsProgram
 				jsStatus <- js_getProgramParameter jsContext jsProgram webgl_LINK_STATUS
-				if fromJSBool' jsStatus then return ()
+				if pFromJSRef jsStatus then return ()
 				else fail "failed to link program"
 
 				-- set as current
@@ -203,7 +206,7 @@ instance Device WebGLDevice where
 				forM_ (zip samplers [0..]) $ \(GlslSampler
 					{ glslSamplerName = name
 					}, i) -> do
-					jsLocation <- js_getUniformLocation jsContext jsProgram $ toJSString name
+					jsLocation <- js_getUniformLocation jsContext jsProgram $ pToJSRef name
 					js_uniform1i jsContext jsLocation i
 
 				-- form uniforms
@@ -211,7 +214,7 @@ instance Device WebGLDevice where
 					{ glslUniformName = name
 					, glslUniformInfo = info
 					} -> do
-					jsLocation <- js_getUniformLocation jsContext jsProgram $ toJSString name
+					jsLocation <- js_getUniformLocation jsContext jsProgram $ pToJSRef name
 					return WebGLUniform
 						{ webglUniformLocation = jsLocation
 						, webglUniformInfo = info
@@ -511,12 +514,12 @@ instance Presenter WebGLPresenter WebGLSystem WebGLContext WebGLDevice where
 		syncVar <- newEmptyMVar
 
 		-- create sync callback
-		callback <- syncCallback AlwaysRetain False $ do
+		callback <- syncCallback ThrowWouldBlock $ do
 			-- set framebuffer
 			writeIORef frameBufferRef $ WebGLFrameBufferId nullRef
 			-- get client size
-			width <- DOM.elementGetClientWidth canvas
-			height <- DOM.elementGetClientHeight canvas
+			width <- DOM.getClientWidth canvas
+			height <- DOM.getClientHeight canvas
 			-- set viewport
 			writeIORef viewportRef (floor width, floor height)
 
@@ -530,7 +533,7 @@ instance Presenter WebGLPresenter WebGLSystem WebGLContext WebGLDevice where
 		r <- takeMVar syncVar
 
 		-- release data associated with callback
-		GHCJS.Foreign.release callback
+		releaseCallback callback
 
 		return r
 
@@ -540,7 +543,7 @@ foreign import javascript unsafe "( \
 	\ window.mozRequestAnimationFrame || \
 	\ window.webkitRequestAnimationFrame || \
 	\ window.msRequestAnimationFrame \
-	\ )($1);" js_requestAnimationFrame :: JSFun (IO ()) -> IO ()
+	\ )($1);" js_requestAnimationFrame :: Callback (IO ()) -> IO ()
 
 webglInit :: DOM.Element -> Bool -> IO ((WebGLDevice, WebGLContext, WebGLPresenter), IO ())
 webglInit canvas needDepth = do
@@ -765,7 +768,7 @@ loadWebGLTexture2DFromURL :: WebGLDevice -> T.Text -> IO (TextureId WebGLDevice,
 loadWebGLTexture2DFromURL device@WebGLDevice
 	{ webglDeviceContext = jsContext
 	} url = describeException "failed to load WebGL texture from URL" $ do
-	image <- js_loadImage $ toJSString url
+	image <- js_loadImage $ pToJSRef url
 	jsTexture <- js_createTexture jsContext
 	js_bindTexture jsContext webgl_TEXTURE_2D jsTexture
 	js_texImage2D jsContext webgl_TEXTURE_2D 0 webgl_RGBA webgl_RGBA webgl_UNSIGNED_BYTE image
@@ -779,14 +782,11 @@ loadWebGLTexture2DFromURL device@WebGLDevice
 		, webglTextureTexture = jsTexture
 		}, return ())
 
-convertToArrayBuffer :: B.ByteString -> IO (JSRef ())
-convertToArrayBuffer bytes = do
-	byteArray <- newByteArray $ B.length bytes
-	forM_ (zip (B.unpack bytes) [0..]) $ \(b, i) -> writeByteArray byteArray i b
-	ByteArray (internalByteArray) <- unsafeFreezeByteArray byteArray
-	js_getBuffer $ byteArrayJSRef internalByteArray
-
-foreign import javascript safe "$1.buf" js_getBuffer :: JSRef () -> IO (JSRef ())
+convertToJsBuffer :: B.ByteString -> IO (JSRef ())
+convertToJsBuffer bytes = do
+	let (buf, off, len) = GHCJS.Buffer.fromByteString bytes
+	js_unwrapBuf (unsafeCoerce buf) off len
+foreign import javascript unsafe "new Uint8Array($1.buf, $2, $3)" js_unwrapBuf :: JSRef a -> Int -> Int -> IO (JSRef ())
 
 instance Eq (VertexBufferId WebGLDevice) where
 	WebGLVertexBufferId { webglVertexBufferId = a } == WebGLVertexBufferId { webglVertexBufferId = b } = a == b

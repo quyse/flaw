@@ -15,8 +15,8 @@ import Control.Concurrent.STM
 import Control.Monad
 import Data.Maybe
 import qualified Data.Text as T
-import GHCJS.Foreign
 import GHCJS.Marshal
+import GHCJS.Marshal.Pure
 import GHCJS.Types
 import qualified GHCJS.DOM.Element as DOM
 
@@ -40,12 +40,12 @@ initCanvas title = do
 	return canvas
 
 instance Window Canvas where
-	setWindowTitle _canvas title = js_setTitle $ toJSString title
+	setWindowTitle _canvas title = js_setTitle $ pToJSRef title
 	getWindowClientSize Canvas
 		{ canvasElement = domCanvas
 		} = do
-		width <- liftM floor $ DOM.elementGetClientWidth domCanvas
-		height <- liftM floor $ DOM.elementGetClientHeight domCanvas
+		width <- liftM floor $ DOM.getClientWidth domCanvas
+		height <- liftM floor $ DOM.getClientHeight domCanvas
 		return (width, height)
 	chanWindowEvents Canvas
 		{ canvasEventsChan = eventsChan
@@ -66,4 +66,4 @@ foreign import javascript unsafe " \
 	\ }, false); \
 	\ $r=c" js_initCanvas :: IO (JSRef DOM.Element)
 
-foreign import javascript unsafe "document.title=$1" js_setTitle :: JSString -> IO ()
+foreign import javascript unsafe "document.title=$1" js_setTitle :: JSRef T.Text -> IO ()

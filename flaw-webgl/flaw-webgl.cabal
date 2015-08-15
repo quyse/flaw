@@ -23,6 +23,6 @@ library
   other-modules:
     Flaw.Graphics.WebGL.FFI
   -- other-extensions:    
-  build-depends:       array, base, bytestring, flaw-base, flaw-glsl, flaw-graphics, flaw-math, flaw-sl, ghcjs-base, ghcjs-dom, ghcjs-prim, mtl, primitive, text, template-haskell, transformers
+  build-depends:       array, base, bytestring, flaw-base, flaw-glsl, flaw-graphics, flaw-math, flaw-sl, ghcjs-base, ghcjs-dom, mtl, primitive, text, template-haskell, transformers
   -- hs-source-dirs:      
   default-language:    Haskell2010

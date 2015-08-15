@@ -13,7 +13,7 @@ import Control.Concurrent.STM
 import Data.Char
 import Data.Maybe
 import qualified GHCJS.DOM.Element as DOM
-import GHCJS.Foreign
+import GHCJS.Foreign.Callback
 import GHCJS.Marshal
 import GHCJS.Types
 
@@ -39,26 +39,26 @@ initWebInput Web.Canvas
 	let addMouseEvent event = atomically $ writeTChan mouseChan event
 
 	-- register callbacks
-	keydownCallback <- syncCallback1 AlwaysRetain False $ \jsKeyCode -> do
+	keydownCallback <- syncCallback1 ThrowWouldBlock $ \jsKeyCode -> do
 		keyCode <- convertKeyCode jsKeyCode
 		addKeyboardEvent $ KeyDownEvent keyCode
-	keyupCallback <- syncCallback1 AlwaysRetain False $ \jsKeyCode -> do
+	keyupCallback <- syncCallback1 ThrowWouldBlock $ \jsKeyCode -> do
 		keyCode <- convertKeyCode jsKeyCode
 		addKeyboardEvent $ KeyUpEvent keyCode
-	keypressCallback <- syncCallback1 AlwaysRetain False $ \jsCharCode -> do
+	keypressCallback <- syncCallback1 ThrowWouldBlock $ \jsCharCode -> do
 		charCode <- convertCharCode jsCharCode
 		addKeyboardEvent $ CharEvent charCode
-	mousedownCallback <- syncCallback1 AlwaysRetain False $ \jsButton -> do
+	mousedownCallback <- syncCallback1 ThrowWouldBlock $ \jsButton -> do
 		button <- convertMouseButton jsButton
 		addMouseEvent $ MouseDownEvent button
-	mouseupCallback <- syncCallback1 AlwaysRetain False $ \jsButton -> do
+	mouseupCallback <- syncCallback1 ThrowWouldBlock $ \jsButton -> do
 		button <- convertMouseButton jsButton
 		addMouseEvent $ MouseUpEvent button
-	mousemoveCallback <- syncCallback2 AlwaysRetain False $ \jsX jsY -> do
+	mousemoveCallback <- syncCallback2 ThrowWouldBlock $ \jsX jsY -> do
 		maybeX <- fromJSRef jsX
 		maybeY <- fromJSRef jsY
 		addMouseEvent $ CursorMoveEvent (fromJust maybeX) (fromJust maybeY)
-	mousewheelCallback <- syncCallback1 AlwaysRetain False $ \jsZ -> do
+	mousewheelCallback <- syncCallback1 ThrowWouldBlock $ \jsZ -> do
 		maybeZ <- fromJSRef jsZ
 		addMouseEvent $ RawMouseMoveEvent 0 0 $ fromJust maybeZ
 
@@ -143,11 +143,11 @@ foreign import javascript unsafe " \
 	\ }, false); \
 	\ " js_registerEvents
 	:: JSRef DOM.Element
-	-> JSFun (JSRef Int -> IO ())
-	-> JSFun (JSRef Int -> IO ())
-	-> JSFun (JSRef Int -> IO ())
-	-> JSFun (JSRef Int -> IO ())
-	-> JSFun (JSRef Int -> IO ())
-	-> JSFun (JSRef Int -> JSRef Int -> IO ())
-	-> JSFun (JSRef Float -> IO ())
+	-> Callback (JSRef Int -> IO ())
+	-> Callback (JSRef Int -> IO ())
+	-> Callback (JSRef Int -> IO ())
+	-> Callback (JSRef Int -> IO ())
+	-> Callback (JSRef Int -> IO ())
+	-> Callback (JSRef Int -> JSRef Int -> IO ())
+	-> Callback (JSRef Float -> IO ())
 	-> IO ()

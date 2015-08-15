@@ -368,6 +368,7 @@ module Flaw.Graphics.WebGL.FFI
 	, webgl_BROWSER_DEFAULT_WEBGL
 	) where
 
+import qualified Data.Text as T
 import qualified GHCJS.DOM.Element as DOM
 import GHCJS.Types
 
@@ -425,17 +426,17 @@ foreign import javascript unsafe "$1.disableVertexAttribArray($2)" js_disableVer
 foreign import javascript unsafe "$1.vertexAttribPointer($2, $3, $4, $5, $6, $7)" js_vertexAttribPointer :: JSRef JS_WebGLContext -> GLuint -> GLint -> GLenum -> GLboolean -> GLsizei -> GLintptr -> IO ()
 
 foreign import javascript unsafe "$1.createShader($2)" js_createShader :: JSRef JS_WebGLContext -> GLenum -> IO (JSRef JS_WebGLShader)
-foreign import javascript unsafe "$1.shaderSource($2, $3)" js_shaderSource :: JSRef JS_WebGLContext -> JSRef JS_WebGLShader -> JSString -> IO ()
+foreign import javascript unsafe "$1.shaderSource($2, $3)" js_shaderSource :: JSRef JS_WebGLContext -> JSRef JS_WebGLShader -> JSRef T.Text -> IO ()
 foreign import javascript unsafe "$1.compileShader($2)" js_compileShader :: JSRef JS_WebGLContext -> JSRef JS_WebGLShader -> IO ()
-foreign import javascript unsafe "$1.getShaderParameter($2, $3)" js_getShaderParameter :: JSRef JS_WebGLContext -> JSRef JS_WebGLShader -> GLenum -> IO (JSRef ())
-foreign import javascript unsafe "$1.getShaderInfoLog($2)" js_getShaderInfoLog :: JSRef JS_WebGLContext -> JSRef JS_WebGLShader -> IO JSString
+foreign import javascript unsafe "$1.getShaderParameter($2, $3)" js_getShaderParameter :: JSRef JS_WebGLContext -> JSRef JS_WebGLShader -> GLenum -> IO (JSRef a)
+foreign import javascript unsafe "$1.getShaderInfoLog($2)" js_getShaderInfoLog :: JSRef JS_WebGLContext -> JSRef JS_WebGLShader -> IO (JSRef T.Text)
 foreign import javascript unsafe "$1.createProgram()" js_createProgram :: JSRef JS_WebGLContext -> IO (JSRef JS_WebGLProgram)
 foreign import javascript unsafe "$1.attachShader($2, $3)" js_attachShader :: JSRef JS_WebGLContext -> JSRef JS_WebGLProgram -> JSRef JS_WebGLShader -> IO ()
-foreign import javascript unsafe "$1.bindAttribLocation($2, $3, $4)" js_bindAttribLocation :: JSRef JS_WebGLContext -> JSRef JS_WebGLProgram -> GLuint -> JSString -> IO ()
+foreign import javascript unsafe "$1.bindAttribLocation($2, $3, $4)" js_bindAttribLocation :: JSRef JS_WebGLContext -> JSRef JS_WebGLProgram -> GLuint -> JSRef T.Text -> IO ()
 foreign import javascript unsafe "$1.linkProgram($2)" js_linkProgram :: JSRef JS_WebGLContext -> JSRef JS_WebGLProgram -> IO ()
-foreign import javascript unsafe "$1.getProgramParameter($2, $3)" js_getProgramParameter :: JSRef JS_WebGLContext -> JSRef JS_WebGLProgram -> GLenum -> IO (JSRef ())
+foreign import javascript unsafe "$1.getProgramParameter($2, $3)" js_getProgramParameter :: JSRef JS_WebGLContext -> JSRef JS_WebGLProgram -> GLenum -> IO (JSRef a)
 foreign import javascript unsafe "$1.useProgram($2)" js_useProgram :: JSRef JS_WebGLContext -> JSRef JS_WebGLProgram -> IO ()
-foreign import javascript unsafe "$1.getUniformLocation($2, $3)" js_getUniformLocation :: JSRef JS_WebGLContext -> JSRef JS_WebGLProgram -> JSString -> IO (JSRef JS_WebGLUniformLocation)
+foreign import javascript unsafe "$1.getUniformLocation($2, $3)" js_getUniformLocation :: JSRef JS_WebGLContext -> JSRef JS_WebGLProgram -> JSRef T.Text -> IO (JSRef JS_WebGLUniformLocation)
 
 foreign import javascript unsafe "$1.uniform1f($2, $3)" js_uniform1f :: JSRef JS_WebGLContext -> JSRef JS_WebGLUniformLocation -> GLfloat -> IO ()
 foreign import javascript unsafe "$1.uniform1i($2, $3)" js_uniform1i :: JSRef JS_WebGLContext -> JSRef JS_WebGLUniformLocation -> GLint -> IO ()
@@ -464,7 +465,7 @@ foreign import javascript unsafe "$1.drawElementsInstanced($2, $3, $4, $5, $6)" 
 
 -- Helpers.
 
-foreign import javascript interruptible "var image=new Image();image.onload=function(){$c(image);};image.src=$1;" js_loadImage :: JSString -> IO (JSRef ())
+foreign import javascript interruptible "var image=new Image();image.onload=function(){$c(image);};image.src=$1;" js_loadImage :: JSRef T.Text -> IO (JSRef ())
 
 -- Constants.
 
