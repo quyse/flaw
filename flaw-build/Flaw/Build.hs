@@ -97,7 +97,7 @@ instance EmbedIO B.ByteString where
 
 instance EmbedIO BL.ByteString where
 	embedIOExp bytes = do
-		[| B.unsafePackAddressLen $(litE $ integerL $ fromIntegral $ BL.length bytes) $(litE $ stringPrimL $ BL.unpack bytes) |]
+		[| liftM BL.fromStrict $ B.unsafePackAddressLen $(litE $ integerL $ fromIntegral $ BL.length bytes) $(litE $ stringPrimL $ BL.unpack bytes) |]
 
 instance EmbedIO a => EmbedIO [a] where
 	embedIOExp a = [| sequence $(listE $ map embedIOExp a) |]
