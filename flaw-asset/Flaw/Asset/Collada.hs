@@ -518,6 +518,7 @@ animateNode ColladaNodeTag
 
 							ColladaMatrixTag _initialMat -> case path of
 
+								-- TODO: implement matrix paths
 								_ -> throwError $ "unknown path for matrix tag: " ++ path
 
 						Nothing -> return []
@@ -674,7 +675,7 @@ parseSkin (ColladaSkeleton nodes) skinElement = do
 	let unitMat = csUnitMat settings
 	let invUnitMat = csInvUnitMat settings
 
-	bindShapeTransform <- liftM (\v -> transformFromMatrix $ unitMat `mul` (constructStridable v 0 :: Mat4x4f) `mul` invUnitMat) (parseArray =<< getSingleChildWithTag "bind_shape_matrix" skinElement)
+	bindShapeTransform <- liftM (\v -> constructStridable v 0 :: Mat4x4f) (parseArray =<< getSingleChildWithTag "bind_shape_matrix" skinElement)
 
 	jointsElement <- getSingleChildWithTag "joints" skinElement
 	jointsInputs <- mapM parseInput =<< getChildrenWithTag "input" jointsElement
@@ -686,7 +687,7 @@ parseSkin (ColladaSkeleton nodes) skinElement = do
 	jointsJointInput <- findInput jointsInputs "JOINT" "joints"
 	jointsJointNames <- liftM fst $ parseSource $ citSourceElement jointsJointInput
 	jointsInvBindMatrixInput <- findInput jointsInputs "INV_BIND_MATRIX" "joints"
-	jointsInvBindTransforms <- liftM (V.map $ \mat -> transformFromMatrix $ unitMat `mul` (mat :: Mat4x4f) `mul` invUnitMat) $ parseStridables =<< (parseSource $ citSourceElement jointsInvBindMatrixInput)
+	jointsInvBindTransforms <- parseStridables =<< (parseSource $ citSourceElement jointsInvBindMatrixInput)
 
 	skinBones <- forM (V.zip jointsJointNames jointsInvBindTransforms) $ \(jointName, jointInvBindTransform) -> do
 		case V.findIndex (\ColladaSkeletonNode
@@ -696,7 +697,7 @@ parseSkin (ColladaSkeleton nodes) skinElement = do
 			} -> T.pack sid == jointName) nodes of
 			Just nodeIndex -> return ColladaBone
 				{ cboneSkeletonIndex = nodeIndex
-				, cboneInvBindTransform = combineTransform bindShapeTransform jointInvBindTransform
+				, cboneInvBindTransform = transformFromMatrix $ unitMat `mul` (jointInvBindTransform :: Mat4x4f) `mul` bindShapeTransform `mul` invUnitMat
 				}
 			Nothing -> throwError $ "missing skeleton node for joint " ++ T.unpack jointName
 
