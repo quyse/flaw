@@ -34,7 +34,6 @@ import GHCJS.Foreign.Callback
 import GHCJS.Marshal
 import GHCJS.Marshal.Pure
 import GHCJS.Types
-import Unsafe.Coerce
 
 import Flaw.Exception
 import Flaw.Graphics
@@ -176,7 +175,7 @@ instance Device WebGLDevice where
 				fail $ show ("failed to compile shader", (pFromJSRef jsLog) :: T.Text)
 
 		-- generate GLSL
-		glslProgram <- liftM generateProgram $ runProgram program
+		glslProgram <- liftM (generateProgram glslWebGLConfig) $ runProgram program
 		case glslProgram of
 			GlslVertexPixelProgram attributes uniforms samplers vertexShader pixelShader -> do
 				-- create program
@@ -785,8 +784,9 @@ loadWebGLTexture2DFromURL device@WebGLDevice
 convertToJsBuffer :: B.ByteString -> IO (JSRef ())
 convertToJsBuffer bytes = do
 	let (buf, off, len) = GHCJS.Buffer.fromByteString bytes
-	js_unwrapBuf (unsafeCoerce buf) off len
-foreign import javascript unsafe "new Uint8Array($1.buf, $2, $3)" js_unwrapBuf :: JSRef a -> Int -> Int -> IO (JSRef ())
+	r <- js_unwrapBuf buf off len
+	return r
+foreign import javascript unsafe "$r = new Uint8Array($1.buf, $2, $3)" js_unwrapBuf :: GHCJS.Buffer.Buffer -> Int -> Int -> IO (JSRef ())
 
 instance Eq (VertexBufferId WebGLDevice) where
 	WebGLVertexBufferId { webglVertexBufferId = a } == WebGLVertexBufferId { webglVertexBufferId = b } = a == b

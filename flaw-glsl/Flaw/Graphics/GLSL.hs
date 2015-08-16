@@ -7,7 +7,9 @@ License: MIT
 {-# LANGUAGE GADTs, OverloadedStrings, TypeFamilies #-}
 
 module Flaw.Graphics.GLSL
-	( GlslAttribute(..)
+	( GlslConfig(..)
+	, glslWebGLConfig
+	, GlslAttribute(..)
 	, GlslUniform(..)
 	, GlslSampler(..)
 	, GlslProgram(..)
@@ -23,6 +25,16 @@ import Data.Text.Lazy.Builder
 
 import Flaw.Graphics.Program.Internal
 import qualified Flaw.Graphics.Program.SL as SL
+
+-- | GLSL config for various versions of GLSL.
+data GlslConfig = GlslConfig
+	{ glslConfigForceFloatAttributes :: !Bool
+	}
+
+glslWebGLConfig :: GlslConfig
+glslWebGLConfig = GlslConfig
+	{ glslConfigForceFloatAttributes = True
+	}
 
 -- | GLSL input or output.
 data GlslVar = GlslVar
@@ -55,8 +67,8 @@ data GlslProgram
 	deriving Show
 
 -- | Generate shader programs in GLSL.
-generateProgram :: State -> GlslProgram
-generateProgram state = case SL.programInfo state of
+generateProgram :: GlslConfig -> State -> GlslProgram
+generateProgram config state = case SL.programInfo state of
 	SL.VertexPixelProgramInfo vsInfo psInfo -> let
 		(_, attributes, vsUniforms, vsSamplers, _vsTargets) = vsInfo
 		(psTemps, _, psUniforms, psSamplers, _psTargets) = psInfo
@@ -101,21 +113,22 @@ generateProgram state = case SL.programInfo state of
 			}
 		samplers = map (programSampler . head) $ group $ sort $ vsSamplers ++ psSamplers
 
-		vs = glslShader VertexStage vsInfo attributeInputs interpolants $ map tempIndex interpolantTemps
-		ps = glslShader PixelStage psInfo [] interpolants []
+		vs = glslShader config VertexStage vsInfo attributeInputs interpolants $ map tempIndex interpolantTemps
+		ps = glslShader config PixelStage psInfo [] interpolants []
 
 		in GlslVertexPixelProgram as uniforms samplers vs ps
 
-glslShader :: Stage -> SL.ShaderInfo -> [GlslVar] -> [GlslVar] -> [Int] -> GlslShader
-glslShader stage (temps, _, uniforms, samplers, targets) attributes varyings interpolants = GlslShader $ TL.toStrict $ toLazyText source where
+glslShader :: GlslConfig -> Stage -> SL.ShaderInfo -> [GlslVar] -> [GlslVar] -> [Int] -> GlslShader
+glslShader config stage (temps, _, uniforms, samplers, targets) attributes varyings interpolants = GlslShader $ TL.toStrict $ toLazyText source where
 	source = headerSource <> attributesSource <> varyingsSource <> uniformsSource <> samplersSource <> codeSource
 	headerSource = "#ifdef GL_ES\nprecision highp float;\n#endif\n"
 	attributesSource = foldr mappend "" $ map attributeSource attributes
 	varyingsSource = foldr mappend "" $ map varyingSource varyings
+	attributeValueTypeSource = if glslConfigForceFloatAttributes config then valueTypeSource . forceFloatType else valueTypeSource
 	attributeSource GlslVar
 		{ glslVarName = name
 		, glslVarType = t
-		} = "attribute " <> valueTypeSource t <> " " <> name <> ";\n"
+		} = "attribute " <> attributeValueTypeSource t <> " " <> name <> ";\n"
 	varyingSource GlslVar
 		{ glslVarName = name
 		, glslVarType = t
@@ -129,7 +142,15 @@ glslShader stage (temps, _, uniforms, samplers, targets) attributes varyings int
 		, tempNode = node
 		, tempStage = ts
 		, tempType = t
-		} = "\t" <> valueTypeSource t <> " " <> tempName i <> " = " <> (if ts == stage then nodeSource node else interpolantName i) <> ";\n"
+		} = let
+		tempNodeSource node = case node of
+			AttributeNode Attribute
+				{ attributeValueType = t
+				} -> nodeSource $
+				if glslConfigForceFloatAttributes config && t /= forceFloatType t then CastNode (forceFloatType t) t node
+				else node
+			_ -> nodeSource node
+		in "\t" <> valueTypeSource t <> " " <> tempName i <> " = " <> (if ts == stage then tempNodeSource node else interpolantName i) <> ";\n"
 	interpolantsSource = foldr mappend mempty $ map interpolantSource interpolants
 	interpolantSource i = "\t" <> interpolantName i <> " = " <> tempName i <> ";\n"
 	targetsSource = foldr mappend mempty $ map targetSource targets
@@ -147,6 +168,20 @@ valueTypeSource vt = case vt of
 			scalarShortTypeSource st <> "mat" <> dimensionSource d1
 		else
 			scalarShortTypeSource st <> "mat" <> dimensionSource d1 <> "x" <> dimensionSource d2
+
+forceFloatType :: ValueType -> ValueType
+forceFloatType vt = case vt of
+	ScalarValueType st -> ScalarValueType $ forceFloatScalarType st
+	VectorValueType d st -> VectorValueType d $ forceFloatScalarType st
+	MatrixValueType d1 d2 st -> MatrixValueType d1 d2 $ forceFloatScalarType st
+
+forceFloatScalarType :: ScalarType -> ScalarType
+forceFloatScalarType st = case st of
+	ScalarFloat -> ScalarFloat
+	ScalarDouble -> ScalarDouble
+	ScalarInt -> ScalarFloat
+	ScalarUint -> ScalarFloat
+	ScalarBool -> ScalarFloat
 
 scalarTypeSource :: ScalarType -> Builder
 scalarTypeSource st = case st of
