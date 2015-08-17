@@ -15,6 +15,7 @@ module Flaw.Graphics.WebGL
 	, loadWebGLTexture2DFromURL
 	) where
 
+import Control.Exception
 import Control.Concurrent.MVar
 import Control.Monad
 import Data.Array.IO as A
@@ -49,8 +50,8 @@ instance System WebGLSystem where
 	data DeviceId WebGLSystem
 	data DisplayId WebGLSystem
 	data DisplayModeId WebGLSystem
-	getInstalledDevices _ = fail "not implemented"
-	createDisplayMode _system _displayId _width _height = fail "not implemented"
+	getInstalledDevices _ = throwIO $ DescribeFirstException "not implemented"
+	createDisplayMode _system _displayId _width _height = throwIO $ DescribeFirstException "not implemented"
 
 -- | Device.
 data WebGLDevice = WebGLDevice
@@ -113,21 +114,21 @@ instance Device WebGLDevice where
 		, webglUniformBufferPtr = undefined
 		}
 
-	createDeferredContext _ = fail "not implemented"
+	createDeferredContext _ = throwIO $ DescribeFirstException "not implemented"
 
-	createStaticTexture _ _ = fail "not implemented"
+	createStaticTexture _ _ _ = throwIO $ DescribeFirstException "not implemented"
 
 	createSamplerState _device _samplerInfo = describeException "failed to create WebGL sampler state" $ do
 		-- TODO
 		return (WebGLSamplerStateId, undefined)
 
-	createReadableRenderTarget _ _ _ _ = fail "not implemented"
+	createReadableRenderTarget _ _ _ _ = throwIO $ DescribeFirstException "not implemented"
 
-	createDepthStencilTarget _ _ _ = fail "not implemented"
+	createDepthStencilTarget _ _ _ = throwIO $ DescribeFirstException "not implemented"
 
-	createReadableDepthStencilTarget _ _ _ = fail "not implemented"
+	createReadableDepthStencilTarget _ _ _ = throwIO $ DescribeFirstException "not implemented"
 
-	createFrameBuffer _ _ _ = fail "not implemented"
+	createFrameBuffer _ _ _ = throwIO $ DescribeFirstException "not implemented"
 
 	createStaticVertexBuffer device@WebGLDevice
 		{ webglDeviceContext = jsContext
@@ -172,7 +173,7 @@ instance Device WebGLDevice where
 			else do
 				jsLog <- js_getShaderInfoLog jsContext jsShader
 				putStrLn $ T.unpack source
-				fail $ show ("failed to compile shader", (pFromJSRef jsLog) :: T.Text)
+				throwIO $ DescribeFirstException ("failed to compile shader", (pFromJSRef jsLog) :: T.Text)
 
 		-- generate GLSL
 		glslProgram <- liftM (generateProgram glslWebGLConfig) $ runProgram program
@@ -196,7 +197,7 @@ instance Device WebGLDevice where
 				js_linkProgram jsContext jsProgram
 				jsStatus <- js_getProgramParameter jsContext jsProgram webgl_LINK_STATUS
 				if pFromJSRef jsStatus then return ()
-				else fail "failed to link program"
+				else throwIO $ DescribeFirstException "failed to link program"
 
 				-- set as current
 				js_useProgram jsContext jsProgram
@@ -499,7 +500,7 @@ data WebGLPresenter = WebGLPresenter
 	}
 
 instance Presenter WebGLPresenter WebGLSystem WebGLContext WebGLDevice where
-	setPresenterMode _presenter _maybeDisplayMode = fail "not implemented"
+	setPresenterMode _presenter _maybeDisplayMode = throwIO $ DescribeFirstException "not implemented"
 
 	presenterRender WebGLPresenter
 		{ webglPresenterCanvas = canvas
@@ -549,7 +550,7 @@ webglInit canvas needDepth = do
 	-- get context
 	jsCanvas <- toJSRef canvas
 	jsContext <- js_getWebGLContext jsCanvas needDepth
-	if isNull jsContext then fail "cannot get WebGL context"
+	if isNull jsContext then throwIO $ DescribeFirstException "cannot get WebGL context"
 	else return ()
 	-- create device
 	createIdRef <- newIORef 1
