@@ -809,7 +809,7 @@ byteStringToJsBuffer bytes = do
 	return r
 foreign import javascript unsafe "$r = new Uint8Array($1.buf, $2, $3)" js_unwrapBuf :: GHCJS.Buffer.Buffer -> Int -> Int -> IO (JSRef ())
 
-foreign import javascript unsafe "$r = $1.f3.slice($1_2, $1_2 + $2)" js_ptrToFloat32Array :: Ptr () -> Int -> IO (JSRef ())
+foreign import javascript unsafe "$r = $1.f3.subarray($1_2, $1_2 + $2)" js_ptrToFloat32Array :: Ptr () -> Int -> IO (JSRef ())
 
 instance Eq (VertexBufferId WebGLDevice) where
 	WebGLVertexBufferId { webglVertexBufferId = a } == WebGLVertexBufferId { webglVertexBufferId = b } = a == b
