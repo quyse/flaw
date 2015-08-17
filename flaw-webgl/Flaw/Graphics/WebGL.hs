@@ -136,7 +136,7 @@ instance Device WebGLDevice where
 		bufferId <- webglAllocateId device
 		jsBuffer <- js_createBuffer jsContext
 		js_bindBuffer jsContext webgl_ARRAY_BUFFER jsBuffer
-		jsDataBuffer <- convertToJsBuffer bytes
+		jsDataBuffer <- byteStringToJsBuffer bytes
 		js_bufferData jsContext webgl_ARRAY_BUFFER jsDataBuffer webgl_STATIC_DRAW
 		return (WebGLVertexBufferId
 			{ webglVertexBufferId = bufferId
@@ -150,7 +150,7 @@ instance Device WebGLDevice where
 		bufferId <- webglAllocateId device
 		jsBuffer <- js_createBuffer jsContext
 		js_bindBuffer jsContext webgl_ELEMENT_ARRAY_BUFFER jsBuffer
-		jsDataBuffer <- convertToJsBuffer bytes
+		jsDataBuffer <- byteStringToJsBuffer bytes
 		js_bufferData jsContext webgl_ELEMENT_ARRAY_BUFFER jsDataBuffer webgl_STATIC_DRAW
 		let format = if is32Bit then webgl_UNSIGNED_INT else webgl_UNSIGNED_SHORT
 		return (WebGLIndexBufferId
@@ -782,8 +782,8 @@ loadWebGLTexture2DFromURL device@WebGLDevice
 		, webglTextureTexture = jsTexture
 		}, return ())
 
-convertToJsBuffer :: B.ByteString -> IO (JSRef ())
-convertToJsBuffer bytes = do
+byteStringToJsBuffer :: B.ByteString -> IO (JSRef ())
+byteStringToJsBuffer bytes = do
 	let (buf, off, len) = GHCJS.Buffer.fromByteString bytes
 	r <- js_unwrapBuf buf off len
 	return r
