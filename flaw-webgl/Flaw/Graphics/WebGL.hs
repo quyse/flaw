@@ -699,53 +699,30 @@ webglUpdateContext WebGLContext
 		, webglUniformInfo = Uniform
 			{ uniformSlot = slot
 			, uniformOffset = offset
-			--, uniformSize = size -- TODO arrays
+			, uniformSize = size
 			, uniformType = t
 			}
 		} -> do
 		WebGLUniformBufferId
 			{ webglUniformBufferPtr = foreignPtr
 			} <- readArray desiredUniformBuffersArray slot
+		let count = if size > 0 then size else 1
 		withForeignPtr foreignPtr $ \bufferPtr -> case t of
-			ScalarValueType ScalarFloat -> js_uniform1f jsContext jsLocation =<< peekByteOff bufferPtr offset
-			ScalarValueType ScalarInt -> js_uniform1i jsContext jsLocation =<< peekByteOff bufferPtr offset
+			ScalarValueType ScalarFloat -> do
+				js_uniform1fv jsContext jsLocation =<< js_ptrToFloat32Array (bufferPtr `plusPtr` offset) count
+			ScalarValueType ScalarInt -> do
+				js_uniform1iv jsContext jsLocation =<< js_ptrToFloat32Array (bufferPtr `plusPtr` offset) count
 			VectorValueType Dimension1 ScalarFloat -> do
-				a0 <- peekByteOff bufferPtr $ offset + 0 * sizeOf (undefined :: Float)
-				js_uniform1fv jsContext jsLocation a0
+				js_uniform1fv jsContext jsLocation =<< js_ptrToFloat32Array (bufferPtr `plusPtr` offset) count
 			VectorValueType Dimension2 ScalarFloat -> do
-				a0 <- peekByteOff bufferPtr $ offset + 0 * sizeOf (undefined :: Float)
-				a1 <- peekByteOff bufferPtr $ offset + 1 * sizeOf (undefined :: Float)
-				js_uniform2fv jsContext jsLocation a0 a1
+				js_uniform2fv jsContext jsLocation =<< js_ptrToFloat32Array (bufferPtr `plusPtr` offset) (count * 2)
 			VectorValueType Dimension3 ScalarFloat -> do
-				a0 <- peekByteOff bufferPtr $ offset + 0 * sizeOf (undefined :: Float)
-				a1 <- peekByteOff bufferPtr $ offset + 1 * sizeOf (undefined :: Float)
-				a2 <- peekByteOff bufferPtr $ offset + 2 * sizeOf (undefined :: Float)
-				js_uniform3fv jsContext jsLocation a0 a1 a2
+				js_uniform3fv jsContext jsLocation =<< js_ptrToFloat32Array (bufferPtr `plusPtr` offset) (count * 3)
 			VectorValueType Dimension4 ScalarFloat -> do
-				a0 <- peekByteOff bufferPtr $ offset + 0 * sizeOf (undefined :: Float)
-				a1 <- peekByteOff bufferPtr $ offset + 1 * sizeOf (undefined :: Float)
-				a2 <- peekByteOff bufferPtr $ offset + 2 * sizeOf (undefined :: Float)
-				a3 <- peekByteOff bufferPtr $ offset + 3 * sizeOf (undefined :: Float)
-				js_uniform4fv jsContext jsLocation a0 a1 a2 a3
+				js_uniform4fv jsContext jsLocation =<< js_ptrToFloat32Array (bufferPtr `plusPtr` offset) (count * 4)
 			MatrixValueType Dimension4 Dimension4 ScalarFloat -> do
-				a00 <- peekByteOff bufferPtr $ offset + 0 * sizeOf (undefined :: Float)
-				a10 <- peekByteOff bufferPtr $ offset + 1 * sizeOf (undefined :: Float)
-				a20 <- peekByteOff bufferPtr $ offset + 2 * sizeOf (undefined :: Float)
-				a30 <- peekByteOff bufferPtr $ offset + 3 * sizeOf (undefined :: Float)
-				a01 <- peekByteOff bufferPtr $ offset + 4 * sizeOf (undefined :: Float)
-				a11 <- peekByteOff bufferPtr $ offset + 5 * sizeOf (undefined :: Float)
-				a21 <- peekByteOff bufferPtr $ offset + 6 * sizeOf (undefined :: Float)
-				a31 <- peekByteOff bufferPtr $ offset + 7 * sizeOf (undefined :: Float)
-				a02 <- peekByteOff bufferPtr $ offset + 8 * sizeOf (undefined :: Float)
-				a12 <- peekByteOff bufferPtr $ offset + 9 * sizeOf (undefined :: Float)
-				a22 <- peekByteOff bufferPtr $ offset + 10 * sizeOf (undefined :: Float)
-				a32 <- peekByteOff bufferPtr $ offset + 11 * sizeOf (undefined :: Float)
-				a03 <- peekByteOff bufferPtr $ offset + 12 * sizeOf (undefined :: Float)
-				a13 <- peekByteOff bufferPtr $ offset + 13 * sizeOf (undefined :: Float)
-				a23 <- peekByteOff bufferPtr $ offset + 14 * sizeOf (undefined :: Float)
-				a33 <- peekByteOff bufferPtr $ offset + 15 * sizeOf (undefined :: Float)
-				js_uniformMatrix4fv jsContext jsLocation a00 a10 a20 a30 a01 a11 a21 a31 a02 a12 a22 a32 a03 a13 a23 a33
-			_ -> return ()
+				js_uniformMatrix4fv jsContext jsLocation =<< js_ptrToFloat32Array (bufferPtr `plusPtr` offset) (count * 16)
+			_ -> throwIO $ DescribeFirstException ("wrong WebGL uniform type", t)
 
 	-- uniform buffers
 	arraySetup actualUniformBuffersArray desiredUniformBuffersArray $ \desiredUniformBuffers -> do
@@ -788,14 +765,24 @@ webglUpdateContext WebGLContext
 			, attributeType = at
 			}, i) -> do
 			js_enableVertexAttribArray jsContext i
-			let (s, t) = case at of
-				ATFloat32 -> (1, webgl_FLOAT)
-				ATVec1 ATFloat32 -> (1, webgl_FLOAT)
-				ATVec2 ATFloat32 -> (2, webgl_FLOAT)
-				ATVec3 ATFloat32 -> (3, webgl_FLOAT)
-				ATVec4 ATFloat32 -> (4, webgl_FLOAT)
-				_ -> undefined
-			js_vertexAttribPointer jsContext i s t False stride offset
+			let normalized n = case n of
+				NonNormalized -> False
+				Normalized -> True
+			let stn q = case q of
+				ATFloat32 -> (1, webgl_FLOAT, False)
+				ATInt32 n -> (1, webgl_INT, normalized n)
+				ATInt16 n -> (1, webgl_SHORT, normalized n)
+				ATInt8 n -> (1, webgl_BYTE, normalized n)
+				ATUint32 n -> (1, webgl_UNSIGNED_INT, normalized n)
+				ATUint16 n -> (1, webgl_UNSIGNED_SHORT, normalized n)
+				ATUint8 n -> (1, webgl_UNSIGNED_BYTE, normalized n)
+				ATVec1 a -> let (_, t, n) = stn a in (1, t, n)
+				ATVec2 a -> let (_, t, n) = stn a in (2, t, n)
+				ATVec3 a -> let (_, t, n) = stn a in (3, t, n)
+				ATVec4 a -> let (_, t, n) = stn a in (4, t, n)
+				_ -> error $ show ("wrong WebGL attribute type", at)
+			let (aSize, aType, aNormalized) = stn at
+			js_vertexAttribPointer jsContext i aSize aType aNormalized stride offset
 
 loadWebGLTexture2DFromURL :: WebGLDevice -> T.Text -> IO (TextureId WebGLDevice, IO ())
 loadWebGLTexture2DFromURL device@WebGLDevice
@@ -821,6 +808,8 @@ byteStringToJsBuffer bytes = do
 	r <- js_unwrapBuf buf off len
 	return r
 foreign import javascript unsafe "$r = new Uint8Array($1.buf, $2, $3)" js_unwrapBuf :: GHCJS.Buffer.Buffer -> Int -> Int -> IO (JSRef ())
+
+foreign import javascript unsafe "$r = $1.f3.slice($1_2, $1_2 + $2)" js_ptrToFloat32Array :: Ptr () -> Int -> IO (JSRef ())
 
 instance Eq (VertexBufferId WebGLDevice) where
 	WebGLVertexBufferId { webglVertexBufferId = a } == WebGLVertexBufferId { webglVertexBufferId = b } = a == b

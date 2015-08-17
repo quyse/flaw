@@ -60,6 +60,7 @@ module Flaw.Graphics.WebGL.FFI
 	, js_uniform3fv
 	, js_uniform4fv
 	, js_uniformMatrix4fv
+	, js_uniform1iv
 	, js_clearColor
 	, js_clearDepth
 	, js_clearStencil
@@ -443,17 +444,12 @@ foreign import javascript unsafe "$1.getUniformLocation($2, $3)" js_getUniformLo
 
 foreign import javascript unsafe "$1.uniform1f($2, $3)" js_uniform1f :: JSRef JS_WebGLContext -> JSRef JS_WebGLUniformLocation -> GLfloat -> IO ()
 foreign import javascript unsafe "$1.uniform1i($2, $3)" js_uniform1i :: JSRef JS_WebGLContext -> JSRef JS_WebGLUniformLocation -> GLint -> IO ()
-foreign import javascript unsafe "$1.uniform1fv($2, [$3])" js_uniform1fv :: JSRef JS_WebGLContext -> JSRef JS_WebGLUniformLocation -> GLfloat -> IO ()
-foreign import javascript unsafe "$1.uniform2fv($2, [$3, $4])" js_uniform2fv :: JSRef JS_WebGLContext -> JSRef JS_WebGLUniformLocation -> GLfloat -> GLfloat -> IO ()
-foreign import javascript unsafe "$1.uniform3fv($2, [$3, $4, $5])" js_uniform3fv :: JSRef JS_WebGLContext -> JSRef JS_WebGLUniformLocation -> GLfloat -> GLfloat -> GLfloat -> IO ()
-foreign import javascript unsafe "$1.uniform4fv($2, [$3, $4, $5, $6])" js_uniform4fv :: JSRef JS_WebGLContext -> JSRef JS_WebGLUniformLocation -> GLfloat -> GLfloat -> GLfloat -> GLfloat -> IO ()
-foreign import javascript unsafe "$1.uniformMatrix4fv($2, false, [$3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18])" js_uniformMatrix4fv
-	:: JSRef JS_WebGLContext -> JSRef JS_WebGLUniformLocation
-	-> GLfloat -> GLfloat -> GLfloat -> GLfloat
-	-> GLfloat -> GLfloat -> GLfloat -> GLfloat
-	-> GLfloat -> GLfloat -> GLfloat -> GLfloat
-	-> GLfloat -> GLfloat -> GLfloat -> GLfloat
-	-> IO ()
+foreign import javascript unsafe "$1.uniform1fv($2, $3)" js_uniform1fv :: JSRef JS_WebGLContext -> JSRef JS_WebGLUniformLocation -> JSRef () -> IO ()
+foreign import javascript unsafe "$1.uniform2fv($2, $3)" js_uniform2fv :: JSRef JS_WebGLContext -> JSRef JS_WebGLUniformLocation -> JSRef () -> IO ()
+foreign import javascript unsafe "$1.uniform3fv($2, $3)" js_uniform3fv :: JSRef JS_WebGLContext -> JSRef JS_WebGLUniformLocation -> JSRef () -> IO ()
+foreign import javascript unsafe "$1.uniform4fv($2, $3)" js_uniform4fv :: JSRef JS_WebGLContext -> JSRef JS_WebGLUniformLocation -> JSRef () -> IO ()
+foreign import javascript unsafe "$1.uniformMatrix4fv($2, false, $3)" js_uniformMatrix4fv :: JSRef JS_WebGLContext -> JSRef JS_WebGLUniformLocation -> JSRef () -> IO ()
+foreign import javascript unsafe "$1.uniform1iv($2, $3)" js_uniform1iv :: JSRef JS_WebGLContext -> JSRef JS_WebGLUniformLocation -> JSRef () -> IO ()
 
 foreign import javascript unsafe "$1.clearColor($2, $3, $4, $5)" js_clearColor :: JSRef JS_WebGLContext -> GLclampf -> GLclampf -> GLclampf -> GLclampf -> IO ()
 foreign import javascript unsafe "$1.clearDepth($2)" js_clearDepth :: JSRef JS_WebGLContext -> GLclampf -> IO ()
