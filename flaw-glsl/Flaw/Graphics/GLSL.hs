@@ -29,11 +29,13 @@ import qualified Flaw.Graphics.Program.SL as SL
 -- | GLSL config for various versions of GLSL.
 data GlslConfig = GlslConfig
 	{ glslConfigForceFloatAttributes :: !Bool
+	, glslConfigUnsignedUnsupported :: !Bool
 	}
 
 glslWebGLConfig :: GlslConfig
 glslWebGLConfig = GlslConfig
 	{ glslConfigForceFloatAttributes = True
+	, glslConfigUnsignedUnsupported = True
 	}
 
 -- | GLSL input or output.
@@ -143,14 +145,12 @@ glslShader config stage (temps, _, uniforms, samplers, targets) attributes varyi
 		, tempStage = ts
 		, tempType = t
 		} = let
-		tempNodeSource node = case node of
-			AttributeNode Attribute
-				{ attributeValueType = t
-				} -> nodeSource $
+		tempNodeSource = nodeSource $ case node of
+			AttributeNode _ ->
 				if glslConfigForceFloatAttributes config && t /= forceFloatType t then CastNode (forceFloatType t) t node
 				else node
-			_ -> nodeSource node
-		in "\t" <> valueTypeSource t <> " " <> tempName i <> " = " <> (if ts == stage then tempNodeSource node else interpolantName i) <> ";\n"
+			_ -> node
+		in "\t" <> valueTypeSource t <> " " <> tempName i <> " = " <> (if ts == stage then tempNodeSource else interpolantName i) <> ";\n"
 	interpolantsSource = foldr mappend mempty $ map interpolantSource interpolants
 	interpolantSource i = "\t" <> interpolantName i <> " = " <> tempName i <> ";\n"
 	targetsSource = foldr mappend mempty $ map targetSource targets
@@ -159,52 +159,195 @@ glslShader config stage (temps, _, uniforms, samplers, targets) attributes varyi
 		ColorTarget slot node -> targetColorName slot <> " = " <> nodeSource node <> ";\n"
 		DepthTarget node -> targetDepthName <> " = " <> nodeSource node <> ";\n"
 
-valueTypeSource :: ValueType -> Builder
-valueTypeSource vt = case vt of
-	ScalarValueType st -> scalarTypeSource st
-	VectorValueType d st -> scalarShortTypeSource st <> "vec" <> dimensionSource d
-	MatrixValueType d1 d2 st ->
-		if d1 == d2 then
-			scalarShortTypeSource st <> "mat" <> dimensionSource d1
-		else
-			scalarShortTypeSource st <> "mat" <> dimensionSource d1 <> "x" <> dimensionSource d2
+	valueTypeSource :: ValueType -> Builder
+	valueTypeSource vt = case vt of
+		ScalarValueType st -> scalarTypeSource st
+		VectorValueType d st -> scalarShortTypeSource st <> "vec" <> dimensionSource d
+		MatrixValueType d1 d2 st ->
+			if d1 == d2 then
+				scalarShortTypeSource st <> "mat" <> dimensionSource d1
+			else
+				scalarShortTypeSource st <> "mat" <> dimensionSource d1 <> "x" <> dimensionSource d2
 
-forceFloatType :: ValueType -> ValueType
-forceFloatType vt = case vt of
-	ScalarValueType st -> ScalarValueType $ forceFloatScalarType st
-	VectorValueType d st -> VectorValueType d $ forceFloatScalarType st
-	MatrixValueType d1 d2 st -> MatrixValueType d1 d2 $ forceFloatScalarType st
+	forceFloatType vt = case vt of
+		ScalarValueType st -> ScalarValueType $ forceFloatScalarType st
+		VectorValueType d st -> VectorValueType d $ forceFloatScalarType st
+		MatrixValueType d1 d2 st -> MatrixValueType d1 d2 $ forceFloatScalarType st
 
-forceFloatScalarType :: ScalarType -> ScalarType
-forceFloatScalarType st = case st of
-	ScalarFloat -> ScalarFloat
-	ScalarDouble -> ScalarDouble
-	ScalarInt -> ScalarFloat
-	ScalarUint -> ScalarFloat
-	ScalarBool -> ScalarFloat
+	forceFloatScalarType st = case st of
+		ScalarFloat -> ScalarFloat
+		ScalarDouble -> ScalarDouble
+		ScalarInt -> ScalarFloat
+		ScalarUint -> ScalarFloat
+		ScalarBool -> ScalarFloat
 
-scalarTypeSource :: ScalarType -> Builder
-scalarTypeSource st = case st of
-	ScalarFloat -> "float"
-	ScalarDouble -> "double"
-	ScalarInt -> "int"
-	ScalarUint -> "uint"
-	ScalarBool -> "bool"
+	scalarTypeSource :: ScalarType -> Builder
+	scalarTypeSource st = case st of
+		ScalarFloat -> "float"
+		ScalarDouble -> "double"
+		ScalarInt -> "int"
+		ScalarUint -> if glslConfigUnsignedUnsupported config then "int" else "uint"
+		ScalarBool -> "bool"
 
-scalarShortTypeSource :: ScalarType -> Builder
-scalarShortTypeSource st = case st of
-	ScalarFloat -> ""
-	ScalarDouble -> "d"
-	ScalarInt -> "i"
-	ScalarUint -> "u"
-	ScalarBool -> "b"
+	scalarShortTypeSource :: ScalarType -> Builder
+	scalarShortTypeSource st = case st of
+		ScalarFloat -> ""
+		ScalarDouble -> "d"
+		ScalarInt -> "i"
+		ScalarUint -> if glslConfigUnsignedUnsupported config then "i" else "u"
+		ScalarBool -> "b"
 
-dimensionSource :: Dimension -> Builder
-dimensionSource d = case d of
-	Dimension1 -> "1"
-	Dimension2 -> "2"
-	Dimension3 -> "3"
-	Dimension4 -> "4"
+	dimensionSource :: Dimension -> Builder
+	dimensionSource d = case d of
+		Dimension1 -> "1"
+		Dimension2 -> "2"
+		Dimension3 -> "3"
+		Dimension4 -> "4"
+
+	uniformSource :: Uniform -> Builder
+	uniformSource Uniform
+		{ uniformSlot = slot
+		, uniformOffset = offset
+		, uniformSize = size
+		, uniformType = t
+		} = "uniform "
+		<> valueTypeSource t
+		<> " "
+		<> uniformName slot offset
+		<> (if size > 0 then "[" <> fromString (show size) <> "]" else mempty)
+		<> ";\n"
+
+	samplerSource :: Sampler -> Builder
+	samplerSource Sampler
+		{ samplerSlot = slot
+		, samplerDimension = dimension
+		, samplerSampleType = sampleType
+		} = "uniform " <> typeSource <> samplerDimensionSource <> " s" <> fromString (show slot) <> ";\n" where
+		typeSource = case sampleType of
+			ScalarValueType st -> scalarShortTypeSource st
+			VectorValueType _dim st -> scalarShortTypeSource st
+			MatrixValueType _dim1 _dim2 st -> scalarShortTypeSource st
+		samplerDimensionSource = case dimension of
+			Sampler1D -> "sampler1D"
+			Sampler2D -> "sampler2D"
+			Sampler3D -> "sampler3D"
+			SamplerCube -> "samplerCube"
+
+	nodeSource :: Node a -> Builder
+	nodeSource node = case node of
+		AttributeNode Attribute
+			{ attributeSlot = slot
+			, attributeOffset = offset
+			} -> attributeName slot offset
+		UniformNode Uniform
+			{ uniformSlot = slot
+			, uniformOffset = offset
+			} -> uniformName slot offset
+		TempNode i -> tempName i
+		ConstNode t v -> let
+			s = valueToShowList v
+			content = case t of
+				ScalarValueType _ -> head s
+				VectorValueType _ _ -> concat $ intersperse ", " s
+				MatrixValueType _ _ _ -> concat $ intersperse ", " s
+			in valueTypeSource t <> "(" <> fromString content <> ")"
+		IndexNode _ _ a b -> "(" <> nodeSource a <> ")[" <> nodeSource b <> "]"
+		AddNode _ a b -> binaryOpSource '+' a b
+		SubtractNode _ a b -> binaryOpSource '-' a b
+		MultiplyNode _ a b -> binaryOpSource '*' a b
+		DivideNode _ a b -> binaryOpSource '/' a b
+		RecipNode _ a -> func1Source "rcp" a
+		NegateNode _ a -> "-(" <> nodeSource a <> ")"
+		AbsNode _ a -> func1Source "abs" a
+		SignumNode _ a -> func1Source "sign" a
+		MinNode _ a b -> func2Source "min" a b
+		MaxNode _ a b -> func2Source "max" a b
+		PiNode t -> let
+			typedPi :: Floating a => Node a -> a
+			typedPi _ = pi
+			in nodeSource $ ConstNode t $ typedPi node
+		ExpNode _ a -> func1Source "exp" a
+		SqrtNode _ a -> func1Source "sqrt" a
+		LogNode _ a -> func1Source "log" a
+		PowNode _ a b -> func2Source "pow" a b
+		LogBaseNode t a b -> nodeSource $ DivideNode t (LogNode t a) (LogNode t b)
+		SinNode _ a -> func1Source "sin" a
+		TanNode _ a -> func1Source "tan" a
+		CosNode _ a -> func1Source "tan" a
+		AsinNode _ a -> func1Source "asin" a
+		AtanNode _ a -> func1Source "atan" a
+		AcosNode _ a -> func1Source "acos" a
+		SinhNode _ a -> func1Source "sinh" a
+		TanhNode _ a -> func1Source "tanh" a
+		CoshNode _ a -> func1Source "cosh" a
+		AsinhNode _ a -> func1Source "asinh" a
+		AtanhNode _ a -> func1Source "atanh" a
+		AcoshNode _ a -> func1Source "acosh" a
+		MulNode _ _ _ a b -> binaryOpSource '*' a b
+		DotNode _ _ a b -> func2Source "dot" a b
+		NormNode _ _ a -> func1Source "length" a
+		Norm2Node _ _ a -> func1Source "length2" a
+		NormalizeNode _ a -> func1Source "normalize" a
+		DdxNode _ a -> func1Source "ddx" a
+		DdyNode _ a -> func1Source "ddy" a
+		InstanceIdNode -> "sI"
+		ComponentNode _ _ c a -> "(" <> nodeSource a <> ")." <> singleton c
+		SwizzleNode _ _ s a ->  "(" <> nodeSource a <> ")." <> fromString s
+		SampleNode (SamplerNode Sampler
+			{ samplerSlot = slot
+			, samplerSampleType = sampleType
+			}) c -> "texture2D(s" <> fromString (show slot) <> ", " <> nodeSource c <> ")"
+			<> case sampleType of
+				ScalarValueType _ -> ".x"
+				VectorValueType dim _ -> case dim of
+					Dimension1 -> ".x"
+					Dimension2 -> ".xy"
+					Dimension3 -> ".xyz"
+					Dimension4 -> mempty
+				MatrixValueType _ _ _ -> mempty
+		CastNode _ t a -> valueTypeSource t <> "(" <> nodeSource a <> ")"
+		Combine2VecNode _ _ t a b -> func2Source (valueTypeSource t) a b
+		Combine3VecNode _ _ _ t a b c -> func3Source (valueTypeSource t) a b c
+		Combine4VecNode _ _ _ _ t a b c d -> func4Source (valueTypeSource t) a b c d
+
+	binaryOpSource :: Char -> Node a -> Node b -> Builder
+	binaryOpSource op a b = "(" <> nodeSource a <> ") " <> singleton op <> " (" <> nodeSource b <> ")"
+
+	func1Source :: Builder -> Node a -> Builder
+	func1Source func a = func
+		<> "("
+		<> nodeSource a
+		<> ")"
+
+	func2Source :: Builder -> Node a -> Node b -> Builder
+	func2Source func a b = func
+		<> "("
+		<> nodeSource a
+		<> ", "
+		<> nodeSource b
+		<> ")"
+
+	func3Source :: Builder -> Node a -> Node b -> Node c -> Builder
+	func3Source func a b c = func
+		<> "("
+		<> nodeSource a
+		<> ", "
+		<> nodeSource b
+		<> ", "
+		<> nodeSource c
+		<> ")"
+
+	func4Source :: Builder -> Node a -> Node b -> Node c -> Node d -> Builder
+	func4Source func a b c d = func
+		<> "("
+		<> nodeSource a
+		<> ", "
+		<> nodeSource b
+		<> ", "
+		<> nodeSource c
+		<> ", "
+		<> nodeSource d
+		<> ")"
 
 attributeInput :: Attribute -> GlslVar
 attributeInput Attribute
@@ -242,152 +385,5 @@ targetDepthName = "gl_FragDepth"
 uniformName :: Int -> Int -> Builder
 uniformName slot offset = "u" <> fromString (show slot) <> "_" <> fromString (show offset)
 
-uniformSource :: Uniform -> Builder
-uniformSource Uniform
-	{ uniformSlot = slot
-	, uniformOffset = offset
-	, uniformSize = size
-	, uniformType = t
-	} = source where
-	source = "uniform "
-		<> valueTypeSource t
-		<> " "
-		<> uniformName slot offset
-		<> (if size > 0 then "[" <> fromString (show size) <> "]" else mempty)
-		<> ";\n"
-
 samplerName :: Int -> Builder
 samplerName slot = "s" <> fromString (show slot)
-
-samplerSource :: Sampler -> Builder
-samplerSource Sampler
-	{ samplerSlot = slot
-	, samplerDimension = dimension
-	, samplerSampleType = sampleType
-	} = source where
-	typeSource = case sampleType of
-		ScalarValueType st -> scalarShortTypeSource st
-		VectorValueType _dim st -> scalarShortTypeSource st
-		MatrixValueType _dim1 _dim2 st -> scalarShortTypeSource st
-	samplerDimensionSource = case dimension of
-		Sampler1D -> "sampler1D"
-		Sampler2D -> "sampler2D"
-		Sampler3D -> "sampler3D"
-		SamplerCube -> "samplerCube"
-	source = "uniform " <> typeSource <> samplerDimensionSource <> " s" <> fromString (show slot) <> ";\n"
-
-nodeSource :: Node a -> Builder
-nodeSource node = case node of
-	AttributeNode Attribute
-		{ attributeSlot = slot
-		, attributeOffset = offset
-		} -> attributeName slot offset
-	UniformNode Uniform
-		{ uniformSlot = slot
-		, uniformOffset = offset
-		} -> uniformName slot offset
-	TempNode i -> tempName i
-	ConstNode t v -> let
-		s = valueToShowList v
-		content = case t of
-			ScalarValueType _ -> head s
-			VectorValueType _ _ -> concat $ intersperse ", " s
-			MatrixValueType _ _ _ -> concat $ intersperse ", " s
-		in valueTypeSource t <> "(" <> fromString content <> ")"
-	IndexNode _ _ a b -> "(" <> nodeSource a <> ")[" <> nodeSource b <> "]"
-	AddNode _ a b -> binaryOpSource '+' a b
-	SubtractNode _ a b -> binaryOpSource '-' a b
-	MultiplyNode _ a b -> binaryOpSource '*' a b
-	DivideNode _ a b -> binaryOpSource '/' a b
-	RecipNode _ a -> func1Source "rcp" a
-	NegateNode _ a -> "-(" <> nodeSource a <> ")"
-	AbsNode _ a -> func1Source "abs" a
-	SignumNode _ a -> func1Source "sign" a
-	MinNode _ a b -> func2Source "min" a b
-	MaxNode _ a b -> func2Source "max" a b
-	PiNode t -> let
-		typedPi :: Floating a => Node a -> a
-		typedPi _ = pi
-		in nodeSource $ ConstNode t $ typedPi node
-	ExpNode _ a -> func1Source "exp" a
-	SqrtNode _ a -> func1Source "sqrt" a
-	LogNode _ a -> func1Source "log" a
-	PowNode _ a b -> func2Source "pow" a b
-	LogBaseNode t a b -> nodeSource $ DivideNode t (LogNode t a) (LogNode t b)
-	SinNode _ a -> func1Source "sin" a
-	TanNode _ a -> func1Source "tan" a
-	CosNode _ a -> func1Source "tan" a
-	AsinNode _ a -> func1Source "asin" a
-	AtanNode _ a -> func1Source "atan" a
-	AcosNode _ a -> func1Source "acos" a
-	SinhNode _ a -> func1Source "sinh" a
-	TanhNode _ a -> func1Source "tanh" a
-	CoshNode _ a -> func1Source "cosh" a
-	AsinhNode _ a -> func1Source "asinh" a
-	AtanhNode _ a -> func1Source "atanh" a
-	AcoshNode _ a -> func1Source "acosh" a
-	MulNode _ _ _ a b -> binaryOpSource '*' a b
-	DotNode _ _ a b -> func2Source "dot" a b
-	NormNode _ _ a -> func1Source "length" a
-	Norm2Node _ _ a -> func1Source "length2" a
-	NormalizeNode _ a -> func1Source "normalize" a
-	DdxNode _ a -> func1Source "ddx" a
-	DdyNode _ a -> func1Source "ddy" a
-	InstanceIdNode -> "sI"
-	ComponentNode _ _ c a -> "(" <> nodeSource a <> ")." <> singleton c
-	SwizzleNode _ _ s a ->  "(" <> nodeSource a <> ")." <> fromString s
-	SampleNode (SamplerNode Sampler
-		{ samplerSlot = slot
-		, samplerSampleType = sampleType
-		}) c -> "texture2D(s" <> fromString (show slot) <> ", " <> nodeSource c <> ")"
-		<> case sampleType of
-			ScalarValueType _ -> ".x"
-			VectorValueType dim _ -> case dim of
-				Dimension1 -> ".x"
-				Dimension2 -> ".xy"
-				Dimension3 -> ".xyz"
-				Dimension4 -> mempty
-			MatrixValueType _ _ _ -> mempty
-	CastNode _ t a -> valueTypeSource t <> "(" <> nodeSource a <> ")"
-	Combine2VecNode _ _ t a b -> func2Source (valueTypeSource t) a b
-	Combine3VecNode _ _ _ t a b c -> func3Source (valueTypeSource t) a b c
-	Combine4VecNode _ _ _ _ t a b c d -> func4Source (valueTypeSource t) a b c d
-
-binaryOpSource :: Char -> Node a -> Node b -> Builder
-binaryOpSource op a b = "(" <> nodeSource a <> ") " <> singleton op <> " (" <> nodeSource b <> ")"
-
-func1Source :: Builder -> Node a -> Builder
-func1Source func a = func
-	<> "("
-	<> nodeSource a
-	<> ")"
-
-func2Source :: Builder -> Node a -> Node b -> Builder
-func2Source func a b = func
-	<> "("
-	<> nodeSource a
-	<> ", "
-	<> nodeSource b
-	<> ")"
-
-func3Source :: Builder -> Node a -> Node b -> Node c -> Builder
-func3Source func a b c = func
-	<> "("
-	<> nodeSource a
-	<> ", "
-	<> nodeSource b
-	<> ", "
-	<> nodeSource c
-	<> ")"
-
-func4Source :: Builder -> Node a -> Node b -> Node c -> Node d -> Builder
-func4Source func a b c d = func
-	<> "("
-	<> nodeSource a
-	<> ", "
-	<> nodeSource b
-	<> ", "
-	<> nodeSource c
-	<> ", "
-	<> nodeSource d
-	<> ")"
