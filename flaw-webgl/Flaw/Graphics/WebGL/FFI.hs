@@ -24,6 +24,7 @@ module Flaw.Graphics.WebGL.FFI
 	, GLboolean
 	, GLbitfield
 	, js_getWebGLContext
+	, js_getExtension
 	, js_frontFace
 	, js_cullFace
 	, js_enable
@@ -404,6 +405,8 @@ foreign import javascript unsafe " \
 	\ }; \
 	\ $r = $1.getContext('webgl',settings) || $1.getContext('experimental-webgl', settings); \
 	\" js_getWebGLContext :: JSRef DOM.Element -> Bool -> IO (JSRef JS_WebGLContext)
+
+foreign import javascript unsafe "$1.getExtension($2)" js_getExtension :: JSRef JS_WebGLContext -> JSRef T.Text -> IO (JSRef ())
 
 foreign import javascript unsafe "$1.frontFace($2)" js_frontFace :: JSRef JS_WebGLContext -> GLenum -> IO ()
 foreign import javascript unsafe "$1.cullFace($2)" js_cullFace :: JSRef JS_WebGLContext -> GLenum -> IO ()
