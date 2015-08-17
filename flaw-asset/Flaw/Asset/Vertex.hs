@@ -9,10 +9,11 @@ License: MIT
 module Flaw.Asset.Vertex
 	( ColladaVertex(..)
 	, VertexPNT(..)
-	, VertexPNTBW(..)
+	, VertexPNTWB(..)
 	) where
 
 import qualified Data.Vector as V
+import Data.Word
 
 import Flaw.Asset.Collada
 import Flaw.FFI
@@ -41,28 +42,28 @@ instance ColladaVertex VertexPNT where
 			, f_VertexPNT_texcoord = xy__ $ texcoords V.! i
 			}
 
-genStruct "VertexPNTBW"
+genStruct "VertexPNTWB"
 	[ ([t| Vec3f |], "position")
 	, ([t| Vec3f |], "normal")
 	, ([t| Vec2f |], "texcoord")
-	, ([t| Vec4i |], "bones")
 	, ([t| Vec4f |], "weights")
+	, ([t| Vec4 Word8 |], "bones")
 	]
 
-deriving instance Eq VertexPNTBW
-deriving instance Ord VertexPNTBW
+deriving instance Eq VertexPNTWB
+deriving instance Ord VertexPNTWB
 
-instance ColladaVertex VertexPNTBW where
+instance ColladaVertex VertexPNTWB where
 	createColladaVertices verticesData = do
 		positions <- cvdPositions verticesData
 		normals <- cvdNormals verticesData
 		texcoords <- cvdTexcoords verticesData
 		bones <- cvdBones verticesData
 		weights <- cvdWeights verticesData
-		return $ V.generate (cvdCount verticesData) $ \i -> VertexPNTBW
-			{ f_VertexPNTBW_position = positions V.! i
-			, f_VertexPNTBW_normal = normals V.! i
-			, f_VertexPNTBW_texcoord = xy__ $ texcoords V.! i
-			, f_VertexPNTBW_bones = bones V.! i
-			, f_VertexPNTBW_weights = weights V.! i
+		return $ V.generate (cvdCount verticesData) $ \i -> VertexPNTWB
+			{ f_VertexPNTWB_position = positions V.! i
+			, f_VertexPNTWB_normal = normals V.! i
+			, f_VertexPNTWB_texcoord = xy__ $ texcoords V.! i
+			, f_VertexPNTWB_bones = bones V.! i
+			, f_VertexPNTWB_weights = weights V.! i
 			}

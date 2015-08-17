@@ -45,6 +45,7 @@ import qualified Data.Vector.Generic as VG
 import qualified Data.Vector.Mutable as VM
 import qualified Data.Vector.Unboxed as VU
 import qualified Data.Vector.Unboxed.Mutable as VUM
+import Data.Word
 import qualified Text.XML.Light as XML
 
 import Flaw.Math
@@ -292,8 +293,8 @@ data ColladaVerticesData = ColladaVerticesData
 	, cvdPositions :: ColladaM (V.Vector Vec3f)
 	, cvdNormals :: ColladaM (V.Vector Vec3f)
 	, cvdTexcoords :: ColladaM (V.Vector Vec3f)
-	, cvdBones :: ColladaM (V.Vector Vec4i)
 	, cvdWeights :: ColladaM (V.Vector Vec4f)
+	, cvdBones :: ColladaM (V.Vector (Vec4 Word8))
 	}
 
 parseTriangles :: XML.Element -> ColladaM ColladaVerticesData
@@ -348,8 +349,8 @@ parseTriangles element = do
 		, cvdPositions = liftM (V.map (* vecFromScalar unit)) $ stream "VERTEX"
 		, cvdNormals = stream "NORMAL"
 		, cvdTexcoords = stream "TEXCOORD"
-		, cvdBones = return V.empty
 		, cvdWeights = return V.empty
+		, cvdBones = return V.empty
 		}
 
 parseMesh :: XML.Element -> ColladaM ColladaVerticesData
@@ -773,8 +774,8 @@ parseSkin (ColladaSkeleton nodes) skinElement = do
 	positionIndices <- cvdPositionIndices verticesData
 
 	return (verticesData
-		{ cvdBones = return $ V.generate (VU.length positionIndices) $ \i -> rawBones V.! (positionIndices VU.! i)
-		, cvdWeights = return $ V.generate (VU.length positionIndices) $ \i -> rawWeights V.! (positionIndices VU.! i)
+		{ cvdWeights = return $ V.generate (VU.length positionIndices) $ \i -> rawWeights V.! (positionIndices VU.! i)
+		, cvdBones = return $ V.generate (VU.length positionIndices) $ \i -> rawBones V.! (positionIndices VU.! i)
 		}, ColladaSkin
 		{ cskinBones = skinBones
 		})
