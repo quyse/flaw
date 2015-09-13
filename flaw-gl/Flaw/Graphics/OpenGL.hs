@@ -30,8 +30,8 @@ import Graphics.Rendering.OpenGL.Raw.ARB.UniformBufferObject
 import Graphics.Rendering.OpenGL.Raw.Core30
 import Graphics.Rendering.OpenGL.Raw.EXT.TextureCompressionS3TC
 import Graphics.Rendering.OpenGL.Raw.EXT.TextureSRGB
-import qualified Graphics.UI.SDL.Types as SDL
-import qualified Graphics.UI.SDL.Video as SDL
+import qualified SDL.Raw.Types as SDL
+import qualified SDL.Raw.Video as SDL
 
 import Flaw.Exception
 import Flaw.Graphics.Blend

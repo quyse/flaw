@@ -54,9 +54,6 @@ type AppInputManager = Win32InputManager
 
 #else
 
-import qualified Graphics.UI.SDL.Basic as SDL
-import qualified Graphics.UI.SDL.Enum as SDL
-
 import Flaw.Graphics
 import Flaw.Graphics.OpenGL
 import Flaw.Input.Sdl
@@ -107,10 +104,6 @@ initApp title width height needDepth = do
 	presenter <- book bk $ dx11CreatePresenter graphicsDevice window Nothing needDepth
 
 #else
-
-	_ <- book bk $ do
-		r <- SDL.init SDL.SDL_INIT_VIDEO
-		return (r, SDL.quit)
 
 	windowSystem <- book bk $ initSdlWindowSystem
 	window <- book bk $ createSdlWindow windowSystem title 0 0 width height

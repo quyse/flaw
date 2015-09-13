@@ -33,4 +33,4 @@ library
     if os(windows)
       build-depends:       flaw-dx11
     else
-      build-depends:       flaw-gl, sdl2
+      build-depends:       flaw-gl

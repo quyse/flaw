@@ -39,4 +39,4 @@ library
     else
       exposed-modules:
         Flaw.Input.Sdl
-      build-depends:       bytestring, sdl2, text
+      build-depends:       bytestring, sdl2 >= 2, text

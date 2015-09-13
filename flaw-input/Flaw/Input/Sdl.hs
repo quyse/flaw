@@ -15,8 +15,8 @@ import qualified Data.ByteString.Unsafe as B
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import Foreign.Marshal.Array
-import qualified Graphics.UI.SDL.Enum as SDL
-import qualified Graphics.UI.SDL.Types as SDL
+import qualified SDL.Raw.Enum as SDL
+import qualified SDL.Raw.Types as SDL
 
 import Flaw.Input.Basic
 import Flaw.Input.Keyboard

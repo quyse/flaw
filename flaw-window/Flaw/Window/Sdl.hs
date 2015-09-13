@@ -29,11 +29,12 @@ import Foreign.Marshal.Alloc
 import Foreign.Marshal.Utils
 import Foreign.Ptr
 import Foreign.Storable
-import qualified Graphics.UI.SDL.Enum as SDL
-import qualified Graphics.UI.SDL.Event as SDL
-import qualified Graphics.UI.SDL.Types as SDL
-import qualified Graphics.UI.SDL.Video as SDL
+import qualified SDL.Raw.Enum as SDL
+import qualified SDL.Raw.Event as SDL
+import qualified SDL.Raw.Types as SDL
+import qualified SDL.Raw.Video as SDL
 
+import Flaw.Book
 import Flaw.Sdl
 import Flaw.Window
 
@@ -65,6 +66,10 @@ instance Window SdlWindow where
 
 initSdlWindowSystem :: IO (SdlWindowSystem, IO ())
 initSdlWindowSystem = do
+
+	bk <- newBook
+
+	book bk initSdlVideo
 
 	windowsVar <- newTVarIO HashMap.empty
 
@@ -134,10 +139,12 @@ initSdlWindowSystem = do
 		, SDL.userEventData2 = nullPtr
 		} $ checkSdlError (== 1) . SDL.pushEvent
 
+	book bk $ return ((), quit)
+
 	return (SdlWindowSystem
 		{ swsWindows = windowsVar
 		, swsInvokeUserEventCode = invokeUserEventCode
-		}, quit)
+		}, freeBook bk)
 
 createSdlWindow :: SdlWindowSystem -> T.Text -> Int -> Int -> Int -> Int -> IO (SdlWindow, IO ())
 createSdlWindow ws@SdlWindowSystem
