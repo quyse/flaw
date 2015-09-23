@@ -60,9 +60,9 @@ data Dimension
 
 -- | Supported types in programs.
 data ValueType
-	= ScalarValueType ScalarType
-	| VectorValueType Dimension ScalarType
-	| MatrixValueType Dimension Dimension ScalarType
+	= ScalarValueType !ScalarType
+	| VectorValueType !Dimension !ScalarType
+	| MatrixValueType !Dimension !Dimension !ScalarType
 	deriving (Eq, Ord, Show)
 
 -- | Class of scalar types which can be used in program.
@@ -142,32 +142,32 @@ class OfValueType a => OfAttributeType a where
 data AttributeType
 	= ATFloat32
 	| ATFloat16
-	| ATInt32 Normalization
-	| ATInt16 Normalization
-	| ATInt8 Normalization
-	| ATUint32 Normalization
-	| ATUint16 Normalization
-	| ATUint8 Normalization
-	| ATVec1 AttributeType
-	| ATVec2 AttributeType
-	| ATVec3 AttributeType
-	| ATVec4 AttributeType
-	| ATMat1x1 AttributeType
-	| ATMat1x2 AttributeType
-	| ATMat1x3 AttributeType
-	| ATMat1x4 AttributeType
-	| ATMat2x1 AttributeType
-	| ATMat2x2 AttributeType
-	| ATMat2x3 AttributeType
-	| ATMat2x4 AttributeType
-	| ATMat3x1 AttributeType
-	| ATMat3x2 AttributeType
-	| ATMat3x3 AttributeType
-	| ATMat3x4 AttributeType
-	| ATMat4x1 AttributeType
-	| ATMat4x2 AttributeType
-	| ATMat4x3 AttributeType
-	| ATMat4x4 AttributeType
+	| ATInt32 !Normalization
+	| ATInt16 !Normalization
+	| ATInt8 !Normalization
+	| ATUint32 !Normalization
+	| ATUint16 !Normalization
+	| ATUint8 !Normalization
+	| ATVec1 !AttributeType
+	| ATVec2 !AttributeType
+	| ATVec3 !AttributeType
+	| ATVec4 !AttributeType
+	| ATMat1x1 !AttributeType
+	| ATMat1x2 !AttributeType
+	| ATMat1x3 !AttributeType
+	| ATMat1x4 !AttributeType
+	| ATMat2x1 !AttributeType
+	| ATMat2x2 !AttributeType
+	| ATMat2x3 !AttributeType
+	| ATMat2x4 !AttributeType
+	| ATMat3x1 !AttributeType
+	| ATMat3x2 !AttributeType
+	| ATMat3x3 !AttributeType
+	| ATMat3x4 !AttributeType
+	| ATMat4x1 !AttributeType
+	| ATMat4x2 !AttributeType
+	| ATMat4x3 !AttributeType
+	| ATMat4x4 !AttributeType
 	deriving (Eq, Ord, Show)
 
 -- | Normalization mode.
@@ -186,9 +186,9 @@ instance OfAttributeType Float where
 
 instance OfAttributeType Int where
 	data AttributeFormat Int
-		= AttributeInt32 Normalization
-		| AttributeInt16 Normalization
-		| AttributeInt8 Normalization
+		= AttributeInt32 !Normalization
+		| AttributeInt16 !Normalization
+		| AttributeInt8 !Normalization
 	attributeFormatToType f = case f of
 		AttributeInt32 n -> ATInt32 n
 		AttributeInt16 n -> ATInt16 n
@@ -196,9 +196,9 @@ instance OfAttributeType Int where
 
 instance OfAttributeType Word where
 	data AttributeFormat Word
-		= AttributeUint32 Normalization
-		| AttributeUint16 Normalization
-		| AttributeUint8 Normalization
+		= AttributeUint32 !Normalization
+		| AttributeUint16 !Normalization
+		| AttributeUint8 !Normalization
 	attributeFormatToType f = case f of
 		AttributeUint32 n -> ATUint32 n
 		AttributeUint16 n -> ATUint16 n
@@ -234,30 +234,30 @@ forM [(ci, cj) | ci <- ['1'..'4'], cj <- ['1'..'4']] $ \(ci, cj) -> do
 data State = State
 	{ stateStage :: Stage
 	, stateTemps :: [Temp]
-	, stateTempsCount :: Int
+	, stateTempsCount :: !Int
 	, stateTargets :: [Target]
 	} deriving Show
 
 data Attribute = Attribute
-	{ attributeSlot :: Int
-	, attributeOffset :: Int
-	, attributeDivisor :: Int
-	, attributeType :: AttributeType
-	, attributeValueType :: ValueType
+	{ attributeSlot :: !Int
+	, attributeOffset :: !Int
+	, attributeDivisor :: !Int
+	, attributeType :: !AttributeType
+	, attributeValueType :: !ValueType
 	} deriving (Eq, Ord, Show)
 
 data Uniform = Uniform
-	{ uniformSlot :: Int
-	, uniformOffset :: Int
-	, uniformSize :: Int
-	, uniformType :: ValueType
+	{ uniformSlot :: !Int
+	, uniformOffset :: !Int
+	, uniformSize :: !Int
+	, uniformType :: !ValueType
 	} deriving (Eq, Ord, Show)
 
 data Sampler = Sampler
-	{ samplerSlot :: Int
-	, samplerDimension :: SamplerDimension
-	, samplerSampleType :: ValueType
-	, samplerCoordsType :: ValueType
+	{ samplerSlot :: !Int
+	, samplerDimension :: !SamplerDimension
+	, samplerSampleType :: !ValueType
+	, samplerCoordsType :: !ValueType
 	} deriving (Eq, Ord, Show)
 
 data SamplerDimension
@@ -269,7 +269,7 @@ data SamplerDimension
 
 data Target
 	= PositionTarget (Node Vec4f)
-	| ColorTarget Int (Node Vec4f)
+	| ColorTarget !Int (Node Vec4f)
 	| DepthTarget (Node Float)
 	deriving Show
 
@@ -280,10 +280,10 @@ data Stage
 	deriving (Eq, Show)
 
 data Temp = forall a. OfValueType a => Temp
-	{ tempIndex :: Int
+	{ tempIndex :: !Int
 	, tempNode :: Node a
-	, tempStage :: Stage
-	, tempType :: ValueType
+	, tempStage :: !Stage
+	, tempType :: !ValueType
 	}
 deriving instance Show Temp
 
