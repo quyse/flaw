@@ -12,6 +12,7 @@ module Flaw.Graphics.GLSL
 	, GlslAttribute(..)
 	, GlslUniform(..)
 	, GlslSampler(..)
+	, GlslTarget(..)
 	, GlslProgram(..)
 	, GlslShader(..)
 	, generateProgram
@@ -30,12 +31,15 @@ import qualified Flaw.Graphics.Program.SL as SL
 data GlslConfig = GlslConfig
 	{ glslConfigForceFloatAttributes :: !Bool
 	, glslConfigUnsignedUnsupported :: !Bool
+	, glslConfigDeclareTargets :: !Bool
 	}
 
+-- | GLSL config for WebGL.
 glslWebGLConfig :: GlslConfig
 glslWebGLConfig = GlslConfig
 	{ glslConfigForceFloatAttributes = True
 	, glslConfigUnsignedUnsupported = True
+	, glslConfigDeclareTargets = False
 	}
 
 -- | GLSL input or output.
@@ -63,9 +67,14 @@ data GlslSampler = GlslSampler
 	, glslSamplerInfo :: Sampler
 	} deriving Show
 
+data GlslTarget = GlslTarget
+	{ glslTargetName :: T.Text
+	, glslTargetIndex :: !Int
+	} deriving Show
+
 -- | GLSL program.
 data GlslProgram
-	= GlslVertexPixelProgram [GlslAttribute] [GlslUniform] [GlslSampler] GlslShader GlslShader
+	= GlslVertexPixelProgram [GlslAttribute] [GlslUniform] [GlslSampler] [GlslTarget] GlslShader GlslShader
 	deriving Show
 
 -- | Generate shader programs in GLSL.
@@ -73,7 +82,7 @@ generateProgram :: GlslConfig -> State -> GlslProgram
 generateProgram config state = case SL.programInfo state of
 	SL.VertexPixelProgramInfo vsInfo psInfo -> let
 		(_, attributes, vsUniforms, vsSamplers, _vsTargets) = vsInfo
-		(psTemps, _, psUniforms, psSamplers, _psTargets) = psInfo
+		(psTemps, _, psUniforms, psSamplers, psTargets) = psInfo
 		as = map (\attribute@Attribute
 			{ attributeSlot = slot
 			, attributeOffset = offset
@@ -115,10 +124,18 @@ generateProgram config state = case SL.programInfo state of
 			}
 		samplers = map (programSampler . head) $ group $ sort $ vsSamplers ++ psSamplers
 
+		-- program targets
+		programTarget (ColorTarget i _node) = [GlslTarget
+			{ glslTargetName = TL.toStrict $ toLazyText $ targetColorName i
+			, glslTargetIndex = i
+			}]
+		programTarget _ = []
+		targets = if glslConfigDeclareTargets config then concat $ map programTarget psTargets else []
+
 		vs = glslShader config VertexStage vsInfo attributeInputs interpolants $ map tempIndex interpolantTemps
 		ps = glslShader config PixelStage psInfo [] interpolants []
 
-		in GlslVertexPixelProgram as uniforms samplers vs ps
+		in GlslVertexPixelProgram as uniforms samplers targets vs ps
 
 glslShader :: GlslConfig -> Stage -> SL.ShaderInfo -> [GlslVar] -> [GlslVar] -> [Int] -> GlslShader
 glslShader config stage (temps, _, uniforms, samplers, targets) attributes varyings interpolants = GlslShader $ TL.toStrict $ toLazyText source where

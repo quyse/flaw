@@ -17,17 +17,22 @@ module Flaw.Graphics.OpenGL
 
 import Control.Exception
 import Control.Monad
+import Data.Array.IO as A
+import qualified Data.ByteString as B
 import qualified Data.ByteString.Unsafe as B
+import Data.Coerce
+import Data.IORef
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import Foreign.C.String
+import Foreign.C.Types
 import Foreign.Marshal.Alloc
 import Foreign.Marshal.Utils
 import Foreign.Ptr
 import Foreign.Storable
 import Graphics.Rendering.OpenGL.Raw.ARB.TextureStorage
 import Graphics.Rendering.OpenGL.Raw.ARB.UniformBufferObject
-import Graphics.Rendering.OpenGL.Raw.Core30
+import Graphics.Rendering.OpenGL.Raw.Core31
 import Graphics.Rendering.OpenGL.Raw.EXT.TextureCompressionS3TC
 import Graphics.Rendering.OpenGL.Raw.EXT.TextureSRGB
 import qualified SDL.Raw.Types as SDL
@@ -36,6 +41,7 @@ import qualified SDL.Raw.Video as SDL
 import Flaw.Exception
 import Flaw.Graphics.Blend
 import Flaw.Graphics.Internal
+import Flaw.Graphics.Program.Internal
 import Flaw.Graphics.Texture
 import Flaw.Sdl
 import Flaw.Window.Sdl
@@ -88,9 +94,40 @@ instance System GlSystem where
 data GlContext = GlContext
 	{ glContextContext :: !SDL.GLContext
 	, glContextCaps :: !GlCaps
+	, glContextActualState :: GlContextState
+	, glContextDesiredState :: GlContextState
+	}
+
+data GlContextState = GlContextState
+	{ glContextStateFrameBuffer :: !(IORef (FrameBufferId GlDevice))
+	, glContextStateViewport :: !(IORef (Int, Int))
+	, glContextStateVertexBuffers :: !(IOArray Int (VertexBufferId GlDevice))
+	, glContextStateIndexBuffer :: !(IORef (IndexBufferId GlDevice))
+	, glContextStateUniformBuffers :: !(IOArray Int (UniformBufferId GlDevice))
+	, glContextStateSamplers :: !(IOArray Int (TextureId GlDevice, SamplerStateId GlDevice))
+	, glContextStateProgram :: !(IORef (ProgramId GlDevice))
+	, glContextStateAttributes :: !(IORef ([Attribute], VertexBufferId GlDevice))
+	, glContextStateDepthTestFunc :: !(IORef DepthTestFunc)
+	, glContextStateDepthWrite :: !(IORef Bool)
 	}
 
 type GlDevice = GlContext
+
+data GlAttributeBinding
+	= GlVertexArrayAttributeBinding !GLuint
+	| GlManualAttributeBinding
+		{ glAttributeBindingSlots :: !(V.Vector GlAttributeSlot)
+		}
+
+data GlAttributeSlot = GlAttributeSlot
+	{ glAttributeSlotElements :: !(V.Vector Attribute)
+	, glAttributeSlotDivisor :: !GLuint
+	}
+
+data GlUniform = GlUniform
+	{ glUniformLocation :: !GLint
+	, glUniformInfo :: !Uniform
+	}
 
 instance Device GlContext where
 	type DeferredContext GlContext = GlContext
@@ -99,18 +136,27 @@ instance Device GlContext where
 	newtype BlendStateId GlContext = GlBlendStateId BlendStateInfo
 	newtype RenderTargetId GlContext = GlRenderTargetId GLuint
 	newtype DepthStencilTargetId GlContext = GlDepthStencilTargetId GLuint
-	newtype FrameBufferId GlContext = GlFrameBufferId GLuint
-	data VertexBufferId GlContext = GlVertexBufferId GLuint Int
-	data IndexBufferId GlContext = GlIndexBufferId GLuint Int
-	newtype ProgramId GlContext = GlProgramId GLuint
-	data UniformBufferId GlContext = GlUniformBufferId GLuint Int
+	newtype FrameBufferId GlContext = GlFrameBufferId GLuint deriving Eq
+	data VertexBufferId GlContext = GlVertexBufferId !GLuint !Int
+	data IndexBufferId GlContext = GlIndexBufferId !GLuint !GLenum
+	data ProgramId GlContext
+		= GlProgramId
+			{ glProgramName :: !GLuint
+			, glProgramAttributeBinding :: !GlAttributeBinding
+			, glProgramUniforms :: !(V.Vector GlUniform)
+			}
+	data UniformBufferId GlContext
+		-- | Real uniform buffer: buffer name, size.
+		= GlUniformBufferId !GLuint !Int
+		-- | Emulated uniform buffer: bytestring ref, size.
+		| GlUniformMemoryBufferId !(IORef B.ByteString) !Int
 
 	nullTexture = GlTextureId 0
 	nullSamplerState = GlSamplerStateId 0
 	nullBlendState = GlBlendStateId defaultBlendStateInfo
 	nullDepthStencilTarget = GlDepthStencilTargetId 0
-	nullIndexBuffer = GlIndexBufferId 0 0
-	nullUniformBuffer = GlUniformBufferId 0
+	nullIndexBuffer = GlIndexBufferId 0 gl_UNSIGNED_SHORT
+	nullUniformBuffer = GlUniformBufferId 0 0
 
 	createDeferredContext = undefined
 
@@ -242,7 +288,8 @@ instance Device GlContext where
 
 		return (GlTextureId textureName, with textureName $ glDeleteTextures 1)
 
-	createSamplerState = undefined
+	createSamplerState _context _samplerStateInfo = describeException "failed to create OpenGL sampler state" $ do
+		return (GlSamplerStateId 0, return ())
 
 	createBlendState _context blendStateInfo = return (GlBlendStateId blendStateInfo, return ())
 
@@ -339,10 +386,10 @@ instance Device GlContext where
 		B.unsafeUseAsCStringLen bytes $ \(bytesPtr, bytesLen) -> do
 			glBufferData gl_ELEMENT_ARRAY_BUFFER (fromIntegral bytesLen) bytesPtr gl_STATIC_DRAW
 
-		return (GlIndexBufferId bufferName (if is32Bit then 4 else 2), with bufferName $ glDeleteBuffers 1)
+		return (GlIndexBufferId bufferName (if is32Bit then gl_UNSIGNED_INT else gl_UNSIGNED_SHORT), with bufferName $ glDeleteBuffers 1)
 
 	createProgram _context program = describeException "failed to create OpenGL program" $ do
-		
+		return (error "createProgram not implemented", return ())
 
 	createUniformBuffer GlContext
 		{ glContextCaps = GlCaps
@@ -357,12 +404,90 @@ instance Device GlContext where
 				peek namePtr
 
 			glBindBuffer gl_UNIFORM_BUFFER bufferName
-			glBufferData gl_UNIFORM_BUFFER size nullPtr gl_DYNAMIC_DRAW
+			glBufferData gl_UNIFORM_BUFFER (fromIntegral size) nullPtr gl_DYNAMIC_DRAW
 			
 			return (GlUniformBufferId bufferName size, with bufferName $ glDeleteBuffers 1)
-		else return (GlUniformBufferId 0 size, return ())
+		else do
+			bufferRef <- newIORef B.empty
+			return (GlUniformMemoryBufferId bufferRef size, return ())
 
 instance Context GlContext GlContext where
+	contextClearColor context targetIndex color = do
+		glUpdateFrameBuffer context
+		with color $ glClearBufferfv gl_COLOR (fromIntegral targetIndex) . castPtr
+		glCheckErrors "clear color"
+
+	contextClearDepth context depth = do
+		glUpdateFrameBuffer context
+		glEnableDepthWriteForClearing context
+		with (coerce depth) $ glClearBufferfv gl_DEPTH 0
+		glCheckErrors "clear depth"
+
+	contextClearStencil context stencil = do
+		glUpdateFrameBuffer context
+		with (fromIntegral stencil) $ glClearBufferiv gl_STENCIL 0
+		glCheckErrors "clear stencil"
+
+	contextClearDepthStencil context depth stencil = do
+		glUpdateFrameBuffer context
+		glEnableDepthWriteForClearing context
+		glClearBufferfi gl_DEPTH_STENCIL 0 (coerce depth) (fromIntegral stencil)
+		glCheckErrors "clear depth stencil"
+
+	contextUploadUniformBuffer _context uniformBuffer bytes = case uniformBuffer of
+		GlUniformBufferId bufferName _bufferSize -> do
+			glBindBuffer gl_UNIFORM_BUFFER bufferName
+			B.unsafeUseAsCStringLen bytes $ \(bytesPtr, bytesLen) -> do
+				glBufferData gl_UNIFORM_BUFFER (fromIntegral bytesLen) bytesPtr gl_DYNAMIC_DRAW
+			glCheckErrors "upload uniform buffer"
+		GlUniformMemoryBufferId bufferRef _bufferSize -> do
+			-- remember buffer data
+			writeIORef bufferRef bytes
+
+	contextUploadVertexBuffer _context (GlVertexBufferId bufferName _bufferSize) bytes = do
+		glBindBuffer gl_ARRAY_BUFFER bufferName
+		B.unsafeUseAsCStringLen bytes $ \(bytesPtr, bytesLen) -> do
+			glBufferData gl_ARRAY_BUFFER (fromIntegral bytesLen) bytesPtr gl_DYNAMIC_DRAW
+		glCheckErrors "upload vertex buffer"
+
+	contextDraw context@GlContext
+		{ glContextDesiredState = GlContextState
+			{ glContextStateIndexBuffer = indexBufferRef
+			}
+		} instancesCount indicesCount = do
+		glUpdateContext context
+		GlIndexBufferId indexBufferName indicesType <- readIORef indexBufferRef
+		if indexBufferName > 0 then do
+			if instancesCount > 1 then
+				glDrawElementsInstanced gl_TRIANGLES indicesCount indicesType nullPtr instancesCount
+			else
+				glDrawElements gl_TRIANGLES indicesCount indicesType nullPtr
+		else do
+			if instancesCount > 1 then
+				glDrawArraysInstanced gl_TRIANGLES 0 indicesCount instancesCount
+			else
+				glDrawArrays gl_TRIANGLES 0 indicesCount
+		glCheckErrors "draw"
+
+	{-
+	contextDraw :: c
+		-> Int -- ^ Instances count (1 for non-instanced).
+		-> Int -- ^ Indices count.
+		-> IO ()
+	contextPlay :: Context dc d => c -> dc -> IO ()
+	contextRender :: c -> IO a -> IO a
+	contextSetFrameBuffer :: c -> FrameBufferId d -> IO a -> IO a
+	contextSetViewport :: c -> Int -> Int -> IO a -> IO a
+	contextGetViewport :: c -> IO (Int, Int)
+	contextSetVertexBuffer :: c -> Int -> VertexBufferId d -> IO a -> IO a
+	contextSetIndexBuffer :: c -> IndexBufferId d -> IO a -> IO a
+	contextSetUniformBuffer :: c -> Int -> UniformBufferId d -> IO a -> IO a
+	contextSetSampler :: c -> Int -> TextureId d -> SamplerStateId d -> IO a -> IO a
+	contextSetBlendState :: c -> BlendStateId d -> IO a -> IO a
+	contextSetDepthTestFunc :: c -> DepthTestFunc -> IO a -> IO a
+	contextSetDepthWrite :: c -> Bool -> IO a -> IO a
+	contextSetProgram :: c -> ProgramId d -> IO a -> IO a
+	-}
 
 type GlPresenter = GlContext
 
@@ -393,7 +518,11 @@ createGlContext _deviceId SdlWindow
 	capArbFramebufferObject <- isGlExtensionSupported "ARB_framebuffer_object"
 	capArbTextureStorage <- isGlExtensionSupported "ARB_texture_storage"
 	capArbInstancedArrays <- isGlExtensionSupported "ARB_instanced_arrays"
-	return (GlContext
+
+	-- create context
+	actualContextState <- glCreateContextState
+	desiredContextState <- glCreateContextState
+	let context = GlContext
 		{ glContextContext = glContext
 		, glContextCaps = GlCaps
 			{ glCapsArbUniformBufferObject = capArbUniformBufferObject
@@ -403,7 +532,39 @@ createGlContext _deviceId SdlWindow
 			, glCapsArbTextureStorage = capArbTextureStorage
 			, glCapsArbInstancedArrays = capArbInstancedArrays
 			}
-		}, SDL.glDeleteContext glContext)
+		, glContextActualState = actualContextState
+		, glContextDesiredState = desiredContextState
+		}
+
+	-- set front face mode
+	glFrontFace gl_CW
+
+	return (context, SDL.glDeleteContext glContext)
+
+glCreateContextState :: IO GlContextState
+glCreateContextState = do
+	frameBuffer <- newIORef $ GlFrameBufferId 0
+	viewport <- newIORef (0, 0)
+	vertexBuffers <- A.newArray (0, 7) $ GlVertexBufferId 0 0
+	indexBuffer <- newIORef $ GlIndexBufferId 0 gl_UNSIGNED_SHORT
+	uniformBuffers <- A.newArray (0, 7) $ GlUniformBufferId 0 0
+	samplers <- A.newArray (0, 7) (GlTextureId 0, GlSamplerStateId 0)
+	program <- newIORef $ GlProgramId 0
+	attributes <- newIORef ([], GlVertexBufferId 0 0)
+	depthTestFunc <- newIORef DepthTestFuncLess
+	depthWrite <- newIORef True
+	return GlContextState
+		{ glContextStateFrameBuffer = frameBuffer
+		, glContextStateViewport = viewport
+		, glContextStateVertexBuffers = vertexBuffers
+		, glContextStateIndexBuffer = indexBuffer
+		, glContextStateUniformBuffers = uniformBuffers
+		, glContextStateSamplers = samplers
+		, glContextStateProgram = program
+		, glContextStateAttributes = attributes
+		, glContextStateDepthTestFunc = depthTestFunc
+		, glContextStateDepthWrite = depthWrite
+		}
 
 isGlExtensionSupported :: String -> IO Bool
 isGlExtensionSupported name = withCString name SDL.glExtensionSupported
@@ -413,10 +574,10 @@ glFormatFromTextureFormat :: TextureFormat -> (Bool, GLenum, GLenum, GLenum)
 glFormatFromTextureFormat format = case format of
 	UncompressedTextureFormat
 		{ textureFormatComponents = components
-		, textureFormatValueType = valueType
+		, textureFormatValueType = vt
 		, textureFormatPixelSize = pixelSize
 		, textureFormatColorSpace = colorSpace
-		} -> case (components, valueType, pixelSize, colorSpace) of
+		} -> case (components, vt, pixelSize, colorSpace) of
 		(PixelR, PixelUint, Pixel8bit, LinearColorSpace) -> (False, gl_R8, gl_RED, gl_UNSIGNED_BYTE)
 		(PixelR, PixelUint, Pixel16bit, LinearColorSpace) -> (False, gl_R16, gl_RED, gl_UNSIGNED_SHORT)
 		(PixelR, PixelFloat, Pixel16bit, LinearColorSpace) -> (False, gl_R16F, gl_RED, gl_FLOAT)
@@ -459,3 +620,97 @@ data TextureType
 	| Texture1DArray
 	| Texture1D
 	deriving Eq
+
+glUpdateContext :: GlContext -> IO ()
+glUpdateContext context@GlContext
+	{ glContextCaps = GlCaps
+		{ glCapsArbVertexAttribBinding = capArbVertexAttribBinding
+		}
+	, glContextActualState = GlContextState
+		{ glContextStateViewport = actualViewportRef
+		, glContextStateVertexBuffers = actualVertexBuffersArray
+		, glContextStateIndexBuffer = actualIndexBufferRef
+		, glContextStateUniformBuffers = actualUniformBuffersArray
+		, glContextStateSamplers = actualSamplersArray
+		, glContextStateProgram = actualProgramRef
+		, glContextStateAttributes = actualAttributesArray
+		, glContextStateDepthTestFunc = actualDepthTestFuncRef
+		, glContextStateDepthWrite = actualDepthWriteRef
+		}
+	, glContextDesiredState = GlContextState
+		{ glContextStateViewport = desiredViewportRef
+		, glContextStateVertexBuffers = desiredVertexBuffersArray
+		, glContextStateIndexBuffer = desiredIndexBufferRef
+		, glContextStateUniformBuffers = desiredUniformBuffersArray
+		, glContextStateSamplers = desiredSamplersArray
+		, glContextStateProgram = desiredProgramRef
+		, glContextStateAttributes = desiredAttributesArray
+		, glContextStateDepthTestFunc = desiredDepthTestFuncRef
+		, glContextStateDepthWrite = desiredDepthWriteRef
+		}
+	} = do
+	glUpdateFrameBuffer context
+
+	-- viewport
+	refSetup actualViewportRef desiredViewportRef $ \(viewportWidth, viewportHeight) -> do
+		glViewport 0 0 viewportWidth viewportHeight
+		glCheckErrors "update viewport"
+
+glUpdateFrameBuffer :: GlContext -> IO ()
+glUpdateFrameBuffer GlContext
+	{ glContextActualState = GlContextState
+		{ glContextStateFrameBuffer = actualFrameBufferRef
+		}
+	, glContextDesiredState = GlContextState
+		{ glContextStateFrameBuffer = desiredFrameBufferRef
+		}
+	} = refSetup actualFrameBufferRef desiredFrameBufferRef $ \(GlFrameBufferId name) -> do
+	glBindFramebuffer gl_FRAMEBUFFER name
+	glCheckErrors "bind framebuffer"
+
+glEnableDepthWriteForClearing :: GlContext -> IO ()
+glEnableDepthWriteForClearing GlContext
+	{ glContextActualState = GlContextState
+		{ glContextStateDepthTestFunc = actualDepthTestFuncRef
+		, glContextStateDepthWrite = actualDepthWriteRef
+		}
+	} = do
+	-- enable depth test
+	glEnable gl_DEPTH_TEST
+	glDepthFunc gl_ALWAYS
+	writeIORef actualDepthTestFuncRef DepthTestFuncAlways
+	-- enable depth write
+	glDepthMask $ fromIntegral gl_TRUE
+	writeIORef actualDepthWriteRef True
+
+refSetup :: Eq a => IORef a -> IORef a -> (a -> IO ()) -> IO ()
+refSetup actualRef desiredRef setup = do
+	actual <- readIORef actualRef
+	desired <- readIORef desiredRef
+	if actual /= desired then do
+		setup desired
+		writeIORef actualRef desired
+	else return ()
+
+arraySetup :: Eq a => IOArray Int a -> IOArray Int a -> ([a] -> IO ()) -> IO ()
+arraySetup actualArray desiredArray setup = do
+	actual <- getElems actualArray
+	desired <- getElems desiredArray
+	if actual /= desired then do
+		setup desired
+		bounds <- getBounds desiredArray
+		forM_ (range bounds) $ \i -> writeArray actualArray i =<< readArray desiredArray i
+	else return ()
+
+-- | Check for OpenGL errors, throw an exception if there's some.
+glCheckErrors :: String -> IO ()
+glCheckErrors msg = do
+	firstError <- glGetError
+	if firstError == gl_NO_ERROR then return ()
+	else do
+		let f restErrors = do
+			nextError <- glGetError
+			if nextError == gl_NO_ERROR then return restErrors
+			else f $ nextError : restErrors
+		errors <- f [firstError]
+		throwIO $ DescribeFirstException $ show ("OpenGL error", msg, errors)
