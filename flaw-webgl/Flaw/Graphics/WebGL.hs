@@ -178,7 +178,7 @@ instance Device WebGLDevice where
 		-- generate GLSL
 		glslProgram <- liftM (generateProgram glslWebGLConfig) $ runProgram program
 		case glslProgram of
-			GlslVertexPixelProgram attributes uniforms samplers vertexShader pixelShader -> do
+			GlslVertexPixelProgram attributes uniforms samplers _targets vertexShader pixelShader -> do
 				-- create program
 				jsProgram <- js_createProgram jsContext
 
