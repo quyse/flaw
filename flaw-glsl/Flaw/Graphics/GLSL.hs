@@ -32,6 +32,7 @@ data GlslConfig = GlslConfig
 	{ glslConfigForceFloatAttributes :: !Bool
 	, glslConfigUnsignedUnsupported :: !Bool
 	, glslConfigDeclareTargets :: !Bool
+	, glslConfigUniformBlocks :: !Bool
 	}
 
 -- | GLSL config for WebGL.
@@ -40,6 +41,7 @@ glslWebGLConfig = GlslConfig
 	{ glslConfigForceFloatAttributes = True
 	, glslConfigUnsignedUnsupported = True
 	, glslConfigDeclareTargets = False
+	, glslConfigUniformBlocks = False
 	}
 
 -- | GLSL input or output.
@@ -53,28 +55,33 @@ newtype GlslShader = GlslShader T.Text
 	deriving Show
 
 data GlslAttribute = GlslAttribute
-	{ glslAttributeName :: T.Text
+	{ glslAttributeName :: !T.Text
 	, glslAttributeInfo :: Attribute
 	} deriving Show
 
+data GlslUniformBlock = GlslUniformBlock
+	{ glslUniformBlockName :: !T.Text
+	, glslUniformBlockSlot :: !Int
+	}
+
 data GlslUniform = GlslUniform
-	{ glslUniformName :: T.Text
+	{ glslUniformName :: !T.Text
 	, glslUniformInfo :: Uniform
 	} deriving Show
 
 data GlslSampler = GlslSampler
-	{ glslSamplerName :: T.Text
+	{ glslSamplerName :: !T.Text
 	, glslSamplerInfo :: Sampler
 	} deriving Show
 
 data GlslTarget = GlslTarget
-	{ glslTargetName :: T.Text
+	{ glslTargetName :: !T.Text
 	, glslTargetIndex :: !Int
 	} deriving Show
 
 -- | GLSL program.
 data GlslProgram
-	= GlslVertexPixelProgram [GlslAttribute] [GlslUniform] [GlslSampler] [GlslTarget] GlslShader GlslShader
+	= GlslVertexPixelProgram [GlslAttribute] [GlslUniformBlock] [GlslUniform] [GlslSampler] [GlslTarget] GlslShader GlslShader
 	deriving Show
 
 -- | Generate shader programs in GLSL.
@@ -105,6 +112,9 @@ generateProgram config state = case SL.programInfo state of
 			, glslVarType = t
 			}
 
+		-- all uniforms
+		allUniforms = map head $ group $ sort $ vsUniforms ++ psUniforms
+
 		-- program uniforms
 		programUniform info@Uniform
 			{ uniformSlot = slot
@@ -113,7 +123,16 @@ generateProgram config state = case SL.programInfo state of
 			{ glslUniformName = TL.toStrict $ toLazyText $ uniformName slot offset
 			, glslUniformInfo = info
 			}
-		uniforms = map (programUniform . head) $ group $ sort $ vsUniforms ++ psUniforms
+		uniforms = map programUniform allUniforms
+
+		-- program uniform blocks
+		compareBySlot u1 u2 = compare (uniformSlot u1) (uniformSlot u2)
+		programUniformBlock uniforms = GlslUniformBlock
+			{ glslUniformBlockName = uniformBlockName slot
+			, glslUniformBlockSlot = slot
+			} where
+			slot = uniformSlot $ glslUniformInfo $ head uniforms
+		uniformBlocks = map programUniformBlock $ group $ sortBy compareBySlot allUniforms
 
 		-- program samplers
 		programSampler info@Sampler
@@ -398,6 +417,9 @@ targetColorName i = "gl_FragData[" <> fromString (show i) <> "]"
 
 targetDepthName :: Builder
 targetDepthName = "gl_FragDepth"
+
+uniformBlockName :: Int -> Builder
+uniformBlockName slot = "ub" <> fromString (show slot)
 
 uniformName :: Int -> Int -> Builder
 uniformName slot offset = "u" <> fromString (show slot) <> "_" <> fromString (show offset)
