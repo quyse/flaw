@@ -4,7 +4,7 @@ Description: OpenGL graphics implementation.
 License: MIT
 -}
 
-{-# LANGUAGE MultiParamTypeClasses, TypeFamilies #-}
+{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, TypeFamilies #-}
 
 module Flaw.Graphics.OpenGL
 	( GlSystem()
@@ -100,6 +100,8 @@ data GlContext = GlContext
 	, glContextCaps :: !GlCaps
 	, glContextActualState :: GlContextState
 	, glContextDesiredState :: GlContextState
+	-- | Number of manually bound attributes.
+	, glContextBoundAttributesCount :: !(IORef Int)
 	}
 
 data GlContextState = GlContextState
@@ -110,51 +112,78 @@ data GlContextState = GlContextState
 	, glContextStateUniformBuffers :: !(VM.IOVector (UniformBufferId GlDevice))
 	, glContextStateSamplers :: !(VM.IOVector (TextureId GlDevice, SamplerStateId GlDevice))
 	, glContextStateProgram :: !(IORef (ProgramId GlDevice))
-	, glContextStateAttributes :: !(IORef ([Attribute], VertexBufferId GlDevice))
 	, glContextStateDepthTestFunc :: !(IORef DepthTestFunc)
 	, glContextStateDepthWrite :: !(IORef Bool)
+	, glContextStateBlendState :: !(IORef (BlendStateId GlDevice))
 	}
 
 type GlDevice = GlContext
 
 data GlAttributeSlot = GlAttributeSlot
-	{ glAttributeSlotElements :: !(V.Vector Attribute)
+	{ glAttributeSlotElements :: !(V.Vector GlAttribute)
 	, glAttributeSlotDivisor :: !GLuint
+	}
+
+data GlAttribute = GlAttribute
+	{
+	-- | Generic attribute index.
+	  glAttributeIndex :: !GLuint
+	-- | Attribute size as specified to glVertexAttribPointer.
+	, glAttributeSize :: !GLint
+	-- | Attribute type as specified to glVertexAttribPointer.
+	, glAttributeType :: !GLenum
+	-- | Is attribute normalized.
+	, glAttributeIsNormalized :: !GLboolean
+	-- | Is attribute integer.
+	, glAttributeIsInteger :: !Bool
+	-- | Offset within vertex buffer.
+	, glAttributeOffset :: !IntPtr
 	}
 
 data GlUniform = GlUniform
 	{ glUniformLocation :: !GLint
-	, glUniformInfo :: !Uniform
+	, glUniformOffset :: !Int
+	, glUniformSize :: !GLint
+	, glUniformType :: !ValueType
 	}
 
 instance Device GlContext where
 	type DeferredContext GlContext = GlContext
 	newtype TextureId GlContext = GlTextureId GLuint deriving Eq
 	newtype SamplerStateId GlContext = GlSamplerStateId GLuint deriving Eq
-	newtype BlendStateId GlContext = GlBlendStateId BlendStateInfo
+	data BlendStateId GlContext
+		= GlBlendStateId BlendStateInfo
+		| GlNullBlendStateId
+		deriving Eq
 	newtype RenderTargetId GlContext = GlRenderTargetId GLuint
 	newtype DepthStencilTargetId GlContext = GlDepthStencilTargetId GLuint
 	newtype FrameBufferId GlContext = GlFrameBufferId GLuint deriving Eq
-	data VertexBufferId GlContext = GlVertexBufferId !GLuint !Int
+	data VertexBufferId GlContext = GlVertexBufferId !GLuint !GLsizei deriving Eq
 	data IndexBufferId GlContext = GlIndexBufferId !GLuint !GLenum
 	data ProgramId GlContext = GlProgramId
 		{ glProgramName :: !GLuint
 		, glProgramVertexArrayName :: !GLuint
 		, glProgramAttributeSlots ::  !(V.Vector GlAttributeSlot)
-		, glProgramUniforms :: !(V.Vector GlUniform)
+		-- | Number of generic vertex attributes used (i.e. used attributes are from 0 to this number minus 1).
+		-- Only for manual binding, i.e. zero when vertex array is used.
+		, glProgramAttributesCount :: !Int
+		-- | "Manual" uniforms by slot.
+		, glProgramUniforms :: !(V.Vector (V.Vector GlUniform))
 		}
 	data UniformBufferId GlContext
 		-- | Real uniform buffer: buffer name, size.
 		= GlUniformBufferId !GLuint !Int
-		-- | Emulated uniform buffer: bytestring ref, size.
-		| GlUniformMemoryBufferId !(IORef B.ByteString) !Int
+		-- | Emulated uniform buffer: bytestring ref.
+		| GlUniformMemoryBufferId !(IORef B.ByteString)
+		-- | Null uniform buffer.
+		| GlNullUniformBufferId
 
 	nullTexture = GlTextureId 0
 	nullSamplerState = GlSamplerStateId 0
-	nullBlendState = GlBlendStateId defaultBlendStateInfo
+	nullBlendState = GlNullBlendStateId
 	nullDepthStencilTarget = GlDepthStencilTargetId 0
 	nullIndexBuffer = GlIndexBufferId 0 gl_UNSIGNED_SHORT
-	nullUniformBuffer = GlUniformBufferId 0 0
+	nullUniformBuffer = GlNullUniformBufferId
 
 	createDeferredContext = undefined
 
@@ -361,7 +390,7 @@ instance Device GlContext where
 		B.unsafeUseAsCStringLen bytes $ \(bytesPtr, bytesLen) -> do
 			glBufferData gl_ARRAY_BUFFER (fromIntegral bytesLen) bytesPtr gl_STATIC_DRAW
 
-		return (GlVertexBufferId bufferName stride, with bufferName $ glDeleteBuffers 1)
+		return (GlVertexBufferId bufferName (fromIntegral stride), with bufferName $ glDeleteBuffers 1)
 
 	createDynamicVertexBuffer _context size stride = describeException "failed to create OpenGL dynamic vertex buffer" $ do
 		-- allocate buffer name
@@ -372,7 +401,7 @@ instance Device GlContext where
 		glBindBuffer gl_ARRAY_BUFFER bufferName
 		glBufferData gl_ARRAY_BUFFER (fromIntegral size) nullPtr gl_DYNAMIC_DRAW
 
-		return (GlVertexBufferId bufferName stride, with bufferName $ glDeleteBuffers 1)
+		return (GlVertexBufferId bufferName (fromIntegral stride), with bufferName $ glDeleteBuffers 1)
 
 	createStaticIndexBuffer _context bytes is32Bit = describeException "failed to create OpenGL static index buffer" $ do
 		-- allocate buffer name
@@ -390,6 +419,9 @@ instance Device GlContext where
 		{ glContextCaps = GlCaps
 			{ glCapsArbUniformBufferObject = useUniformBufferObject
 			, glCapsArbVertexAttribBinding = capArbVertexAttribBinding
+			}
+		, glContextActualState = GlContextState
+			{ glContextStateProgram = actualProgramRef
 			}
 		} program = describeException "failed to create OpenGL program" $ do
 
@@ -430,7 +462,7 @@ instance Device GlContext where
 			}
 		glslProgram <- liftM (generateProgram glslConfig) $ runProgram program
 		case glslProgram of
-			GlslVertexPixelProgram attributes uniforms samplers targets vertexShader pixelShader -> do
+			GlslVertexPixelProgram attributes uniformBlocks uniforms samplers targets vertexShader pixelShader -> do
 				-- create program
 				programName <- book bk $ do
 					p <- glCreateProgram
@@ -450,10 +482,10 @@ instance Device GlContext where
 					glCheckErrors 0 "bind attribute location"
 
 				-- bind targets
-				forM_ (zip targets [0..]) $ \(GlslTarget
+				forM_ targets $ \GlslTarget
 					{ glslTargetName = targetName
 					, glslTargetIndex = targetIndex
-					}, i) -> do
+					} -> do
 					B.useAsCString (T.encodeUtf8 targetName) $ glBindFragDataLocation programName (fromIntegral targetIndex)
 					glCheckErrors 0 "bind frag data location"
 
@@ -481,38 +513,71 @@ instance Device GlContext where
 				glCheckErrors 0 "set program"
 
 				-- bind uniform blocks
-				forM_ uniforms $ \GlslUniformBlock
-					{ glslUniformName = uniformName
-					, glslUniformInfo = Uniform
-						{ uniformSlot = slot
-						}
+				forM_ uniformBlocks $ \GlslUniformBlock
+					{ glslUniformBlockName = uniformBlockName
+					, glslUniformBlockSlot = slot
 					} -> do
-					index <- B.useAsCString (T.encodeUtf8 uniformName) $ glGetUniformBlockIndex programName
+					index <- B.useAsCString (T.encodeUtf8 uniformBlockName) $ glGetUniformBlockIndex programName
 					glCheckErrors 0 "get uniform block index"
 					glUniformBlockBinding programName index (fromIntegral slot)
 					glCheckErrors 0 "uniform block binding"
 
 				-- bind samplers
-				forM_ (zip samplers [0..]) $ \(GlslSampler
+				forM_ samplers $ \GlslSampler
 					{ glslSamplerName = samplerName
 					, glslSamplerInfo = Sampler
 						{ samplerSlot = slot
 						}
-					}, i) -> do
+					} -> do
 					location <- B.useAsCString (T.encodeUtf8 samplerName) $ glGetUniformLocation programName
 					glCheckErrors 0 "get sampler location"
 					glUniform1i location (fromIntegral slot)
 					glCheckErrors 0 "bind sampler to texture unit"
 
 				-- get non-buffer uniform bindings
-				-- TODO
+				uniformBindings <- do
+					-- sort uniforms by slot
+					let getSlot GlslUniform
+						{ glslUniformInfo = Uniform
+							{ uniformSlot = slot
+							}
+						} = slot
+					let eqBySlot a b = getSlot a == getSlot b
+					let compareBySlot a b = compare (getSlot a) (getSlot b)
+					let uniformsBySlot = groupBy eqBySlot $ sortBy compareBySlot uniforms
+					-- get maximum slot
+					let maxSlot = maximum $ map (getSlot . head) uniformsBySlot
+					-- create slots
+					slots <- VM.replicate (maxSlot + 1) V.empty
+					forM_ uniformsBySlot $ \us@(u : _) -> do
+						let slot = getSlot u
+						slotUniforms <- V.forM (V.fromList us) $ \GlslUniform
+							{ glslUniformName = uniformName
+							, glslUniformInfo = Uniform
+								{ uniformOffset = offset
+								, uniformSize = size
+								, uniformType = t
+								}
+							} -> do
+							-- get location
+							location <- B.useAsCString (T.encodeUtf8 uniformName) $ glGetUniformLocation programName
+							glCheckErrors 0 "get uniform location"
+
+							return GlUniform
+								{ glUniformLocation = location
+								, glUniformOffset = offset
+								, glUniformSize = fromIntegral size
+								, glUniformType = t
+								}
+						VM.write slots slot slotUniforms
+					V.unsafeFreeze slots
 
 				-- reset current program
 				glUseProgram 0
 				glCheckErrors 0 "reset program"
 
 				-- create vertex array if supported
-				(vertexArrayName, attributeSlots) <- if capArbVertexAttribBinding then do
+				(vertexArrayName, attributeSlots, attributesCount) <- if capArbVertexAttribBinding then do
 					-- create vertex array
 					vaName <- book bk $ do
 						vaName <- alloca $ \vaNamePtr -> do
@@ -521,14 +586,16 @@ instance Device GlContext where
 							peek vaNamePtr
 						return (vaName, with vaName $ glDeleteVertexArrays 1)
 
+					-- reset current program (so it will be rebound on next draw)
+					writeIORef actualProgramRef glNullProgram
+
 					-- bind vertex array
 					glBindVertexArray vaName
 					glCheckErrors 0 "bind vertex array"
 
 					-- setup attributes for vertex array
 					forM_ (zip attributes [0..]) $ \(GlslAttribute
-						{ glslAttributeName = aName
-						, glslAttributeInfo = Attribute
+						{ glslAttributeInfo = Attribute
 							{ attributeSlot = slot
 							, attributeOffset = offset
 							, attributeDivisor = divisor
@@ -559,7 +626,7 @@ instance Device GlContext where
 					glBindVertexArray 0
 					glCheckErrors 0 "unbind vertex array"
 
-					return (vaName, V.empty)
+					return (vaName, V.empty, 0)
 				-- else create "manual" attribute binding
 				else do
 					-- sort attributes by slot
@@ -568,11 +635,11 @@ instance Device GlContext where
 							{ attributeSlot = slot
 							}
 						} = slot
-					let eqBySlot a b = getSlot a == getSlot b
-					let compareBySlot a b = compare (getSlot a) (getSlot b)
-					let attributesBySlot = groupBy eqBySlot $ sortBy compareBySlot attributes
+					let eqBySlot a b = getSlot (fst a) == getSlot (fst b)
+					let compareBySlot a b = compare (getSlot $ fst a) (getSlot $ fst b)
+					let attributesBySlot = groupBy eqBySlot $ sortBy compareBySlot $ zip attributes [0..]
 					-- get maximum slot
-					let maxSlot = maximum $ map (getSlot . head) attributesBySlot
+					let maxSlot = maximum $ map (getSlot . fst . head) attributesBySlot
 					-- create attribute slots
 					let attributeSlots = V.create $ do
 						slots <- VM.replicate (maxSlot + 1) GlAttributeSlot
@@ -580,24 +647,35 @@ instance Device GlContext where
 							, glAttributeSlotDivisor = 0
 							}
 						forM_ attributesBySlot $ \as@(a : _) -> do
-							let slot = getSlot a
+							let slot = getSlot $ fst a
+							elements <- V.forM (V.fromList as) $ \(GlslAttribute
+								{ glslAttributeInfo = Attribute
+									{ attributeOffset = offset
+									, attributeType = aType
+									}
+								}, i) -> do
+								let (size, t, isNormalized, isInteger) = glGetAttributeSTNI aType
+								return GlAttribute
+									{ glAttributeIndex = i
+									, glAttributeSize = size
+									, glAttributeType = t
+									, glAttributeIsNormalized = isNormalized
+									, glAttributeIsInteger = isInteger
+									, glAttributeOffset = fromIntegral offset
+									}
 							VM.write slots slot GlAttributeSlot
-								{ glAttributeSlotElements = V.fromList $ map glslAttributeInfo as
-								, glAttributeSlotDivisor = fromIntegral $ attributeDivisor $ glslAttributeInfo a
+								{ glAttributeSlotElements = elements
+								, glAttributeSlotDivisor = fromIntegral $ attributeDivisor $ glslAttributeInfo $ fst a
 								}
 						return slots
 
-					return (0, attributeSlots)
-
-				-- create uniform bindings
-				let createUniformBinding GlslUniform
-					{ glslUniformName = 
-				uniformBindings = map 
+					return (0, attributeSlots, length attributes)
 
 				return (GlProgramId
 					{ glProgramName = programName
 					, glProgramVertexArrayName = vertexArrayName
 					, glProgramAttributeSlots = attributeSlots
+					, glProgramAttributesCount = attributesCount
 					, glProgramUniforms = uniformBindings
 					}, freeBook bk)
 
@@ -619,7 +697,7 @@ instance Device GlContext where
 			return (GlUniformBufferId bufferName size, with bufferName $ glDeleteBuffers 1)
 		else do
 			bufferRef <- newIORef B.empty
-			return (GlUniformMemoryBufferId bufferRef size, return ())
+			return (GlUniformMemoryBufferId bufferRef, return ())
 
 instance Context GlContext GlContext where
 	contextClearColor context targetIndex color = do
@@ -650,9 +728,10 @@ instance Context GlContext GlContext where
 			B.unsafeUseAsCStringLen bytes $ \(bytesPtr, bytesLen) -> do
 				glBufferData gl_UNIFORM_BUFFER (fromIntegral bytesLen) bytesPtr gl_DYNAMIC_DRAW
 			glCheckErrors 1 "upload uniform buffer"
-		GlUniformMemoryBufferId bufferRef _bufferSize -> do
+		GlUniformMemoryBufferId bufferRef -> do
 			-- remember buffer data
 			writeIORef bufferRef bytes
+		GlNullUniformBufferId -> throwIO $ DescribeFirstException "uploading to null uniform buffer"
 
 	contextUploadVertexBuffer _context (GlVertexBufferId bufferName _stride) bytes = do
 		glBindBuffer gl_ARRAY_BUFFER bufferName
@@ -680,10 +759,6 @@ instance Context GlContext GlContext where
 		glCheckErrors 1 "draw"
 
 	{-
-	contextDraw :: c
-		-> Int -- ^ Instances count (1 for non-instanced).
-		-> Int -- ^ Indices count.
-		-> IO ()
 	contextPlay :: Context dc d => c -> dc -> IO ()
 	contextRender :: c -> IO a -> IO a
 	contextSetFrameBuffer :: c -> FrameBufferId d -> IO a -> IO a
@@ -732,6 +807,7 @@ createGlContext _deviceId SdlWindow
 	-- create context
 	actualContextState <- glCreateContextState
 	desiredContextState <- glCreateContextState
+	boundAttributesCount <- newIORef 0
 	let context = GlContext
 		{ glContextContext = glContext
 		, glContextCaps = GlCaps
@@ -744,6 +820,7 @@ createGlContext _deviceId SdlWindow
 			}
 		, glContextActualState = actualContextState
 		, glContextDesiredState = desiredContextState
+		, glContextBoundAttributesCount = boundAttributesCount
 		}
 
 	-- set front face mode
@@ -751,23 +828,27 @@ createGlContext _deviceId SdlWindow
 
 	return (context, SDL.glDeleteContext glContext)
 
+glNullProgram :: ProgramId GlDevice
+glNullProgram = GlProgramId
+	{ glProgramName = 0
+	, glProgramVertexArrayName = 0
+	, glProgramAttributeSlots = V.empty
+	, glProgramAttributesCount = 0
+	, glProgramUniforms = V.empty
+	}
+
 glCreateContextState :: IO GlContextState
 glCreateContextState = do
 	frameBuffer <- newIORef $ GlFrameBufferId 0
 	viewport <- newIORef (0, 0)
 	vertexBuffers <- VM.replicate 8 $ GlVertexBufferId 0 0
 	indexBuffer <- newIORef $ GlIndexBufferId 0 gl_UNSIGNED_SHORT
-	uniformBuffers <- VM.replicate 8 $ GlUniformBufferId 0 0
+	uniformBuffers <- VM.replicate 8 GlNullUniformBufferId
 	samplers <- VM.replicate 8 (GlTextureId 0, GlSamplerStateId 0)
-	program <- newIORef $ GlProgramId
-		{ glProgramName = 0
-		, glProgramVertexArrayName = 0
-		, glProgramAttributeSlots = V.empty
-		, glProgramUniforms = V.empty
-		}
-	attributes <- newIORef ([], GlVertexBufferId 0 0)
+	program <- newIORef glNullProgram
 	depthTestFunc <- newIORef DepthTestFuncLess
 	depthWrite <- newIORef True
+	blendState <- newIORef nullBlendState
 	return GlContextState
 		{ glContextStateFrameBuffer = frameBuffer
 		, glContextStateViewport = viewport
@@ -776,9 +857,9 @@ glCreateContextState = do
 		, glContextStateUniformBuffers = uniformBuffers
 		, glContextStateSamplers = samplers
 		, glContextStateProgram = program
-		, glContextStateAttributes = attributes
 		, glContextStateDepthTestFunc = depthTestFunc
 		, glContextStateDepthWrite = depthWrite
+		, glContextStateBlendState = blendState
 		}
 
 isGlExtensionSupported :: String -> IO Bool
@@ -840,6 +921,7 @@ glUpdateContext :: GlContext -> IO ()
 glUpdateContext context@GlContext
 	{ glContextCaps = GlCaps
 		{ glCapsArbVertexAttribBinding = capArbVertexAttribBinding
+		, glCapsArbInstancedArrays = capArbInstancedArrays
 		}
 	, glContextActualState = GlContextState
 		{ glContextStateViewport = actualViewportRef
@@ -848,9 +930,9 @@ glUpdateContext context@GlContext
 		, glContextStateUniformBuffers = actualUniformBuffersVector
 		, glContextStateSamplers = actualSamplersVector
 		, glContextStateProgram = actualProgramRef
-		, glContextStateAttributes = actualAttributesVector
 		, glContextStateDepthTestFunc = actualDepthTestFuncRef
 		, glContextStateDepthWrite = actualDepthWriteRef
+		, glContextStateBlendState = actualBlendStateRef
 		}
 	, glContextDesiredState = GlContextState
 		{ glContextStateViewport = desiredViewportRef
@@ -859,10 +941,11 @@ glUpdateContext context@GlContext
 		, glContextStateUniformBuffers = desiredUniformBuffersVector
 		, glContextStateSamplers = desiredSamplersVector
 		, glContextStateProgram = desiredProgramRef
-		, glContextStateAttributes = desiredAttributesVector
 		, glContextStateDepthTestFunc = desiredDepthTestFuncRef
 		, glContextStateDepthWrite = desiredDepthWriteRef
+		, glContextStateBlendState = desiredBlendStateRef
 		}
+	, glContextBoundAttributesCount = boundAttributesCountRef
 	} = do
 	-- framebuffer
 	glUpdateFrameBuffer context
@@ -875,30 +958,253 @@ glUpdateContext context@GlContext
 		glCheckErrors 0 "bind sampler"
 
 	-- program
-	refSetup actualProgramRef desiredProgramRef $ \GlProgramId
+	programUpdated <- refSetup actualProgramRef desiredProgramRef $ \GlProgramId
 		{ glProgramName = programName
 		, glProgramVertexArrayName = vertexArrayName
-		, glProgramAttributeSlots = attributeSlots
-		, glProgramUniforms = uniforms
 		} -> do
 		-- program
 		glUseProgram programName
 		glCheckErrors 0 "bind program"
-		-- vertex array
+
+		-- if vertex array is supported
 		if vertexArrayName > 0 then do
+			-- bind vertex array
 			glBindVertexArray vertexArrayName
 			glCheckErrors 0 "bind vertex array"
 		else return ()
 
-	-- vertex buffers
-	vectorSetup actualVertexBuffersVector desiredVertexBuffersVector $ \i (GlVertexBufferId bufferName stride) -> do
-		glBindBuffer gl_ARRAY_BUFFER bufferName
-		-- TODO
+	-- uniform buffers
+	uniformBindings <- liftM glProgramUniforms $ readIORef desiredProgramRef
+	forM_ [0, VM.length actualUniformBuffersVector - 1] $ \i -> do
+		actualUniformBuffer <- VM.read actualUniformBuffersVector i
+		desiredUniformBuffer <- VM.read desiredUniformBuffersVector i
+		let bindBuffer bufferName = do
+			glBindBufferBase gl_UNIFORM_BUFFER (fromIntegral i) bufferName
+			glCheckErrors 0 "bind uniform buffer"
+		let updateActual = VM.write actualUniformBuffersVector i desiredUniformBuffer
+		let bindMemoryBuffer bytes = do
+			-- get uniforms for this slot
+			let uniforms = uniformBindings V.! i
+			-- setup manually
+			B.unsafeUseAsCString bytes $ \bytesPtr -> forM_ uniforms $ \GlUniform
+				{ glUniformLocation = location
+				, glUniformOffset = offset
+				, glUniformSize = size
+				, glUniformType = t
+				} -> do
+				let ptr = plusPtr bytesPtr offset
+				case t of
+					ScalarValueType ScalarFloat -> glUniform1fv location size $ castPtr ptr
+					ScalarValueType ScalarInt -> glUniform1iv location size $ castPtr ptr
+					ScalarValueType ScalarUint -> glUniform1uiv location size $ castPtr ptr
+					ScalarValueType ScalarBool -> glUniform1iv location size $ castPtr ptr
+					VectorValueType Dimension1 ScalarFloat -> glUniform1fv location size $ castPtr ptr
+					VectorValueType Dimension2 ScalarFloat -> glUniform2fv location size $ castPtr ptr
+					VectorValueType Dimension3 ScalarFloat -> glUniform3fv location size $ castPtr ptr
+					VectorValueType Dimension4 ScalarFloat -> glUniform4fv location size $ castPtr ptr
+					VectorValueType Dimension1 ScalarInt -> glUniform1iv location size $ castPtr ptr
+					VectorValueType Dimension2 ScalarInt -> glUniform2iv location size $ castPtr ptr
+					VectorValueType Dimension3 ScalarInt -> glUniform3iv location size $ castPtr ptr
+					VectorValueType Dimension4 ScalarInt -> glUniform4iv location size $ castPtr ptr
+					VectorValueType Dimension1 ScalarUint -> glUniform1uiv location size $ castPtr ptr
+					VectorValueType Dimension2 ScalarUint -> glUniform2uiv location size $ castPtr ptr
+					VectorValueType Dimension3 ScalarUint -> glUniform3uiv location size $ castPtr ptr
+					VectorValueType Dimension4 ScalarUint -> glUniform4uiv location size $ castPtr ptr
+					VectorValueType Dimension1 ScalarBool -> glUniform1iv location size $ castPtr ptr
+					VectorValueType Dimension2 ScalarBool -> glUniform2iv location size $ castPtr ptr
+					VectorValueType Dimension3 ScalarBool -> glUniform3iv location size $ castPtr ptr
+					VectorValueType Dimension4 ScalarBool -> glUniform4iv location size $ castPtr ptr
+					MatrixValueType Dimension3 Dimension3 ScalarFloat -> glUniformMatrix3fv location size 0 $ castPtr ptr
+					MatrixValueType Dimension4 Dimension4 ScalarFloat -> glUniformMatrix4fv location size 0 $ castPtr ptr
+					_ -> return ()
+				glCheckErrors 0 "set uniform"
+		case desiredUniformBuffer of
+			GlUniformBufferId bufferName _bufferSize -> case actualUniformBuffer of
+				GlUniformBufferId prevBufferName _prevBufferSize -> do
+					if bufferName /= prevBufferName then do
+						bindBuffer bufferName
+						updateActual
+					else return ()
+				GlUniformMemoryBufferId _ -> do
+					bindBuffer bufferName
+					updateActual
+				GlNullUniformBufferId -> do
+					bindBuffer bufferName
+					updateActual
+			GlUniformMemoryBufferId bytesRef -> case actualUniformBuffer of
+				GlUniformBufferId _ _ -> do
+					bindBuffer 0
+					bytes <- readIORef bytesRef
+					bindMemoryBuffer bytes
+					updateActual
+				GlUniformMemoryBufferId prevBytesRef -> do
+					bytes <- readIORef bytesRef
+					prevBytes <- readIORef prevBytesRef
+					if bytes /= prevBytes then do
+						bindMemoryBuffer bytes
+						updateActual
+					else return ()
+				GlNullUniformBufferId -> do
+					bytes <- readIORef bytesRef
+					bindMemoryBuffer bytes
+					updateActual
+			GlNullUniformBufferId -> case actualUniformBuffer of
+				GlUniformBufferId _prevBufferName _prevBufferSize -> do
+					bindBuffer 0
+					updateActual
+				GlUniformMemoryBufferId _ -> do
+					updateActual
+				GlNullUniformBufferId -> return ()
+
+	-- if vertex array is supported, bind vertex buffers
+	if capArbVertexAttribBinding then do
+		vectorSetupCond programUpdated actualVertexBuffersVector desiredVertexBuffersVector $ \i (GlVertexBufferId bufferName stride) -> do
+			glBindVertexBuffer (fromIntegral i) bufferName 0 (fromIntegral stride)
+			glCheckErrors 0 "bind vertex buffer"
+	-- otherwise manually bind attributes
+	else do
+		vectorSetupCond programUpdated actualVertexBuffersVector desiredVertexBuffersVector $ \_ (GlVertexBufferId bufferName stride) -> do
+			-- bind buffer
+			glBindBuffer gl_ARRAY_BUFFER bufferName
+			glCheckErrors 0 "bind array buffer"
+
+			-- bind attributes
+			attributeSlots <- liftM glProgramAttributeSlots $ readIORef desiredProgramRef
+			V.forM_ attributeSlots $ \GlAttributeSlot
+				{ glAttributeSlotElements = elements
+				, glAttributeSlotDivisor = divisor
+				} -> do
+				V.forM_ elements $ \GlAttribute
+					{ glAttributeIndex = i
+					, glAttributeSize = size
+					, glAttributeType = t
+					, glAttributeIsNormalized = isNormalized
+					, glAttributeIsInteger = isInteger
+					, glAttributeOffset = offset
+					} -> do
+
+					glEnableVertexAttribArray i
+					glCheckErrors 0 "enable vertex attrib array"
+
+					if isInteger then
+						glVertexAttribIPointer i size t stride (intPtrToPtr offset)
+					else
+						glVertexAttribPointer i size t isNormalized stride (intPtrToPtr offset)
+					glCheckErrors 0 "vertex attrib pointer"
+
+					if capArbInstancedArrays then do
+						glVertexAttribDivisor i divisor
+						glCheckErrors 0 "vertex attrib divisor"
+					else return ()
+
+	-- disable unused attributes
+	newBoundAttributesCount <- liftM glProgramAttributesCount $ readIORef desiredProgramRef
+	oldBoundAttributesCount <- readIORef boundAttributesCountRef
+	forM_ [newBoundAttributesCount .. (oldBoundAttributesCount - 1)] $ \i -> do
+		glDisableVertexAttribArray (fromIntegral i)
+		glCheckErrors 0 "disable unused vertex attrib array"
+	writeIORef boundAttributesCountRef newBoundAttributesCount
+
+	-- index buffer
+	refSetup_ actualIndexBufferRef desiredIndexBufferRef $ \(GlIndexBufferId indexBufferName _indicesType) -> do
+		glBindBuffer gl_ELEMENT_ARRAY_BUFFER indexBufferName
+		glCheckErrors 0 "bind index buffer"
 
 	-- viewport
-	refSetup actualViewportRef desiredViewportRef $ \(viewportWidth, viewportHeight) -> do
+	refSetup_ actualViewportRef desiredViewportRef $ \(viewportWidth, viewportHeight) -> do
 		glViewport 0 0 (fromIntegral viewportWidth) (fromIntegral viewportHeight)
 		glCheckErrors 0 "bind viewport"
+
+	-- depth test func & depth write
+	do
+		actualDepthTestFunc <- readIORef actualDepthTestFuncRef
+		desiredDepthTestFunc <- readIORef desiredDepthTestFuncRef
+		actualDepthWrite <- readIORef actualDepthWriteRef
+		desiredDepthWrite <- readIORef desiredDepthWriteRef
+		-- enable or disable depth test
+		if actualDepthTestFunc /= desiredDepthTestFunc || actualDepthWrite /= desiredDepthWrite then do
+			(if desiredDepthTestFunc /= DepthTestFuncAlways || desiredDepthWrite then glEnable else glDisable) gl_DEPTH_TEST
+			glCheckErrors 0 "enable/disable depth test"
+		else return ()
+		-- depth test func
+		if actualDepthTestFunc /= desiredDepthTestFunc then do
+			let func = case desiredDepthTestFunc of
+				DepthTestFuncNever -> gl_NEVER
+				DepthTestFuncLess -> gl_LESS
+				DepthTestFuncLessOrEqual -> gl_LEQUAL
+				DepthTestFuncEqual -> gl_EQUAL
+				DepthTestFuncNonEqual -> gl_NOTEQUAL
+				DepthTestFuncGreaterOrEqual -> gl_GEQUAL
+				DepthTestFuncGreater -> gl_GREATER
+				DepthTestFuncAlways -> gl_ALWAYS
+			glDepthFunc func
+			glCheckErrors 0 "set depth test func"
+			writeIORef actualDepthTestFuncRef desiredDepthTestFunc
+		else return ()
+		-- depth write
+		if actualDepthWrite /= desiredDepthWrite then do
+			glDepthMask (if desiredDepthWrite then 1 else 0)
+			glCheckErrors 0 "set depth write"
+			writeIORef actualDepthWriteRef desiredDepthWrite
+		else return ()
+
+	-- blend state
+	refSetup_ actualBlendStateRef desiredBlendStateRef $ \blendStateId -> case blendStateId of
+		GlBlendStateId BlendStateInfo
+			{ blendSourceColor = sourceColor
+			, blendDestColor = destColor
+			, blendColorOperation = colorOperation
+			, blendSourceAlpha = sourceAlpha
+			, blendDestAlpha = destAlpha
+			, blendAlphaOperation = alphaOperation
+			} -> do
+			-- enable blending
+			glEnable gl_BLEND
+			glCheckErrors 0 "enable blending"
+
+			-- convert-to-OpenGL functions
+			let convertColor c = case c of
+				ColorSourceZero -> gl_ZERO
+				ColorSourceOne -> gl_ONE
+				ColorSourceSrc -> gl_SRC_COLOR
+				ColorSourceInvSrc -> gl_ONE_MINUS_SRC_COLOR
+				ColorSourceSrcAlpha -> gl_SRC_ALPHA
+				ColorSourceInvSrcAlpha -> gl_ONE_MINUS_SRC_ALPHA
+				ColorSourceDest -> gl_DST_COLOR
+				ColorSourceInvDest -> gl_ONE_MINUS_DST_COLOR
+				ColorSourceDestAlpha -> gl_DST_ALPHA
+				ColorSourceInvDestAlpha -> gl_ONE_MINUS_DST_ALPHA
+				ColorSourceSecondSrc -> gl_SRC1_COLOR
+				ColorSourceInvSecondSrc -> gl_ONE_MINUS_SRC1_COLOR
+				ColorSourceSecondSrcAlpha -> gl_SRC1_ALPHA
+				ColorSourceInvSecondSrcAlpha -> gl_ONE_MINUS_SRC1_ALPHA
+			let convertAlpha a = case a of
+				AlphaSourceZero -> gl_ZERO
+				AlphaSourceOne -> gl_ONE
+				AlphaSourceSrc -> gl_SRC_ALPHA
+				AlphaSourceInvSrc -> gl_ONE_MINUS_SRC_ALPHA
+				AlphaSourceDest -> gl_DST_ALPHA
+				AlphaSourceInvDest -> gl_ONE_MINUS_DST_ALPHA
+				AlphaSourceSecondSrc -> gl_SRC1_ALPHA
+				AlphaSourceInvSecondSrc -> gl_ONE_MINUS_SRC1_ALPHA
+			let convertOperation o = case o of
+				BlendOperationAdd -> gl_FUNC_ADD
+				BlendOperationSubtractAB -> gl_FUNC_SUBTRACT
+				BlendOperationSubtractBA -> gl_FUNC_REVERSE_SUBTRACT
+				BlendOperationMin -> gl_MIN
+				BlendOperationMax -> gl_MAX
+
+			-- set blend funcs
+			glBlendFuncSeparate (convertColor sourceColor) (convertColor destColor) (convertAlpha sourceAlpha) (convertAlpha destAlpha)
+			glCheckErrors 0 "set blend func"
+			-- set blend operations
+			glBlendEquationSeparate (convertOperation colorOperation) (convertOperation alphaOperation)
+			glCheckErrors 0 "set blend equation"
+
+		GlNullBlendStateId -> do
+			-- disable blending
+			glDisable gl_BLEND
+			glCheckErrors 0 "disable blending"
 
 glUpdateFrameBuffer :: GlContext -> IO ()
 glUpdateFrameBuffer GlContext
@@ -908,7 +1214,7 @@ glUpdateFrameBuffer GlContext
 	, glContextDesiredState = GlContextState
 		{ glContextStateFrameBuffer = desiredFrameBufferRef
 		}
-	} = refSetup actualFrameBufferRef desiredFrameBufferRef $ \(GlFrameBufferId name) -> do
+	} = refSetup_ actualFrameBufferRef desiredFrameBufferRef $ \(GlFrameBufferId name) -> do
 	glBindFramebuffer gl_FRAMEBUFFER name
 	glCheckErrors 0 "bind framebuffer"
 
@@ -929,7 +1235,7 @@ glEnableDepthWriteForClearing GlContext
 
 -- | Get size, type, isNormalized and isInteger for OpenGL by attribute type.
 glGetAttributeSTNI :: AttributeType -> (GLint, GLenum, GLboolean, Bool)
-glGetAttributeSTNI t = case t of
+glGetAttributeSTNI at = case at of
 	ATFloat32 -> (1, gl_FLOAT, 0, False)
 	ATFloat16 -> (1, gl_HALF_FLOAT, 0, False)
 	ATInt32 n -> let nn = normalized n in (1, gl_INT, if nn then 1 else 0, not nn)
@@ -948,25 +1254,40 @@ glGetAttributeSTNI t = case t of
 		NonNormalized -> False
 		Normalized -> True
 
-refSetup :: Eq a => IORef a -> IORef a -> (a -> IO ()) -> IO ()
+refSetup :: Eq a => IORef a -> IORef a -> (a -> IO ()) -> IO Bool
 refSetup actualRef desiredRef setup = do
 	actual <- readIORef actualRef
 	desired <- readIORef desiredRef
 	if actual /= desired then do
 		setup desired
 		writeIORef actualRef desired
-	else return ()
+		return True
+	else return False
 
-vectorSetup :: Eq a => VM.IOVector a -> VM.IOVector a -> (Int -> a -> IO ()) -> IO ()
-vectorSetup actualArray desiredArray setup = do
+refSetup_ :: Eq a => IORef a -> IORef a -> (a -> IO ()) -> IO ()
+refSetup_ actualRef desiredRef setup = do
+	_ <- refSetup actualRef desiredRef setup
+	return ()
+
+vectorSetupCond :: Eq a => Bool -> VM.IOVector a -> VM.IOVector a -> (Int -> a -> IO ()) -> IO ()
+vectorSetupCond forceSetup actualArray desiredArray setup = do
 	let len = VM.length actualArray
 	forM_ [0..(len - 1)] $ \i -> do
 		actual <- VM.unsafeRead actualArray i
 		desired <- VM.unsafeRead desiredArray i
-		if actual /= desired then do
+		if forceSetup || actual /= desired then do
 			setup i desired
 			VM.unsafeWrite actualArray i desired
 		else return ()
+
+vectorSetup :: Eq a => VM.IOVector a -> VM.IOVector a -> (Int -> a -> IO ()) -> IO ()
+vectorSetup = vectorSetupCond False
+
+instance Eq (IndexBufferId GlDevice) where
+	(GlIndexBufferId indexBufferName1 _indicesType1) == (GlIndexBufferId indexBufferName2 _indicesType2) = indexBufferName1 == indexBufferName2
+
+instance Eq (ProgramId GlDevice) where
+	(GlProgramId { glProgramName = name1 }) == (GlProgramId { glProgramName = name2 }) = name1 == name2
 
 -- | Check for OpenGL errors, throw an exception if there's some.
 glCheckErrors :: Int -> String -> IO ()

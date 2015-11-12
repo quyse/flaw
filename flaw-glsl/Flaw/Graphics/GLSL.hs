@@ -10,6 +10,7 @@ module Flaw.Graphics.GLSL
 	( GlslConfig(..)
 	, glslWebGLConfig
 	, GlslAttribute(..)
+	, GlslUniformBlock(..)
 	, GlslUniform(..)
 	, GlslSampler(..)
 	, GlslTarget(..)
@@ -62,7 +63,7 @@ data GlslAttribute = GlslAttribute
 data GlslUniformBlock = GlslUniformBlock
 	{ glslUniformBlockName :: !T.Text
 	, glslUniformBlockSlot :: !Int
-	}
+	} deriving Show
 
 data GlslUniform = GlslUniform
 	{ glslUniformName :: !T.Text
@@ -112,10 +113,20 @@ generateProgram config state = case SL.programInfo state of
 			, glslVarType = t
 			}
 
-		-- all uniforms
+		-- all uniforms without duplicates
 		allUniforms = map head $ group $ sort $ vsUniforms ++ psUniforms
 
-		-- program uniforms
+		-- create GLSL uniform blocks
+		compareBySlot u1 u2 = compare (uniformSlot u1) (uniformSlot u2)
+		programUniformBlock slot = GlslUniformBlock
+			{ glslUniformBlockName = TL.toStrict $ toLazyText $ uniformBlockName slot
+			, glslUniformBlockSlot = slot
+			}
+		uniformBlocks = if glslConfigUniformBlocks config then
+			map (programUniformBlock . uniformSlot . head) $ group $ sortBy compareBySlot allUniforms
+			else []
+
+		-- create GLSL uniforms
 		programUniform info@Uniform
 			{ uniformSlot = slot
 			, uniformOffset = offset
@@ -123,16 +134,7 @@ generateProgram config state = case SL.programInfo state of
 			{ glslUniformName = TL.toStrict $ toLazyText $ uniformName slot offset
 			, glslUniformInfo = info
 			}
-		uniforms = map programUniform allUniforms
-
-		-- program uniform blocks
-		compareBySlot u1 u2 = compare (uniformSlot u1) (uniformSlot u2)
-		programUniformBlock uniforms = GlslUniformBlock
-			{ glslUniformBlockName = uniformBlockName slot
-			, glslUniformBlockSlot = slot
-			} where
-			slot = uniformSlot $ glslUniformInfo $ head uniforms
-		uniformBlocks = map programUniformBlock $ group $ sortBy compareBySlot allUniforms
+		uniforms = if glslConfigUniformBlocks config then [] else map programUniform allUniforms
 
 		-- program samplers
 		programSampler info@Sampler
@@ -154,7 +156,7 @@ generateProgram config state = case SL.programInfo state of
 		vs = glslShader config VertexStage vsInfo attributeInputs interpolants $ map tempIndex interpolantTemps
 		ps = glslShader config PixelStage psInfo [] interpolants []
 
-		in GlslVertexPixelProgram as uniforms samplers targets vs ps
+		in GlslVertexPixelProgram as uniformBlocks uniforms samplers targets vs ps
 
 glslShader :: GlslConfig -> Stage -> SL.ShaderInfo -> [GlslVar] -> [GlslVar] -> [Int] -> GlslShader
 glslShader config stage (temps, _, uniforms, samplers, targets) attributes varyings interpolants = GlslShader $ TL.toStrict $ toLazyText source where

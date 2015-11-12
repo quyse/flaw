@@ -28,7 +28,7 @@ data ColorSource
 	| ColorSourceInvSecondSrc
 	| ColorSourceSecondSrcAlpha
 	| ColorSourceInvSecondSrcAlpha
-	deriving Show
+	deriving (Eq, Show)
 
 -- | Alpha source for blending.
 data AlphaSource
@@ -40,7 +40,7 @@ data AlphaSource
 	| AlphaSourceInvDest
 	| AlphaSourceSecondSrc
 	| AlphaSourceInvSecondSrc
-	deriving Show
+	deriving (Eq, Show)
 
 -- | Blend operation.
 data BlendOperation
@@ -49,7 +49,7 @@ data BlendOperation
 	| BlendOperationSubtractBA
 	| BlendOperationMin
 	| BlendOperationMax
-	deriving Show
+	deriving (Eq, Show)
 
 data BlendStateInfo = BlendStateInfo
 	{ blendSourceColor :: ColorSource
@@ -58,7 +58,7 @@ data BlendStateInfo = BlendStateInfo
 	, blendSourceAlpha :: AlphaSource
 	, blendDestAlpha :: AlphaSource
 	, blendAlphaOperation :: BlendOperation
-	} deriving Show
+	} deriving (Eq, Show)
 
 defaultBlendStateInfo :: BlendStateInfo
 defaultBlendStateInfo = BlendStateInfo
