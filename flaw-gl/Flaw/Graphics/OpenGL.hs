@@ -98,6 +98,7 @@ instance System GlSystem where
 data GlContext = GlContext
 	{ glContextContext :: !SDL.GLContext
 	, glContextCaps :: !GlCaps
+	, glContextWindow :: SdlWindow
 	, glContextActualState :: GlContextState
 	, glContextDesiredState :: GlContextState
 	-- | Number of manually bound attributes.
@@ -758,25 +759,166 @@ instance Context GlContext GlContext where
 				glDrawArrays gl_TRIANGLES 0 (fromIntegral indicesCount)
 		glCheckErrors 1 "draw"
 
-	{-
-	contextPlay :: Context dc d => c -> dc -> IO ()
-	contextRender :: c -> IO a -> IO a
-	contextSetFrameBuffer :: c -> FrameBufferId d -> IO a -> IO a
-	contextSetViewport :: c -> Int -> Int -> IO a -> IO a
-	contextGetViewport :: c -> IO (Int, Int)
-	contextSetVertexBuffer :: c -> Int -> VertexBufferId d -> IO a -> IO a
-	contextSetIndexBuffer :: c -> IndexBufferId d -> IO a -> IO a
-	contextSetUniformBuffer :: c -> Int -> UniformBufferId d -> IO a -> IO a
-	contextSetSampler :: c -> Int -> TextureId d -> SamplerStateId d -> IO a -> IO a
-	contextSetBlendState :: c -> BlendStateId d -> IO a -> IO a
-	contextSetDepthTestFunc :: c -> DepthTestFunc -> IO a -> IO a
-	contextSetDepthWrite :: c -> Bool -> IO a -> IO a
-	contextSetProgram :: c -> ProgramId d -> IO a -> IO a
-	-}
+	-- TODO
+	contextPlay = undefined
+
+	contextRender GlContext
+		{ glContextDesiredState = desiredContextState
+		} f = do
+		glSetDefaultContextState desiredContextState
+		f
+
+	contextSetFrameBuffer GlContext
+		{ glContextDesiredState = GlContextState
+			{ glContextStateFrameBuffer = frameBufferRef
+			}
+		} frameBuffer scope = do
+		oldFrameBuffer <- readIORef frameBufferRef
+		writeIORef frameBufferRef frameBuffer
+		r <- scope
+		writeIORef frameBufferRef oldFrameBuffer
+		return r
+
+	contextSetViewport GlContext
+		{ glContextDesiredState = GlContextState
+			{ glContextStateViewport = viewportRef
+			}
+		} width height scope = do
+		oldViewport <- readIORef viewportRef
+		writeIORef viewportRef (width, height)
+		r <- scope
+		writeIORef viewportRef oldViewport
+		return r
+
+	contextGetViewport GlContext
+		{ glContextDesiredState = GlContextState
+			{ glContextStateViewport = viewportRef
+			}
+		} = readIORef viewportRef
+
+	contextSetVertexBuffer GlContext
+		{ glContextDesiredState = GlContextState
+			{ glContextStateVertexBuffers = vertexBuffersVector
+			}
+		} i vertexBuffer scope = do
+		oldVertexBuffer <- VM.read vertexBuffersVector i
+		VM.write vertexBuffersVector i vertexBuffer
+		r <- scope
+		VM.write vertexBuffersVector i oldVertexBuffer
+		return r
+
+	contextSetIndexBuffer GlContext
+		{ glContextDesiredState = GlContextState
+			{ glContextStateIndexBuffer = indexBufferRef
+			}
+		} indexBuffer scope = do
+		oldIndexBuffer <- readIORef indexBufferRef
+		writeIORef indexBufferRef indexBuffer
+		r <- scope
+		writeIORef indexBufferRef oldIndexBuffer
+		return r
+
+	contextSetUniformBuffer GlContext
+		{ glContextDesiredState = GlContextState
+			{ glContextStateUniformBuffers = uniformBuffersVector
+			}
+		} i uniformBuffer scope = do
+		oldUniformBuffer <- VM.read uniformBuffersVector i
+		VM.write uniformBuffersVector i uniformBuffer
+		r <- scope
+		VM.write uniformBuffersVector i oldUniformBuffer
+		return r
+
+	contextSetSampler GlContext
+		{ glContextDesiredState = GlContextState
+			{ glContextStateSamplers = samplersVector
+			}
+		} i texture samplerState scope = do
+		oldSampler <- VM.read samplersVector i
+		VM.write samplersVector i (texture, samplerState)
+		r <- scope
+		VM.write samplersVector i oldSampler
+		return r
+
+	contextSetBlendState GlContext
+		{ glContextDesiredState = GlContextState
+			{ glContextStateBlendState = blendStateRef
+			}
+		} blendState scope = do
+		oldBlendState <- readIORef blendStateRef
+		writeIORef blendStateRef blendState
+		r <- scope
+		writeIORef blendStateRef oldBlendState
+		return r
+
+	contextSetDepthTestFunc GlContext
+		{ glContextDesiredState = GlContextState
+			{ glContextStateDepthTestFunc = depthTestFuncRef
+			}
+		} depthTestFunc scope = do
+		oldDepthTestFunc <- readIORef depthTestFuncRef
+		writeIORef depthTestFuncRef depthTestFunc
+		r <- scope
+		writeIORef depthTestFuncRef oldDepthTestFunc
+		return r
+
+	contextSetDepthWrite GlContext
+		{ glContextDesiredState = GlContextState
+			{ glContextStateDepthWrite = depthWriteRef
+			}
+		} depthWrite scope = do
+		oldDepthWrite <- readIORef depthWriteRef
+		writeIORef depthWriteRef depthWrite
+		r <- scope
+		writeIORef depthWriteRef oldDepthWrite
+		return r
+
+	contextSetProgram GlContext
+		{ glContextDesiredState = GlContextState
+			{ glContextStateProgram = programRef
+			}
+		} program scope = do
+		oldProgram <- readIORef programRef
+		writeIORef programRef program
+		r <- scope
+		writeIORef programRef oldProgram
+		return r
 
 type GlPresenter = GlContext
 
 instance Presenter GlContext GlSystem GlContext GlContext where
+	-- TODO
+	setPresenterMode _presenter _maybeMode = return ()
+
+	presenterRender GlContext
+		{ glContextWindow = SdlWindow
+			{ swSystem = windowSystem
+			, swHandle = windowHandle
+			}
+		} GlContext
+		{ glContextDesiredState = GlContextState
+			{ glContextStateFrameBuffer = frameBufferRef
+			, glContextStateViewport = viewportRef
+			}
+		} f = invokeSdlWindowSystem windowSystem $ do
+		-- get viewport size
+		(width, height) <- alloca $ \widthPtr -> alloca $ \heightPtr -> do
+			SDL.glGetDrawableSize windowHandle widthPtr heightPtr
+			width <- peek widthPtr
+			height <- peek heightPtr
+			return (width, height)
+
+		-- setup state
+		writeIORef frameBufferRef $ GlFrameBufferId 0
+		writeIORef viewportRef (fromIntegral width, fromIntegral height)
+
+		-- perform render
+		r <- f
+
+		-- present
+		SDL.glSwapWindow windowHandle
+
+		return r
 
 createGlSystem :: IO (GlSystem, IO ())
 createGlSystem = return (GlSystem, return ())
@@ -791,7 +933,7 @@ data GlCaps = GlCaps
 	}
 
 createGlContext :: DeviceId GlSystem -> SdlWindow -> IO (GlContext, IO ())
-createGlContext _deviceId SdlWindow
+createGlContext _deviceId window@SdlWindow
 	{ swSystem = ws
 	, swHandle = windowHandle
 	} = describeException "failed to create OpenGL device" $ invokeSdlWindowSystem ws $ do
@@ -818,10 +960,23 @@ createGlContext _deviceId SdlWindow
 			, glCapsArbTextureStorage = capArbTextureStorage
 			, glCapsArbInstancedArrays = capArbInstancedArrays
 			}
+		, glContextWindow = window
 		, glContextActualState = actualContextState
 		, glContextDesiredState = desiredContextState
 		, glContextBoundAttributesCount = boundAttributesCount
 		}
+
+	-- make context current
+	checkSdlError (== 0) $ SDL.glMakeCurrent windowHandle glContext
+
+	-- set swap interval
+	do
+		-- try "late swap tearing"
+		r <- SDL.glSetSwapInterval (-1)
+		if r /= 0 then do
+			-- didn't work, try usual vsync
+			checkSdlError (== 0) $ SDL.glSetSwapInterval 1
+		else return ()
 
 	-- set front face mode
 	glFrontFace gl_CW
@@ -861,6 +1016,30 @@ glCreateContextState = do
 		, glContextStateDepthWrite = depthWrite
 		, glContextStateBlendState = blendState
 		}
+
+glSetDefaultContextState :: GlContextState -> IO ()
+glSetDefaultContextState GlContextState
+	{ glContextStateFrameBuffer = frameBufferRef
+	, glContextStateViewport = viewportRef
+	, glContextStateVertexBuffers = vertexBuffersVector
+	, glContextStateIndexBuffer = indexBufferRef
+	, glContextStateUniformBuffers = uniformBuffersVector
+	, glContextStateSamplers = samplersVector
+	, glContextStateProgram = programRef
+	, glContextStateDepthTestFunc = depthTestFuncRef
+	, glContextStateDepthWrite = depthWriteRef
+	, glContextStateBlendState = blendStateRef
+	} = do
+	writeIORef frameBufferRef $ GlFrameBufferId 0
+	writeIORef viewportRef (0, 0)
+	VM.set vertexBuffersVector $ GlVertexBufferId 0 0
+	writeIORef indexBufferRef $ GlIndexBufferId 0 gl_UNSIGNED_SHORT
+	VM.set uniformBuffersVector GlNullUniformBufferId
+	VM.set samplersVector (GlTextureId 0, GlSamplerStateId 0)
+	writeIORef programRef glNullProgram
+	writeIORef depthTestFuncRef DepthTestFuncLess
+	writeIORef depthWriteRef True
+	writeIORef blendStateRef nullBlendState
 
 isGlExtensionSupported :: String -> IO Bool
 isGlExtensionSupported name = withCString name SDL.glExtensionSupported
