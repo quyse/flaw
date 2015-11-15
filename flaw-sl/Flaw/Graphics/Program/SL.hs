@@ -12,7 +12,9 @@ module Flaw.Graphics.Program.SL
 	, programInfo
 	) where
 
-import Data.Array
+import Control.Monad
+import qualified Data.Vector as V
+import qualified Data.Vector.Mutable as VM
 import Data.List
 
 import Flaw.Graphics.Program.Internal
@@ -92,12 +94,12 @@ unique a = map head $ group a
 
 type ShaderInfo = ([Temp], [Attribute], [Uniform], [Sampler], [Target])
 
-shaderInfo :: [Temp] -> [Target] -> Array Int Temp -> ShaderInfo
+shaderInfo :: [Temp] -> [Target] -> V.Vector Temp -> ShaderInfo
 shaderInfo sourceTemps targets allTemps = totalInfo where
 	tempInfos = map (\Temp { tempNode = node, tempIndex = i } -> mergeNodeInfo ([i], [], [], []) $ nodeInfo node) sourceTemps
 	targetInfos = map targetNodeInfo targets
 	(tempIndices, attributes, uniforms, samplers) = foldr mergeNodeInfo (foldr mergeNodeInfo emptyNodeInfo tempInfos) targetInfos
-	temps = map (allTemps !) $ unique tempIndices
+	temps = map (allTemps V.!) $ unique tempIndices
 	totalInfo = (temps, unique attributes, unique uniforms, unique samplers, targets)
 
 data ProgramInfo
@@ -116,7 +118,12 @@ programInfo State
 	{ stateTemps = temps
 	, stateTargets = targets
 	} = info where
-	allTemps = array (0, length temps - 1) $ map (\temp@Temp { tempIndex = i } -> (i, temp)) temps
+	allTemps = V.create $ do
+		ts <- VM.new $ length temps
+		forM_ temps $ \temp@Temp
+			{ tempIndex = i
+			} -> VM.write ts i temp
+		return ts
 	vertexTemps = filter (\temp -> tempStage temp == VertexStage) temps
 	pixelTemps = filter (\temp -> tempStage temp == PixelStage) temps
 	vertexTargets = filter (\target -> targetStage target == VertexStage) targets
