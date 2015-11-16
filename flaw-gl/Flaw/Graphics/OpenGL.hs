@@ -188,13 +188,13 @@ instance Device GlContext where
 
 	createDeferredContext = undefined
 
-	createStaticTexture GlContext
+	createStaticTexture context@GlContext
 		{ glContextCaps = GlCaps
 			{ glCapsArbTextureStorage = useTextureStorage
 			}
 		} textureInfo@TextureInfo
 		{ textureFormat = format
-		} bytes = describeException ("failed to create OpenGL static texture", textureInfo) $ do
+		} bytes = glInvoke context $ describeException ("failed to create OpenGL static texture", textureInfo) $ do
 
 		let
 			width = fromIntegral $ textureWidth textureInfo
@@ -321,11 +321,11 @@ instance Device GlContext where
 
 	createBlendState _context blendStateInfo = return (GlBlendStateId blendStateInfo, return ())
 
-	createReadableRenderTarget GlContext
+	createReadableRenderTarget context@GlContext
 		{ glContextCaps = GlCaps
 			{ glCapsArbTextureStorage = useTextureStorage
 			}
-		} width height format = describeException "failed to create OpenGL readable render target" $ do
+		} width height format = glInvoke context $ describeException "failed to create OpenGL readable render target" $ do
 		-- allocate texture name
 		textureName <- alloca $ \namePtr -> do
 			glGenTextures 1 namePtr
@@ -345,7 +345,7 @@ instance Device GlContext where
 
 		return ((GlRenderTargetId textureName, GlTextureId textureName), with textureName $ glDeleteTextures 1)
 
-	createDepthStencilTarget _context width height = describeException "failed to create OpenGL depth stencil target" $ do
+	createDepthStencilTarget context width height = glInvoke context $ describeException "failed to create OpenGL depth stencil target" $ do
 		-- allocate texture name
 		textureName <- alloca $ \namePtr -> do
 			glGenTextures 1 namePtr
@@ -366,7 +366,7 @@ instance Device GlContext where
 		(depthStencilTarget@(GlDepthStencilTargetId bufferName), destroy) <- createDepthStencilTarget context width height
 		return ((depthStencilTarget, GlTextureId bufferName), destroy)
 
-	createFrameBuffer _context renderTargets (GlDepthStencilTargetId depthStencilName) = describeException "failed to create OpenGL framebuffer" $ do
+	createFrameBuffer context renderTargets (GlDepthStencilTargetId depthStencilName) = glInvoke context $ describeException "failed to create OpenGL framebuffer" $ do
 		-- allocate framebuffer name
 		framebufferName <- alloca $ \namePtr -> do
 			glGenFramebuffers 1 namePtr
@@ -381,7 +381,7 @@ instance Device GlContext where
 
 		return (GlFrameBufferId framebufferName, with framebufferName $ glDeleteFramebuffers 1)
 
-	createStaticVertexBuffer _context bytes stride = describeException "failed to create OpenGL static vertex buffer" $ do
+	createStaticVertexBuffer context bytes stride = glInvoke context $ describeException "failed to create OpenGL static vertex buffer" $ do
 		-- allocate buffer name
 		bufferName <- alloca $ \namePtr -> do
 			glGenBuffers 1 namePtr
@@ -393,7 +393,7 @@ instance Device GlContext where
 
 		return (GlVertexBufferId bufferName (fromIntegral stride), with bufferName $ glDeleteBuffers 1)
 
-	createDynamicVertexBuffer _context size stride = describeException "failed to create OpenGL dynamic vertex buffer" $ do
+	createDynamicVertexBuffer context size stride = glInvoke context $ describeException "failed to create OpenGL dynamic vertex buffer" $ do
 		-- allocate buffer name
 		bufferName <- alloca $ \namePtr -> do
 			glGenBuffers 1 namePtr
@@ -404,7 +404,7 @@ instance Device GlContext where
 
 		return (GlVertexBufferId bufferName (fromIntegral stride), with bufferName $ glDeleteBuffers 1)
 
-	createStaticIndexBuffer _context bytes is32Bit = describeException "failed to create OpenGL static index buffer" $ do
+	createStaticIndexBuffer context bytes is32Bit = glInvoke context $ describeException "failed to create OpenGL static index buffer" $ do
 		-- allocate buffer name
 		bufferName <- alloca $ \namePtr -> do
 			glGenBuffers 1 namePtr
@@ -416,7 +416,7 @@ instance Device GlContext where
 
 		return (GlIndexBufferId bufferName (if is32Bit then gl_UNSIGNED_INT else gl_UNSIGNED_SHORT), with bufferName $ glDeleteBuffers 1)
 
-	createProgram GlContext
+	createProgram context@GlContext
 		{ glContextCaps = GlCaps
 			{ glCapsArbUniformBufferObject = useUniformBufferObject
 			, glCapsArbVertexAttribBinding = capArbVertexAttribBinding
@@ -424,267 +424,287 @@ instance Device GlContext where
 		, glContextActualState = GlContextState
 			{ glContextStateProgram = actualProgramRef
 			}
-		} program = describeException "failed to create OpenGL program" $ do
+		} program = glInvoke context $ describeException "failed to create OpenGL program" $ do
 
 		bk <- newBook
-
-		let createShader (GlslShader source) shaderType = describeException "failed to create OpenGL shader" $ do
-			shaderName <- glCreateShader shaderType
-			glCheckErrors 0 "create shader"
-			B.unsafeUseAsCStringLen (T.encodeUtf8 source) $ \(sourcePtr, sourceLen) -> do
-				with sourcePtr $ \sourcePtrPtr -> do
-					with (fromIntegral sourceLen) $ \sourceLenPtr -> do
-						glShaderSource shaderName 1 sourcePtrPtr sourceLenPtr
-			glCheckErrors 0 "set shader source"
-			glCompileShader shaderName
-			glCheckErrors 0 "compile shader"
-			status <- alloca $ \statusPtr -> do
-				glGetShaderiv shaderName gl_COMPILE_STATUS statusPtr
-				peek statusPtr
-			if status == 1 then return (shaderName, glDeleteShader shaderName)
-			else do
-				logLength <- alloca $ \logLengthPtr -> do
-					glGetShaderiv shaderName gl_INFO_LOG_LENGTH logLengthPtr
-					peek logLengthPtr
-				logBytes <- allocaBytes (fromIntegral logLength) $ \logPtr -> do
-					realLogLength <- alloca $ \logLengthPtr -> do
-						glGetShaderInfoLog shaderName logLength logLengthPtr logPtr
-						peek logLengthPtr
-					B.packCStringLen (logPtr, fromIntegral realLogLength)
-				glClearErrors
-				throwIO $ DescribeFirstException ("failed to compile shader", T.decodeUtf8 logBytes)
 
 		-- generate GLSL
 		let glslConfig = GlslConfig
 			{ glslConfigForceFloatAttributes = False
 			, glslConfigUnsignedUnsupported = False
-			, glslConfigDeclareTargets = True
 			, glslConfigUniformBlocks = useUniformBufferObject
+			, glslConfigInOutSyntax = True
 			}
-		glslProgram <- liftM (generateProgram glslConfig) $ runProgram program
-		case glslProgram of
-			GlslVertexPixelProgram attributes uniformBlocks uniforms samplers targets vertexShader pixelShader -> do
-				-- create program
-				programName <- book bk $ do
-					p <- glCreateProgram
-					return (p, glDeleteProgram p)
+		GlslProgram
+			{ glslProgramAttributes = attributes
+			, glslProgramUniformBlocks = uniformBlocks
+			, glslProgramUniforms = uniforms
+			, glslProgramSamplers = samplers
+			, glslProgramFragmentTargets = fragmentTargets
+			, glslProgramShaders = shaders
+			} <- liftM (glslGenerateProgram glslConfig) $ runProgram program
 
-				-- create and attach shaders
-				glAttachShader programName =<< book bk (createShader vertexShader gl_VERTEX_SHADER)
-				glCheckErrors 0 "attach vertex shader"
-				glAttachShader programName =<< book bk (createShader pixelShader gl_FRAGMENT_SHADER)
-				glCheckErrors 0 "attach pixel shader"
+		-- create program
+		programName <- book bk $ do
+			p <- glCreateProgram
+			return (p, glDeleteProgram p)
 
-				-- bind attributes
-				forM_ (zip attributes [0..]) $ \(GlslAttribute
-					{ glslAttributeName = attributeName
-					}, i) -> do
-					B.useAsCString (T.encodeUtf8 attributeName) $ glBindAttribLocation programName i
-					glCheckErrors 0 "bind attribute location"
+		-- create and attach shaders
+		forM_ shaders $ \(shaderStage, shaderSource) -> describeException ("failed to create OpenGL shader", shaderStage) $ do
 
-				-- bind targets
-				forM_ targets $ \GlslTarget
-					{ glslTargetName = targetName
-					, glslTargetIndex = targetIndex
-					} -> do
-					B.useAsCString (T.encodeUtf8 targetName) $ glBindFragDataLocation programName (fromIntegral targetIndex)
-					glCheckErrors 0 "bind frag data location"
+			-- create shader
+			shaderName <- glCreateShader $ case shaderStage of
+				GlslVertexStage -> gl_VERTEX_SHADER
+				GlslFragmentStage -> gl_FRAGMENT_SHADER
+			glCheckErrors 0 "create shader"
+			_ <- book bk $ return (shaderName, glDeleteShader shaderName)
 
-				-- link program
-				glLinkProgram programName
-				glCheckErrors 0 "link program"
-				status <- alloca $ \statusPtr -> do
-					glGetProgramiv programName gl_LINK_STATUS statusPtr
-					peek statusPtr
-				if status == 1 then return ()
-				else do
-					logLength <- alloca $ \logLengthPtr -> do
-						glGetProgramiv programName gl_INFO_LOG_LENGTH logLengthPtr
+			-- set shader source
+			B.unsafeUseAsCStringLen (T.encodeUtf8 shaderSource) $ \(sourcePtr, sourceLen) -> do
+				with sourcePtr $ \sourcePtrPtr -> do
+					with (fromIntegral sourceLen) $ \sourceLenPtr -> do
+						glShaderSource shaderName 1 sourcePtrPtr sourceLenPtr
+			glCheckErrors 0 "set shader source"
+
+			-- compile shader
+			glCompileShader shaderName
+			glCheckErrors 0 "compile shader"
+			-- check compilation status
+			status <- alloca $ \statusPtr -> do
+				glGetShaderiv shaderName gl_COMPILE_STATUS statusPtr
+				peek statusPtr
+			if status == 1 then do
+				-- compilation succeeded, attach shader to program
+				glAttachShader programName shaderName
+				glCheckErrors 0 "attach shader"
+			else do
+				-- in case of error, get compilation log
+				logLength <- alloca $ \logLengthPtr -> do
+					poke logLengthPtr 0
+					glGetShaderiv shaderName gl_INFO_LOG_LENGTH logLengthPtr
+					glCheckErrors 0 "get shader log length"
+					peek logLengthPtr
+				logBytes <- allocaBytes (fromIntegral logLength) $ \logPtr -> do
+					realLogLength <- alloca $ \logLengthPtr -> do
+						glGetShaderInfoLog shaderName logLength logLengthPtr logPtr
+						glCheckErrors 0 "get shader log"
 						peek logLengthPtr
-					logBytes <- allocaBytes (fromIntegral logLength) $ \logPtr -> do
-						realLogLength <- alloca $ \logLengthPtr -> do
-							glGetProgramInfoLog programName logLength logLengthPtr logPtr
-							peek logLengthPtr
-						B.packCStringLen (logPtr, fromIntegral realLogLength)
-					glClearErrors
-					throwIO $ DescribeFirstException ("failed to link program", T.decodeUtf8 logBytes)
+					B.packCStringLen (logPtr, fromIntegral realLogLength)
+				glClearErrors
+				throwIO $ DescribeFirstException ("failed to compile shader", T.decodeUtf8 logBytes)
 
-				-- set as current
-				glUseProgram programName
-				glCheckErrors 0 "set program"
+		-- bind attributes
+		forM_ (zip attributes [0..]) $ \(GlslAttribute
+			{ glslAttributeName = attributeName
+			}, i) -> do
+			B.useAsCString (T.encodeUtf8 attributeName) $ glBindAttribLocation programName i
+			glCheckErrors 0 "bind attribute location"
 
-				-- bind uniform blocks
-				forM_ uniformBlocks $ \GlslUniformBlock
-					{ glslUniformBlockName = uniformBlockName
-					, glslUniformBlockSlot = slot
-					} -> do
-					index <- B.useAsCString (T.encodeUtf8 uniformBlockName) $ glGetUniformBlockIndex programName
-					glCheckErrors 0 "get uniform block index"
-					glUniformBlockBinding programName index (fromIntegral slot)
-					glCheckErrors 0 "uniform block binding"
+		-- bind fragment targets
+		forM_ fragmentTargets $ \GlslFragmentTarget
+			{ glslFragmentTargetName = targetName
+			, glslFragmentTargetIndex = targetIndex
+			} -> do
+			B.useAsCString (T.encodeUtf8 targetName) $ glBindFragDataLocation programName (fromIntegral targetIndex)
+			glCheckErrors 0 "bind frag data location"
 
-				-- bind samplers
-				forM_ samplers $ \GlslSampler
-					{ glslSamplerName = samplerName
-					, glslSamplerInfo = Sampler
-						{ samplerSlot = slot
+		-- link program
+		glLinkProgram programName
+		glCheckErrors 0 "link program"
+		-- check link status
+		status <- alloca $ \statusPtr -> do
+			glGetProgramiv programName gl_LINK_STATUS statusPtr
+			peek statusPtr
+		if status == 1 then return ()
+		else do
+			-- in case of error, get linking log
+			logLength <- alloca $ \logLengthPtr -> do
+				glGetProgramiv programName gl_INFO_LOG_LENGTH logLengthPtr
+				peek logLengthPtr
+			logBytes <- allocaBytes (fromIntegral logLength) $ \logPtr -> do
+				realLogLength <- alloca $ \logLengthPtr -> do
+					glGetProgramInfoLog programName logLength logLengthPtr logPtr
+					peek logLengthPtr
+				B.packCStringLen (logPtr, fromIntegral realLogLength)
+			glClearErrors
+			throwIO $ DescribeFirstException ("failed to link program", T.decodeUtf8 logBytes)
+
+		-- set as current
+		glUseProgram programName
+		glCheckErrors 0 "set program"
+
+		-- bind uniform blocks
+		forM_ uniformBlocks $ \GlslUniformBlock
+			{ glslUniformBlockName = uniformBlockName
+			, glslUniformBlockSlot = slot
+			} -> do
+			index <- B.useAsCString (T.encodeUtf8 uniformBlockName) $ glGetUniformBlockIndex programName
+			glCheckErrors 0 "get uniform block index"
+			glUniformBlockBinding programName index (fromIntegral slot)
+			glCheckErrors 0 "uniform block binding"
+
+		-- bind samplers
+		forM_ samplers $ \GlslSampler
+			{ glslSamplerName = samplerName
+			, glslSamplerInfo = Sampler
+				{ samplerSlot = slot
+				}
+			} -> do
+			location <- B.useAsCString (T.encodeUtf8 samplerName) $ glGetUniformLocation programName
+			glCheckErrors 0 "get sampler location"
+			glUniform1i location (fromIntegral slot)
+			glCheckErrors 0 "bind sampler to texture unit"
+
+		-- get non-buffer uniform bindings
+		uniformBindings <- do
+			-- sort uniforms by slot
+			let getSlot GlslUniform
+				{ glslUniformInfo = Uniform
+					{ uniformSlot = slot
+					}
+				} = slot
+			let eqBySlot a b = getSlot a == getSlot b
+			let compareBySlot a b = compare (getSlot a) (getSlot b)
+			let uniformsBySlot = groupBy eqBySlot $ sortBy compareBySlot uniforms
+			-- get maximum slot
+			let slotsCount = if null uniformsBySlot then 0 else 1 + (maximum $ map (getSlot . head) uniformsBySlot)
+			-- create slots
+			slots <- VM.replicate slotsCount V.empty
+			forM_ uniformsBySlot $ \us@(u : _) -> do
+				let slot = getSlot u
+				slotUniforms <- V.forM (V.fromList us) $ \GlslUniform
+					{ glslUniformName = uniformName
+					, glslUniformInfo = Uniform
+						{ uniformOffset = offset
+						, uniformSize = size
+						, uniformType = t
 						}
 					} -> do
-					location <- B.useAsCString (T.encodeUtf8 samplerName) $ glGetUniformLocation programName
-					glCheckErrors 0 "get sampler location"
-					glUniform1i location (fromIntegral slot)
-					glCheckErrors 0 "bind sampler to texture unit"
+					-- get location
+					location <- B.useAsCString (T.encodeUtf8 uniformName) $ glGetUniformLocation programName
+					glCheckErrors 0 "get uniform location"
 
-				-- get non-buffer uniform bindings
-				uniformBindings <- do
-					-- sort uniforms by slot
-					let getSlot GlslUniform
-						{ glslUniformInfo = Uniform
-							{ uniformSlot = slot
-							}
-						} = slot
-					let eqBySlot a b = getSlot a == getSlot b
-					let compareBySlot a b = compare (getSlot a) (getSlot b)
-					let uniformsBySlot = groupBy eqBySlot $ sortBy compareBySlot uniforms
-					-- get maximum slot
-					let maxSlot = maximum $ map (getSlot . head) uniformsBySlot
-					-- create slots
-					slots <- VM.replicate (maxSlot + 1) V.empty
-					forM_ uniformsBySlot $ \us@(u : _) -> do
-						let slot = getSlot u
-						slotUniforms <- V.forM (V.fromList us) $ \GlslUniform
-							{ glslUniformName = uniformName
-							, glslUniformInfo = Uniform
-								{ uniformOffset = offset
-								, uniformSize = size
-								, uniformType = t
-								}
-							} -> do
-							-- get location
-							location <- B.useAsCString (T.encodeUtf8 uniformName) $ glGetUniformLocation programName
-							glCheckErrors 0 "get uniform location"
+					return GlUniform
+						{ glUniformLocation = location
+						, glUniformOffset = offset
+						, glUniformSize = fromIntegral size
+						, glUniformType = t
+						}
+				VM.write slots slot slotUniforms
+			V.unsafeFreeze slots
 
-							return GlUniform
-								{ glUniformLocation = location
-								, glUniformOffset = offset
-								, glUniformSize = fromIntegral size
-								, glUniformType = t
-								}
-						VM.write slots slot slotUniforms
-					V.unsafeFreeze slots
+		-- reset current program
+		glUseProgram 0
+		glCheckErrors 0 "reset program"
 
-				-- reset current program
-				glUseProgram 0
-				glCheckErrors 0 "reset program"
+		-- create vertex array if supported
+		(vertexArrayName, attributeSlots, attributesCount) <- if capArbVertexAttribBinding then do
+			-- create vertex array
+			vaName <- book bk $ do
+				vaName <- alloca $ \vaNamePtr -> do
+					glGenVertexArrays 1 vaNamePtr
+					glCheckErrors 0 "gen vertex array"
+					peek vaNamePtr
+				return (vaName, with vaName $ glDeleteVertexArrays 1)
 
-				-- create vertex array if supported
-				(vertexArrayName, attributeSlots, attributesCount) <- if capArbVertexAttribBinding then do
-					-- create vertex array
-					vaName <- book bk $ do
-						vaName <- alloca $ \vaNamePtr -> do
-							glGenVertexArrays 1 vaNamePtr
-							glCheckErrors 0 "gen vertex array"
-							peek vaNamePtr
-						return (vaName, with vaName $ glDeleteVertexArrays 1)
+			-- reset current program (so it will be rebound on next draw)
+			writeIORef actualProgramRef glNullProgram
 
-					-- reset current program (so it will be rebound on next draw)
-					writeIORef actualProgramRef glNullProgram
+			-- bind vertex array
+			glBindVertexArray vaName
+			glCheckErrors 0 "bind vertex array"
 
-					-- bind vertex array
-					glBindVertexArray vaName
-					glCheckErrors 0 "bind vertex array"
+			-- setup attributes for vertex array
+			forM_ (zip attributes [0..]) $ \(GlslAttribute
+				{ glslAttributeInfo = Attribute
+					{ attributeSlot = slot
+					, attributeOffset = offset
+					, attributeDivisor = divisor
+					, attributeType = aType
+					}
+				}, i) -> do
+				-- enable attribute
+				glEnableVertexAttribArray i
+				glCheckErrors 0 "enable vertex attrib array"
 
-					-- setup attributes for vertex array
-					forM_ (zip attributes [0..]) $ \(GlslAttribute
+				-- get attribute's info
+				let (size, t, isNormalized, isInteger) = glGetAttributeSTNI aType
+
+				-- set format
+				if isInteger then glVertexAttribIFormat i size t (fromIntegral offset)
+				else glVertexAttribFormat i size t isNormalized (fromIntegral offset)
+				glCheckErrors 0 "vertex attrib format"
+
+				-- set slot
+				glVertexAttribBinding i (fromIntegral slot)
+				glCheckErrors 0 "vertex attrib binding"
+				-- set divisor for slot
+				-- TODO: it's not optimal, as we will set the same divisor multiple times for the same slot
+				glVertexBindingDivisor i (fromIntegral divisor)
+				glCheckErrors 0 "vertex binding divisor"
+
+			-- unbind vertex array
+			glBindVertexArray 0
+			glCheckErrors 0 "unbind vertex array"
+
+			return (vaName, V.empty, 0)
+		-- else create "manual" attribute binding
+		else do
+			-- sort attributes by slot
+			let getSlot GlslAttribute
+				{ glslAttributeInfo = Attribute
+					{ attributeSlot = slot
+					}
+				} = slot
+			let eqBySlot a b = getSlot (fst a) == getSlot (fst b)
+			let compareBySlot a b = compare (getSlot $ fst a) (getSlot $ fst b)
+			let attributesBySlot = groupBy eqBySlot $ sortBy compareBySlot $ zip attributes [0..]
+			-- get maximum slot
+			let slotsCount = if null attributesBySlot then 0 else 1 + (maximum $ map (getSlot . fst . head) attributesBySlot)
+			-- create attribute slots
+			let attributeSlots = V.create $ do
+				slots <- VM.replicate slotsCount GlAttributeSlot
+					{ glAttributeSlotElements = V.empty
+					, glAttributeSlotDivisor = 0
+					}
+				forM_ attributesBySlot $ \as@(a : _) -> do
+					let slot = getSlot $ fst a
+					elements <- V.forM (V.fromList as) $ \(GlslAttribute
 						{ glslAttributeInfo = Attribute
-							{ attributeSlot = slot
-							, attributeOffset = offset
-							, attributeDivisor = divisor
+							{ attributeOffset = offset
 							, attributeType = aType
 							}
 						}, i) -> do
-						-- enable attribute
-						glEnableVertexAttribArray i
-						glCheckErrors 0 "enable vertex attrib array"
-
-						-- get attribute's info
 						let (size, t, isNormalized, isInteger) = glGetAttributeSTNI aType
-
-						-- set format
-						if isInteger then glVertexAttribIFormat i size t (fromIntegral offset)
-						else glVertexAttribFormat i size t isNormalized (fromIntegral offset)
-						glCheckErrors 0 "vertex attrib format"
-
-						-- set slot
-						glVertexAttribBinding i (fromIntegral slot)
-						glCheckErrors 0 "vertex attrib binding"
-						-- set divisor for slot
-						-- TODO: it's not optimal, as we will set the same divisor multiple times for the same slot
-						glVertexBindingDivisor i (fromIntegral divisor)
-						glCheckErrors 0 "vertex binding divisor"
-
-					-- unbind vertex array
-					glBindVertexArray 0
-					glCheckErrors 0 "unbind vertex array"
-
-					return (vaName, V.empty, 0)
-				-- else create "manual" attribute binding
-				else do
-					-- sort attributes by slot
-					let getSlot GlslAttribute
-						{ glslAttributeInfo = Attribute
-							{ attributeSlot = slot
+						return GlAttribute
+							{ glAttributeIndex = i
+							, glAttributeSize = size
+							, glAttributeType = t
+							, glAttributeIsNormalized = isNormalized
+							, glAttributeIsInteger = isInteger
+							, glAttributeOffset = fromIntegral offset
 							}
-						} = slot
-					let eqBySlot a b = getSlot (fst a) == getSlot (fst b)
-					let compareBySlot a b = compare (getSlot $ fst a) (getSlot $ fst b)
-					let attributesBySlot = groupBy eqBySlot $ sortBy compareBySlot $ zip attributes [0..]
-					-- get maximum slot
-					let maxSlot = maximum $ map (getSlot . fst . head) attributesBySlot
-					-- create attribute slots
-					let attributeSlots = V.create $ do
-						slots <- VM.replicate (maxSlot + 1) GlAttributeSlot
-							{ glAttributeSlotElements = V.empty
-							, glAttributeSlotDivisor = 0
-							}
-						forM_ attributesBySlot $ \as@(a : _) -> do
-							let slot = getSlot $ fst a
-							elements <- V.forM (V.fromList as) $ \(GlslAttribute
-								{ glslAttributeInfo = Attribute
-									{ attributeOffset = offset
-									, attributeType = aType
-									}
-								}, i) -> do
-								let (size, t, isNormalized, isInteger) = glGetAttributeSTNI aType
-								return GlAttribute
-									{ glAttributeIndex = i
-									, glAttributeSize = size
-									, glAttributeType = t
-									, glAttributeIsNormalized = isNormalized
-									, glAttributeIsInteger = isInteger
-									, glAttributeOffset = fromIntegral offset
-									}
-							VM.write slots slot GlAttributeSlot
-								{ glAttributeSlotElements = elements
-								, glAttributeSlotDivisor = fromIntegral $ attributeDivisor $ glslAttributeInfo $ fst a
-								}
-						return slots
+					VM.write slots slot GlAttributeSlot
+						{ glAttributeSlotElements = elements
+						, glAttributeSlotDivisor = fromIntegral $ attributeDivisor $ glslAttributeInfo $ fst a
+						}
+				return slots
 
-					return (0, attributeSlots, length attributes)
+			return (0, attributeSlots, length attributes)
 
-				return (GlProgramId
-					{ glProgramName = programName
-					, glProgramVertexArrayName = vertexArrayName
-					, glProgramAttributeSlots = attributeSlots
-					, glProgramAttributesCount = attributesCount
-					, glProgramUniforms = uniformBindings
-					}, freeBook bk)
+		return (GlProgramId
+			{ glProgramName = programName
+			, glProgramVertexArrayName = vertexArrayName
+			, glProgramAttributeSlots = attributeSlots
+			, glProgramAttributesCount = attributesCount
+			, glProgramUniforms = uniformBindings
+			}, freeBook bk)
 
-	createUniformBuffer GlContext
+	createUniformBuffer context@GlContext
 		{ glContextCaps = GlCaps
 			{ glCapsArbUniformBufferObject = useUniformBufferObject
 			}
-		} size = describeException "failed to create OpenGL uniform buffer" $ do
+		} size = glInvoke context $ describeException "failed to create OpenGL uniform buffer" $ do
 
 		if useUniformBufferObject then do
 			-- allocate buffer name
@@ -890,17 +910,15 @@ instance Presenter GlContext GlSystem GlContext GlContext where
 	-- TODO
 	setPresenterMode _presenter _maybeMode = return ()
 
-	presenterRender GlContext
+	presenterRender context@GlContext
 		{ glContextWindow = SdlWindow
-			{ swSystem = windowSystem
-			, swHandle = windowHandle
+			{ swHandle = windowHandle
 			}
-		} GlContext
-		{ glContextDesiredState = GlContextState
+		, glContextDesiredState = GlContextState
 			{ glContextStateFrameBuffer = frameBufferRef
 			, glContextStateViewport = viewportRef
 			}
-		} f = invokeSdlWindowSystem windowSystem $ do
+		} _context f = glInvoke context $ do
 		-- get viewport size
 		(width, height) <- alloca $ \widthPtr -> alloca $ \heightPtr -> do
 			SDL.glGetDrawableSize windowHandle widthPtr heightPtr
@@ -930,21 +948,25 @@ data GlCaps = GlCaps
 	, glCapsArbFramebufferObject :: !Bool
 	, glCapsArbTextureStorage :: !Bool
 	, glCapsArbInstancedArrays :: !Bool
-	}
+	} deriving Show
 
 createGlContext :: DeviceId GlSystem -> SdlWindow -> IO (GlContext, IO ())
 createGlContext _deviceId window@SdlWindow
 	{ swSystem = ws
 	, swHandle = windowHandle
 	} = describeException "failed to create OpenGL device" $ invokeSdlWindowSystem ws $ do
-	glContext <- SDL.glCreateContext windowHandle
+	-- create context
+	glContext <- checkSdlResult $ SDL.glCreateContext windowHandle
+	-- make it current
+	checkSdlError (== 0) $ SDL.glMakeCurrent windowHandle glContext
+
 	-- init capabilities
-	capArbUniformBufferObject <- isGlExtensionSupported "ARB_uniform_buffer_object"
-	capArbSamplerObjects <- isGlExtensionSupported "ARB_sampler_objects"
-	capArbVertexAttribBinding <- isGlExtensionSupported "ARB_vertex_attrib_binding"
-	capArbFramebufferObject <- isGlExtensionSupported "ARB_framebuffer_object"
-	capArbTextureStorage <- isGlExtensionSupported "ARB_texture_storage"
-	capArbInstancedArrays <- isGlExtensionSupported "ARB_instanced_arrays"
+	capArbUniformBufferObject <- isGlExtensionSupported "GL_ARB_uniform_buffer_object"
+	capArbSamplerObjects <- isGlExtensionSupported "GL_ARB_sampler_objects"
+	capArbVertexAttribBinding <- isGlExtensionSupported "GL_ARB_vertex_attrib_binding"
+	capArbFramebufferObject <- isGlExtensionSupported "GL_ARB_framebuffer_object"
+	capArbTextureStorage <- isGlExtensionSupported "GL_ARB_texture_storage"
+	capArbInstancedArrays <- isGlExtensionSupported "GL_ARB_instanced_arrays"
 
 	-- create context
 	actualContextState <- glCreateContextState
@@ -965,9 +987,6 @@ createGlContext _deviceId window@SdlWindow
 		, glContextDesiredState = desiredContextState
 		, glContextBoundAttributesCount = boundAttributesCount
 		}
-
-	-- make context current
-	checkSdlError (== 0) $ SDL.glMakeCurrent windowHandle glContext
 
 	-- set swap interval
 	do
@@ -1040,6 +1059,14 @@ glSetDefaultContextState GlContextState
 	writeIORef depthTestFuncRef DepthTestFuncLess
 	writeIORef depthWriteRef True
 	writeIORef blendStateRef nullBlendState
+
+-- | Run in a thread of SDL window system.
+glInvoke :: GlContext -> IO a -> IO a
+glInvoke GlContext
+	{ glContextWindow = SdlWindow
+		{ swSystem = windowSystem
+		}
+	} io = invokeSdlWindowSystem windowSystem io
 
 isGlExtensionSupported :: String -> IO Bool
 isGlExtensionSupported name = withCString name SDL.glExtensionSupported

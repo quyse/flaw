@@ -10,6 +10,7 @@ module Flaw.Graphics.Program.Internal
 	( ScalarType(..)
 	, Dimension(..)
 	, ValueType(..)
+	, valueTypeScalarsCount
 	, OfScalarType(..)
 	, OfVectorType
 	, OfValueType(..)
@@ -64,6 +65,18 @@ data ValueType
 	| VectorValueType !Dimension !ScalarType
 	| MatrixValueType !Dimension !Dimension !ScalarType
 	deriving (Eq, Ord, Show)
+
+-- | Number of scalars in type.
+valueTypeScalarsCount :: ValueType -> Int
+valueTypeScalarsCount vt = case vt of
+	ScalarValueType _ -> 1
+	VectorValueType d _ -> dim d
+	MatrixValueType d1 d2 _ -> dim d1 * dim d2
+	where dim d = case d of
+		Dimension1 -> 1
+		Dimension2 -> 2
+		Dimension3 -> 3
+		Dimension4 -> 4
 
 -- | Class of scalar types which can be used in program.
 class OfValueType a => OfScalarType a where
@@ -277,7 +290,7 @@ data Stage
 	= VertexStage
 	| PixelStage
 	| EndStage
-	deriving (Eq, Show)
+	deriving (Eq, Ord, Show)
 
 data Temp = forall a. OfValueType a => Temp
 	{ tempIndex :: !Int

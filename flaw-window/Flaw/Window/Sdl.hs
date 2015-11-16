@@ -67,18 +67,53 @@ instance Window SdlWindow where
 initSdlWindowSystem :: IO (SdlWindowSystem, IO ())
 initSdlWindowSystem = do
 
-	bk <- newBook
-
-	book bk initSdlVideo
-
-	windowsVar <- newTVarIO HashMap.empty
-
-	userEventCodes <- SDL.registerEvents 2
-	let invokeUserEventCode = fromIntegral userEventCodes
-	let quitUserEventCode = invokeUserEventCode + 1
+	-- var for returning initialization result from SDL thread
+	initResultVar <- newEmptyMVar
 
 	-- run window thread
 	_ <- forkOS $ do
+
+		-- initialize
+
+		bk <- newBook
+
+		book bk initSdlVideo
+
+		windowsVar <- newTVarIO HashMap.empty
+
+		userEventCodes <- SDL.registerEvents 2
+		let invokeUserEventCode = fromIntegral userEventCodes
+		let quitUserEventCode = invokeUserEventCode + 1
+
+		let quit = with SDL.UserEvent
+			{ SDL.eventType = SDL.SDL_USEREVENT
+			, SDL.eventTimestamp = 0
+			, SDL.userEventWindowID = 0
+			, SDL.userEventCode = quitUserEventCode
+			, SDL.userEventData1 = nullPtr
+			, SDL.userEventData2 = nullPtr
+			} $ checkSdlError (== 1) . SDL.pushEvent
+
+		book bk $ return ((), quit)
+
+		-- return result into initial thread
+		putMVar initResultVar (SdlWindowSystem
+			{ swsWindows = windowsVar
+			, swsInvokeUserEventCode = invokeUserEventCode
+			}, freeBook bk)
+
+		-- perform some additional initialization
+		checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_RED_SIZE 8
+		checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_GREEN_SIZE 8
+		checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_BLUE_SIZE 8
+		checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_DEPTH_SIZE 16
+		checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_DOUBLEBUFFER 1
+		checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_CONTEXT_PROFILE_MASK SDL.SDL_GL_CONTEXT_PROFILE_CORE
+		checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_CONTEXT_MAJOR_VERSION 3
+		checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_CONTEXT_MINOR_VERSION 3
+
+		-- enable debug flag
+		checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_CONTEXT_FLAGS SDL.SDL_GL_CONTEXT_DEBUG_FLAG
 
 		-- quit flag
 		quitRef <- newIORef False
@@ -130,21 +165,8 @@ initSdlWindowSystem = do
 
 		loop
 
-	let quit = with SDL.UserEvent
-		{ SDL.eventType = SDL.SDL_USEREVENT
-		, SDL.eventTimestamp = 0
-		, SDL.userEventWindowID = 0
-		, SDL.userEventCode = quitUserEventCode
-		, SDL.userEventData1 = nullPtr
-		, SDL.userEventData2 = nullPtr
-		} $ checkSdlError (== 1) . SDL.pushEvent
-
-	book bk $ return ((), quit)
-
-	return (SdlWindowSystem
-		{ swsWindows = windowsVar
-		, swsInvokeUserEventCode = invokeUserEventCode
-		}, freeBook bk)
+	-- wait for initialization and return result from thread
+	takeMVar initResultVar
 
 createSdlWindow :: SdlWindowSystem -> T.Text -> Int -> Int -> Int -> Int -> IO (SdlWindow, IO ())
 createSdlWindow ws@SdlWindowSystem

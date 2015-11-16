@@ -8,7 +8,7 @@ License: MIT
 
 module Flaw.Graphics.Program.SL
 	( ProgramInfo(..)
-	, ShaderInfo
+	, ShaderInfo(..)
 	, programInfo
 	) where
 
@@ -19,6 +19,7 @@ import Data.List
 
 import Flaw.Graphics.Program.Internal
 
+-- | Information about node: what temps, attributes, etc. it uses (recursively, i.e. including all subnodes).
 type NodeInfo = ([Int], [Attribute], [Uniform], [Sampler])
 
 nodeInfo :: Node a -> NodeInfo
@@ -89,22 +90,38 @@ mergeSorted a [] = a
 mergeSorted [] a = a
 mergeSorted aa@(a:as) bb@(b:bs) = if a < b then a : mergeSorted as bb else b : mergeSorted aa bs
 
-unique :: Ord a => [a] -> [a]
-unique a = map head $ group a
+uniqueFromSorted :: Ord a => [a] -> [a]
+uniqueFromSorted a = map head $ group a
 
-type ShaderInfo = ([Temp], [Attribute], [Uniform], [Sampler], [Target])
+-- | Information about shader, containing merged lists of all resources and variables used by shader.
+data ShaderInfo = ShaderInfo
+	{ shaderTemps :: [Temp]
+	, shaderAttributes :: [Attribute]
+	, shaderUniforms :: [Uniform]
+	, shaderSamplers :: [Sampler]
+	, shaderTargets :: [Target]
+	} deriving Show
 
 shaderInfo :: [Temp] -> [Target] -> V.Vector Temp -> ShaderInfo
 shaderInfo sourceTemps targets allTemps = totalInfo where
+	-- get information about temps defined in the shader, in order to include everything needed to construct those temps
 	tempInfos = map (\Temp { tempNode = node, tempIndex = i } -> mergeNodeInfo ([i], [], [], []) $ nodeInfo node) sourceTemps
+	-- get information about target nodes
 	targetInfos = map targetNodeInfo targets
+	-- merge above things
 	(tempIndices, attributes, uniforms, samplers) = foldr mergeNodeInfo (foldr mergeNodeInfo emptyNodeInfo tempInfos) targetInfos
-	temps = map (allTemps V.!) $ unique tempIndices
-	totalInfo = (temps, unique attributes, unique uniforms, unique samplers, targets)
+	-- get temps by indices
+	temps = map (allTemps V.!) $ uniqueFromSorted tempIndices
+	-- combine everything
+	totalInfo = ShaderInfo
+		{ shaderTemps = temps
+		, shaderAttributes = uniqueFromSorted attributes
+		, shaderUniforms = uniqueFromSorted uniforms
+		, shaderSamplers = uniqueFromSorted samplers
+		, shaderTargets = targets
+		}
 
-data ProgramInfo
-	= VertexPixelProgramInfo ShaderInfo ShaderInfo
-	deriving Show
+newtype ProgramInfo = ProgramInfo [(Stage, ShaderInfo)] deriving Show
 
 targetStage :: Target -> Stage
 targetStage target = case target of
@@ -118,16 +135,31 @@ programInfo State
 	{ stateTemps = temps
 	, stateTargets = targets
 	} = info where
+	-- create vector with all temps indexed by their indices
 	allTemps = V.create $ do
 		ts <- VM.new $ length temps
 		forM_ temps $ \temp@Temp
 			{ tempIndex = i
 			} -> VM.write ts i temp
 		return ts
-	vertexTemps = filter (\temp -> tempStage temp == VertexStage) temps
-	pixelTemps = filter (\temp -> tempStage temp == PixelStage) temps
-	vertexTargets = filter (\target -> targetStage target == VertexStage) targets
-	pixelTargets = filter (\target -> targetStage target == PixelStage) targets
-	vsInfo = shaderInfo vertexTemps vertexTargets allTemps
-	psInfo = shaderInfo pixelTemps pixelTargets allTemps
-	info = VertexPixelProgramInfo vsInfo psInfo
+	-- group temps by stage
+	compareTempsByStage a b = compare (tempStage a) (tempStage b)
+	eqTempsByStage a b = tempStage a == tempStage b
+	tempsByStage = groupBy eqTempsByStage $ sortBy compareTempsByStage temps
+	-- group targets by stage
+	compareTargetsByStage a b = compare (targetStage a) (targetStage b)
+	eqTargetsByStage a b = targetStage a == targetStage b
+	targetsByStage = groupBy eqTargetsByStage $ sortBy compareTargetsByStage targets
+	-- calculate shader info for every non-empty stage (i.e. which has either temps or targets)
+	getShaderInfo tempGroups@(tempGroup : restTempGroups) targetGroups@(targetGroup : restTargetGroups) = case compare tempGroupStage targetGroupStage of
+		LT -> (tempGroupStage, shaderInfo tempGroup [] allTemps) : getShaderInfo restTempGroups targetGroups
+		EQ -> (tempGroupStage, shaderInfo tempGroup targetGroup allTemps) : getShaderInfo restTempGroups restTargetGroups
+		GT -> (targetGroupStage, shaderInfo [] targetGroup allTemps) : getShaderInfo tempGroups restTargetGroups
+		where
+			tempGroupStage = tempStage $ head tempGroup
+			targetGroupStage = targetStage $ head targetGroup
+	getShaderInfo (tempGroup : restTempGroups) [] = (tempStage $ head tempGroup, shaderInfo tempGroup [] allTemps) : getShaderInfo restTempGroups []
+	getShaderInfo [] (targetGroup : restTargetGroups) = (targetStage $ head targetGroup, shaderInfo [] targetGroup allTemps) : getShaderInfo [] restTargetGroups
+	getShaderInfo [] [] = []
+	-- pack results
+	info = ProgramInfo $ getShaderInfo tempsByStage targetsByStage
