@@ -103,14 +103,10 @@ initSdlWindowSystem = do
 			, swsInvokeUserEventCode = invokeUserEventCode
 			}, freeBook bk)
 
-		-- perform some additional initialization
-		checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_RED_SIZE 8
-		checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_GREEN_SIZE 8
-		checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_BLUE_SIZE 8
-		checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_DEPTH_SIZE 16
-		checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_DOUBLEBUFFER 1
+		-- set common attributes
 		checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_CONTEXT_MAJOR_VERSION 3
 		checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_CONTEXT_MINOR_VERSION 3
+		checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_DOUBLEBUFFER 1
 
 		-- quit flag
 		quitRef <- newIORef False
@@ -202,10 +198,16 @@ initSdlWindowSystem = do
 	-- wait for initialization and return result from thread
 	takeMVar initResultVar
 
-createSdlWindow :: SdlWindowSystem -> T.Text -> Int -> Int -> Int -> Int -> IO (SdlWindow, IO ())
+createSdlWindow :: SdlWindowSystem -> T.Text -> Int -> Int -> Int -> Int -> Bool -> IO (SdlWindow, IO ())
 createSdlWindow ws@SdlWindowSystem
 	{ swsWindows = windowsVar
-	} title x y width height = invokeSdlWindowSystem ws $ do
+	} title x y width height needDepth = invokeSdlWindowSystem ws $ do
+	-- set up attributes
+	checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_RED_SIZE 8
+	checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_GREEN_SIZE 8
+	checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_BLUE_SIZE 8
+	checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_DEPTH_SIZE (if needDepth then 16 else 0)
+	checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_STENCIL_SIZE (if needDepth then 8 else 0)
 	-- create SDL window
 	windowHandle <- checkSdlResult $ withCString (T.unpack title) $ \titlePtr -> do
 		SDL.createWindow titlePtr

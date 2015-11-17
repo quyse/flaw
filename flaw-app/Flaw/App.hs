@@ -106,7 +106,7 @@ initApp title width height needDepth = do
 #else
 
 	windowSystem <- book bk $ initSdlWindowSystem
-	window <- book bk $ createSdlWindow windowSystem title 0 0 width height
+	window <- book bk $ createSdlWindow windowSystem title 0 0 width height needDepth
 
 	inputManager <- initSdlInput window
 
