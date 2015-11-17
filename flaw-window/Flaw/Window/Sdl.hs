@@ -109,12 +109,8 @@ initSdlWindowSystem = do
 		checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_BLUE_SIZE 8
 		checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_DEPTH_SIZE 16
 		checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_DOUBLEBUFFER 1
-		checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_CONTEXT_PROFILE_MASK SDL.SDL_GL_CONTEXT_PROFILE_CORE
 		checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_CONTEXT_MAJOR_VERSION 3
 		checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_CONTEXT_MINOR_VERSION 3
-
-		-- enable debug flag
-		checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_CONTEXT_FLAGS SDL.SDL_GL_CONTEXT_DEBUG_FLAG
 
 		-- quit flag
 		quitRef <- newIORef False
