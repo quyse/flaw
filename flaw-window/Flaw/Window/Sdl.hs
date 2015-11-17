@@ -17,6 +17,7 @@ module Flaw.Window.Sdl
 import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Exception
+import Control.Monad
 import qualified Data.ByteString as B
 import Data.Int
 import Data.IORef
@@ -85,7 +86,7 @@ initSdlWindowSystem = do
 		let invokeUserEventCode = fromIntegral userEventCodes
 		let quitUserEventCode = invokeUserEventCode + 1
 
-		let quit = with SDL.UserEvent
+		let shutdown = with SDL.UserEvent
 			{ SDL.eventType = SDL.SDL_USEREVENT
 			, SDL.eventTimestamp = 0
 			, SDL.userEventWindowID = 0
@@ -94,7 +95,7 @@ initSdlWindowSystem = do
 			, SDL.userEventData2 = nullPtr
 			} $ checkSdlError (== 1) . SDL.pushEvent
 
-		book bk $ return ((), quit)
+		book bk $ return ((), shutdown)
 
 		-- return result into initial thread
 		putMVar initResultVar (SdlWindowSystem
@@ -124,16 +125,54 @@ initSdlWindowSystem = do
 				checkSdlError (== 1) $ SDL.waitEvent eventPtr
 				peek eventPtr
 
-			-- select by event
-			case event of
+			-- get window id
+			let maybeWindowId = case event of
 				SDL.WindowEvent
 					{ SDL.windowEventWindowID = windowId
-					, SDL.windowEventEvent = eventType
+					} -> Just windowId
+				SDL.KeyboardEvent
+					{ SDL.keyboardEventWindowID = windowId
+					} -> Just windowId
+				SDL.TextEditingEvent
+					{ SDL.textEditingEventWindowID = windowId
+					} -> Just windowId
+				SDL.TextInputEvent
+					{ SDL.textInputEventWindowID = windowId
+					} -> Just windowId
+				SDL.MouseMotionEvent
+					{ SDL.mouseMotionEventWindowID = windowId
+					} -> Just windowId
+				SDL.MouseButtonEvent
+					{ SDL.mouseButtonEventWindowID = windowId
+					} -> Just windowId
+				SDL.MouseWheelEvent
+					{ SDL.mouseWheelEventWindowID = windowId
+					} -> Just windowId
+				SDL.UserEvent
+					{ SDL.userEventWindowID = windowId
+					} -> Just windowId
+				_ -> Nothing
+
+			-- get window
+			maybeWindow <- case maybeWindowId of
+				Just windowId -> liftM (HashMap.lookup windowId) $ atomically $ readTVar windowsVar
+				Nothing -> return Nothing
+
+			-- if there's a window, call user callbacks
+			case maybeWindow of
+				Just SdlWindow
+					{ swUserCallbacksRef = userCallbacksRef
+					} -> mapM_ ($ event) =<< readIORef userCallbacksRef
+				Nothing -> return ()
+
+			-- process some events
+			case event of
+				SDL.WindowEvent
+					{ SDL.windowEventEvent = eventType
 					, SDL.windowEventData1 = data1
 					, SDL.windowEventData2 = data2
 					} -> do
-					windows <- atomically $ readTVar windowsVar
-					case HashMap.lookup windowId windows of
+					case maybeWindow of
 						Just SdlWindow
 							{ swEventsChan = eventsChan
 							, swClientSizeVar = clientSizeVar
@@ -146,7 +185,6 @@ initSdlWindowSystem = do
 							SDL.SDL_WINDOWEVENT_CLOSE -> atomically $ writeTChan eventsChan CloseWindowEvent
 							_ -> return ()
 						Nothing -> return ()
-
 				SDL.UserEvent
 					{ SDL.userEventCode = eventCode
 					, SDL.userEventData1 = eventData
