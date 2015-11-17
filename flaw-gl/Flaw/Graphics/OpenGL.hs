@@ -214,11 +214,13 @@ instance Device GlContext where
 		-- allocate texture name
 		textureName <- alloca $ \namePtr -> do
 			glGenTextures 1 namePtr
+			glCheckErrors 0 "gen texture"
 			peek namePtr
 
 		let (compressed, glInternalFormat, glFormat, glType) = glFormatFromTextureFormat format
 
 		glPixelStorei gl_UNPACK_ALIGNMENT 1
+		glCheckErrors 0 "set unpack alignment"
 
 		let pixelSize = fromIntegral $ pixelSizeByteSize $ textureFormatPixelSize format
 
@@ -240,14 +242,17 @@ instance Device GlContext where
 
 		-- bind texture
 		glBindTexture glTarget textureName
+		glCheckErrors 0 "bind texture"
 
 		-- allocate texture storage, if we use it
-		if useTextureStorage then case textureType of
-			Texture3D      -> glTexStorage3D glTarget mips glInternalFormat width height depth
-			Texture2DArray -> glTexStorage3D glTarget mips glInternalFormat width height count
-			Texture2D      -> glTexStorage2D glTarget mips glInternalFormat width height
-			Texture1DArray -> glTexStorage2D glTarget mips glInternalFormat width count
-			Texture1D      -> glTexStorage1D glTarget mips glInternalFormat width
+		if useTextureStorage then do
+			case textureType of
+				Texture3D      -> glTexStorage3D glTarget mips glInternalFormat width height depth
+				Texture2DArray -> glTexStorage3D glTarget mips glInternalFormat width height count
+				Texture2D      -> glTexStorage2D glTarget mips glInternalFormat width height
+				Texture1DArray -> glTexStorage2D glTarget mips glInternalFormat width count
+				Texture1D      -> glTexStorage1D glTarget mips glInternalFormat width
+			glCheckErrors 0 "tex storage"
 		else return ()
 
 		-- gl[Compressed]TexImage* requires GLint, but glInternal format is GLenum (GLuint)
@@ -267,11 +272,13 @@ instance Device GlContext where
 			-- set unpack image height if needed
 			if textureType == Texture3D || textureType == Texture2DArray then do
 				glPixelStorei gl_UNPACK_IMAGE_HEIGHT $ mipSlicePitch `div` pixelSize
+				glCheckErrors 0 "set unpack image height"
 			else return ()
 
 			-- set unpack row length if needed
 			if textureType == Texture3D || textureType == Texture2DArray || textureType == Texture2D || textureType == Texture1DArray then do
 				glPixelStorei gl_UNPACK_ROW_LENGTH $ mipLinePitch `div` pixelSize
+				glCheckErrors 0 "set unpack row length"
 			else return ()
 
 			-- get mip data
@@ -308,13 +315,15 @@ instance Device GlContext where
 						Texture2D      -> glTexImage2D glTarget mip glInternalFormatS mipWidth mipHeight          0 glFormat glType mipData
 						Texture1DArray -> glTexImage2D glTarget mip glInternalFormatS mipWidth count              0 glFormat glType mipData
 						Texture1D      -> glTexImage1D glTarget mip glInternalFormatS mipWidth                    0 glFormat glType mipData
+			glCheckErrors 0 "tex image"
 
 		if useTextureStorage then return ()
 		else do
 			glTexParameteri glTarget gl_TEXTURE_BASE_LEVEL 0
 			glTexParameteri glTarget gl_TEXTURE_MAX_LEVEL $ mips - 1
+			glCheckErrors 0 "texture parameters"
 
-		return (GlTextureId textureName, with textureName $ glDeleteTextures 1)
+		return (GlTextureId textureName, glInvoke context $ with textureName $ glDeleteTextures 1)
 
 	createSamplerState _context _samplerStateInfo = describeException "failed to create OpenGL sampler state" $ do
 		return (GlSamplerStateId 0, return ())
@@ -332,6 +341,7 @@ instance Device GlContext where
 			peek namePtr
 
 		glBindTexture gl_TEXTURE_2D textureName
+		glCheckErrors 0 "bind texture"
 
 		let (compressed, glInternalFormat, glFormat, glType) = glFormatFromTextureFormat format
 
@@ -342,8 +352,9 @@ instance Device GlContext where
 			glTexStorage2D gl_TEXTURE_2D 1 glInternalFormat (fromIntegral width) (fromIntegral height)
 		else
 			glTexImage2D gl_TEXTURE_2D 0 (fromIntegral glInternalFormat) (fromIntegral width) (fromIntegral height) 0 glFormat glType nullPtr
+		glCheckErrors 0 "texture storage"
 
-		return ((GlRenderTargetId textureName, GlTextureId textureName), with textureName $ glDeleteTextures 1)
+		return ((GlRenderTargetId textureName, GlTextureId textureName), glInvoke context $ with textureName $ glDeleteTextures 1)
 
 	createDepthStencilTarget context width height = glInvoke context $ describeException "failed to create OpenGL depth stencil target" $ do
 		-- allocate texture name
@@ -352,69 +363,104 @@ instance Device GlContext where
 			peek namePtr
 
 		glBindTexture gl_TEXTURE_2D textureName
+		glCheckErrors 0 "bind texture"
 		glTexImage2D gl_TEXTURE_2D 0 (fromIntegral gl_DEPTH_STENCIL) (fromIntegral width) (fromIntegral height) 0 gl_DEPTH_STENCIL gl_UNSIGNED_INT_24_8 nullPtr
+		glCheckErrors 0 "tex image"
 
 		glTexParameteri gl_TEXTURE_2D gl_TEXTURE_MIN_FILTER $ fromIntegral gl_NEAREST
 		glTexParameteri gl_TEXTURE_2D gl_TEXTURE_MAG_FILTER $ fromIntegral gl_NEAREST
 		glTexParameteri gl_TEXTURE_2D gl_TEXTURE_WRAP_S $ fromIntegral gl_CLAMP_TO_EDGE
 		glTexParameteri gl_TEXTURE_2D gl_TEXTURE_WRAP_T $ fromIntegral gl_CLAMP_TO_EDGE
 		glTexParameteri gl_TEXTURE_2D gl_TEXTURE_WRAP_R $ fromIntegral gl_CLAMP_TO_EDGE
+		glCheckErrors 0 "texture parameters"
 
-		return (GlDepthStencilTargetId textureName, with textureName $ glDeleteTextures 1)
+		return (GlDepthStencilTargetId textureName, glInvoke context $ with textureName $ glDeleteTextures 1)
 
 	createReadableDepthStencilTarget context width height = do
 		(depthStencilTarget@(GlDepthStencilTargetId bufferName), destroy) <- createDepthStencilTarget context width height
 		return ((depthStencilTarget, GlTextureId bufferName), destroy)
 
-	createFrameBuffer context renderTargets (GlDepthStencilTargetId depthStencilName) = glInvoke context $ describeException "failed to create OpenGL framebuffer" $ do
+	createFrameBuffer context@GlContext
+		{ glContextActualState = GlContextState
+			{ glContextStateFrameBuffer = actualFrameBufferRef
+			}
+		} renderTargets (GlDepthStencilTargetId depthStencilName) = glInvoke context $ describeException "failed to create OpenGL framebuffer" $ do
 		-- allocate framebuffer name
 		framebufferName <- alloca $ \namePtr -> do
 			glGenFramebuffers 1 namePtr
+			glCheckErrors 0 "gen framebuffer"
 			peek namePtr
+
+		-- bind framebuffer
+		glBindFramebuffer gl_FRAMEBUFFER framebufferName
+		glCheckErrors 0 "bind framebuffer"
 
 		-- bind render targets
 		forM_ (zip [0..] renderTargets) $ \(i, GlRenderTargetId renderTargetName) -> do
 			glFramebufferTexture2D gl_FRAMEBUFFER (gl_COLOR_ATTACHMENT0 + i) gl_TEXTURE_2D renderTargetName 0
+			glCheckErrors 0 "bind framebuffer color buffer"
 
 		-- bind depth-stencil target
 		glFramebufferTexture2D gl_FRAMEBUFFER gl_DEPTH_STENCIL_ATTACHMENT gl_TEXTURE_2D depthStencilName 0
+		glCheckErrors 0 "bind framebuffer depth-stencil buffer"
 
-		return (GlFrameBufferId framebufferName, with framebufferName $ glDeleteFramebuffers 1)
+		let frameBufferId = GlFrameBufferId framebufferName
+
+		writeIORef actualFrameBufferRef frameBufferId
+
+		return (frameBufferId, glInvoke context $ with framebufferName $ glDeleteFramebuffers 1)
 
 	createStaticVertexBuffer context bytes stride = glInvoke context $ describeException "failed to create OpenGL static vertex buffer" $ do
 		-- allocate buffer name
 		bufferName <- alloca $ \namePtr -> do
 			glGenBuffers 1 namePtr
+			glCheckErrors 0 "gen buffer"
 			peek namePtr
 
 		glBindBuffer gl_ARRAY_BUFFER bufferName
+		glCheckErrors 0 "bind buffer"
 		B.unsafeUseAsCStringLen bytes $ \(bytesPtr, bytesLen) -> do
 			glBufferData gl_ARRAY_BUFFER (fromIntegral bytesLen) bytesPtr gl_STATIC_DRAW
+		glCheckErrors 0 "buffer data"
 
-		return (GlVertexBufferId bufferName (fromIntegral stride), with bufferName $ glDeleteBuffers 1)
+		return (GlVertexBufferId bufferName (fromIntegral stride), glInvoke context $ with bufferName $ glDeleteBuffers 1)
 
 	createDynamicVertexBuffer context size stride = glInvoke context $ describeException "failed to create OpenGL dynamic vertex buffer" $ do
 		-- allocate buffer name
 		bufferName <- alloca $ \namePtr -> do
 			glGenBuffers 1 namePtr
+			glCheckErrors 0 "gen buffer"
 			peek namePtr
 
 		glBindBuffer gl_ARRAY_BUFFER bufferName
+		glCheckErrors 0 "bind buffer"
 		glBufferData gl_ARRAY_BUFFER (fromIntegral size) nullPtr gl_DYNAMIC_DRAW
+		glCheckErrors 0 "buffer data"
 
-		return (GlVertexBufferId bufferName (fromIntegral stride), with bufferName $ glDeleteBuffers 1)
+		return (GlVertexBufferId bufferName (fromIntegral stride), glInvoke context $ with bufferName $ glDeleteBuffers 1)
 
-	createStaticIndexBuffer context bytes is32Bit = glInvoke context $ describeException "failed to create OpenGL static index buffer" $ do
+	createStaticIndexBuffer context@GlContext
+		{ glContextActualState = GlContextState
+			{ glContextStateIndexBuffer = actualIndexBufferRef
+			}
+		} bytes is32Bit = glInvoke context $ describeException "failed to create OpenGL static index buffer" $ do
 		-- allocate buffer name
 		bufferName <- alloca $ \namePtr -> do
 			glGenBuffers 1 namePtr
+			glCheckErrors 0 "gen buffer"
 			peek namePtr
 
 		glBindBuffer gl_ELEMENT_ARRAY_BUFFER bufferName
+		glCheckErrors 0 "bind buffer"
 		B.unsafeUseAsCStringLen bytes $ \(bytesPtr, bytesLen) -> do
 			glBufferData gl_ELEMENT_ARRAY_BUFFER (fromIntegral bytesLen) bytesPtr gl_STATIC_DRAW
+		glCheckErrors 0 "buffer data"
 
-		return (GlIndexBufferId bufferName (if is32Bit then gl_UNSIGNED_INT else gl_UNSIGNED_SHORT), with bufferName $ glDeleteBuffers 1)
+		let indexBufferId = GlIndexBufferId bufferName (if is32Bit then gl_UNSIGNED_INT else gl_UNSIGNED_SHORT)
+
+		writeIORef actualIndexBufferRef indexBufferId
+
+		return (indexBufferId, glInvoke context $ with bufferName $ glDeleteBuffers 1)
 
 	createProgram context@GlContext
 		{ glContextCaps = GlCaps
@@ -425,6 +471,9 @@ instance Device GlContext where
 			{ glContextStateProgram = actualProgramRef
 			}
 		} program = glInvoke context $ describeException "failed to create OpenGL program" $ do
+
+		-- reset current program in order to correctly rebind it later for drawing
+		writeIORef actualProgramRef glNullProgram
 
 		bk <- newBook
 
@@ -491,6 +540,7 @@ instance Device GlContext where
 						peek logLengthPtr
 					B.packCStringLen (logPtr, fromIntegral realLogLength)
 				glClearErrors
+				putStrLn $ T.unpack shaderSource -- TEST
 				throwIO $ DescribeFirstException ("failed to compile shader", T.decodeUtf8 logBytes)
 
 		-- bind attributes
@@ -593,10 +643,6 @@ instance Device GlContext where
 				VM.write slots slot slotUniforms
 			V.unsafeFreeze slots
 
-		-- reset current program
-		glUseProgram 0
-		glCheckErrors 0 "reset program"
-
 		-- create vertex array if supported
 		(vertexArrayName, attributeSlots, attributesCount) <- if capArbVertexAttribBinding then do
 			-- create vertex array
@@ -606,9 +652,6 @@ instance Device GlContext where
 					glCheckErrors 0 "gen vertex array"
 					peek vaNamePtr
 				return (vaName, with vaName $ glDeleteVertexArrays 1)
-
-			-- reset current program (so it will be rebound on next draw)
-			writeIORef actualProgramRef glNullProgram
 
 			-- bind vertex array
 			glBindVertexArray vaName
@@ -698,7 +741,7 @@ instance Device GlContext where
 			, glProgramAttributeSlots = attributeSlots
 			, glProgramAttributesCount = attributesCount
 			, glProgramUniforms = uniformBindings
-			}, freeBook bk)
+			}, glInvoke context $ freeBook bk)
 
 	createUniformBuffer context@GlContext
 		{ glContextCaps = GlCaps
@@ -710,12 +753,15 @@ instance Device GlContext where
 			-- allocate buffer name
 			bufferName <- alloca $ \namePtr -> do
 				glGenBuffers 1 namePtr
+				glCheckErrors 0 "gen buffer"
 				peek namePtr
 
 			glBindBuffer gl_UNIFORM_BUFFER bufferName
+			glCheckErrors 0 "bind buffer"
 			glBufferData gl_UNIFORM_BUFFER (fromIntegral size) nullPtr gl_DYNAMIC_DRAW
+			glCheckErrors 0 "buffer data"
 			
-			return (GlUniformBufferId bufferName size, with bufferName $ glDeleteBuffers 1)
+			return (GlUniformBufferId bufferName size, glInvoke context $ with bufferName $ glDeleteBuffers 1)
 		else do
 			bufferRef <- newIORef B.empty
 			return (GlUniformMemoryBufferId bufferRef, return ())
@@ -1000,7 +1046,7 @@ createGlContext _deviceId window@SdlWindow
 	-- set front face mode
 	glFrontFace gl_CW
 
-	return (context, SDL.glDeleteContext glContext)
+	return (context, glInvoke context $ SDL.glDeleteContext glContext)
 
 glNullProgram :: ProgramId GlDevice
 glNullProgram = GlProgramId
