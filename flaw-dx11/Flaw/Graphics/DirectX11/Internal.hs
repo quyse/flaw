@@ -16,7 +16,6 @@ module Flaw.Graphics.DirectX11.Internal
 
 import Control.Exception
 import Control.Monad
-import Data.Array.IO
 import Data.Bits
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
@@ -27,8 +26,10 @@ import Data.List
 import Data.Maybe
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
+import qualified Data.Vector as V
+import qualified Data.Vector.Mutable as VM
 import Foreign.Marshal.Alloc
-import Foreign.Marshal.Array(copyArray, withArray)
+import Foreign.Marshal.Array(allocaArray, copyArray, withArray)
 import Foreign.Marshal.Utils
 import Foreign.Ptr
 import Foreign.Storable
@@ -837,10 +838,10 @@ data Dx11Context = Dx11Context
 data Dx11ContextState = Dx11ContextState
 	{ dx11ContextStateFrameBuffer :: !(IORef (FrameBufferId Dx11Device))
 	, dx11ContextStateViewport :: !(IORef (Int, Int))
-	, dx11ContextStateVertexBuffers :: !(IOArray Int (VertexBufferId Dx11Device))
+	, dx11ContextStateVertexBuffers :: !(VM.IOVector (VertexBufferId Dx11Device))
 	, dx11ContextStateIndexBuffer :: !(IORef (IndexBufferId Dx11Device))
-	, dx11ContextStateUniformBuffers :: !(IOArray Int (UniformBufferId Dx11Device))
-	, dx11ContextStateSamplers :: !(IOArray Int (TextureId Dx11Device, SamplerStateId Dx11Device))
+	, dx11ContextStateUniformBuffers :: !(VM.IOVector (UniformBufferId Dx11Device))
+	, dx11ContextStateSamplers :: !(VM.IOVector (TextureId Dx11Device, SamplerStateId Dx11Device))
 	, dx11ContextStateBlendState :: !(IORef (BlendStateId Dx11Device))
 	, dx11ContextStateDepthTestFunc :: !(IORef DepthTestFunc)
 	, dx11ContextStateDepthWrite :: !(IORef Bool)
@@ -869,10 +870,10 @@ dx11CreateContextState :: IO Dx11ContextState
 dx11CreateContextState = do
 	frameBuffer <- newIORef $ Dx11FrameBufferId [] Dx11NullDepthStencilTargetId
 	viewport <- newIORef (0, 0)
-	vertexBuffers <- newArray (0, 7) Dx11NullVertexBufferId
+	vertexBuffers <- VM.replicate 8 Dx11NullVertexBufferId
 	indexBuffer <- newIORef $ Dx11NullIndexBufferId D3D11_PRIMITIVE_TOPOLOGY_UNDEFINED
-	uniformBuffers <- newArray (0, 7) Dx11NullUniformBufferId
-	samplers <- newArray (0, 7) (Dx11NullTextureId, Dx11NullSamplerStateId)
+	uniformBuffers <- VM.replicate 8 Dx11NullUniformBufferId
+	samplers <- VM.replicate 8 (Dx11NullTextureId, Dx11NullSamplerStateId)
 	blendState <- newIORef $ Dx11NullBlendStateId
 	depthTestFunc <- newIORef $ DepthTestFuncLess
 	depthWrite <- newIORef True
@@ -894,10 +895,10 @@ dx11SetDefaultContextState :: Dx11ContextState -> IO ()
 dx11SetDefaultContextState Dx11ContextState
 	{ dx11ContextStateFrameBuffer = frameBufferRef
 	, dx11ContextStateViewport = viewportRef
-	, dx11ContextStateVertexBuffers = vertexBuffersArray
+	, dx11ContextStateVertexBuffers = vertexBuffersVector
 	, dx11ContextStateIndexBuffer = indexBufferRef
-	, dx11ContextStateUniformBuffers = uniformBuffersArray
-	, dx11ContextStateSamplers = samplersArray
+	, dx11ContextStateUniformBuffers = uniformBuffersVector
+	, dx11ContextStateSamplers = samplersVector
 	, dx11ContextStateBlendState = blendStateRef
 	, dx11ContextStateDepthTestFunc = depthTestFuncRef
 	, dx11ContextStateDepthWrite = depthWriteRef
@@ -905,13 +906,10 @@ dx11SetDefaultContextState Dx11ContextState
 	} = do
 	writeIORef frameBufferRef $ Dx11FrameBufferId [] Dx11NullDepthStencilTargetId
 	writeIORef viewportRef (0, 0)
-	vertexBuffersBounds <- getBounds vertexBuffersArray
-	forM_ (range vertexBuffersBounds) $ \i -> writeArray vertexBuffersArray i Dx11NullVertexBufferId
+	VM.set vertexBuffersVector Dx11NullVertexBufferId
 	writeIORef indexBufferRef $ Dx11NullIndexBufferId D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST
-	uniformBuffersBounds <- getBounds uniformBuffersArray
-	forM_ (range uniformBuffersBounds) $ \i -> writeArray uniformBuffersArray i Dx11NullUniformBufferId
-	samplersBounds <- getBounds samplersArray
-	forM_ (range samplersBounds) $ \i -> writeArray samplersArray i (Dx11NullTextureId, Dx11NullSamplerStateId)
+	VM.set uniformBuffersVector Dx11NullUniformBufferId
+	VM.set samplersVector (Dx11NullTextureId, Dx11NullSamplerStateId)
 	writeIORef blendStateRef Dx11NullBlendStateId
 	writeIORef depthTestFuncRef DepthTestFuncLess
 	writeIORef depthWriteRef True
@@ -1007,13 +1005,13 @@ instance Context Dx11Context Dx11Device where
 
 	contextSetVertexBuffer Dx11Context
 		{ dx11ContextDesiredState = Dx11ContextState
-			{ dx11ContextStateVertexBuffers = vertexBuffersArray
+			{ dx11ContextStateVertexBuffers = vertexBuffersVector
 			}
 		} i vertexBuffer scope = do
-		oldVertexBuffer <- readArray vertexBuffersArray i
-		writeArray vertexBuffersArray i vertexBuffer
+		oldVertexBuffer <- VM.read vertexBuffersVector i
+		VM.write vertexBuffersVector i vertexBuffer
 		r <- scope
-		writeArray vertexBuffersArray i oldVertexBuffer
+		VM.write vertexBuffersVector i oldVertexBuffer
 		return r
 
 	contextSetIndexBuffer Dx11Context
@@ -1029,24 +1027,24 @@ instance Context Dx11Context Dx11Device where
 
 	contextSetUniformBuffer Dx11Context
 		{ dx11ContextDesiredState = Dx11ContextState
-			{ dx11ContextStateUniformBuffers = uniformBuffersArray
+			{ dx11ContextStateUniformBuffers = uniformBuffersVector
 			}
 		} i uniformBuffer scope = do
-		oldUniformBuffer <- readArray uniformBuffersArray i
-		writeArray uniformBuffersArray i uniformBuffer
+		oldUniformBuffer <- VM.read uniformBuffersVector i
+		VM.write uniformBuffersVector i uniformBuffer
 		r <- scope
-		writeArray uniformBuffersArray i oldUniformBuffer
+		VM.write uniformBuffersVector i oldUniformBuffer
 		return r
 
 	contextSetSampler Dx11Context
 		{ dx11ContextDesiredState = Dx11ContextState
-			{ dx11ContextStateSamplers = samplersArray
+			{ dx11ContextStateSamplers = samplersVector
 			}
 		} i texture samplerState scope = do
-		oldSampler <- readArray samplersArray i
-		writeArray samplersArray i (texture, samplerState)
+		oldSampler <- VM.read samplersVector i
+		VM.write samplersVector i (texture, samplerState)
 		r <- scope
-		writeArray samplersArray i oldSampler
+		VM.write samplersVector i oldSampler
 		return r
 
 	contextSetBlendState Dx11Context
@@ -1455,10 +1453,10 @@ dx11UpdateContext context@Dx11Context
 	, dx11ContextActualState = Dx11ContextState
 		{ dx11ContextStateFrameBuffer = actualFrameBufferRef
 		, dx11ContextStateViewport = actualViewportRef
-		, dx11ContextStateVertexBuffers = actualVertexBuffersArray
+		, dx11ContextStateVertexBuffers = actualVertexBuffersVector
 		, dx11ContextStateIndexBuffer = actualIndexBufferRef
-		, dx11ContextStateUniformBuffers = actualUniformBuffersArray
-		, dx11ContextStateSamplers = actualSamplersArray
+		, dx11ContextStateUniformBuffers = actualUniformBuffersVector
+		, dx11ContextStateSamplers = actualSamplersVector
 		, dx11ContextStateBlendState = actualBlendStateRef
 		, dx11ContextStateDepthTestFunc = actualDepthTestFuncRef
 		, dx11ContextStateDepthWrite = actualDepthWriteRef
@@ -1467,10 +1465,10 @@ dx11UpdateContext context@Dx11Context
 	, dx11ContextDesiredState = Dx11ContextState
 		{ dx11ContextStateFrameBuffer = desiredFrameBufferRef
 		, dx11ContextStateViewport = desiredViewportRef
-		, dx11ContextStateVertexBuffers = desiredVertexBuffersArray
+		, dx11ContextStateVertexBuffers = desiredVertexBuffersVector
 		, dx11ContextStateIndexBuffer = desiredIndexBufferRef
-		, dx11ContextStateUniformBuffers = desiredUniformBuffersArray
-		, dx11ContextStateSamplers = desiredSamplersArray
+		, dx11ContextStateUniformBuffers = desiredUniformBuffersVector
+		, dx11ContextStateSamplers = desiredSamplersVector
 		, dx11ContextStateBlendState = desiredBlendStateRef
 		, dx11ContextStateDepthTestFunc = desiredDepthTestFuncRef
 		, dx11ContextStateDepthWrite = desiredDepthWriteRef
@@ -1489,15 +1487,20 @@ dx11UpdateContext context@Dx11Context
 			else return ()
 
 	let
-		arraySetup :: Eq a => IOArray Int a -> IOArray Int a -> ([a] -> IO ()) -> IO ()
-		arraySetup actualArray desiredArray setup = do
-			actual <- getElems actualArray
-			desired <- getElems desiredArray
-			if actual /= desired then do
-				setup desired
-				bounds <- getBounds desiredArray
-				forM_ (range bounds) $ \i -> writeArray actualArray i =<< readArray desiredArray i
-			else return ()
+		vectorSetup :: Eq a => VM.IOVector a -> VM.IOVector a -> (V.Vector a -> IO ()) -> IO ()
+		vectorSetup actualVector desiredVector setup = do
+			let len = VM.length actualVector
+			let f i = do
+				if i < len then do
+					actual <- VM.unsafeRead actualVector i
+					desired <- VM.unsafeRead desiredVector i
+					if actual /= desired then do
+						freezedDesiredVector <- V.freeze desiredVector
+						setup freezedDesiredVector
+						V.copy actualVector freezedDesiredVector
+					else f $ i + 1
+				else return ()
+			f 0
 
 	-- framebuffer
 	refSetup actualFrameBufferRef desiredFrameBufferRef $ \desiredFrameBuffer -> do
@@ -1524,16 +1527,17 @@ dx11UpdateContext context@Dx11Context
 			m_ID3D11DeviceContext_RSSetViewports contextInterface 1 viewportPtr
 
 	-- vertex buffers
-	arraySetup actualVertexBuffersArray desiredVertexBuffersArray $ \desiredVertexBuffers -> do
-		let buffersCount = length desiredVertexBuffers
-		let (buffersInterfaces, strides) = unzip [case vertexBuffer of
-			Dx11VertexBufferId bufferInterface stride -> (pokeCOMObject bufferInterface, stride)
-			Dx11NullVertexBufferId -> (nullPtr, 0)
-			| vertexBuffer <- desiredVertexBuffers]
-		withArray buffersInterfaces $ \buffersInterfacesPtr -> do
-			withArray (map fromIntegral strides) $ \stridesPtr -> do
-				withArray (replicate buffersCount 0) $ \offsetsPtr -> do
-					m_ID3D11DeviceContext_IASetVertexBuffers contextInterface 0 (fromIntegral buffersCount) buffersInterfacesPtr stridesPtr offsetsPtr
+	vectorSetup actualVertexBuffersVector desiredVertexBuffersVector $ \desiredVertexBuffers -> do
+		let buffersCount = V.length desiredVertexBuffers
+		allocaArray buffersCount $ \buffersInterfacesPtr -> allocaArray buffersCount $ \stridesPtr -> allocaArray buffersCount $ \offsetsPtr -> do
+			(flip V.imapM_) desiredVertexBuffers $ \i vertexBuffer -> do
+				let (bufferInterfacePtr, stride) = case vertexBuffer of
+					Dx11VertexBufferId bufferInterface stride' -> (pokeCOMObject bufferInterface, stride')
+					Dx11NullVertexBufferId -> (nullPtr, 0)
+				pokeElemOff buffersInterfacesPtr i bufferInterfacePtr
+				pokeElemOff stridesPtr i $ fromIntegral stride
+				pokeElemOff offsetsPtr i 0
+			m_ID3D11DeviceContext_IASetVertexBuffers contextInterface 0 (fromIntegral buffersCount) buffersInterfacesPtr stridesPtr offsetsPtr
 
 	-- index buffer
 	refSetup actualIndexBufferRef desiredIndexBufferRef $ \desiredIndexBuffer -> do
@@ -1544,33 +1548,33 @@ dx11UpdateContext context@Dx11Context
 		m_ID3D11DeviceContext_IASetPrimitiveTopology contextInterface (wrapEnum primitiveTopology)
 
 	-- uniform buffers
-	arraySetup actualUniformBuffersArray desiredUniformBuffersArray $ \desiredUniformBuffers -> do
-		let buffersCount = fromIntegral $ length desiredUniformBuffers
-		let buffersInterfaces = [case uniformBuffer of
-			Dx11UniformBufferId bufferInterface -> pokeCOMObject bufferInterface
-			Dx11NullUniformBufferId -> nullPtr
-			| uniformBuffer <- desiredUniformBuffers]
-		withArray buffersInterfaces $ \buffersInterfacesPtr -> do
-			m_ID3D11DeviceContext_VSSetConstantBuffers contextInterface 0 buffersCount buffersInterfacesPtr
-			m_ID3D11DeviceContext_PSSetConstantBuffers contextInterface 0 buffersCount buffersInterfacesPtr
+	vectorSetup actualUniformBuffersVector desiredUniformBuffersVector $ \desiredUniformBuffers -> do
+		let buffersCount = V.length desiredUniformBuffers
+		allocaArray buffersCount $ \buffersInterfacesPtr -> do
+			(flip V.imapM_) desiredUniformBuffers $ \i uniformBuffer -> do
+				pokeElemOff buffersInterfacesPtr i $ case uniformBuffer of
+					Dx11UniformBufferId bufferInterface -> pokeCOMObject bufferInterface
+					Dx11NullUniformBufferId -> nullPtr
+			m_ID3D11DeviceContext_VSSetConstantBuffers contextInterface 0 (fromIntegral buffersCount) buffersInterfacesPtr
+			m_ID3D11DeviceContext_PSSetConstantBuffers contextInterface 0 (fromIntegral buffersCount) buffersInterfacesPtr
 
 	-- samplers
-	arraySetup actualSamplersArray desiredSamplersArray $ \desiredSamplers -> do
-		let samplersCount = fromIntegral $ length desiredSamplers
-		let srvInterfaces = [case texture of
-			Dx11TextureId srvInterface -> pokeCOMObject srvInterface
-			Dx11NullTextureId -> nullPtr
-			| (texture, _samplerState) <- desiredSamplers]
-		withArray srvInterfaces $ \srvInterfacesPtr -> do
-			m_ID3D11DeviceContext_VSSetShaderResources contextInterface 0 samplersCount srvInterfacesPtr
-			m_ID3D11DeviceContext_PSSetShaderResources contextInterface 0 samplersCount srvInterfacesPtr
-		let ssInterfaces = [case samplerState of
-			Dx11SamplerStateId ssInterface -> pokeCOMObject ssInterface
-			Dx11NullSamplerStateId -> nullPtr
-			| (_texture, samplerState) <- desiredSamplers]
-		withArray ssInterfaces $ \ssInterfacesPtr -> do
-			m_ID3D11DeviceContext_VSSetSamplers contextInterface 0 samplersCount ssInterfacesPtr
-			m_ID3D11DeviceContext_PSSetSamplers contextInterface 0 samplersCount ssInterfacesPtr
+	vectorSetup actualSamplersVector desiredSamplersVector $ \desiredSamplers -> do
+		let samplersCount = V.length desiredSamplers
+		allocaArray samplersCount $ \srvInterfacesPtr -> do
+			(flip V.imapM_) desiredSamplers $ \i (texture, _samplerState) -> do
+				pokeElemOff srvInterfacesPtr i $ case texture of
+					Dx11TextureId srvInterface -> pokeCOMObject srvInterface
+					Dx11NullTextureId -> nullPtr
+			m_ID3D11DeviceContext_VSSetShaderResources contextInterface 0 (fromIntegral samplersCount) srvInterfacesPtr
+			m_ID3D11DeviceContext_PSSetShaderResources contextInterface 0 (fromIntegral samplersCount) srvInterfacesPtr
+		allocaArray samplersCount $ \ssInterfacesPtr -> do
+			(flip V.imapM_) desiredSamplers $ \i (_texture, samplerState) -> do
+				pokeElemOff ssInterfacesPtr i $ case samplerState of
+					Dx11SamplerStateId ssInterface -> pokeCOMObject ssInterface
+					Dx11NullSamplerStateId -> nullPtr
+			m_ID3D11DeviceContext_VSSetSamplers contextInterface 0 (fromIntegral samplersCount) ssInterfacesPtr
+			m_ID3D11DeviceContext_PSSetSamplers contextInterface 0 (fromIntegral samplersCount) ssInterfacesPtr
 
 	-- blend state
 	refSetup actualBlendStateRef desiredBlendStateRef $ \desiredBlendState -> do
