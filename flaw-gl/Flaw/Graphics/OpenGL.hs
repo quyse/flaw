@@ -687,7 +687,7 @@ instance Device GlContext where
 				glCheckErrors 0 "vertex attrib binding"
 				-- set divisor for slot
 				-- TODO: it's not optimal, as we will set the same divisor multiple times for the same slot
-				glVertexBindingDivisor i (fromIntegral divisor)
+				glVertexBindingDivisor (fromIntegral slot) (fromIntegral divisor)
 				glCheckErrors 0 "vertex binding divisor"
 
 			-- unbind vertex array
