@@ -1582,14 +1582,14 @@ refSetup_ actualRef desiredRef setup = do
 	return ()
 
 vectorSetupCond :: Eq a => Bool -> VM.IOVector a -> VM.IOVector a -> (Int -> a -> IO ()) -> IO ()
-vectorSetupCond forceSetup actualArray desiredArray setup = do
-	let len = VM.length actualArray
+vectorSetupCond forceSetup actualVector desiredVector setup = do
+	let len = VM.length actualVector
 	forM_ [0..(len - 1)] $ \i -> do
-		actual <- VM.unsafeRead actualArray i
-		desired <- VM.unsafeRead desiredArray i
+		actual <- VM.unsafeRead actualVector i
+		desired <- VM.unsafeRead desiredVector i
 		if forceSetup || actual /= desired then do
 			setup i desired
-			VM.unsafeWrite actualArray i desired
+			VM.unsafeWrite actualVector i desired
 		else return ()
 
 vectorSetup :: Eq a => VM.IOVector a -> VM.IOVector a -> (Int -> a -> IO ()) -> IO ()
