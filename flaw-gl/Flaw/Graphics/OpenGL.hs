@@ -521,6 +521,7 @@ instance Device GlContext where
 			-- check compilation status
 			status <- alloca $ \statusPtr -> do
 				glGetShaderiv shaderName gl_COMPILE_STATUS statusPtr
+				glCheckErrors 0 "get shader compile status"
 				peek statusPtr
 			if status == 1 then do
 				-- compilation succeeded, attach shader to program
@@ -564,16 +565,19 @@ instance Device GlContext where
 		-- check link status
 		status <- alloca $ \statusPtr -> do
 			glGetProgramiv programName gl_LINK_STATUS statusPtr
+			glCheckErrors 0 "get program link status"
 			peek statusPtr
 		if status == 1 then return ()
 		else do
 			-- in case of error, get linking log
 			logLength <- alloca $ \logLengthPtr -> do
 				glGetProgramiv programName gl_INFO_LOG_LENGTH logLengthPtr
+				glCheckErrors 0 "get program log length"
 				peek logLengthPtr
 			logBytes <- allocaBytes (fromIntegral logLength) $ \logPtr -> do
 				realLogLength <- alloca $ \logLengthPtr -> do
 					glGetProgramInfoLog programName logLength logLengthPtr logPtr
+					glCheckErrors 0 "get program log"
 					peek logLengthPtr
 				B.packCStringLen (logPtr, fromIntegral realLogLength)
 			glClearErrors
