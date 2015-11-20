@@ -458,7 +458,11 @@ instance Device GlContext where
 
 		let indexBufferId = GlIndexBufferId bufferName (if is32Bit then gl_UNSIGNED_INT else gl_UNSIGNED_SHORT)
 
-		writeIORef actualIndexBufferRef indexBufferId
+		-- element array buffer is a part of VAO; unbind it in order to re-bind with actual VAO during drawing
+		glBindBuffer gl_ELEMENT_ARRAY_BUFFER 0
+		glCheckErrors 0 "unbind buffer"
+
+		writeIORef actualIndexBufferRef $ GlIndexBufferId 0 gl_UNSIGNED_SHORT
 
 		return (indexBufferId, glInvoke context $ with bufferName $ glDeleteBuffers 1)
 
@@ -1277,6 +1281,8 @@ glUpdateContext context@GlContext
 			-- bind vertex array
 			glBindVertexArray vertexArrayName
 			glCheckErrors 0 "bind vertex array"
+			-- reset current index buffer binding in order to refresh (as element array buffer is part of VAO state)
+			writeIORef actualIndexBufferRef $ GlIndexBufferId (-1) 0
 		else return ()
 
 	-- uniform buffers
