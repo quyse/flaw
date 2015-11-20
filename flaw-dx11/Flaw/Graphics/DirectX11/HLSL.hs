@@ -116,7 +116,8 @@ hlslGenerateProgram state = program where
 
 		-- outputs source
 		outputsSource = "struct Output\n{\n" <> (foldr mappend mempty $ map varSource outputs) <> "};\n"
-		outputs = map varTarget targets ++ map varInterpolant outInterpolants
+		-- important: targets should be after interpolants, to have them in the same registers in accepting stage
+		outputs = map varInterpolant outInterpolants ++ map varTarget targets
 		-- out-interpolants are temps defined at this stage, but used by some other stage
 		outInterpolants = filter (\temp -> tempStage temp == stage && tempUsedByOtherStage (tempIndex temp)) temps
 		otherShaderInfos = concat $ map (\(otherStage, otherShaderInfo) -> if otherStage == stage then [] else [otherShaderInfo]) shaders
