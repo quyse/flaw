@@ -56,13 +56,15 @@ import Flaw.Window.Win32
 data Dx11Device = Dx11Device
 	{
 	-- | System.
-	  dx11DeviceSystem :: DXGISystem
+	  dx11DeviceSystem :: !DXGISystem
 	-- | Main device interface.
-	, dx11DeviceInterface :: ID3D11Device
+	, dx11DeviceInterface :: !ID3D11Device
 	-- | Device's immediate context.
-	, dx11DeviceImmediateContext :: ID3D11DeviceContext
+	, dx11DeviceImmediateContext :: !ID3D11DeviceContext
 	-- | D3DCompile function.
-	, dx11DeviceD3DCompile :: D3DCompileProc
+	, dx11DeviceD3DCompile :: !D3DCompileProc
+	-- | Debug mode.
+	, dx11DeviceDebug :: !Bool
 	}
 
 instance Device Dx11Device where
@@ -612,6 +614,7 @@ instance Device Dx11Device where
 	createProgram Dx11Device
 		{ dx11DeviceInterface = deviceInterface
 		, dx11DeviceD3DCompile = d3dCompile
+		, dx11DeviceDebug = debug
 		} program = describeException "failed to create DirectX11 program" $ do
 
 		-- function to create input layout
@@ -692,8 +695,7 @@ instance Device Dx11Device where
 			, hlslShaderEntryPoint = entryPoint
 			, hlslShaderProfile = profile
 			} = describeException ("failed to compile shader", source, entryPoint, profile) $ do
-			let debug = False
-			let optimize = True
+			let optimize = not debug
 			let flags = fromIntegral $ (fromEnum D3DCOMPILE_ENABLE_STRICTNESS) .|. (fromEnum D3DCOMPILE_PACK_MATRIX_COLUMN_MAJOR)
 				.|. (if debug then fromEnum D3DCOMPILE_DEBUG else 0)
 				.|. (if optimize then fromEnum D3DCOMPILE_OPTIMIZATION_LEVEL3 else (fromEnum D3DCOMPILE_OPTIMIZATION_LEVEL0) .|. (fromEnum D3DCOMPILE_SKIP_OPTIMIZATION))
@@ -787,8 +789,8 @@ instance Device Dx11Device where
 		return (Dx11UniformBufferId bufferInterface, releaseBufferInterface)
 
 -- | Create DirectX11 device.
-dx11CreateDevice :: DeviceId DXGISystem -> IO ((Dx11Device, Dx11Context), IO ())
-dx11CreateDevice (DXGIDeviceId system adapter) = describeException "failed to create DirectX11 graphics device" $ do
+dx11CreateDevice :: DeviceId DXGISystem -> Bool -> IO ((Dx11Device, Dx11Context), IO ())
+dx11CreateDevice (DXGIDeviceId system adapter) debug = describeException "failed to create DirectX11 graphics device" $ do
 
 	(deviceInterface, contextInterface) <- alloca $ \devicePtr -> alloca $ \deviceContextPtr -> do
 		let featureLevels = [D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_1, D3D_FEATURE_LEVEL_10_0]
@@ -810,6 +812,7 @@ dx11CreateDevice (DXGIDeviceId system adapter) = describeException "failed to cr
 		, dx11DeviceInterface = deviceInterface
 		, dx11DeviceImmediateContext = contextInterface
 		, dx11DeviceD3DCompile = d3dCompileProc
+		, dx11DeviceDebug = debug
 		}
 
 	(context, destroyContext) <- dx11CreateContextFromInterface device contextInterface

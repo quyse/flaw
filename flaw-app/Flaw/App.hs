@@ -105,7 +105,7 @@ initApp title width height needDepth debug = do
 
 	graphicsSystem <- book bk $ dxgiCreateSystem
 	graphicsDevices <- book bk $ getInstalledDevices graphicsSystem
-	(graphicsDevice, graphicsContext) <- book bk $ dx11CreateDevice $ fst $ head graphicsDevices
+	(graphicsDevice, graphicsContext) <- book bk $ dx11CreateDevice (fst $ head graphicsDevices) debug
 	presenter <- book bk $ dx11CreatePresenter graphicsDevice window Nothing needDepth
 
 #else
