@@ -23,6 +23,7 @@ import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString.Unsafe as B
 import qualified Data.HashMap.Strict as HM
 import Data.IORef
+import Data.List
 import Data.Maybe
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
@@ -742,18 +743,24 @@ instance Device Dx11Device where
 					createCOMObjectViaPtr $ m_ID3D11Device_CreatePixelShader deviceInterface (castPtr ptr) (fromIntegral len) nullPtr
 
 		-- generate HLSL
-		hlslProgram <- liftM generateProgram $ runProgram program
+		HlslProgram
+			{ hlslProgramAttributes = attributes
+			, hlslProgramShaders = shaders
+			} <- liftM hlslGenerateProgram $ runProgram program
 
 		bk <- newBook
 
-		-- select on type of the program
-		case hlslProgram of
-			HlslVertexPixelProgram attributes vertexShader pixelShader -> do
+		-- sort shaders by stage
+		let sortedShaders = sortBy (\(stage1, _) (stage2, _) -> compare stage1 stage2) shaders
+		-- accept only certain combinations of shaders
+		case sortedShaders of
+			[(HlslVertexStage, vertexShader), (HlslPixelStage, pixelShader)] -> do
 				vertexShaderByteCode <- compileShader vertexShader
 				inputLayoutInterface <- book bk $ createInputLayout attributes vertexShaderByteCode
 				vertexShaderInterface <- book bk $ createVertexShader vertexShaderByteCode
 				pixelShaderInterface <- book bk $ createPixelShader =<< compileShader pixelShader
 				return (Dx11VertexPixelProgramId inputLayoutInterface vertexShaderInterface pixelShaderInterface, freeBook bk)
+			_ -> throwIO $ DescribeFirstException ("unsupported combination of HLSL shaders", map fst sortedShaders)
 
 	createUniformBuffer Dx11Device
 		{ dx11DeviceInterface = deviceInterface
