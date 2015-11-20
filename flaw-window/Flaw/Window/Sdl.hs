@@ -65,8 +65,8 @@ instance Window SdlWindow where
 		{ swEventsChan = chan
 		} = dupTChan chan
 
-initSdlWindowSystem :: IO (SdlWindowSystem, IO ())
-initSdlWindowSystem = do
+initSdlWindowSystem :: Bool -> IO (SdlWindowSystem, IO ())
+initSdlWindowSystem debug = do
 
 	-- var for returning initialization result from SDL thread
 	initResultVar <- newEmptyMVar
@@ -107,6 +107,9 @@ initSdlWindowSystem = do
 		checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_CONTEXT_MAJOR_VERSION 3
 		checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_CONTEXT_MINOR_VERSION 3
 		checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_DOUBLEBUFFER 1
+		-- enable debug context if requested
+		if debug then checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_CONTEXT_FLAGS SDL.SDL_GL_CONTEXT_DEBUG_FLAG
+		else return ()
 
 		-- quit flag
 		quitRef <- newIORef False

@@ -70,12 +70,17 @@ type AppInputManager = SdlInputManager
 #endif
 
 
-initApp :: T.Text -> Int -> Int -> Bool
+initApp
+	:: T.Text -- ^ Window title.
+	-> Int -- ^ Window width.
+	-> Int -- ^ Window height.
+	-> Bool -- ^ Create depth buffer.
+	-> Bool -- ^ Enable debug features.
 	-> IO
 		( (AppWindow, AppGraphicsDevice, AppGraphicsContext, AppGraphicsPresenter, AppInputManager)
 		, IO ()
 		)
-initApp title width height needDepth = do
+initApp title width height needDepth debug = do
 
 	bk <- newBook
 
@@ -105,14 +110,14 @@ initApp title width height needDepth = do
 
 #else
 
-	windowSystem <- book bk $ initSdlWindowSystem
+	windowSystem <- book bk $ initSdlWindowSystem debug
 	window <- book bk $ createSdlWindow windowSystem title 0 0 width height needDepth
 
 	inputManager <- initSdlInput window
 
 	graphicsSystem <- book bk $ createGlSystem
 	graphicsDevices <- book bk $ getInstalledDevices graphicsSystem
-	graphicsContext <- book bk $ createGlContext (fst $ head graphicsDevices) window
+	graphicsContext <- book bk $ createGlContext (fst $ head graphicsDevices) window debug
 	let graphicsDevice = graphicsContext
 	let presenter = graphicsContext
 

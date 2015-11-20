@@ -996,11 +996,11 @@ data GlCaps = GlCaps
 	, glCapsArbInstancedArrays :: !Bool
 	} deriving Show
 
-createGlContext :: DeviceId GlSystem -> SdlWindow -> IO (GlContext, IO ())
+createGlContext :: DeviceId GlSystem -> SdlWindow -> Bool -> IO (GlContext, IO ())
 createGlContext _deviceId window@SdlWindow
 	{ swSystem = ws
 	, swHandle = windowHandle
-	} = describeException "failed to create OpenGL device" $ invokeSdlWindowSystem ws $ do
+	} debug = describeException "failed to create OpenGL device" $ invokeSdlWindowSystem ws $ do
 	-- create context
 	glContext <- checkSdlResult $ SDL.glCreateContext windowHandle
 	-- make it current
@@ -1046,7 +1046,57 @@ createGlContext _deviceId window@SdlWindow
 	-- set front face mode
 	glFrontFace gl_CW
 
+	-- if debug mode requested, setup debug output
+	if debug then do
+		-- enable debug output
+		glEnable gl_DEBUG_OUTPUT
+		-- set debug message callback
+		callbackPtr <- wrapGlDebugMessageCallback $ \messageSource messageType messageId messageSeverity messageLength messagePtr _userParam -> do
+			let messageSourceStr = case messageSource of
+				gl_DEBUG_SOURCE_API -> "DEBUG_SOURCE_API"
+				gl_DEBUG_SOURCE_WINDOW_SYSTEM -> "DEBUG_SOURCE_WINDOW_SYSTEM"
+				gl_DEBUG_SOURCE_SHADER_COMPILER -> "DEBUG_SOURCE_SHADER_COMPILER"
+				gl_DEBUG_SOURCE_THIRD_PARTY -> "DEBUG_SOURCE_THIRD_PARTY"
+				gl_DEBUG_SOURCE_APPLICATION -> "DEBUG_SOURCE_APPLICATION"
+				gl_DEBUG_SOURCE_OTHER -> "DEBUG_SOURCE_OTHER"
+				_ -> show messageSource
+			let messageTypeStr = case messageType of
+				gl_DEBUG_TYPE_ERROR -> "DEBUG_TYPE_ERROR"
+				gl_DEBUG_TYPE_DEPRECATED_BEHAVIOR -> "DEBUG_TYPE_DEPRECATED_BEHAVIOR"
+				gl_DEBUG_TYPE_UNDEFINED_BEHAVIOR -> "DEBUG_TYPE_UNDEFINED_BEHAVIOR"
+				gl_DEBUG_TYPE_PORTABILITY -> "DEBUG_TYPE_PORTABILITY"
+				gl_DEBUG_TYPE_PERFORMANCE -> "DEBUG_TYPE_PERFORMANCE"
+				gl_DEBUG_TYPE_MARKER -> "DEBUG_TYPE_MARKER"
+				gl_DEBUG_TYPE_PUSH_GROUP -> "DEBUG_TYPE_PUSH_GROUP"
+				gl_DEBUG_TYPE_POP_GROUP -> "DEBUG_TYPE_POP_GROUP"
+				gl_DEBUG_TYPE_OTHER -> "DEBUG_TYPE_OTHER"
+				_ -> show messageType
+			let messageSeverityStr = case messageSeverity of
+				gl_DEBUG_SEVERITY_HIGH -> "DEBUG_SEVERITY_HIGH"
+				gl_DEBUG_SEVERITY_MEDIUM -> "DEBUG_SEVERITY_MEDIUM"
+				gl_DEBUG_SEVERITY_LOW -> "DEBUG_SEVERITY_LOW"
+				gl_DEBUG_SEVERITY_NOTIFICATION -> "DEBUG_SEVERITY_NOTIFICATION"
+				_ -> show messageSeverity
+			message <- liftM T.decodeUtf8 $ B.unsafePackCStringLen (messagePtr, fromIntegral messageLength)
+			putStrLn $ "*** OpenGL debug message ***" ++
+				"\n  source:    " ++ messageSourceStr ++
+				"\n  type:      " ++ messageTypeStr ++
+				"\n  id:        " ++ show messageId ++
+				"\n  severity:  " ++ messageSeverityStr ++
+				"\n  message:   " ++ T.unpack message ++
+				"\n*** EOM ***"
+		glDebugMessageCallback callbackPtr nullPtr
+		-- enable asynchronous calls to callback
+		glDisable gl_DEBUG_OUTPUT_SYNCHRONOUS
+		-- enable all debug messages
+		glDebugMessageControl gl_DONT_CARE gl_DONT_CARE gl_DONT_CARE 0 nullPtr 1
+		glCheckErrors 1 "setup debug output"
+	else return ()
+
 	return (context, glInvoke context $ SDL.glDeleteContext glContext)
+
+type GlDebugMessageCallback = GLenum -> GLenum -> GLuint -> GLenum -> GLsizei -> Ptr GLchar -> Ptr () -> IO ()
+foreign import ccall "wrapper" wrapGlDebugMessageCallback :: GlDebugMessageCallback -> IO (FunPtr GlDebugMessageCallback)
 
 glNullProgram :: ProgramId GlDevice
 glNullProgram = GlProgramId
