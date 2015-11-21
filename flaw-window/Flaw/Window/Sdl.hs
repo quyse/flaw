@@ -104,12 +104,13 @@ initSdlWindowSystem debug = do
 			}, freeBook bk)
 
 		-- set common attributes
-		checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_CONTEXT_MAJOR_VERSION 3
-		checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_CONTEXT_MINOR_VERSION 3
-		checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_DOUBLEBUFFER 1
-		-- enable debug context if requested
-		if debug then checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_CONTEXT_FLAGS SDL.SDL_GL_CONTEXT_DEBUG_FLAG
-		else return ()
+		mapM_ (\(attr, value) -> checkSdlError (== 0) $ SDL.glSetAttribute attr value)
+			[ (SDL.SDL_GL_CONTEXT_MAJOR_VERSION, 3)
+			, (SDL.SDL_GL_CONTEXT_MINOR_VERSION, 3)
+			, (SDL.SDL_GL_DOUBLEBUFFER, 1)
+			, (SDL.SDL_GL_FRAMEBUFFER_SRGB_CAPABLE, 1)
+			, (SDL.SDL_GL_CONTEXT_FLAGS, if debug then SDL.SDL_GL_CONTEXT_DEBUG_FLAG else 0)
+			]
 
 		-- quit flag
 		quitRef <- newIORef False

@@ -1056,6 +1056,8 @@ createGlContext _deviceId window@SdlWindow
 	-- set cull mode
 	glEnable gl_CULL_FACE
 	glCullFace gl_BACK
+	-- enable SRGB framebuffer
+	glEnable gl_FRAMEBUFFER_SRGB
 	glCheckErrors 1 "init state"
 
 	-- if debug mode requested, setup debug output
