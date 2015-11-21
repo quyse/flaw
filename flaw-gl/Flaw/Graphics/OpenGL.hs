@@ -483,7 +483,8 @@ instance Device GlContext where
 
 		-- generate GLSL
 		let glslConfig = GlslConfig
-			{ glslConfigForceFloatAttributes = False
+			{ glslConfigVersion = Just 330
+			, glslConfigForceFloatAttributes = False
 			, glslConfigUnsignedUnsupported = False
 			, glslConfigUniformBlocks = useUniformBufferObject
 			, glslConfigInOutSyntax = True

@@ -31,8 +31,10 @@ import qualified Flaw.Graphics.Program.SL as SL
 -- | GLSL config for various versions of GLSL.
 data GlslConfig = GlslConfig
 	{
+	-- | GLSL version.
+	  glslConfigVersion :: Maybe Int
 	-- | Replace integer types with float types for attributes.
-	  glslConfigForceFloatAttributes :: !Bool
+	, glslConfigForceFloatAttributes :: !Bool
 	-- | Replace unsigned types with signed types.
 	, glslConfigUnsignedUnsupported :: !Bool
 	-- | Use uniform blocks (instead of separate uniforms).
@@ -44,7 +46,8 @@ data GlslConfig = GlslConfig
 -- | GLSL config for WebGL.
 glslWebGLConfig :: GlslConfig
 glslWebGLConfig = GlslConfig
-	{ glslConfigForceFloatAttributes = True
+	{ glslConfigVersion = Nothing
+	, glslConfigForceFloatAttributes = True
 	, glslConfigUnsignedUnsupported = True
 	, glslConfigUniformBlocks = False
 	, glslConfigInOutSyntax = False
@@ -99,7 +102,8 @@ data GlslProgram = GlslProgram
 -- | Generate shader programs in GLSL.
 glslGenerateProgram :: GlslConfig -> State -> GlslProgram
 glslGenerateProgram GlslConfig
-	{ glslConfigForceFloatAttributes = configForceFloatAttributes
+	{ glslConfigVersion = configVersion
+	, glslConfigForceFloatAttributes = configForceFloatAttributes
 	, glslConfigUnsignedUnsupported = configUnsignedUnsupported
 	, glslConfigUniformBlocks = configUniformBlocks
 	, glslConfigInOutSyntax = configInOutSyntax
@@ -200,7 +204,10 @@ glslGenerateProgram GlslConfig
 			<> samplersSource <> targetDeclsSource <> codeSource
 
 		-- header source
-		headerSource = "#version 330\n#ifdef GL_ES\nprecision highp float;\n#endif\n"
+		headerSource = versionSource <> "#ifdef GL_ES\nprecision highp float;\n#endif\n"
+		versionSource = case configVersion of
+			Just version -> "#version " <> fromString (show version) <> "\n"
+			Nothing -> mempty
 
 		-- attributes source
 		attributesSource = foldr mappend mempty $ map attributeDefinitionSource attributes

@@ -164,7 +164,7 @@ instance Device WebGLDevice where
 		{ webglDeviceContext = jsContext
 		} program = describeException "failed to create WebGL program" $ do
 
-		let createShader (GlslShader source) shaderType = describeException "failed to create WebGL shader" $ do
+		let createShader source shaderType = describeException "failed to create WebGL shader" $ do
 			jsShader <- js_createShader jsContext shaderType
 			js_shaderSource jsContext jsShader $ pToJSRef source
 			js_compileShader jsContext jsShader
@@ -176,57 +176,66 @@ instance Device WebGLDevice where
 				throwIO $ DescribeFirstException ("failed to compile shader", (pFromJSRef jsLog) :: T.Text)
 
 		-- generate GLSL
-		glslProgram <- liftM (generateProgram glslWebGLConfig) $ runProgram program
-		case glslProgram of
-			GlslVertexPixelProgram attributes uniforms samplers _targets vertexShader pixelShader -> do
-				-- create program
-				jsProgram <- js_createProgram jsContext
+		GlslProgram
+			{ glslProgramAttributes = attributes
+			, glslProgramUniformBlocks = _uniformBlocks
+			, glslProgramUniforms = uniforms
+			, glslProgramSamplers = samplers
+			, glslProgramFragmentTargets = _fragmentTargets
+			, glslProgramShaders = shaders
+			} <- liftM (glslGenerateProgram glslWebGLConfig) $ runProgram program
 
-				-- create and attach shaders
-				js_attachShader jsContext jsProgram =<< createShader vertexShader webgl_VERTEX_SHADER
-				js_attachShader jsContext jsProgram =<< createShader pixelShader webgl_FRAGMENT_SHADER
+		-- create program
+		jsProgram <- js_createProgram jsContext
 
-				-- bind attributes
-				forM_ (zip attributes [0..]) $ \(GlslAttribute
-					{ glslAttributeName = name
-					}, i) -> js_bindAttribLocation jsContext jsProgram i $ pToJSRef name
+		-- create and attach shaders
+		forM_ shaders $ \(shaderStage, shaderSource) -> do
+			shader <- createShader shaderSource $ case shaderStage of
+				GlslVertexStage -> webgl_VERTEX_SHADER
+				GlslFragmentStage -> webgl_FRAGMENT_SHADER
+			js_attachShader jsContext jsProgram shader
 
-				-- TODO: bind targets
+		-- bind attributes
+		forM_ (zip attributes [0..]) $ \(GlslAttribute
+			{ glslAttributeName = name
+			}, i) -> js_bindAttribLocation jsContext jsProgram i $ pToJSVal name
 
-				-- link program
-				js_linkProgram jsContext jsProgram
-				jsStatus <- js_getProgramParameter jsContext jsProgram webgl_LINK_STATUS
-				if pFromJSRef jsStatus then return ()
-				else throwIO $ DescribeFirstException "failed to link program"
+		-- TODO: bind targets
 
-				-- set as current
-				js_useProgram jsContext jsProgram
+		-- link program
+		js_linkProgram jsContext jsProgram
+		jsStatus <- js_getProgramParameter jsContext jsProgram webgl_LINK_STATUS
+		if pFromJSVal jsStatus then return ()
+		else throwIO $ DescribeFirstException "failed to link program"
 
-				-- bind samplers
-				forM_ (zip samplers [0..]) $ \(GlslSampler
-					{ glslSamplerName = name
-					}, i) -> do
-					jsLocation <- js_getUniformLocation jsContext jsProgram $ pToJSRef name
-					js_uniform1i jsContext jsLocation i
+		-- set as current
+		js_useProgram jsContext jsProgram
 
-				-- form uniforms
-				programUniforms <- forM uniforms $ \GlslUniform
-					{ glslUniformName = name
-					, glslUniformInfo = info
-					} -> do
-					jsLocation <- js_getUniformLocation jsContext jsProgram $ pToJSRef name
-					return WebGLUniform
-						{ webglUniformLocation = jsLocation
-						, webglUniformInfo = info
-						}
+		-- bind samplers
+		forM_ (zip samplers [0..]) $ \(GlslSampler
+			{ glslSamplerName = name
+			}, i) -> do
+			jsLocation <- js_getUniformLocation jsContext jsProgram $ pToJSVal name
+			js_uniform1i jsContext jsLocation i
 
-				programId <- webglAllocateId device
-				return (WebGLProgramId
-					{ webglProgramId = programId
-					, webglProgramProgram = jsProgram
-					, webglProgramAttributes = map glslAttributeInfo attributes
-					, webglProgramUniforms = programUniforms
-					}, undefined)
+		-- form uniforms
+		programUniforms <- forM uniforms $ \GlslUniform
+			{ glslUniformName = name
+			, glslUniformInfo = info
+			} -> do
+			jsLocation <- js_getUniformLocation jsContext jsProgram $ pToJSVal name
+			return WebGLUniform
+				{ webglUniformLocation = jsLocation
+				, webglUniformInfo = info
+				}
+
+		programId <- webglAllocateId device
+		return (WebGLProgramId
+			{ webglProgramId = programId
+			, webglProgramProgram = jsProgram
+			, webglProgramAttributes = map glslAttributeInfo attributes
+			, webglProgramUniforms = programUniforms
+			}, undefined)
 
 	createUniformBuffer device size = describeException "failed to create WebGL uniform buffer" $ do
 		bufferId <- webglAllocateId device
