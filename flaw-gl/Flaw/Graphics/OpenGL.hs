@@ -1053,6 +1053,10 @@ createGlContext _deviceId window@SdlWindow
 
 	-- set front face mode
 	glFrontFace gl_CW
+	-- set cull mode
+	glEnable gl_CULL_FACE
+	glCullFace gl_BACK
+	glCheckErrors 1 "init state"
 
 	-- if debug mode requested, setup debug output
 	if debug then do
