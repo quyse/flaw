@@ -55,40 +55,40 @@ instance System WebGLSystem where
 
 -- | Device.
 data WebGLDevice = WebGLDevice
-	{ webglDeviceContext :: JSRef JS_WebGLContext
+	{ webglDeviceContext :: JSVal
 	-- | Counter for ids for various resources.
 	, webglDeviceCreateId :: IORef Int
 	}
 
 data WebGLUniform = WebGLUniform
-	{ webglUniformLocation :: JSRef JS_WebGLUniformLocation
+	{ webglUniformLocation :: JSVal
 	, webglUniformInfo :: Uniform
 	}
 
 instance Device WebGLDevice where
-	type DeferredContext WebGLDevice = JSRef JS_WebGLContext
+	type DeferredContext WebGLDevice = JSVal
 	data TextureId WebGLDevice = WebGLTextureId
 		{ webglTextureId :: Int
-		, webglTextureTexture :: JSRef JS_WebGLTexture
+		, webglTextureTexture :: JSVal
 		}
 	data SamplerStateId WebGLDevice = WebGLSamplerStateId deriving Eq
-	newtype RenderTargetId WebGLDevice = WebGLRenderTargetId (JSRef JS_WebGLRenderbuffer)
-	newtype DepthStencilTargetId WebGLDevice = WebGLDepthStencilTargetId (JSRef ())
-	newtype FrameBufferId WebGLDevice = WebGLFrameBufferId (JSRef JS_WebGLFramebuffer)
+	newtype RenderTargetId WebGLDevice = WebGLRenderTargetId JSVal
+	newtype DepthStencilTargetId WebGLDevice = WebGLDepthStencilTargetId JSVal
+	newtype FrameBufferId WebGLDevice = WebGLFrameBufferId JSVal
 	data VertexBufferId WebGLDevice = WebGLVertexBufferId
 		{ webglVertexBufferId :: Int
-		, webglVertexBufferBuffer :: JSRef JS_WebGLBuffer
+		, webglVertexBufferBuffer :: JSVal
 		, webglVertexBufferStride :: Int
 		}
 	data IndexBufferId WebGLDevice = WebGLIndexBufferId
 		{ webglIndexBufferId :: !Int
-		, webglIndexBufferBuffer :: JSRef JS_WebGLBuffer
+		, webglIndexBufferBuffer :: JSVal
 		, webglIndexBufferMode :: !GLenum
 		, webglIndexBufferFormat :: !GLenum
 		}
 	data ProgramId WebGLDevice = WebGLProgramId
 		{ webglProgramId :: !Int
-		, webglProgramProgram :: JSRef JS_WebGLProgram
+		, webglProgramProgram :: JSVal
 		, webglProgramAttributes :: [Attribute]
 		, webglProgramUniforms :: [WebGLUniform]
 		}
@@ -166,14 +166,14 @@ instance Device WebGLDevice where
 
 		let createShader source shaderType = describeException "failed to create WebGL shader" $ do
 			jsShader <- js_createShader jsContext shaderType
-			js_shaderSource jsContext jsShader $ pToJSRef source
+			js_shaderSource jsContext jsShader $ pToJSVal source
 			js_compileShader jsContext jsShader
 			jsStatus <- js_getShaderParameter jsContext jsShader webgl_COMPILE_STATUS
-			if pFromJSRef jsStatus then return jsShader
+			if pFromJSVal jsStatus then return jsShader
 			else do
 				jsLog <- js_getShaderInfoLog jsContext jsShader
 				putStrLn $ T.unpack source
-				throwIO $ DescribeFirstException ("failed to compile shader", (pFromJSRef jsLog) :: T.Text)
+				throwIO $ DescribeFirstException ("failed to compile shader", (pFromJSVal jsLog) :: T.Text)
 
 		-- generate GLSL
 		GlslProgram
@@ -246,7 +246,7 @@ instance Device WebGLDevice where
 			}, undefined)
 
 data WebGLContext = WebGLContext
-	{ webglContextContext :: JSRef JS_WebGLContext
+	{ webglContextContext :: JSVal
 	, webglContextActualState :: WebGLContextState
 	, webglContextDesiredState :: WebGLContextState
 	}
@@ -557,7 +557,7 @@ foreign import javascript unsafe "( \
 webglInit :: DOM.Element -> Bool -> IO ((WebGLDevice, WebGLContext, WebGLPresenter), IO ())
 webglInit canvas needDepth = do
 	-- get context
-	jsCanvas <- toJSRef canvas
+	jsCanvas <- toJSVal canvas
 	jsContext <- js_getWebGLContext jsCanvas needDepth
 	if isNull jsContext then throwIO $ DescribeFirstException "cannot get WebGL context"
 	else return ()
@@ -613,7 +613,7 @@ webglInit canvas needDepth = do
 		, "OES_vertex_array_object"
 		, "WEBGL_draw_buffers"
 		]
-	forM_ extensions $ js_getExtension jsContext . pToJSRef . T.pack
+	forM_ extensions $ js_getExtension jsContext . pToJSVal . T.pack
 
 	-- create presenter
 	let presenter = WebGLPresenter
@@ -797,7 +797,7 @@ loadWebGLTexture2DFromURL :: WebGLDevice -> T.Text -> IO (TextureId WebGLDevice,
 loadWebGLTexture2DFromURL device@WebGLDevice
 	{ webglDeviceContext = jsContext
 	} url = describeException "failed to load WebGL texture from URL" $ do
-	image <- js_loadImage $ pToJSRef url
+	image <- js_loadImage $ pToJSVal url
 	jsTexture <- js_createTexture jsContext
 	js_bindTexture jsContext webgl_TEXTURE_2D jsTexture
 	js_texImage2D jsContext webgl_TEXTURE_2D 0 webgl_RGBA webgl_RGBA webgl_UNSIGNED_BYTE image
@@ -811,14 +811,14 @@ loadWebGLTexture2DFromURL device@WebGLDevice
 		, webglTextureTexture = jsTexture
 		}, return ())
 
-byteStringToJsBuffer :: B.ByteString -> IO (JSRef ())
+byteStringToJsBuffer :: B.ByteString -> IO JSVal
 byteStringToJsBuffer bytes = do
 	let (buf, off, len) = GHCJS.Buffer.fromByteString bytes
 	r <- js_unwrapBuf buf off len
 	return r
-foreign import javascript unsafe "$r = new Uint8Array($1.buf, $2, $3)" js_unwrapBuf :: GHCJS.Buffer.Buffer -> Int -> Int -> IO (JSRef ())
+foreign import javascript unsafe "$r = new Uint8Array($1.buf, $2, $3)" js_unwrapBuf :: GHCJS.Buffer.Buffer -> Int -> Int -> IO JSVal
 
-foreign import javascript unsafe "$r = $1.f3.subarray($1_2, $1_2 + $2)" js_ptrToFloat32Array :: Ptr () -> Int -> IO (JSRef ())
+foreign import javascript unsafe "$r = $1.f3.subarray($1_2, $1_2 + $2)" js_ptrToFloat32Array :: Ptr () -> Int -> IO JSVal
 
 instance Eq (VertexBufferId WebGLDevice) where
 	WebGLVertexBufferId { webglVertexBufferId = a } == WebGLVertexBufferId { webglVertexBufferId = b } = a == b

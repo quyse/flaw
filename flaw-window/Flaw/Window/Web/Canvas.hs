@@ -30,7 +30,7 @@ data Canvas = Canvas
 initCanvas :: T.Text -> IO Canvas
 initCanvas title = do
 	jsCanvas <- js_initCanvas
-	maybeDomCanvas <- fromJSRef jsCanvas
+	maybeDomCanvas <- fromJSVal jsCanvas
 	eventsChan <- newBroadcastTChanIO
 	let canvas = Canvas
 		{ canvasElement = fromJust maybeDomCanvas
@@ -40,7 +40,7 @@ initCanvas title = do
 	return canvas
 
 instance Window Canvas where
-	setWindowTitle _canvas title = js_setTitle $ pToJSRef title
+	setWindowTitle _canvas title = js_setTitle $ pToJSVal title
 	getWindowClientSize Canvas
 		{ canvasElement = domCanvas
 		} = do
@@ -64,6 +64,6 @@ foreign import javascript unsafe " \
 	\ c.width = window.innerWidth; \
 	\ c.height = window.innerHeight; \
 	\ }, false); \
-	\ $r=c" js_initCanvas :: IO (JSRef DOM.Element)
+	\ $r=c" js_initCanvas :: IO JSVal
 
-foreign import javascript unsafe "document.title=$1" js_setTitle :: JSRef T.Text -> IO ()
+foreign import javascript unsafe "document.title=$1" js_setTitle :: JSVal -> IO ()

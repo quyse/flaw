@@ -31,7 +31,7 @@ library
   if impl(ghcjs)
     exposed-modules:
       Flaw.Input.Web
-    build-depends:       ghcjs-base, ghcjs-dom
+    build-depends:       ghcjs-base
   else
     if os(windows)
       exposed-modules:
