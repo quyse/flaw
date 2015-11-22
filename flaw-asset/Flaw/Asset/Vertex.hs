@@ -39,7 +39,7 @@ instance ColladaVertex VertexPNT where
 		return $ V.generate (cvdCount verticesData) $ \i -> VertexPNT
 			{ f_VertexPNT_position = positions V.! i
 			, f_VertexPNT_normal = normals V.! i
-			, f_VertexPNT_texcoord = xy__ $ texcoords V.! i
+			, f_VertexPNT_texcoord = let Vec3 tx ty _tz = texcoords V.! i in Vec2 tx (1 - ty)
 			}
 
 genStruct "VertexPNTWB"
