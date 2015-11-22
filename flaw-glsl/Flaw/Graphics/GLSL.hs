@@ -246,9 +246,9 @@ glslGenerateProgram GlslConfig
 			blockSource = foldr mappend mempty $ map uniformInBlockSource $ addBlockGaps blockUniforms 0
 			uniformInBlockSource u = "\t" <> uniformDefinitionSource u
 			addBlockGaps ua@(u:us) offset
-				| advance == 0 = u : (addBlockGaps us $ offset + (valueTypeScalarsCount $ uniformType u))
+				| advance == 0 = u : (addBlockGaps us $ offset + (valueTypeScalarsCount $ uniformType u) * count * 4)
 				| advance `mod` 4 == 0 && advance >= 4 = Uniform
-					{ uniformSlot = (-1)
+					{ uniformSlot = uniformSlot u
 					, uniformOffset = offset
 					, uniformSize = 0
 					, uniformType = case cappedAdvance `div` 4 of
@@ -262,6 +262,8 @@ glslGenerateProgram GlslConfig
 				where
 					advance = uniformOffset u - offset
 					cappedAdvance = min advance 16
+					size = uniformSize u
+					count = if size > 0 then size else 1
 			addBlockGaps [] _ = []
 		eqUniformBySlot a b = uniformSlot a == uniformSlot b
 		compareUniformBySlot a b = compare (uniformSlot a) (uniformSlot b)
