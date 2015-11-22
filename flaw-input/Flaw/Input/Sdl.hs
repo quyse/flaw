@@ -164,9 +164,13 @@ initSdlInput window = do
 						_ -> return ()
 					Nothing -> return ()
 			SDL.MouseMotionEvent
-				{ SDL.mouseMotionEventXRel = xrel
+				{ SDL.mouseMotionEventX = x
+				, SDL.mouseMotionEventY = y
+				, SDL.mouseMotionEventXRel = xrel
 				, SDL.mouseMotionEventYRel = yrel
-				} -> addMouseEvent $ RawMouseMoveEvent (fromIntegral xrel) (fromIntegral yrel) 0
+				} -> do
+				addMouseEvent $ RawMouseMoveEvent (fromIntegral xrel) (fromIntegral yrel) 0
+				addMouseEvent $ CursorMoveEvent (fromIntegral x) (fromIntegral y)
 			SDL.MouseWheelEvent
 				{ SDL.mouseWheelEventY = y
 				} -> addMouseEvent $ RawMouseMoveEvent 0 0 $ fromIntegral y
