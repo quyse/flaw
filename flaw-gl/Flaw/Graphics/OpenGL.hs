@@ -1295,7 +1295,7 @@ glUpdateContext context@GlContext
 
 	-- uniform buffers
 	uniformBindings <- liftM glProgramUniforms $ readIORef desiredProgramRef
-	forM_ [0, VM.length actualUniformBuffersVector - 1] $ \i -> do
+	forM_ [0..(VM.length actualUniformBuffersVector - 1)] $ \i -> do
 		actualUniformBuffer <- VM.read actualUniformBuffersVector i
 		desiredUniformBuffer <- VM.read desiredUniformBuffersVector i
 		let bindBuffer bufferName = do
