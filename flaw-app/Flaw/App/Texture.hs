@@ -26,6 +26,7 @@ import Control.Monad.IO.Class
 import qualified Data.ByteString.Lazy as BL
 
 import Flaw.Graphics
+import Flaw.Graphics.Sampler
 import Flaw.Graphics.Texture
 import Flaw.Asset.Texture
 
@@ -56,7 +57,7 @@ loadTextureExp filePath = do
 	[|
 		\device -> do
 			bytes <- liftIO $(embedIOExp fileBytes)
-			createStaticTexture device $(embedExp textureInfo) bytes
+			createStaticTexture device $(embedExp textureInfo) defaultSamplerStateInfo bytes
 		|]
 
 #endif

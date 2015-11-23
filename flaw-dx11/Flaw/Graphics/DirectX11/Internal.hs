@@ -70,7 +70,7 @@ data Dx11Device = Dx11Device
 instance Device Dx11Device where
 	type DeferredContext Dx11Device = Dx11Context
 	data TextureId Dx11Device
-		= Dx11TextureId ID3D11ShaderResourceView
+		= Dx11TextureId ID3D11ShaderResourceView !(SamplerStateId Dx11Device)
 		| Dx11NullTextureId
 		deriving Eq
 	data SamplerStateId Dx11Device
@@ -123,7 +123,7 @@ instance Device Dx11Device where
 		context <- book bk $ dx11CreateContextFromInterface device contextInterface
 		return (context, freeBook bk)
 
-	createStaticTexture Dx11Device
+	createStaticTexture device@Dx11Device
 		{ dx11DeviceInterface = deviceInterface
 		} textureInfo@TextureInfo
 		{ textureWidth = width
@@ -132,7 +132,7 @@ instance Device Dx11Device where
 		, textureMips = mips
 		, textureFormat = format
 		, textureCount = count
-		} bytes = describeException ("failed to create DirectX11 static texture", textureInfo) $ do
+		} samplerStateInfo bytes = describeException ("failed to create DirectX11 static texture", textureInfo) $ do
 		let dxgiFormat = getDXGIFormat format
 		let realCount = if count > 0 then count else 1
 		let TextureMetrics
@@ -267,13 +267,19 @@ instance Device Dx11Device where
 
 		-- create ID3D11Resource
 		(resourceInterface, releaseResourceInterface) <- allocateCOMObject $ B.unsafeUseAsCString bytes createResource
+
+		bk <- newBook
+
 		-- create ID3D11ShaderResourceView
-		(srvInterface, releaseSrvInterface) <- allocateCOMObject $ with srvDesc $ \srvDescPtr -> do
+		srvInterface <- book bk $ allocateCOMObject $ with srvDesc $ \srvDescPtr -> do
 			createCOMObjectViaPtr $ m_ID3D11Device_CreateShaderResourceView deviceInterface (pokeCOMObject resourceInterface) srvDescPtr
 		-- release resource interface
 		releaseResourceInterface
 
-		return (Dx11TextureId srvInterface, releaseSrvInterface)
+		-- create sampler state
+		samplerState <- book bk $ createSamplerState device samplerStateInfo
+
+		return (Dx11TextureId srvInterface samplerState, freeBook bk)
 
 	createSamplerState Dx11Device
 		{ dx11DeviceInterface = deviceInterface
@@ -284,8 +290,8 @@ instance Device Dx11Device where
 		, samplerWrapU = wrapU
 		, samplerWrapV = wrapV
 		, samplerWrapW = wrapW
-		, samplerMinLOD = minLOD
-		, samplerMaxLOD = maxLOD
+		, samplerMinLod = minLod
+		, samplerMaxLod = maxLod
 		, samplerBorderColor = borderColor
 		} = describeException ("failed to create DirectX11 sampler state", samplerStateInfo) $ do
 		-- conversion function
@@ -319,8 +325,8 @@ instance Device Dx11Device where
 			, f_D3D11_SAMPLER_DESC_MaxAnisotropy = 16
 			, f_D3D11_SAMPLER_DESC_ComparisonFunc = D3D11_COMPARISON_NEVER
 			, f_D3D11_SAMPLER_DESC_BorderColor = vecToList borderColor
-			, f_D3D11_SAMPLER_DESC_MinLOD = minLOD
-			, f_D3D11_SAMPLER_DESC_MaxLOD = maxLOD
+			, f_D3D11_SAMPLER_DESC_MinLOD = minLod
+			, f_D3D11_SAMPLER_DESC_MaxLOD = maxLod
 			}
 
 		-- create
@@ -393,9 +399,9 @@ instance Device Dx11Device where
 
 		return (Dx11BlendStateId bsInterface, releaseBsInterface)
 
-	createReadableRenderTarget Dx11Device
+	createReadableRenderTarget device@Dx11Device
 		{ dx11DeviceInterface = deviceInterface
-		} width height format = describeException ("failed to create DirectX11 readable render target", width, height, format) $ do
+		} width height format samplerStateInfo = describeException ("failed to create DirectX11 readable render target", width, height, format) $ do
 
 		let dxgiFormat = getDXGIFormat format
 
@@ -419,20 +425,21 @@ instance Device Dx11Device where
 		(resourceInterface, releaseResourceInterface) <- allocateCOMObject $ with desc $ \descPtr -> do
 			liftM com_get_ID3D11Resource $ createCOMObjectViaPtr $ m_ID3D11Device_CreateTexture2D deviceInterface descPtr nullPtr
 
+		bk <- newBook
+
 		-- create render target view
-		(rtvInterface, releaseRtvInterface) <- allocateCOMObject $ createCOMObjectViaPtr $ m_ID3D11Device_CreateRenderTargetView deviceInterface (pokeCOMObject resourceInterface) nullPtr
+		rtvInterface <- book bk $ allocateCOMObject $ createCOMObjectViaPtr $ m_ID3D11Device_CreateRenderTargetView deviceInterface (pokeCOMObject resourceInterface) nullPtr
 
 		-- create shader resource view
-		(srvInterface, releaseSrvInterface) <- allocateCOMObject $ createCOMObjectViaPtr $ m_ID3D11Device_CreateShaderResourceView deviceInterface (pokeCOMObject resourceInterface) nullPtr
+		srvInterface <- book bk $ allocateCOMObject $ createCOMObjectViaPtr $ m_ID3D11Device_CreateShaderResourceView deviceInterface (pokeCOMObject resourceInterface) nullPtr
 
 		-- release resource interface
 		releaseResourceInterface
 
-		let destroy = do
-			releaseRtvInterface
-			releaseSrvInterface
+		-- create sampler state
+		samplerState <- book bk $ createSamplerState device samplerStateInfo
 
-		return ((Dx11RenderTargetId rtvInterface, Dx11TextureId srvInterface), destroy)
+		return ((Dx11RenderTargetId rtvInterface, Dx11TextureId srvInterface samplerState), freeBook bk)
 
 	createDepthStencilTarget Dx11Device
 		{ dx11DeviceInterface = deviceInterface
@@ -533,7 +540,7 @@ instance Device Dx11Device where
 			releaseDsvInterface
 			releaseSrvInterface
 
-		return ((Dx11DepthStencilTargetId dsvInterface, Dx11TextureId srvInterface), destroy)
+		return ((Dx11DepthStencilTargetId dsvInterface, Dx11TextureId srvInterface nullSamplerState), destroy)
 
 	createFrameBuffer _device renderTargets depthStencilTarget = do
 		return (Dx11FrameBufferId renderTargets depthStencilTarget, return ())
@@ -1565,19 +1572,21 @@ dx11UpdateContext context@Dx11Context
 	vectorSetup actualSamplersVector desiredSamplersVector $ \desiredSamplers -> do
 		let samplersCount = V.length desiredSamplers
 		allocaArray samplersCount $ \srvInterfacesPtr -> do
-			(flip V.imapM_) desiredSamplers $ \i (texture, _samplerState) -> do
-				pokeElemOff srvInterfacesPtr i $ case texture of
-					Dx11TextureId srvInterface -> pokeCOMObject srvInterface
-					Dx11NullTextureId -> nullPtr
-			m_ID3D11DeviceContext_VSSetShaderResources contextInterface 0 (fromIntegral samplersCount) srvInterfacesPtr
-			m_ID3D11DeviceContext_PSSetShaderResources contextInterface 0 (fromIntegral samplersCount) srvInterfacesPtr
-		allocaArray samplersCount $ \ssInterfacesPtr -> do
-			(flip V.imapM_) desiredSamplers $ \i (_texture, samplerState) -> do
-				pokeElemOff ssInterfacesPtr i $ case samplerState of
-					Dx11SamplerStateId ssInterface -> pokeCOMObject ssInterface
-					Dx11NullSamplerStateId -> nullPtr
-			m_ID3D11DeviceContext_VSSetSamplers contextInterface 0 (fromIntegral samplersCount) ssInterfacesPtr
-			m_ID3D11DeviceContext_PSSetSamplers contextInterface 0 (fromIntegral samplersCount) ssInterfacesPtr
+			allocaArray samplersCount $ \ssInterfacesPtr -> do
+				(flip V.imapM_) desiredSamplers $ \i (texture, samplerState) -> do
+					let (srvInterfacePtr, ssInterfacePtr) = case texture of
+						Dx11TextureId srvInterface textureSamplerState -> case samplerState of
+							Dx11SamplerStateId ssInterface -> (pokeCOMObject srvInterface, pokeCOMObject ssInterface)
+							Dx11NullSamplerStateId -> case textureSamplerState of
+								Dx11SamplerStateId ssInterface -> (pokeCOMObject srvInterface, pokeCOMObject ssInterface)
+								Dx11NullSamplerStateId -> (pokeCOMObject srvInterface, nullPtr)
+						Dx11NullTextureId -> (nullPtr, nullPtr)
+					pokeElemOff srvInterfacesPtr i srvInterfacePtr
+					pokeElemOff ssInterfacesPtr i ssInterfacePtr
+				m_ID3D11DeviceContext_VSSetShaderResources contextInterface 0 (fromIntegral samplersCount) srvInterfacesPtr
+				m_ID3D11DeviceContext_PSSetShaderResources contextInterface 0 (fromIntegral samplersCount) srvInterfacesPtr
+				m_ID3D11DeviceContext_VSSetSamplers contextInterface 0 (fromIntegral samplersCount) ssInterfacesPtr
+				m_ID3D11DeviceContext_PSSetSamplers contextInterface 0 (fromIntegral samplersCount) ssInterfacesPtr
 
 	-- blend state
 	refSetup actualBlendStateRef desiredBlendStateRef $ \desiredBlendState -> do
