@@ -195,7 +195,7 @@ instance Device GlContext where
 			}
 		} textureInfo@TextureInfo
 		{ textureFormat = format
-		} bytes = glInvoke context $ describeException ("failed to create OpenGL static texture", textureInfo) $ do
+		} samplerStateInfo bytes = glInvoke context $ describeException ("failed to create OpenGL static texture", textureInfo) $ do
 
 		let
 			width = fromIntegral $ textureWidth textureInfo
@@ -324,6 +324,9 @@ instance Device GlContext where
 			glTexParameteri glTarget gl_TEXTURE_MAX_LEVEL $ mips - 1
 			glCheckErrors 0 "texture parameters"
 
+		-- setup sampling
+		glSetupTextureSampling glTarget samplerStateInfo
+
 		return (GlTextureId textureName, glInvoke context $ with textureName $ glDeleteTextures 1)
 
 	createSamplerState context samplerStateInfo@SamplerStateInfo
@@ -378,7 +381,7 @@ instance Device GlContext where
 		{ glContextCaps = GlCaps
 			{ glCapsArbTextureStorage = useTextureStorage
 			}
-		} width height format = glInvoke context $ describeException "failed to create OpenGL readable render target" $ do
+		} width height format samplerStateInfo = glInvoke context $ describeException "failed to create OpenGL readable render target" $ do
 		-- allocate texture name
 		textureName <- alloca $ \namePtr -> do
 			glGenTextures 1 namePtr
@@ -398,6 +401,9 @@ instance Device GlContext where
 		else
 			glTexImage2D gl_TEXTURE_2D 0 (fromIntegral glInternalFormat) (fromIntegral width) (fromIntegral height) 0 glFormat glType nullPtr
 		glCheckErrors 0 "texture storage"
+
+		-- setup sampling
+		glSetupTextureSampling gl_TEXTURE_2D samplerStateInfo
 
 		return ((GlRenderTargetId textureName, GlTextureId textureName), glInvoke context $ with textureName $ glDeleteTextures 1)
 
@@ -1652,6 +1658,44 @@ glSamplerWrap wrap = case wrap of
 	SamplerWrapRepeatMirror -> gl_MIRRORED_REPEAT
 	SamplerWrapClamp -> gl_CLAMP_TO_EDGE
 	SamplerWrapBorder -> gl_CLAMP_TO_BORDER
+
+-- | Set sampling settings for a texture.
+glSetupTextureSampling :: GLenum -> SamplerStateInfo -> IO ()
+glSetupTextureSampling target samplerStateInfo@SamplerStateInfo
+	{ samplerWrapU = wrapU
+	, samplerWrapV = wrapV
+	, samplerWrapW = wrapW
+	, samplerMinLod = minLod
+	, samplerMaxLod = maxLod
+	, samplerBorderColor = borderColor
+	} = do
+	-- min filter
+	glTexParameteri target gl_TEXTURE_MIN_FILTER $ fromIntegral $ glSamplerMinFilter samplerStateInfo
+	glCheckErrors 0 "min filter"
+	-- mag filter
+	glTexParameteri target gl_TEXTURE_MAG_FILTER $ fromIntegral $ glSamplerMagFilter samplerStateInfo
+	glCheckErrors 0 "mag filter"
+
+	-- wrap U
+	glTexParameteri target gl_TEXTURE_WRAP_S $ fromIntegral $ glSamplerWrap wrapU
+	glCheckErrors 0 "wrap U"
+	-- wrap V
+	glTexParameteri target gl_TEXTURE_WRAP_T $ fromIntegral $ glSamplerWrap wrapV
+	glCheckErrors 0 "wrap V"
+	-- wrap W
+	glTexParameteri target gl_TEXTURE_WRAP_R $ fromIntegral $ glSamplerWrap wrapW
+	glCheckErrors 0 "wrap W"
+
+	-- min LOD
+	glTexParameterf target gl_TEXTURE_MIN_LOD $ coerce minLod
+	glCheckErrors 0 "min LOD"
+	-- max LOD
+	glTexParameterf target gl_TEXTURE_MAX_LOD $ coerce maxLod
+	glCheckErrors 0 "max LOD"
+
+	-- border color
+	with borderColor $ glTexParameterfv target gl_TEXTURE_BORDER_COLOR . castPtr
+	glCheckErrors 0 "border color"
 
 refSetup :: Eq a => IORef a -> IORef a -> (a -> IO ()) -> IO Bool
 refSetup actualRef desiredRef setup = do

@@ -117,13 +117,13 @@ class Device d where
 	-- | Create deferred context.
 	createDeferredContext :: Context (DeferredContext d) d => d -> IO (DeferredContext d, IO ())
 	-- | Create static texture.
-	createStaticTexture :: d -> TextureInfo -> B.ByteString -> IO (TextureId d, IO ())
+	createStaticTexture :: d -> TextureInfo -> SamplerStateInfo -> B.ByteString -> IO (TextureId d, IO ())
 	-- | Create sampler state.
 	createSamplerState :: d -> SamplerStateInfo -> IO (SamplerStateId d, IO ())
 	-- | Create blend state.
 	createBlendState :: d -> BlendStateInfo -> IO (BlendStateId d, IO ())
 	-- | Create readable render target.
-	createReadableRenderTarget :: d -> Int -> Int -> TextureFormat -> IO ((RenderTargetId d, TextureId d), IO ())
+	createReadableRenderTarget :: d -> Int -> Int -> TextureFormat -> SamplerStateInfo -> IO ((RenderTargetId d, TextureId d), IO ())
 	-- | Create depth stencil target.
 	createDepthStencilTarget :: d -> Int -> Int -> IO (DepthStencilTargetId d, IO ())
 	-- | Create readable depth stencil target.

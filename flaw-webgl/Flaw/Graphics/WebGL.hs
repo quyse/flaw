@@ -116,13 +116,13 @@ instance Device WebGLDevice where
 
 	createDeferredContext _ = throwIO $ DescribeFirstException "not implemented"
 
-	createStaticTexture _ _ _ = throwIO $ DescribeFirstException "not implemented"
+	createStaticTexture _ _ _ _ = throwIO $ DescribeFirstException "not implemented"
 
 	createSamplerState _device _samplerInfo = describeException "failed to create WebGL sampler state" $ do
 		-- TODO
 		return (WebGLSamplerStateId, undefined)
 
-	createReadableRenderTarget _ _ _ _ = throwIO $ DescribeFirstException "not implemented"
+	createReadableRenderTarget _ _ _ _ _ = throwIO $ DescribeFirstException "not implemented"
 
 	createDepthStencilTarget _ _ _ = throwIO $ DescribeFirstException "not implemented"
 

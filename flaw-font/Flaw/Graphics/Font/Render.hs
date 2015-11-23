@@ -46,7 +46,6 @@ data GlyphRenderer d = GlyphRenderer
 	{ glyphRendererVertexBuffer :: !(VertexBufferId d)
 	, glyphRendererIndexBuffer :: !(IndexBufferId d)
 	, glyphRendererUniformBuffer :: !(UniformBufferId d)
-	, glyphRendererSamplerState :: !(SamplerStateId d)
 	, glyphRendererBlendState :: !(BlendStateId d)
 	, glyphRendererProgram :: !(ProgramId d)
 	, glyphRendererCapacity :: !Int
@@ -79,15 +78,6 @@ initGlyphRenderer device subpixelMode = do
 	let ib = nullIndexBuffer
 	let capacity = 256;
 	ub <- book bk $ createUniformBuffer device (capacity * 3 * sizeOf (undefined :: Vec4f))
-	ss <- book bk $ createSamplerState device defaultSamplerStateInfo
-		{ samplerMinFilter = SamplerLinearFilter
-		, samplerMipFilter = SamplerPointFilter
-		, samplerMagFilter = SamplerLinearFilter
-		, samplerWrapU = SamplerWrapClamp
-		, samplerWrapV = SamplerWrapClamp
-		, samplerWrapW = SamplerWrapClamp
-		, samplerMaxLod = 0
-		}
 
 	let nonSubpixelBlendStateInfo = defaultBlendStateInfo
 		{ blendSourceColor = ColorSourceSrcAlpha
@@ -154,7 +144,6 @@ initGlyphRenderer device subpixelMode = do
 		{ glyphRendererVertexBuffer = vb
 		, glyphRendererIndexBuffer = ib
 		, glyphRendererUniformBuffer = ub
-		, glyphRendererSamplerState = ss
 		, glyphRendererBlendState = bs
 		, glyphRendererProgram = program
 		, glyphRendererCapacity = capacity
@@ -185,6 +174,15 @@ createRenderableFont device Glyphs
 	, glyphsScaleY = scaleY
 	} = do
 	-- create texture
+	let samplerStateInfo = defaultSamplerStateInfo
+		{ samplerMinFilter = SamplerLinearFilter
+		, samplerMipFilter = SamplerPointFilter
+		, samplerMagFilter = SamplerLinearFilter
+		, samplerWrapU = SamplerWrapClamp
+		, samplerWrapV = SamplerWrapClamp
+		, samplerWrapW = SamplerWrapClamp
+		, samplerMaxLod = 0
+		}
 	(textureId, destroy) <- VS.unsafeWith pixels $ \pixelsPtr -> do
 		pixelsBytes <- B.unsafePackCStringLen (castPtr pixelsPtr, VS.length pixels)
 		createStaticTexture device TextureInfo
@@ -199,7 +197,7 @@ createRenderableFont device Glyphs
 				, textureFormatColorSpace = LinearColorSpace
 				}
 			, textureCount = 0
-			} pixelsBytes
+			} samplerStateInfo pixelsBytes
 
 	-- create glyphs
 	let invSize = xyxy__ $ Vec2 (1 / fromIntegral width) (1 / fromIntegral height)
@@ -242,7 +240,6 @@ renderGlyphs GlyphRenderer
 	{ glyphRendererVertexBuffer = vb
 	, glyphRendererIndexBuffer = ib
 	, glyphRendererUniformBuffer = ub
-	, glyphRendererSamplerState = ss
 	, glyphRendererBlendState = bs
 	, glyphRendererProgram = program
 	, glyphRendererCapacity = capacity
@@ -258,7 +255,7 @@ renderGlyphs GlyphRenderer
 	renderVertexBuffer 0 vb
 	renderIndexBuffer ib
 	renderUniformBuffer 0 ub
-	renderSampler 0 textureId ss
+	renderSampler 0 textureId nullSamplerState
 	renderBlendState bs
 	renderProgram program
 
