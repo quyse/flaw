@@ -50,10 +50,11 @@ initFreeType = do
 data FreeTypeFont = FreeTypeFont
 	{ ftFontFace :: !FT_Face
 	, ftFontFaceMemory :: !(Ptr CUChar)
+	, ftFontFaceSize :: !Int
 	}
 
-loadFreeTypeFont :: FreeTypeLibrary -> B.ByteString -> IO (FreeTypeFont, IO ())
-loadFreeTypeFont (FreeTypeLibrary ftLibrary) bytes = do
+loadFreeTypeFont :: FreeTypeLibrary -> Int -> B.ByteString -> IO (FreeTypeFont, IO ())
+loadFreeTypeFont (FreeTypeLibrary ftLibrary) size bytes = do
 	-- copy bytes into new buffer, as FT_New_Memory_Face keeps pointer to memory given
 	(memory, memoryLen) <- B.unsafeUseAsCStringLen bytes $ \(bytesPtr, bytesLen) -> do
 		memory <- mallocArray bytesLen
@@ -65,6 +66,9 @@ loadFreeTypeFont (FreeTypeLibrary ftLibrary) bytes = do
 		ftErrorCheck "FT_New_Memory_Face" =<< ft_New_Memory_Face ftLibrary memory memoryLen 0 ptrFtFace
 		peek ptrFtFace
 
+	-- set pixel size
+	ftErrorCheck "FT_Set_Pixel_Sizes" =<< ft_Set_Pixel_Sizes ftFace (fromIntegral size) (fromIntegral size)
+
 	let destroy = do
 		_ <- ft_Done_Face ftFace
 		free memory
@@ -72,21 +76,27 @@ loadFreeTypeFont (FreeTypeLibrary ftLibrary) bytes = do
 	return (FreeTypeFont
 		{ ftFontFace = ftFace
 		, ftFontFaceMemory = memory
+		, ftFontFaceSize = size
 		}, destroy)
 
-createFreeTypeGlyphs :: FreeTypeFont -> Int -> Int -> Int -> IO (V.Vector (Image Pixel8, GlyphInfo))
-createFreeTypeGlyphs (FreeTypeFont ftFace _memory) size halfScaleX halfScaleY = do
+createFreeTypeGlyphs :: FreeTypeFont -> Int -> Int -> IO (V.Vector (Image Pixel8, GlyphInfo))
+createFreeTypeGlyphs FreeTypeFont
+	{ ftFontFace = ftFace
+	, ftFontFaceSize = size
+	} halfScaleX halfScaleY = do
 
 	-- set pixel size with scale
-	ftErrorCheck "FT_Set_Pixel_Sizes" =<< ft_Set_Pixel_Sizes ftFace
-		(fromIntegral $ size * (halfScaleX * 2 + 1))
-		(fromIntegral $ size * (halfScaleY * 2 + 1))
+	if halfScaleX > 0 || halfScaleY > 0 then
+		ftErrorCheck "FT_Set_Pixel_Sizes" =<< ft_Set_Pixel_Sizes ftFace
+			(fromIntegral $ size * (halfScaleX * 2 + 1))
+			(fromIntegral $ size * (halfScaleY * 2 + 1))
+	else return ()
 
 	-- get number of glyphs
 	glyphsCount <- flaw_ft_get_num_glyphs ftFace
 
 	-- create glyph images and infos
-	V.generateM (fromIntegral glyphsCount) $ \glyphIndex -> do
+	imagesAndInfos <- V.generateM (fromIntegral glyphsCount) $ \glyphIndex -> do
 
 		-- load and render glyph
 		do
@@ -154,3 +164,10 @@ createFreeTypeGlyphs (FreeTypeFont ftFace _memory) size halfScaleX halfScaleY = 
 				, glyphOffsetY = halfScaleY - (fromIntegral bitmapTop)
 				}
 			)
+
+	-- restore pixel size
+	if halfScaleX > 0 || halfScaleY > 0 then
+		ftErrorCheck "FT_Set_Pixel_Sizes" =<< ft_Set_Pixel_Sizes ftFace (fromIntegral size) (fromIntegral size)
+	else return ()
+
+	return imagesAndInfos

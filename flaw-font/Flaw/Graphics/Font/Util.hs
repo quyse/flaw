@@ -36,9 +36,9 @@ uniteGlyphs glyphImagesAndInfos unionConfig = do
 		}
 	return (unitedImage, V.zipWith setPosition glyphImagesAndInfos positions)
 
-makeScaledGlyphs :: (Int -> Int -> Int -> IO (V.Vector (Image Pixel8, GlyphInfo))) -> Int -> Int -> Int -> GlyphUnionConfig -> IO Glyphs
-makeScaledGlyphs createGlyphsAndInfos size halfScaleX halfScaleY unionConfig = do
-	glyphsAndInfos <- createGlyphsAndInfos size halfScaleX halfScaleY
+makeScaledGlyphs :: (Int -> Int -> IO (V.Vector (Image Pixel8, GlyphInfo))) -> Int -> Int -> GlyphUnionConfig -> IO Glyphs
+makeScaledGlyphs createGlyphsAndInfos halfScaleX halfScaleY unionConfig = do
+	glyphsAndInfos <- createGlyphsAndInfos halfScaleX halfScaleY
 	(image, infos) <- uniteGlyphs glyphsAndInfos unionConfig
 	return Glyphs
 		{ glyphsImage = image

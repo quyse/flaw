@@ -27,11 +27,10 @@ import Flaw.Math
 
 data HarfbuzzShaper = HarfbuzzShaper (Ptr Hb_font_t) (Ptr Hb_buffer_t)
 
-createHarfbuzzShaper :: FreeTypeFont -> Int -> IO (HarfbuzzShaper, IO ())
+createHarfbuzzShaper :: FreeTypeFont -> IO (HarfbuzzShaper, IO ())
 createHarfbuzzShaper FreeTypeFont
 	{ ftFontFace = ftFace
-	} size = do
-	ftErrorCheck "ft_Set_Pixel_Sizes" =<< ft_Set_Pixel_Sizes ftFace (fromIntegral size) (fromIntegral size)
+	} = do
 	hbFont <- hb_ft_font_create ftFace nullPtr
 	hbBuffer <- hb_buffer_create
 	let destroy = do
