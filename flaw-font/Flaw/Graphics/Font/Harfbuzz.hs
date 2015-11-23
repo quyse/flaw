@@ -39,8 +39,9 @@ createHarfbuzzShaper FreeTypeFont
 	return (HarfbuzzShaper hbFont hbBuffer, destroy)
 
 instance FontShaper HarfbuzzShaper where
-	shapeText (HarfbuzzShaper hbFont hbBuffer) text = do
-		hb_buffer_set_direction hbBuffer hB_DIRECTION_LTR
+	shapeText (HarfbuzzShaper hbFont hbBuffer) text (FontScript script) = do
+		hb_buffer_set_script hbBuffer script
+		hb_buffer_set_direction hbBuffer $ hb_script_get_horizontal_direction script
 		B.unsafeUseAsCStringLen (T.encodeUtf8 text) $ \(textPtr, textLen) -> do
 			hb_buffer_add_utf8 hbBuffer textPtr (fromIntegral textLen) 0 (fromIntegral textLen)
 		hb_shape hbFont hbBuffer nullPtr 0
@@ -81,12 +82,14 @@ foreign import ccall unsafe hb_ft_font_create :: FT_Face -> Ptr () -> IO (Ptr Hb
 foreign import ccall unsafe hb_font_destroy :: Ptr Hb_font_t -> IO ()
 foreign import ccall unsafe hb_buffer_create :: IO (Ptr Hb_buffer_t)
 foreign import ccall unsafe hb_buffer_destroy :: Ptr Hb_buffer_t -> IO ()
+foreign import ccall unsafe hb_buffer_set_script :: Ptr Hb_buffer_t -> Word32 -> IO ()
 foreign import ccall unsafe hb_buffer_set_direction :: Ptr Hb_buffer_t -> Int -> IO ()
 foreign import ccall unsafe hb_buffer_add_utf8 :: Ptr Hb_buffer_t -> Ptr CChar -> CInt -> CUInt -> CInt -> IO ()
 foreign import ccall unsafe hb_buffer_clear_contents :: Ptr Hb_buffer_t -> IO ()
 foreign import ccall unsafe hb_shape :: Ptr Hb_font_t -> Ptr Hb_buffer_t -> Ptr () -> CUInt -> IO ()
 foreign import ccall unsafe hb_buffer_get_glyph_infos :: Ptr Hb_buffer_t -> Ptr CUInt -> IO (Ptr Hb_glyph_info_t)
 foreign import ccall unsafe hb_buffer_get_glyph_positions :: Ptr Hb_buffer_t -> Ptr CUInt -> IO (Ptr Hb_glyph_position_t)
+foreign import ccall unsafe hb_script_get_horizontal_direction :: Word32 -> Int
 
 hb_x_advance :: Ptr Hb_glyph_position_t -> Ptr Hb_position_t
 hb_x_advance = castPtr
@@ -104,8 +107,3 @@ hb_glyph_position_t_size = 20
 
 hb_glyph_info_t_size :: Int
 hb_glyph_info_t_size = 20
-
-hB_DIRECTION_LTR :: Int
-hB_DIRECTION_LTR = 4
-hB_DIRECTION_RTL :: Int
-hB_DIRECTION_RTL = 5

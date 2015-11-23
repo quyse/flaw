@@ -23,6 +23,7 @@ library
     Flaw.Graphics.Font.FreeType
     Flaw.Graphics.Font.Harfbuzz
     Flaw.Graphics.Font.Render
+    Flaw.Graphics.Font.Script
     Flaw.Graphics.Font.Util
   other-modules:
     Flaw.Graphics.Font.FreeType.FFI

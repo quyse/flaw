@@ -14,6 +14,7 @@ module Flaw.Graphics.Font.Render
 	, createRenderableFont
 	, RenderGlyphsM
 	, renderGlyphs
+	, renderTextWithScript
 	, renderText
 	) where
 
@@ -85,6 +86,7 @@ initGlyphRenderer device subpixelMode = do
 		, samplerWrapU = SamplerWrapClamp
 		, samplerWrapV = SamplerWrapClamp
 		, samplerWrapW = SamplerWrapClamp
+		, samplerMaxLod = 0
 		}
 
 	let nonSubpixelBlendStateInfo = defaultBlendStateInfo
@@ -302,9 +304,9 @@ renderGlyphs GlyphRenderer
 	return result
 
 -- | Shape text and output it in RenderGlyphsM monad.
-renderText :: FontShaper s => s -> T.Text -> Vec2f -> Vec4f -> RenderGlyphsM c ()
-renderText shaper text position color = do
-	(positionsAndIndices, _advance) <- liftIO $ shapeText shaper text
+renderTextWithScript :: FontShaper s => s -> T.Text -> FontScript -> Vec2f -> Vec4f -> RenderGlyphsM c ()
+renderTextWithScript shaper text script position color = do
+	(positionsAndIndices, _advance) <- liftIO $ shapeText shaper text script
 	addGlyph <- ask
 	forM_ positionsAndIndices $ \(glyphPosition, glyphIndex) -> do
 		lift $ addGlyph GlyphToRender
@@ -312,3 +314,7 @@ renderText shaper text position color = do
 			, glyphToRenderIndex = glyphIndex
 			, glyphToRenderColor = color
 			}
+
+-- | Simpler method for rendering text with unspecified script.
+renderText :: FontShaper s => s -> T.Text -> Vec2f -> Vec4f -> RenderGlyphsM c ()
+renderText shaper text position color = renderTextWithScript shaper text fontScriptUnknown position color
