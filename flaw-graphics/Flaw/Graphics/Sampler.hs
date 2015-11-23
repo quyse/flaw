@@ -29,15 +29,15 @@ data SamplerFilter
 
 -- | Sampler settings.
 data SamplerStateInfo = SamplerStateInfo
-	{ samplerMinFilter :: SamplerFilter
-	, samplerMipFilter :: SamplerFilter
-	, samplerMagFilter :: SamplerFilter
-	, samplerWrapU :: SamplerWrap
-	, samplerWrapV :: SamplerWrap
-	, samplerWrapW :: SamplerWrap
-	, samplerMinLOD :: Float
-	, samplerMaxLOD :: Float
-	, samplerBorderColor :: Vec4f
+	{ samplerMinFilter :: !SamplerFilter
+	, samplerMipFilter :: !SamplerFilter
+	, samplerMagFilter :: !SamplerFilter
+	, samplerWrapU :: !SamplerWrap
+	, samplerWrapV :: !SamplerWrap
+	, samplerWrapW :: !SamplerWrap
+	, samplerMinLod :: !Float
+	, samplerMaxLod :: !Float
+	, samplerBorderColor :: !Vec4f
 	} deriving Show
 
 defaultSamplerStateInfo :: SamplerStateInfo
@@ -48,7 +48,7 @@ defaultSamplerStateInfo = SamplerStateInfo
 	, samplerWrapU = SamplerWrapRepeat
 	, samplerWrapV = SamplerWrapRepeat
 	, samplerWrapW = SamplerWrapRepeat
-	, samplerMinLOD = -1000
-	, samplerMaxLOD = 1000
+	, samplerMinLod = -1000
+	, samplerMaxLod = 1000
 	, samplerBorderColor = Vec4 0 0 0 0
 	}

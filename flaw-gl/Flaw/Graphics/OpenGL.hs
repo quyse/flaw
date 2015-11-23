@@ -46,6 +46,7 @@ import Flaw.Graphics.Blend
 import Flaw.Graphics.GLSL
 import Flaw.Graphics.Internal
 import Flaw.Graphics.Program.Internal
+import Flaw.Graphics.Sampler
 import Flaw.Graphics.Texture
 import Flaw.Sdl
 import Flaw.Window.Sdl
@@ -325,8 +326,51 @@ instance Device GlContext where
 
 		return (GlTextureId textureName, glInvoke context $ with textureName $ glDeleteTextures 1)
 
-	createSamplerState _context _samplerStateInfo = describeException "failed to create OpenGL sampler state" $ do
-		return (GlSamplerStateId 0, return ())
+	createSamplerState context samplerStateInfo@SamplerStateInfo
+		{ samplerWrapU = wrapU
+		, samplerWrapV = wrapV
+		, samplerWrapW = wrapW
+		, samplerMinLod = minLod
+		, samplerMaxLod = maxLod
+		, samplerBorderColor = borderColor
+		} = glInvoke context $ describeException "failed to create OpenGL sampler state" $ do
+		-- allocate sampler name
+		samplerName <- alloca $ \namePtr -> do
+			glGenSamplers 1 namePtr
+			glCheckErrors 0 "gen sampler"
+			peek namePtr
+
+		-- setup sampler
+
+		-- min filter
+		glSamplerParameteri samplerName gl_TEXTURE_MIN_FILTER $ fromIntegral $ glSamplerMinFilter samplerStateInfo
+		glCheckErrors 0 "min filter"
+		-- mag filter
+		glSamplerParameteri samplerName gl_TEXTURE_MAG_FILTER $ fromIntegral $ glSamplerMagFilter samplerStateInfo
+		glCheckErrors 0 "mag filter"
+
+		-- wrap U
+		glSamplerParameteri samplerName gl_TEXTURE_WRAP_S $ fromIntegral $ glSamplerWrap wrapU
+		glCheckErrors 0 "wrap U"
+		-- wrap V
+		glSamplerParameteri samplerName gl_TEXTURE_WRAP_T $ fromIntegral $ glSamplerWrap wrapV
+		glCheckErrors 0 "wrap V"
+		-- wrap W
+		glSamplerParameteri samplerName gl_TEXTURE_WRAP_R $ fromIntegral $ glSamplerWrap wrapW
+		glCheckErrors 0 "wrap W"
+
+		-- min LOD
+		glSamplerParameterf samplerName gl_TEXTURE_MIN_LOD $ coerce minLod
+		glCheckErrors 0 "min LOD"
+		-- max LOD
+		glSamplerParameterf samplerName gl_TEXTURE_MAX_LOD $ coerce maxLod
+		glCheckErrors 0 "max LOD"
+
+		-- border color
+		with borderColor $ glSamplerParameterfv samplerName gl_TEXTURE_BORDER_COLOR . castPtr
+		glCheckErrors 0 "border color"
+
+		return (GlSamplerStateId samplerName, glInvoke context $ with samplerName $ glDeleteSamplers 1)
 
 	createBlendState _context blendStateInfo = return (GlBlendStateId blendStateInfo, return ())
 
@@ -338,6 +382,7 @@ instance Device GlContext where
 		-- allocate texture name
 		textureName <- alloca $ \namePtr -> do
 			glGenTextures 1 namePtr
+			glCheckErrors 0 "gen texture"
 			peek namePtr
 
 		glBindTexture gl_TEXTURE_2D textureName
@@ -1573,6 +1618,40 @@ glGetAttributeSTNI at = case at of
 	where normalized n = case n of
 		NonNormalized -> False
 		Normalized -> True
+
+-- | Calculate OpenGL enum value for min filter.
+glSamplerMinFilter :: SamplerStateInfo -> GLenum
+glSamplerMinFilter SamplerStateInfo
+	{ samplerMinFilter = minFilter
+	, samplerMipFilter = mipFilter
+	, samplerMaxLod = maxLod
+	} = if maxLod > 0 then convertedMinMipFilter else convertedMinFilter where
+	convertedMinMipFilter = case minFilter of
+		SamplerPointFilter -> case mipFilter of
+			SamplerPointFilter -> gl_NEAREST_MIPMAP_NEAREST
+			SamplerLinearFilter -> gl_NEAREST_MIPMAP_LINEAR
+		SamplerLinearFilter -> case mipFilter of
+			SamplerPointFilter -> gl_LINEAR_MIPMAP_NEAREST
+			SamplerLinearFilter -> gl_LINEAR_MIPMAP_LINEAR
+	convertedMinFilter = case minFilter of
+		SamplerPointFilter -> gl_NEAREST
+		SamplerLinearFilter -> gl_LINEAR
+
+-- | Calculate OpenGL enum value for mag filter.
+glSamplerMagFilter :: SamplerStateInfo -> GLenum
+glSamplerMagFilter SamplerStateInfo
+	{ samplerMagFilter = magFilter
+	} = case magFilter of
+	SamplerPointFilter -> gl_NEAREST
+	SamplerLinearFilter -> gl_LINEAR
+
+-- | Calculate OpenGL enum value for wrapping.
+glSamplerWrap :: SamplerWrap -> GLenum
+glSamplerWrap wrap = case wrap of
+	SamplerWrapRepeat -> gl_REPEAT
+	SamplerWrapRepeatMirror -> gl_MIRRORED_REPEAT
+	SamplerWrapClamp -> gl_CLAMP_TO_EDGE
+	SamplerWrapBorder -> gl_CLAMP_TO_BORDER
 
 refSetup :: Eq a => IORef a -> IORef a -> (a -> IO ()) -> IO Bool
 refSetup actualRef desiredRef setup = do
