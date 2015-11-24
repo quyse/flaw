@@ -10,6 +10,12 @@ addons:
     packages:
     - libgmp-dev
 
+env:
+# linux ghc build
+- ARGS="                                           test flaw-app flaw-asset flaw-base flaw-build flaw-ffi flaw-font flaw-game flaw-gl flaw-glsl flaw-graphics flaw-input flaw-math flaw-physics flaw-sdl flaw-sl            flaw-window"
+# web ghcjs build
+- ARGS="--compiler ghcjs-0.1.0.20150924_ghc-7.10.2 test flaw-app flaw-asset flaw-base flaw-build flaw-ffi           flaw-game         flaw-glsl flaw-graphics flaw-input flaw-math flaw-physics          flaw-sl flaw-webgl flaw-window"
+
 before_install:
 # download and unpack the stack executable
 - mkdir -p ~/.local/bin
@@ -20,7 +26,7 @@ before_install:
 - export PKG_CONFIG_PATH=$HOME/.deps/lib/pkgconfig
 - export LD_LIBRARY_PATH=$HOME/.deps/lib
 
-script: stack --no-terminal --install-ghc test flaw-app flaw-asset flaw-base flaw-build flaw-ffi flaw-font flaw-game flaw-gl flaw-glsl flaw-graphics flaw-input flaw-math flaw-physics flaw-sdl flaw-sl flaw-window
+script: stack --no-terminal --install-ghc $ARGS
 
 cache:
   directories:
