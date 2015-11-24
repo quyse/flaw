@@ -18,6 +18,7 @@ before_install:
 # download and install deps
 - bash .travis-install.sh
 - export PKG_CONFIG_PATH=$HOME/.deps/lib/pkgconfig
+- export LD_LIBRARY_PATH=$HOME/.deps/lib
 
 script: stack --no-terminal --install-ghc test flaw-app flaw-asset flaw-base flaw-build flaw-ffi flaw-font flaw-game flaw-gl flaw-glsl flaw-graphics flaw-input flaw-math flaw-physics flaw-sdl flaw-sl flaw-window
 
