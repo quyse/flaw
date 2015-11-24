@@ -1,0 +1,31 @@
+resolver: lts-3.15
+
+packages:
+- flaw-app
+- flaw-asset
+- flaw-base
+- flaw-build
+- flaw-canvas
+- flaw-dx11
+- flaw-ffi
+- flaw-font
+- flaw-game
+- flaw-gl
+- flaw-glsl
+- flaw-graphics
+- flaw-input
+- flaw-math
+- flaw-physics
+- flaw-sdl
+- flaw-sl
+- flaw-webgl
+- flaw-window
+
+extra-deps:
+- OpenGLRaw-2.6.0.0
+- sdl2-2.1.0
+
+ghc-options:
+  "*": -O3 -threaded -with-rtsopts=-N -Wall -fno-warn-unsupported-calling-conventions -funbox-strict-fields -fno-warn-tabs
+
+rebuild-ghc-options: true
