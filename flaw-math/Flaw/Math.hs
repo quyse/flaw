@@ -386,7 +386,14 @@ liftM concat $ forM [1..maxVecDimension] $ \dim -> do
 				(normalB $ doE [noBindS [| pokeElemOff (castPtr $(varE p)) $(litE $ integerL $ fromIntegral i) $(varE a) |] | (i, a) <- params]) []]
 			]
 
-	sequence $ dataDec : vecInstance : dotInstance : normInstance : normalizeInstance : numInstance : fractionalInstance : floatingInstance : storableInstance : (map genVecComponentInstance components) ++ swizzleVecInstances ++ combineVecInstances
+	-- instance for Functor class
+	let functorInstance = do
+		f <- newName "f"
+		instanceD (return []) [t| Functor $(conT dataName) |]
+			[ funD 'fmap [clause [varP f, conP dataName $ map varP aParams] (normalB $ foldl appE (conE dataName) $ map (appE (varE f) . varE) aParams) []]
+			]
+
+	sequence $ dataDec : vecInstance : dotInstance : normInstance : normalizeInstance : numInstance : fractionalInstance : floatingInstance : storableInstance : functorInstance : (map genVecComponentInstance components) ++ swizzleVecInstances ++ combineVecInstances
 
 -- Generate matrix datatypes.
 liftM concat $ forM [(i, j) | i <- [1..maxVecDimension], j <- [1..maxVecDimension]] $ \(n, m) -> do
