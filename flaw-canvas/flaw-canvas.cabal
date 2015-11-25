@@ -19,6 +19,7 @@ source-repository head
 
 library
   exposed-modules:
+    Flaw.Graphics.Canvas
     Flaw.Graphics.Sprite
   -- other-extensions:    
   build-depends:       base, bytestring, flaw-base, flaw-graphics, flaw-math, mtl, vector

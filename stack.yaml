@@ -18,6 +18,7 @@ packages:
 - flaw-physics
 - flaw-sdl
 - flaw-sl
+- flaw-ui
 - flaw-webgl
 - flaw-window
 
