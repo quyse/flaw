@@ -37,6 +37,7 @@ import Control.Monad.ST
 import Control.Monad.State
 import qualified Data.ByteString.Lazy as BL
 import Data.List
+import Data.Maybe
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as T
 import qualified Data.Vector as V
@@ -89,7 +90,7 @@ getElementAttr attrName element = do
 getChildrenWithTag :: String -> XML.Element -> ColladaM [XML.Element]
 getChildrenWithTag tag XML.Element
 	{ XML.elContent = contents
-	} = return $ concat $ map f contents where
+	} = return $ concatMap f contents where
 	f content = case content of
 		XML.Elem element@XML.Element
 			{ XML.elName = XML.QName
@@ -119,7 +120,7 @@ initColladaCache fileData = do
 				}
 			, XML.elContent = contents
 			} = do
-			if tag == "COLLADA" then ignoreErrors $ do
+			when (tag == "COLLADA") $ ignoreErrors $ do
 				assetElement <- getSingleChildWithTag "asset" element
 				unitElement <- getSingleChildWithTag "unit" assetElement
 				unit <- liftM read $ getElementAttr "meter" unitElement
@@ -141,7 +142,6 @@ initColladaCache fileData = do
 							0 0 0 1
 						}
 					})
-			else return ()
 			ignoreErrors $ do
 				elementId <- getElementAttr "id" element
 				cache <- get
@@ -306,13 +306,11 @@ parseTriangles element = do
 	-- parse inputs
 	inputs <- mapM parseInput =<< getChildrenWithTag "input" element
 	-- calculate stride and count
-	let stride = 1 + (maximum $ map citOffset inputs)
+	let stride = 1 + maximum (map citOffset inputs)
 	let count = VU.length indices `div` stride
 
 	-- check
-	if trianglesCount * 3 /= count
-		then throwError "wrong number of triangles or indices"
-		else return ()
+	when (trianglesCount * 3 /= count) $ throwError "wrong number of triangles or indices"
 
 	-- flip indices to fix vertex order in triangles
 	let flippedIndices = VU.generate (count * stride) $ \i -> let
@@ -378,8 +376,8 @@ parseNode :: XML.Element -> ColladaM ColladaNodeTag
 parseNode element@XML.Element
 	{ XML.elContent = contents
 	} = do
-	nodeId <- liftM (maybe "" id) $ tryGetElementAttr "id" element
-	sid <- liftM (maybe "" id) $ tryGetElementAttr "sid" element
+	nodeId <- liftM (fromMaybe "") $ tryGetElementAttr "id" element
+	sid <- liftM (fromMaybe "") $ tryGetElementAttr "sid" element
 
 	settings <- liftM ccSettings get
 	let unit = csUnit settings
@@ -390,39 +388,37 @@ parseNode element@XML.Element
 	let f node@ColladaNodeTag
 		{ cntTransforms = transforms
 		, cntSubnodes = subnodes
-		} content = do
-		case content of
-			XML.Elem subElement@XML.Element
-				{ XML.elName = XML.QName
-					{ XML.qName = subElementName
+		} content = case content of
+		XML.Elem subElement@XML.Element
+			{ XML.elName = XML.QName
+				{ XML.qName = subElementName
+				}
+			} -> case subElementName of
+			"node" -> do
+				subnode <- parseNode subElement
+				return node
+					{ cntSubnodes = subnodes ++ [subnode]
 					}
-				} -> do
-				case subElementName of
-					"node" -> do
-						subnode <- parseNode subElement
-						return node
-							{ cntSubnodes = subnodes ++ [subnode]
-							}
-					"translate" -> do
-						maybeTransformSID <- tryGetElementAttr "sid" subElement
-						[x, y, z] <- liftM VG.toList $ parseArray subElement
-						return node
-							{ cntTransforms = transforms ++ [(maybeTransformSID, ColladaTranslateTag $ Vec3 x y z * vecFromScalar unit)]
-							}
-					"rotate" -> do
-						maybeTransformSID <- tryGetElementAttr "sid" subElement
-						[x, y, z, a] <- liftM VG.toList $ parseArray subElement
-						return node
-							{ cntTransforms = transforms ++ [(maybeTransformSID, ColladaRotateTag (Vec3 x y z) (a * pi / 180 :: Float))]
-							}
-					"matrix" -> do
-						maybeTransformSID <- tryGetElementAttr "sid" subElement
-						mat <- liftM ((flip constructStridable) 0) $ parseArray subElement
-						return node
-							{ cntTransforms = transforms ++ [(maybeTransformSID, ColladaMatrixTag (unitMat `mul` (mat :: Mat4x4f) `mul` invUnitMat))]
-							}
-					_ -> return node
+			"translate" -> do
+				maybeTransformSID <- tryGetElementAttr "sid" subElement
+				[x, y, z] <- liftM VG.toList $ parseArray subElement
+				return node
+					{ cntTransforms = transforms ++ [(maybeTransformSID, ColladaTranslateTag $ Vec3 x y z * vecFromScalar unit)]
+					}
+			"rotate" -> do
+				maybeTransformSID <- tryGetElementAttr "sid" subElement
+				[x, y, z, a] <- liftM VG.toList $ parseArray subElement
+				return node
+					{ cntTransforms = transforms ++ [(maybeTransformSID, ColladaRotateTag (Vec3 x y z) (a * pi / 180 :: Float))]
+					}
+			"matrix" -> do
+				maybeTransformSID <- tryGetElementAttr "sid" subElement
+				mat <- liftM (`constructStridable` 0) $ parseArray subElement
+				return node
+					{ cntTransforms = transforms ++ [(maybeTransformSID, ColladaMatrixTag (unitMat `mul` (mat :: Mat4x4f) `mul` invUnitMat))]
+					}
 			_ -> return node
+		_ -> return node
 	foldM f ColladaNodeTag
 		{ cntID = nodeId
 		, cntSID = sid
@@ -574,10 +570,9 @@ stridableStream q = f undefined q where
 parseStridables :: (Stridable s, VG.Vector v a) => (v a, Int) -> ColladaM (V.Vector (s a))
 parseStridables (q, stride) = f undefined q where
 	f :: (Stridable s, VG.Vector v a) => s a -> v a -> ColladaM (V.Vector (s a))
-	f u v = do
-		if stride == stridableStride u
-			then return $ stridableStream v
-			else throwError "wrong stride"
+	f u v = if stride == stridableStride u
+		then return $ stridableStream v
+		else throwError "wrong stride"
 
 class Animatable a where
 	animatableStride :: a -> Int
@@ -688,7 +683,7 @@ parseSkin (ColladaSkeleton nodes) skinElement = do
 	jointsJointInput <- findInput jointsInputs "JOINT" "joints"
 	jointsJointNames <- liftM fst $ parseSource $ citSourceElement jointsJointInput
 	jointsInvBindMatrixInput <- findInput jointsInputs "INV_BIND_MATRIX" "joints"
-	jointsInvBindTransforms <- parseStridables =<< (parseSource $ citSourceElement jointsInvBindMatrixInput)
+	jointsInvBindTransforms <- parseStridables =<< parseSource (citSourceElement jointsInvBindMatrixInput)
 
 	skinBones <- forM (V.zip jointsJointNames jointsInvBindTransforms) $ \(jointName, jointInvBindTransform) -> do
 		case V.findIndex (\ColladaSkeletonNode
@@ -754,7 +749,7 @@ parseSkin (ColladaSkeleton nodes) skinElement = do
 			let len = V.length freezedWeightJointPairs
 			let bestWeightJointPairs =
 				if len >= bonesPerVertex then V.drop (len - bonesPerVertex) freezedWeightJointPairs
-				else freezedWeightJointPairs V.++ (V.fromList $ replicate (bonesPerVertex - len) (0, 0))
+				else freezedWeightJointPairs V.++ V.fromList (replicate (bonesPerVertex - len) (0, 0))
 
 			-- calc sum of weights to normalize
 			let weightSum = V.sum $ V.map fst bestWeightJointPairs
