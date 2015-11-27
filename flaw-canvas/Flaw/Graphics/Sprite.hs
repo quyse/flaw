@@ -121,8 +121,8 @@ renderQuads QuadRenderer
 		else return ()
 		liftIO $ writeIORef bufferIndexRef 0
 
-	(viewportWidth, viewportHeight) <- renderGetViewport
-	let viewportScale = xyxy__ $ Vec2 (2 / fromIntegral viewportWidth) ((-2) / fromIntegral viewportHeight)
+	Vec4 viewportLeft viewportTop viewportRight viewportBottom <- renderGetViewport
+	let viewportScale = xyxy__ $ Vec2 (2 / fromIntegral (viewportRight - viewportLeft)) (2 / fromIntegral (viewportTop - viewportBottom))
 	let viewportOffset = Vec4 (-1) 1 (-1) 1
 
 	result <- runReaderT m $ \QuadToRender

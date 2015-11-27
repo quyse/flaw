@@ -180,10 +180,10 @@ class Device d => Context c d | c -> d where
 	------- Setup commands.
 	-- | Set framebuffer.
 	contextSetFrameBuffer :: c -> FrameBufferId d -> IO a -> IO a
-	-- | Set viewport.
-	contextSetViewport :: c -> Int -> Int -> IO a -> IO a
+	-- | Set viewport (left, top, right, bottom).
+	contextSetViewport :: c -> Vec4 Int -> IO a -> IO a
 	-- | Get current viewport.
-	contextGetViewport :: c -> IO (Int, Int)
+	contextGetViewport :: c -> IO (Vec4 Int)
 	-- | Set vertex buffer.
 	contextSetVertexBuffer :: c -> Int -> VertexBufferId d -> IO a -> IO a
 	-- | Set index buffer.
@@ -263,10 +263,12 @@ renderScope = scope
 renderFrameBuffer :: Context c d => FrameBufferId d -> Render c ()
 renderFrameBuffer fb = renderSetup $ \c q -> contextSetFrameBuffer c fb q
 
-renderViewport :: Context c d => Int -> Int -> Render c ()
-renderViewport width height = renderSetup $ \c q -> contextSetViewport c width height q
+-- | Set current viewport (vector with left, top, right, bottom).
+renderViewport :: Context c d => Vec4 Int -> Render c ()
+renderViewport viewport = renderSetup $ \c q -> contextSetViewport c viewport q
 
-renderGetViewport :: Context c d => Render c (Int, Int)
+-- | Get current viewport.
+renderGetViewport :: Context c d => Render c (Vec4 Int)
 renderGetViewport = renderAction contextGetViewport
 
 -- | Set vertex buffer.

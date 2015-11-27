@@ -125,7 +125,7 @@ drawBorderedRectangle xs ys fillColor borderColor = do
 		{ canvasRenderBorderedRectangle = renderBorderedRectangle
 		} <- ask
 	lift $ renderScope $ do
-		(xSize, ySize) <- renderGetViewport
-		let x = (fmap fromIntegral xs) * xxxx__ (Vec1 $ 2 / fromIntegral xSize) - Vec4 1 1 1 1
-		let y = (wzyx__ $ fmap fromIntegral ys) * xxxx__ (Vec1 $ (-2) / fromIntegral ySize) + Vec4 1 1 1 1
+		Vec4 viewportLeft viewportTop viewportRight viewportBottom <- renderGetViewport
+		let x = (fmap fromIntegral xs) * xxxx__ (Vec1 $ 2 / fromIntegral (viewportRight - viewportLeft)) - Vec4 1 1 1 1
+		let y = (wzyx__ $ fmap fromIntegral ys) * xxxx__ (Vec1 $ 2 / fromIntegral (viewportTop - viewportBottom)) + Vec4 1 1 1 1
 		renderBorderedRectangle x y fillColor borderColor

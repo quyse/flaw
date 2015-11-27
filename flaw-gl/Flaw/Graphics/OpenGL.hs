@@ -17,9 +17,11 @@ module Flaw.Graphics.OpenGL
 
 import Control.Exception
 import Control.Monad
+import Data.Bits
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Unsafe as B
 import Data.Coerce
+import Data.Foldable
 import Data.List
 import Data.IORef
 import qualified Data.Text as T
@@ -48,6 +50,7 @@ import Flaw.Graphics.Internal
 import Flaw.Graphics.Program.Internal
 import Flaw.Graphics.Sampler
 import Flaw.Graphics.Texture
+import Flaw.Math
 import Flaw.Sdl
 import Flaw.Window.Sdl
 
@@ -108,7 +111,7 @@ data GlContext = GlContext
 
 data GlContextState = GlContextState
 	{ glContextStateFrameBuffer :: !(IORef (FrameBufferId GlDevice))
-	, glContextStateViewport :: !(IORef (Int, Int))
+	, glContextStateViewport :: !(IORef (Vec4 Int))
 	, glContextStateVertexBuffers :: !(VM.IOVector (VertexBufferId GlDevice))
 	, glContextStateIndexBuffer :: !(IORef (IndexBufferId GlDevice))
 	, glContextStateUniformBuffers :: !(VM.IOVector (UniformBufferId GlDevice))
@@ -157,9 +160,21 @@ instance Device GlContext where
 		= GlBlendStateId BlendStateInfo
 		| GlNullBlendStateId
 		deriving Eq
-	newtype RenderTargetId GlContext = GlRenderTargetId GLuint
-	newtype DepthStencilTargetId GlContext = GlDepthStencilTargetId GLuint
-	newtype FrameBufferId GlContext = GlFrameBufferId GLuint deriving Eq
+	data RenderTargetId GlContext = GlRenderTargetId
+		{ glRenderTargetName :: !GLuint
+		, glRenderTargetWidth :: !Int
+		, glRenderTargetHeight :: !Int
+		}
+	data DepthStencilTargetId GlContext = GlDepthStencilTargetId
+		{ glDepthStencilTargetName :: !GLuint
+		, glDepthStencilWidth :: !Int
+		, glDepthStencilHeight :: !Int
+		}
+	data FrameBufferId GlContext = GlFrameBufferId
+		{ glFrameBufferName :: !GLuint
+		, glFrameBufferWidth :: !Int
+		, glFrameBufferHeight :: !Int
+		} deriving Eq
 	data VertexBufferId GlContext = GlVertexBufferId !GLuint !GLsizei deriving Eq
 	data IndexBufferId GlContext = GlIndexBufferId !GLuint !GLenum
 	data ProgramId GlContext = GlProgramId
@@ -183,7 +198,11 @@ instance Device GlContext where
 	nullTexture = GlTextureId 0
 	nullSamplerState = GlSamplerStateId 0
 	nullBlendState = GlNullBlendStateId
-	nullDepthStencilTarget = GlDepthStencilTargetId 0
+	nullDepthStencilTarget = GlDepthStencilTargetId
+		{ glDepthStencilTargetName = 0
+		, glDepthStencilWidth = 0
+		, glDepthStencilHeight = 0
+		}
 	nullIndexBuffer = GlIndexBufferId 0 gl_UNSIGNED_SHORT
 	nullUniformBuffer = GlNullUniformBufferId
 
@@ -405,7 +424,11 @@ instance Device GlContext where
 		-- setup sampling
 		glSetupTextureSampling gl_TEXTURE_2D samplerStateInfo
 
-		return ((GlRenderTargetId textureName, GlTextureId textureName), glInvoke context $ with textureName $ glDeleteTextures 1)
+		return ((GlRenderTargetId
+			{ glRenderTargetName = textureName
+			, glRenderTargetWidth = width
+			, glRenderTargetHeight = height
+			}, GlTextureId textureName), glInvoke context $ with textureName $ glDeleteTextures 1)
 
 	createDepthStencilTarget context width height = glInvoke context $ describeException "failed to create OpenGL depth stencil target" $ do
 		-- allocate texture name
@@ -425,17 +448,27 @@ instance Device GlContext where
 		glTexParameteri gl_TEXTURE_2D gl_TEXTURE_WRAP_R $ fromIntegral gl_CLAMP_TO_EDGE
 		glCheckErrors 0 "texture parameters"
 
-		return (GlDepthStencilTargetId textureName, glInvoke context $ with textureName $ glDeleteTextures 1)
+		return (GlDepthStencilTargetId
+			{ glDepthStencilTargetName = textureName
+			, glDepthStencilWidth = width
+			, glDepthStencilHeight = height
+			}, glInvoke context $ with textureName $ glDeleteTextures 1)
 
 	createReadableDepthStencilTarget context width height = do
-		(depthStencilTarget@(GlDepthStencilTargetId bufferName), destroy) <- createDepthStencilTarget context width height
+		(depthStencilTarget@GlDepthStencilTargetId
+			{ glDepthStencilTargetName = bufferName
+			}, destroy) <- createDepthStencilTarget context width height
 		return ((depthStencilTarget, GlTextureId bufferName), destroy)
 
 	createFrameBuffer context@GlContext
 		{ glContextActualState = GlContextState
 			{ glContextStateFrameBuffer = actualFrameBufferRef
 			}
-		} renderTargets (GlDepthStencilTargetId depthStencilName) = glInvoke context $ describeException "failed to create OpenGL framebuffer" $ do
+		} renderTargets (GlDepthStencilTargetId
+		{ glDepthStencilTargetName = depthStencilName
+		, glDepthStencilWidth = depthStencilWidth
+		, glDepthStencilHeight = depthStencilHeight
+		}) = glInvoke context $ describeException "failed to create OpenGL framebuffer" $ do
 		-- allocate framebuffer name
 		framebufferName <- alloca $ \namePtr -> do
 			glGenFramebuffers 1 namePtr
@@ -447,7 +480,9 @@ instance Device GlContext where
 		glCheckErrors 0 "bind framebuffer"
 
 		-- bind render targets
-		forM_ (zip [0..] renderTargets) $ \(i, GlRenderTargetId renderTargetName) -> do
+		forM_ (zip [0..] renderTargets) $ \(i, GlRenderTargetId
+			{ glRenderTargetName = renderTargetName
+			}) -> do
 			glFramebufferTexture2D gl_FRAMEBUFFER (gl_COLOR_ATTACHMENT0 + i) gl_TEXTURE_2D renderTargetName 0
 			glCheckErrors 0 "bind framebuffer color buffer"
 
@@ -455,7 +490,23 @@ instance Device GlContext where
 		glFramebufferTexture2D gl_FRAMEBUFFER gl_DEPTH_STENCIL_ATTACHMENT gl_TEXTURE_2D depthStencilName 0
 		glCheckErrors 0 "bind framebuffer depth-stencil buffer"
 
-		let frameBufferId = GlFrameBufferId framebufferName
+		-- get width and height of framebuffer (and check that they're equal)
+		let foldSize (n, w, h) (rw, rh) = do
+			if n > 0 then do
+				when ((rw > 0 && w /= rw) || (rh > 0 && h /= rh)) $ throwIO $ DescribeFirstException "sizes are not equal"
+				return (rw .|. w, rh .|. h)
+			else return (rw, rh)
+		(frameBufferWidth, frameBufferHeight) <- foldrM foldSize (depthStencilWidth, depthStencilHeight) $ map (\GlRenderTargetId
+			{ glRenderTargetName = n
+			, glRenderTargetWidth = w
+			, glRenderTargetHeight = h
+			} -> (n, w, h)) renderTargets
+
+		let frameBufferId = GlFrameBufferId
+			{ glFrameBufferName = framebufferName
+			, glFrameBufferWidth = frameBufferWidth
+			, glFrameBufferHeight = frameBufferHeight
+			}
 
 		writeIORef actualFrameBufferRef frameBufferId
 
@@ -828,23 +879,23 @@ instance Device GlContext where
 
 instance Context GlContext GlContext where
 	contextClearColor context targetIndex color = do
-		glUpdateFrameBuffer context
+		glUpdateFrameBufferAndViewport context
 		with color $ glClearBufferfv gl_COLOR (fromIntegral targetIndex) . castPtr
 		glCheckErrors 1 "clear color"
 
 	contextClearDepth context depth = do
-		glUpdateFrameBuffer context
+		glUpdateFrameBufferAndViewport context
 		glEnableDepthWriteForClearing context
 		with (coerce depth) $ glClearBufferfv gl_DEPTH 0
 		glCheckErrors 1 "clear depth"
 
 	contextClearStencil context stencil = do
-		glUpdateFrameBuffer context
+		glUpdateFrameBufferAndViewport context
 		with (fromIntegral stencil) $ glClearBufferiv gl_STENCIL 0
 		glCheckErrors 1 "clear stencil"
 
 	contextClearDepthStencil context depth stencil = do
-		glUpdateFrameBuffer context
+		glUpdateFrameBufferAndViewport context
 		glEnableDepthWriteForClearing context
 		glClearBufferfi gl_DEPTH_STENCIL 0 (coerce depth) (fromIntegral stencil)
 		glCheckErrors 1 "clear depth stencil"
@@ -909,9 +960,9 @@ instance Context GlContext GlContext where
 		{ glContextDesiredState = GlContextState
 			{ glContextStateViewport = viewportRef
 			}
-		} width height scope = do
+		} viewport scope = do
 		oldViewport <- readIORef viewportRef
-		writeIORef viewportRef (width, height)
+		writeIORef viewportRef viewport
 		r <- scope
 		writeIORef viewportRef oldViewport
 		return r
@@ -1028,13 +1079,17 @@ instance Presenter GlContext GlSystem GlContext GlContext where
 		-- get viewport size
 		(width, height) <- alloca $ \widthPtr -> alloca $ \heightPtr -> do
 			SDL.glGetDrawableSize windowHandle widthPtr heightPtr
-			width <- peek widthPtr
-			height <- peek heightPtr
+			width <- liftM fromIntegral $ peek widthPtr
+			height <- liftM fromIntegral $ peek heightPtr
 			return (width, height)
 
 		-- setup state
-		writeIORef frameBufferRef $ GlFrameBufferId 0
-		writeIORef viewportRef (fromIntegral width, fromIntegral height)
+		writeIORef frameBufferRef $ GlFrameBufferId
+			{ glFrameBufferName = 0
+			, glFrameBufferWidth = width
+			, glFrameBufferHeight = height
+			}
+		writeIORef viewportRef $ Vec4 0 0 width height
 
 		-- perform render
 		r <- f
@@ -1176,8 +1231,12 @@ glNullProgram = GlProgramId
 
 glCreateContextState :: IO GlContextState
 glCreateContextState = do
-	frameBuffer <- newIORef $ GlFrameBufferId 0
-	viewport <- newIORef (0, 0)
+	frameBuffer <- newIORef $ GlFrameBufferId
+		{ glFrameBufferName = 0
+		, glFrameBufferWidth = 0
+		, glFrameBufferHeight = 0
+		}
+	viewport <- newIORef $ Vec4 0 0 0 0
 	vertexBuffers <- VM.replicate 8 $ GlVertexBufferId 0 0
 	indexBuffer <- newIORef $ GlIndexBufferId 0 gl_UNSIGNED_SHORT
 	uniformBuffers <- VM.replicate 8 GlNullUniformBufferId
@@ -1212,8 +1271,12 @@ glSetDefaultContextState GlContextState
 	, glContextStateDepthWrite = depthWriteRef
 	, glContextStateBlendState = blendStateRef
 	} = do
-	writeIORef frameBufferRef $ GlFrameBufferId 0
-	writeIORef viewportRef (0, 0)
+	writeIORef frameBufferRef $ GlFrameBufferId
+		{ glFrameBufferName = 0
+		, glFrameBufferWidth = 0
+		, glFrameBufferHeight = 0
+		}
+	writeIORef viewportRef $ Vec4 0 0 0 0
 	VM.set vertexBuffersVector $ GlVertexBufferId 0 0
 	writeIORef indexBufferRef $ GlIndexBufferId 0 gl_UNSIGNED_SHORT
 	VM.set uniformBuffersVector GlNullUniformBufferId
@@ -1304,7 +1367,8 @@ glUpdateContext context@GlContext
 		, glContextStateBlendState = actualBlendStateRef
 		}
 	, glContextDesiredState = GlContextState
-		{ glContextStateViewport = desiredViewportRef
+		{ glContextStateFrameBuffer = desiredFrameBufferRef
+		, glContextStateViewport = desiredViewportRef
 		, glContextStateVertexBuffers = desiredVertexBuffersVector
 		, glContextStateIndexBuffer = desiredIndexBufferRef
 		, glContextStateUniformBuffers = desiredUniformBuffersVector
@@ -1316,8 +1380,8 @@ glUpdateContext context@GlContext
 		}
 	, glContextBoundAttributesCount = boundAttributesCountRef
 	} = do
-	-- framebuffer
-	glUpdateFrameBuffer context
+	-- framebuffer and viewport
+	frameBufferUpdated <- glUpdateFrameBufferAndViewport context
 
 	-- samplers
 	vectorSetup actualSamplersVector desiredSamplersVector $ \i (GlTextureId textureName, GlSamplerStateId samplerName) -> do
@@ -1481,11 +1545,6 @@ glUpdateContext context@GlContext
 		glBindBuffer gl_ELEMENT_ARRAY_BUFFER indexBufferName
 		glCheckErrors 0 "bind index buffer"
 
-	-- viewport
-	refSetup_ actualViewportRef desiredViewportRef $ \(viewportWidth, viewportHeight) -> do
-		glViewport 0 0 (fromIntegral viewportWidth) (fromIntegral viewportHeight)
-		glCheckErrors 0 "bind viewport"
-
 	-- depth test func & depth write
 	do
 		actualDepthTestFunc <- readIORef actualDepthTestFuncRef
@@ -1577,17 +1636,31 @@ glUpdateContext context@GlContext
 			glDisable gl_BLEND
 			glCheckErrors 0 "disable blending"
 
-glUpdateFrameBuffer :: GlContext -> IO ()
-glUpdateFrameBuffer GlContext
+glUpdateFrameBufferAndViewport :: GlContext -> IO ()
+glUpdateFrameBufferAndViewport GlContext
 	{ glContextActualState = GlContextState
 		{ glContextStateFrameBuffer = actualFrameBufferRef
+		, glContextStateViewport = actualViewportRef
 		}
 	, glContextDesiredState = GlContextState
 		{ glContextStateFrameBuffer = desiredFrameBufferRef
+		, glContextStateViewport = desiredViewportRef
 		}
-	} = refSetup_ actualFrameBufferRef desiredFrameBufferRef $ \(GlFrameBufferId name) -> do
-	glBindFramebuffer gl_FRAMEBUFFER name
-	glCheckErrors 0 "bind framebuffer"
+	} = do
+	actualFrameBufferId <- readIORef actualFrameBufferRef
+	desiredFrameBufferId <- readIORef desiredFrameBufferRef
+	actualViewport <- readIORef actualViewportRef
+	desiredViewport <- readIORef desiredViewportRef
+	when (actualFrameBufferId /= desiredFrameBufferId) $ do
+		glBindFramebuffer gl_FRAMEBUFFER $ glFrameBufferName desiredFrameBufferId
+		glCheckErrors 0 "bind framebuffer"
+		writeIORef actualFrameBufferRef desiredFrameBufferId
+	when (actualViewport /= desiredViewport || actualFrameBufferId /= desiredFrameBufferId) $ do
+		let Vec4 left top right bottom = desiredViewport
+		let height = glFrameBufferHeight desiredFrameBufferId
+		glViewport (fromIntegral left) (fromIntegral $ height - bottom) (fromIntegral $ right - left) (fromIntegral $ bottom - top)
+		glCheckErrors 0 "bind viewport"
+		writeIORef actualViewportRef desiredViewport
 
 glEnableDepthWriteForClearing :: GlContext -> IO ()
 glEnableDepthWriteForClearing GlContext
@@ -1708,9 +1781,7 @@ refSetup actualRef desiredRef setup = do
 	else return False
 
 refSetup_ :: Eq a => IORef a -> IORef a -> (a -> IO ()) -> IO ()
-refSetup_ actualRef desiredRef setup = do
-	_ <- refSetup actualRef desiredRef setup
-	return ()
+refSetup_ actualRef desiredRef setup = void $ refSetup actualRef desiredRef setup
 
 vectorSetupCond :: Eq a => Bool -> VM.IOVector a -> VM.IOVector a -> (Int -> a -> IO ()) -> IO ()
 vectorSetupCond forceSetup actualVector desiredVector setup = do
