@@ -22,6 +22,6 @@ library
     Flaw.Graphics.OpenGL
   other-modules:
   -- other-extensions:    
-  build-depends:       base, bytestring, flaw-base, flaw-glsl, flaw-graphics, flaw-sdl, flaw-window, OpenGLRaw, sdl2, text, vector
+  build-depends:       base, bytestring, flaw-base, flaw-glsl, flaw-graphics, flaw-math, flaw-sdl, flaw-window, OpenGLRaw, sdl2, text, vector
   -- hs-source-dirs:      
   default-language:    Haskell2010
