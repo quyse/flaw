@@ -24,6 +24,11 @@ class Window w where
 	chanWindowEvents :: w -> STM (TChan WindowEvent)
 
 data WindowEvent
+	-- | User is trying to close window.
 	= CloseWindowEvent
+	-- | Window is destroyed.
 	| DestroyWindowEvent
+	-- | Window is resized.
 	| ResizeWindowEvent Int Int
+	-- | Window is activated or deactivated.
+	| ActivateWindowEvent !Bool
