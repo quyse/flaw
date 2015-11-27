@@ -115,7 +115,7 @@ initApp title width height needDepth debug = do
 
 	inputManager <- initSdlInput window
 
-	graphicsSystem <- book bk $ createGlSystem
+	graphicsSystem <- book bk createGlSystem
 	graphicsDevices <- book bk $ getInstalledDevices graphicsSystem
 	graphicsContext <- book bk $ createGlContext (fst $ head graphicsDevices) window debug
 	let graphicsDevice = graphicsContext
