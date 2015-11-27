@@ -27,15 +27,20 @@ data Glyphs = Glyphs
 	}
 
 data GlyphInfo = GlyphInfo
-	{ glyphWidth :: !Int
+	{
+	-- Size of glyph on texture.
+	  glyphWidth :: !Int
 	, glyphHeight :: !Int
+	-- Coordinates of left-top corner on texture.
 	, glyphLeftTopX :: !Int
 	, glyphLeftTopY :: !Int
+	-- Offset from pen point to left-top corner.
 	, glyphOffsetX :: !Int
 	, glyphOffsetY :: !Int
 	}
 
 class FontShaper a where
+	-- | Output list of (position, glyph index) and final position for a line of text.
 	shapeText :: a -> T.Text -> FontScript -> IO (V.Vector (Vec2f, Int), Vec2f)
 
 -- | Font script.

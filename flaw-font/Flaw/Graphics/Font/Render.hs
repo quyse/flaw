@@ -10,10 +10,12 @@ module Flaw.Graphics.Font.Render
 	( GlyphRenderer
 	, GlyphSubpixelMode(..)
 	, initGlyphRenderer
-	, RenderableFont()
+	, RenderableFont(..)
 	, createRenderableFont
 	, RenderGlyphsM
 	, renderGlyphs
+	, RenderTextCursorX(..)
+	, RenderTextCursorY(..)
 	, renderTextWithScript
 	, renderText
 	) where
@@ -160,6 +162,8 @@ data RenderableGlyph = RenderableGlyph
 data RenderableFont d = RenderableFont
 	{ renderableFontTexture :: !(TextureId d)
 	, renderableFontGlyphs :: !(V.Vector RenderableGlyph)
+	-- | Maximum glyph box (left, top, right, bottom values relative to pen point, i.e. left-baseline).
+	, renderableFontMaxGlyphBox :: !Vec4f
 	}
 
 createRenderableFont :: Device d => d -> Glyphs -> IO (RenderableFont d, IO ())
@@ -202,7 +206,7 @@ createRenderableFont device Glyphs
 	-- create glyphs
 	let invSize = xyxy__ $ Vec2 (1 / fromIntegral width) (1 / fromIntegral height)
 	let invScale = xyxy__ $ Vec2 (1 / fromIntegral scaleX) (1 / fromIntegral scaleY)
-	let f GlyphInfo
+	let createRenderableGlyph GlyphInfo
 		{ glyphWidth = gw
 		, glyphHeight = gh
 		, glyphLeftTopX = gltx
@@ -219,11 +223,25 @@ createRenderableFont device Glyphs
 		lty = fromIntegral glty
 		ox = fromIntegral gox
 		oy = fromIntegral goy
-	let glyphs = V.map f infos
+	let glyphs = V.map createRenderableGlyph infos
+
+	-- calculate max glyph box
+	let foldGlyphBox GlyphInfo
+		{ glyphWidth = gw
+		, glyphHeight = gh
+		, glyphOffsetX = gox
+		, glyphOffsetY = goy
+		} (Vec4 left top right bottom) = Vec4
+		(min left $ fromIntegral gox)
+		(min top $ fromIntegral goy)
+		(max right $ fromIntegral (gw + gox))
+		(max bottom $ fromIntegral (gh + goy))
+	let maxGlyphBox = foldr foldGlyphBox (Vec4 1e8 1e8 (-1e8) (-1e8)) infos
 
 	return (RenderableFont
 		{ renderableFontTexture = textureId
 		, renderableFontGlyphs = glyphs
+		, renderableFontMaxGlyphBox = maxGlyphBox
 		}, destroy)
 
 data GlyphToRender = GlyphToRender
@@ -232,10 +250,15 @@ data GlyphToRender = GlyphToRender
 	, glyphToRenderColor :: !Vec4f
 	}
 
-type RenderGlyphsM c = ReaderT (GlyphToRender -> Render c ()) (Render c)
+data RenderGlyphsState c d = RenderGlyphsState
+	{ renderGlyphsStateAddGlyph :: !(GlyphToRender -> Render c ())
+	, renderGlyphsStateRenderableFont :: RenderableFont d
+	}
+
+type RenderGlyphsM c d = ReaderT (RenderGlyphsState c d) (Render c)
 
 -- | Draw glyphs.
-renderGlyphs :: Context c d => GlyphRenderer d -> RenderableFont d -> RenderGlyphsM c a -> Render c a
+renderGlyphs :: Context c d => GlyphRenderer d -> RenderableFont d -> RenderGlyphsM c d a -> Render c a
 renderGlyphs GlyphRenderer
 	{ glyphRendererVertexBuffer = vb
 	, glyphRendererIndexBuffer = ib
@@ -244,7 +267,7 @@ renderGlyphs GlyphRenderer
 	, glyphRendererProgram = program
 	, glyphRendererCapacity = capacity
 	, glyphRendererBuffer = buffer
-	} RenderableFont
+	} renderableFont@RenderableFont
 	{ renderableFontTexture = textureId
 	, renderableFontGlyphs = glyphs
 	} m = renderScope $ do
@@ -276,15 +299,14 @@ renderGlyphs GlyphRenderer
 	let viewportScale = xyxy__ $ Vec2 (2 / fromIntegral (viewportRight - viewportLeft)) (2 / fromIntegral (viewportTop - viewportBottom))
 	let viewportOffset = Vec4 (-1) 1 (-1) 1
 
-	result <- runReaderT m $ \GlyphToRender
+	let addGlyph GlyphToRender
 		{ glyphToRenderPosition = position
 		, glyphToRenderIndex = index
 		, glyphToRenderColor = color
-		} -> do
+		} = do
 		do
 			bufferIndex <- liftIO $ readIORef bufferIndexRef
-			if bufferIndex >= capacity then flush
-			else return ()
+			when (bufferIndex >= capacity) flush
 		liftIO $ do
 			let RenderableGlyph
 				{ renderableGlyphUV = uv
@@ -296,15 +318,39 @@ renderGlyphs GlyphRenderer
 			VSM.write buffer (bufferIndex + capacity * 2) color
 			writeIORef bufferIndexRef $ bufferIndex + 1
 
+	result <- runReaderT m RenderGlyphsState
+		{ renderGlyphsStateAddGlyph = addGlyph
+		, renderGlyphsStateRenderableFont = renderableFont
+		}
+
 	flush
 
 	return result
 
+data RenderTextCursorX = RenderTextCursorLeft | RenderTextCursorCenter | RenderTextCursorRight
+
+data RenderTextCursorY = RenderTextCursorBaseline | RenderTextCursorTop | RenderTextCursorMiddle | RenderTextCursorBottom
+
 -- | Shape text and output it in RenderGlyphsM monad.
-renderTextWithScript :: FontShaper s => s -> T.Text -> FontScript -> Vec2f -> Vec4f -> RenderGlyphsM c ()
-renderTextWithScript shaper text script position color = do
-	(positionsAndIndices, _advance) <- liftIO $ shapeText shaper text script
-	addGlyph <- ask
+renderTextWithScript :: FontShaper s => s -> T.Text -> FontScript -> Vec2f -> RenderTextCursorX -> RenderTextCursorY -> Vec4f -> RenderGlyphsM c d ()
+renderTextWithScript shaper text script (Vec2 px py) cursorX cursorY color = do
+	(positionsAndIndices, Vec2 ax _ay) <- liftIO $ shapeText shaper text script
+	RenderGlyphsState
+		{ renderGlyphsStateAddGlyph = addGlyph
+		, renderGlyphsStateRenderableFont = RenderableFont
+			{ renderableFontMaxGlyphBox = Vec4 _boxLeft boxTop _boxRight boxBottom
+			}
+		} <- ask
+	let x = case cursorX of
+		RenderTextCursorLeft -> px
+		RenderTextCursorCenter -> px - ax * 0.5
+		RenderTextCursorRight -> px - ax
+	let y = case cursorY of
+		RenderTextCursorBaseline -> py
+		RenderTextCursorTop -> py - boxTop
+		RenderTextCursorMiddle -> py - (boxTop + boxBottom) * 0.5
+		RenderTextCursorBottom -> py - boxBottom
+	let position = Vec2 x y
 	forM_ positionsAndIndices $ \(glyphPosition, glyphIndex) -> do
 		lift $ addGlyph GlyphToRender
 			{ glyphToRenderPosition = position + glyphPosition
@@ -313,5 +359,5 @@ renderTextWithScript shaper text script position color = do
 			}
 
 -- | Simpler method for rendering text with unspecified script.
-renderText :: FontShaper s => s -> T.Text -> Vec2f -> Vec4f -> RenderGlyphsM c ()
-renderText shaper text position color = renderTextWithScript shaper text fontScriptUnknown position color
+renderText :: FontShaper s => s -> T.Text -> Vec2f -> RenderTextCursorX -> RenderTextCursorY -> Vec4f -> RenderGlyphsM c d ()
+renderText shaper text position cursorX cursorY color = renderTextWithScript shaper text fontScriptUnknown position cursorX cursorY color
