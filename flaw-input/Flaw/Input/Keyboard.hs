@@ -19,7 +19,7 @@ import Data.Array.MArray
 import Flaw.Input
 
 data KeyboardState = KeyboardState
-	{ keyboardStateKeys :: TArray Key Bool
+	{ keyboardStateKeys :: !(TArray Key Bool)
 	}
 
 data KeyboardEvent

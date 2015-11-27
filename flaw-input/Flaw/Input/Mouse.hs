@@ -20,8 +20,8 @@ import Data.Array.MArray
 import Flaw.Input
 
 data MouseState = MouseState
-	{ mouseStateButtons :: TArray MouseButton Bool
-	, mouseStateCursor :: TVar (Int, Int)
+	{ mouseStateButtons :: !(TArray MouseButton Bool)
+	, mouseStateCursor :: !(TVar (Int, Int))
 	}
 
 data MouseEvent
