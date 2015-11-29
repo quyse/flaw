@@ -151,7 +151,10 @@ initSdlInput window = do
 			SDL.MouseButtonEvent
 				{ SDL.eventType = eventType
 				, SDL.mouseButtonEventButton = sdlButton
+				, SDL.mouseButtonEventX = x
+				, SDL.mouseButtonEventY = y
 				} -> do
+				addMouseEvent $ CursorMoveEvent (fromIntegral x) (fromIntegral y)
 				let maybeButton = case sdlButton of
 					SDL.SDL_BUTTON_LEFT -> Just LeftMouseButton
 					SDL.SDL_BUTTON_RIGHT -> Just RightMouseButton
