@@ -83,6 +83,7 @@ LRESULT WINAPI wndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	{
 	case WM_CREATE:
 	case WM_SIZE:
+	case WM_CLOSE:
 	case WM_DESTROY:
 		return 0;
 	default:
