@@ -61,7 +61,7 @@ instance Window Win32Window where
 			c_getWin32WindowClientSize hwnd widthPtr heightPtr
 			width <- peek widthPtr
 			height <- peek heightPtr
-			return (width, height)
+			return (fromIntegral width, fromIntegral height)
 	chanWindowEvents Win32Window
 		{ wEventsChan = eventsChan
 		} = dupTChan eventsChan
@@ -212,10 +212,10 @@ foreign import ccall unsafe "createWin32Window" c_createWin32Window
 	-> Int -- layered
 	-> IO HWND -- HWND
 foreign import ccall unsafe "setWin32WindowTitle" c_setWin32WindowTitle :: HWND -> LPWSTR -> IO ()
-foreign import ccall unsafe "getWin32WindowClientSize" c_getWin32WindowClientSize :: HWND -> Ptr Int -> Ptr Int -> IO ()
+foreign import ccall unsafe "getWin32WindowClientSize" c_getWin32WindowClientSize :: HWND -> Ptr CInt -> Ptr CInt -> IO ()
 foreign import ccall unsafe "destroyWin32Window" c_destroyWin32Window :: HWND -> IO ()
 foreign import ccall unsafe "updateLayeredWin32Window" c_updateLayeredWin32Window :: HWND -> IO ()
-foreign import ccall unsafe "getLayeredWin32WindowBitmapData" c_getLayeredWin32WindowBitmapData :: HWND -> Ptr (Ptr CUChar) -> Ptr Int -> Ptr Int -> Ptr Int -> IO ()
+foreign import ccall unsafe "getLayeredWin32WindowBitmapData" c_getLayeredWin32WindowBitmapData :: HWND -> Ptr (Ptr CUChar) -> Ptr CInt -> Ptr CInt -> Ptr CInt -> IO ()
 
 -- wrappers
 
