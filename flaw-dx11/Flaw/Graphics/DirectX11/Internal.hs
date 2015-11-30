@@ -847,7 +847,7 @@ data Dx11Context = Dx11Context
 
 data Dx11ContextState = Dx11ContextState
 	{ dx11ContextStateFrameBuffer :: !(IORef (FrameBufferId Dx11Device))
-	, dx11ContextStateViewport :: !(IORef (Int, Int))
+	, dx11ContextStateViewport :: !(IORef (Vec4 Int))
 	, dx11ContextStateVertexBuffers :: !(VM.IOVector (VertexBufferId Dx11Device))
 	, dx11ContextStateIndexBuffer :: !(IORef (IndexBufferId Dx11Device))
 	, dx11ContextStateUniformBuffers :: !(VM.IOVector (UniformBufferId Dx11Device))
@@ -879,7 +879,7 @@ dx11CreateContextFromInterface device contextInterface = do
 dx11CreateContextState :: IO Dx11ContextState
 dx11CreateContextState = do
 	frameBuffer <- newIORef $ Dx11FrameBufferId [] Dx11NullDepthStencilTargetId
-	viewport <- newIORef (0, 0)
+	viewport <- newIORef $ Vec4 0 0 0 0
 	vertexBuffers <- VM.replicate 8 Dx11NullVertexBufferId
 	indexBuffer <- newIORef $ Dx11NullIndexBufferId D3D11_PRIMITIVE_TOPOLOGY_UNDEFINED
 	uniformBuffers <- VM.replicate 8 Dx11NullUniformBufferId
@@ -915,7 +915,7 @@ dx11SetDefaultContextState Dx11ContextState
 	, dx11ContextStateProgram = programRef
 	} = do
 	writeIORef frameBufferRef $ Dx11FrameBufferId [] Dx11NullDepthStencilTargetId
-	writeIORef viewportRef (0, 0)
+	writeIORef viewportRef $ Vec4 0 0 0 0
 	VM.set vertexBuffersVector Dx11NullVertexBufferId
 	writeIORef indexBufferRef $ Dx11NullIndexBufferId D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST
 	VM.set uniformBuffersVector Dx11NullUniformBufferId
@@ -1000,9 +1000,9 @@ instance Context Dx11Context Dx11Device where
 		{ dx11ContextDesiredState = Dx11ContextState
 			{ dx11ContextStateViewport = viewportRef
 			}
-		} width height scope = do
+		} viewport scope = do
 		oldViewport <- readIORef viewportRef
-		writeIORef viewportRef (width, height)
+		writeIORef viewportRef viewport
 		r <- scope
 		writeIORef viewportRef oldViewport
 		return r
@@ -1248,7 +1248,7 @@ instance Presenter Dx11Presenter DXGISystem Dx11Context Dx11Device where
 
 			-- set context state
 			writeIORef frameBufferRef $ Dx11FrameBufferId [Dx11RenderTargetId rtv] depthStencilTarget
-			writeIORef viewportRef (width, height)
+			writeIORef viewportRef $ Vec4 0 0 width height
 
 			-- perform render
 			r <- f
@@ -1523,13 +1523,13 @@ dx11UpdateContext context@Dx11Context
 			m_ID3D11DeviceContext_OMSetRenderTargets contextInterface (fromIntegral $ length renderTargetsInterfaces) renderTargetsInterfacesPtr depthStencilInterface
 
 	-- viewport
-	refSetup actualViewportRef desiredViewportRef $ \(viewportWidth, viewportHeight) -> do
+	refSetup actualViewportRef desiredViewportRef $ \(Vec4 left top right bottom) -> do
 		-- set new viewport
 		let viewport = D3D11_VIEWPORT
-			{ f_D3D11_VIEWPORT_TopLeftX = 0
-			, f_D3D11_VIEWPORT_TopLeftY = 0
-			, f_D3D11_VIEWPORT_Width = fromIntegral viewportWidth
-			, f_D3D11_VIEWPORT_Height = fromIntegral viewportHeight
+			{ f_D3D11_VIEWPORT_TopLeftX = fromIntegral left
+			, f_D3D11_VIEWPORT_TopLeftY = fromIntegral top
+			, f_D3D11_VIEWPORT_Width = fromIntegral (right - left)
+			, f_D3D11_VIEWPORT_Height = fromIntegral (bottom - top)
 			, f_D3D11_VIEWPORT_MinDepth = 0
 			, f_D3D11_VIEWPORT_MaxDepth = 1
 			}
