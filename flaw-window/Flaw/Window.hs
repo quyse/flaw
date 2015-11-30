@@ -29,6 +29,6 @@ data WindowEvent
 	-- | Window is destroyed.
 	| DestroyWindowEvent
 	-- | Window is resized.
-	| ResizeWindowEvent Int Int
+	| ResizeWindowEvent !Int !Int
 	-- | Window is activated or deactivated.
 	| ActivateWindowEvent !Bool

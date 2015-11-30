@@ -5,33 +5,43 @@ It's not an element.
 License: MIT
 -}
 
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleContexts, GADTs #-}
 
 module Flaw.UI.Window
 	( Window(..)
 	, newWindow
+	, setWindowCloseHandler
 	, processWindow
+	, renderWindow
 	) where
-
-import Flaw.Input
-import Flaw.Input.Keyboard
-import Flaw.Input.Mouse
-import Flaw.UI
-import qualified Flaw.Window as W
 
 import Control.Concurrent.STM
 import Control.Monad
 
+import Flaw.Graphics
+import Flaw.Input
+import Flaw.Input.Keyboard
+import Flaw.Input.Mouse
+import Flaw.Math
+import Flaw.UI
+import Flaw.UI.Drawer
+import qualified Flaw.Window as W
+
 data Window = Window
-	{ windowEventsChan :: !(TChan W.WindowEvent)
+	{ windowNativeWindow :: !SomeNativeWindow
+	, windowEventsChan :: !(TChan W.WindowEvent)
 	, windowKeyboardEventsChan :: !(TChan KeyboardEvent)
 	, windowKeyboardState :: !KeyboardState
 	, windowMouseEventsChan :: !(TChan MouseEvent)
 	, windowMouseState :: !MouseState
 	, windowElement :: !SomeElement
+	, windowSizeVar :: !(TVar (Vec2 Int))
 	, windowCloseHandlerVar :: !(TVar (STM ()))
 	, windowDestroyHandlerVar :: !(TVar (STM ()))
 	}
+
+data SomeNativeWindow where
+	SomeNativeWindow :: W.Window w => w -> SomeNativeWindow
 
 newWindow :: (W.Window w, InputManager im KeyboardEvent, InputManager im MouseEvent, Element e) => w -> im -> e -> STM Window
 newWindow nativeWindow inputManager element = do
@@ -44,36 +54,55 @@ newWindow nativeWindow inputManager element = do
 	mouseEventsChan <- chanInputEvents inputManager
 	mouseState <- initialInputState
 
-	-- refs
+	-- current size
+	sizeVar <- newTVar $ Vec2 0 0
+
+	-- handlers
 	closeHandlerVar <- newTVar $ return ()
 	destroyHandlerVar <- newTVar $ return ()
 
 	-- return window
 	return Window
-		{ windowEventsChan = eventsChan
+		{ windowNativeWindow = SomeNativeWindow nativeWindow
+		, windowEventsChan = eventsChan
 		, windowKeyboardEventsChan = keyboardEventsChan
 		, windowKeyboardState = keyboardState
 		, windowMouseEventsChan = mouseEventsChan
 		, windowMouseState = mouseState
 		, windowElement = SomeElement element
+		, windowSizeVar = sizeVar
 		, windowCloseHandlerVar = closeHandlerVar
 		, windowDestroyHandlerVar = destroyHandlerVar
 		}
 
+-- | Set window close handler.
+setWindowCloseHandler :: Window -> STM () -> STM ()
+setWindowCloseHandler Window
+	{ windowCloseHandlerVar = closeHandlerVar
+	} closeHandler = writeTVar closeHandlerVar closeHandler
+
 -- | Run normal window processing.
 -- It's necessary to run this method regularly (usually in a frame update function).
--- Nothing works without it.
+-- Also it's critical to run it before 'renderWindow'.
 processWindow :: Window -> IO ()
 processWindow Window
-	{ windowEventsChan = eventsChan
+	{ windowNativeWindow = SomeNativeWindow nativeWindow
+	, windowEventsChan = eventsChan
 	, windowKeyboardEventsChan = keyboardEventsChan
 	, windowKeyboardState = keyboardState
 	, windowMouseEventsChan = mouseEventsChan
 	, windowMouseState = mouseState
 	, windowElement = SomeElement element
+	, windowSizeVar = sizeVar
 	, windowCloseHandlerVar = closeHandlerVar
 	, windowDestroyHandlerVar = destroyHandlerVar
 	} = do
+	-- update layout
+	let updateLayout newSize = do
+		size <- readTVar sizeVar
+		when (size /= newSize) $ do
+			layoutElement element newSize
+			writeTVar sizeVar newSize
 	-- process input and window events
 	let process = do
 		-- native window events
@@ -82,6 +111,7 @@ processWindow Window
 			case event of
 				W.CloseWindowEvent -> join $ readTVar closeHandlerVar
 				W.DestroyWindowEvent -> join $ readTVar destroyHandlerVar
+				W.ResizeWindowEvent width height -> updateLayout $ Vec2 width height
 				_ -> return ()
 		-- keyboard events
 		let processKeyboardEvent = do
@@ -96,3 +126,14 @@ processWindow Window
 		let processSomeEvent = orElse processWindowEvent (orElse processKeyboardEvent processMouseEvent)
 		join $ atomically $ orElse (processSomeEvent >> return process) (return $ return ())
 	process
+
+	-- update layout one more time, just in case there was no resize events
+	(clientWidth, clientHeight) <- W.getWindowClientSize nativeWindow
+	atomically $ updateLayout $ Vec2 clientWidth clientHeight
+
+-- | Render window.
+renderWindow :: Context c d => Window -> Drawer d -> STM (Render c ())
+renderWindow Window
+	{ windowElement = SomeElement element
+	} drawer = do
+	renderElement element drawer $ Vec2 0 0

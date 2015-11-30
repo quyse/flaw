@@ -11,9 +11,7 @@ module Flaw.UI.Panel
 	, newPanel
 	) where
 
-import Flaw.Input.Keyboard
-import Flaw.Math
-import Flaw.UI
+import Debug.Trace
 
 import Control.Monad
 import Control.Concurrent.STM
@@ -21,11 +19,21 @@ import Data.Foldable
 import Data.Maybe
 import qualified Data.Set as S
 
+import Flaw.Graphics
+import Flaw.Graphics.Canvas
+import Flaw.Input.Keyboard
+import Flaw.Input.Mouse
+import Flaw.Math
+import Flaw.UI
+import Flaw.UI.Drawer
+
 data Panel = Panel
 	{ panelChildrenVar :: !(TVar (S.Set PanelChild))
 	, panelChildIndexVar :: !(TVar Int)
 	, panelLayoutHandlerVar :: !(TVar (Size -> STM ()))
+	, panelSizeVar :: !(TVar Size)
 	, panelFocusedChildVar :: !(TVar (Maybe PanelChild))
+	, panelLastMouseCursorVar :: !(TVar (Maybe Position))
 	, panelLastMousedChildVar :: !(TVar (Maybe PanelChild))
 	}
 
@@ -40,13 +48,17 @@ newPanel = do
 	childrenVar <- newTVar S.empty
 	childIndexVar <- newTVar 0
 	layoutHandlerVar <- newTVar $ \_ -> return ()
+	sizeVar <- newTVar $ Vec2 0 0
 	focusedChildVar <- newTVar Nothing
+	lastMouseCursorVar <- newTVar Nothing
 	lastMousedChildVar <- newTVar Nothing
 	return Panel
 		{ panelChildrenVar = childrenVar
 		, panelChildIndexVar = childIndexVar
 		, panelLayoutHandlerVar = layoutHandlerVar
+		, panelSizeVar = sizeVar
 		, panelFocusedChildVar = focusedChildVar
+		, panelLastMouseCursorVar = lastMouseCursorVar
 		, panelLastMousedChildVar = lastMousedChildVar
 		}
 
@@ -56,26 +68,64 @@ instance Eq PanelChild where
 instance Ord PanelChild where
 	compare child1 child2 = compare (panelChildIndex child1) (panelChildIndex child2)
 
-instance Visual Panel where
+instance Element Panel where
 
-	layout Panel
+	layoutElement Panel
 		{ panelLayoutHandlerVar = layoutHandlerVar
+		, panelSizeVar = sizeVar
 		} size = do
 		layoutHandler <- readTVar layoutHandlerVar
 		layoutHandler size
+		writeTVar sizeVar size
 
-	draw Panel
+	dabElement Panel
 		{ panelChildrenVar = childrenVar
-		} = do
-		-- TODO: set scissors
-		-- draw children
+		, panelSizeVar = sizeVar
+		} point@(Vec2 px py) = do
+		if px < 0 || py < 0 then return False
+		else do
+			Vec2 sx sy <- readTVar sizeVar
+			if px >= sx || py >= sy then return False
+			else do
+				children <- readTVar childrenVar
+				let
+					dabChildren (PanelChild
+						{ panelChildElement = SomeElement element
+						, panelChildPositionVar = childPositionVar
+						} : restChildren) = do
+						childPosition <- readTVar childPositionVar
+						r <- dabElement element $ point - childPosition
+						if r then return True else dabChildren restChildren
+					dabChildren [] = return False
+				dabChildren $ S.toDescList children
+
+	renderElement Panel
+		{ panelChildrenVar = childrenVar
+		, panelSizeVar = sizeVar
+		} drawer@Drawer
+		{ drawerCanvas = canvas
+		, drawerFlatStyleVariant = StyleVariant
+			{ styleVariantNormalStyle = Style
+				{ styleFillColor = fillColor
+				, styleBorderColor = borderColor
+				}
+			}
+		} position@(Vec2 px py) = do
+		Vec2 sx sy <- readTVar sizeVar
+		-- compose rendering of children
 		children <- readTVar childrenVar
 		let drawChild PanelChild
 			{ panelChildElement = SomeElement element
-			} = draw element
-		foldrM (\a b -> liftM (>> b) a) (return ()) $ map drawChild $ S.toAscList children
-
-instance Element Panel where
+			, panelChildPositionVar = childPositionVar
+			} = do
+			childPosition <- readTVar childPositionVar
+			renderElement element drawer $ position + childPosition
+		renderChildren <- foldrM (\a b -> liftM (>> b) a) (return ()) $ map drawChild $ S.toAscList children
+		-- return
+		return $ renderScope $ do
+			renderViewport $ Vec4 px py (px + sx) (py + sy)
+			drawBorderedRectangle canvas (Vec4 0 1 (sx - 1) sx) (Vec4 0 1 (sy - 1) sy) fillColor borderColor
+			renderChildren
 
 	processInputEvent panel@Panel
 		{ panelChildrenVar = childrenVar
@@ -93,9 +143,13 @@ instance Element Panel where
 					keyShiftRPressed <- getKeyState keyboardState KeyShiftR
 					let keyShiftPressed = keyShiftLPressed || keyShiftRPressed
 					case focusedChild of
-						Just child -> do
+						Just child@PanelChild
+							{ panelChildElement = SomeElement focusedElement
+							} -> do
 							let (before, after) = S.split child children
-							focusSomeChild panel (if keyShiftPressed then S.toDescList before else S.toAscList after)
+							focusedNewChild <- focusSomeChild panel $ if keyShiftPressed then S.toDescList before ++ S.toDescList after else S.toAscList after ++ S.toAscList before
+							when focusedNewChild $ unfocusElement focusedElement
+							return focusedNewChild
 						Nothing -> focusSomeChild panel $ (if keyShiftPressed then S.toDescList else S.toAscList) children
 				_ -> return False
 
@@ -109,30 +163,53 @@ instance Element Panel where
 					if processed then return True else ownProcessEvent
 				Nothing -> ownProcessEvent
 
-		MouseInputEvent _ _ -> do
+		MouseInputEvent mouseEvent mouseState -> do
 			children <- readTVar childrenVar
-			-- try to send mouse event to first (in reverse order) child accepting it
-			let
-				trySendMouse (child@PanelChild
-					{ panelChildElement = SomeElement element
-					} : restChildren) = do
-					processed <- processInputEvent element inputEvent
-					if processed then return $ Just child
-					else trySendMouse restChildren
-				trySendMouse [] = return Nothing
-			child <- trySendMouse (S.toDescList children)
-			-- check if it's not the same child as last time
-			lastMousedChild <- readTVar lastMousedChildVar
-			when (lastMousedChild /= child) $ do
-				-- remember new last-moused child
-				writeTVar lastMousedChildVar child
-				-- send mouse leave event to old one
+			-- send event to last moused child (without any correction)
+			let sendToLastChild = do
+				lastMousedChild <- readTVar lastMousedChildVar
 				case lastMousedChild of
 					Just PanelChild
-						{ panelChildElement = SomeElement element
-						} -> void $ processInputEvent element MouseLeaveEvent
-					Nothing -> return ()
-			return $ isJust child
+						{ panelChildElement = SomeElement lastMousedChildElement
+						} -> processInputEvent lastMousedChildElement inputEvent
+					Nothing -> return False
+			-- select by mouse event
+			case mouseEvent of
+				MouseDownEvent _mouseButton -> sendToLastChild
+				MouseUpEvent _mouseButton -> sendToLastChild
+				RawMouseMoveEvent _dx _dy _dz -> sendToLastChild
+				CursorMoveEvent x y -> do
+					-- determine child with the mouse on it
+					let
+						pickChild (child@PanelChild
+							{ panelChildElement = SomeElement element
+							, panelChildPositionVar = childPositionVar
+							} : restChildren) point = do
+							-- correct position and ask child element
+							childPosition <- readTVar childPositionVar
+							r <- dabElement element $ point - childPosition
+							if r then return $ Just child else pickChild restChildren point
+						pickChild [] _point = return Nothing
+					mousedChild <- pickChild (S.toDescList children) $ Vec2 x y
+					-- update last moused child
+					lastMousedChild <- readTVar lastMousedChildVar
+					when (mousedChild /= lastMousedChild) $ do
+						writeTVar lastMousedChildVar mousedChild
+						case lastMousedChild of
+							Just PanelChild
+								{ panelChildElement = SomeElement lastMousedChildElement
+								} -> void $ processInputEvent lastMousedChildElement MouseLeaveEvent
+							Nothing -> return ()
+					-- if mouse points to some element now
+					case mousedChild of
+						Just PanelChild
+							{ panelChildElement = SomeElement childElement
+							, panelChildPositionVar = childPositionVar
+							} -> do
+							-- correct coordinates and send event
+							Vec2 px py <- readTVar childPositionVar
+							processInputEvent childElement $ MouseInputEvent (CursorMoveEvent (x - px) (y - py)) mouseState
+						Nothing -> return False
 		MouseLeaveEvent -> do
 			lastMousedChild <- readTVar lastMousedChildVar
 			case lastMousedChild of
@@ -141,7 +218,7 @@ instance Element Panel where
 					} -> processInputEvent element MouseLeaveEvent
 				Nothing -> return False
 
-	focus panel@Panel
+	focusElement panel@Panel
 		{ panelChildrenVar = childrenVar
 		, panelFocusedChildVar = focusedChildVar
 		} = do
@@ -151,7 +228,7 @@ instance Element Panel where
 			focusSomeChild panel $ S.toAscList children
 		else return True
 
-	unfocus Panel
+	unfocusElement Panel
 		{ panelFocusedChildVar = focusedChildVar
 		} = do
 		focusedChild <- readTVar focusedChildVar
@@ -159,7 +236,7 @@ instance Element Panel where
 			Just PanelChild
 				{ panelChildElement = SomeElement element
 				} -> do
-				unfocus element
+				unfocusElement element
 				writeTVar focusedChildVar Nothing
 			Nothing -> return ()
 
@@ -204,7 +281,8 @@ instance FreeContainer Panel where
 		focusedChild <- readTVar focusedChildVar
 		when (focusedChild == Just child) $ do
 			-- unfocus it
-			unfocus element
+			unfocusElement element
+			writeTVar focusedChildVar Nothing
 			-- try to focus some other child, starting from next one
 			let (childrenBefore, childrenAfter) = S.split child newChildren
 			_ <- focusSomeChild panel $ S.toAscList childrenAfter ++ S.toAscList childrenBefore
@@ -225,11 +303,10 @@ focusSomeChild Panel
 	tryToFocus (child@PanelChild
 		{ panelChildElement = SomeElement element
 		} : restChildren) = do
-		focusAccepted <- focus element
+		focusAccepted <- focusElement element
 		if focusAccepted then do
 			writeTVar focusedChildVar $ Just child
 			return True
 		else tryToFocus restChildren
 	tryToFocus [] = do
-		writeTVar focusedChildVar Nothing
 		return False

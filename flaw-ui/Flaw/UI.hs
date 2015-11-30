@@ -11,26 +11,26 @@ module Flaw.UI
 	, Position
 	, Size
 	, Visual(..)
+	, SomeVisual(..)
 	, Element(..)
 	, SomeElement(..)
 	, FreeContainer(..)
 	, InputEvent(..)
-	, HasContent(..)
-	, HasTitle(..)
+	, HasText(..)
 	, HasClickHandler(..)
 	, HasChecked(..)
 	, HasProgress(..)
 	, Progress(..)
 	) where
 
+import Control.Concurrent.STM
+import qualified Data.Text as T
+
 import Flaw.Graphics
-import Flaw.Graphics.Canvas
 import Flaw.Input.Keyboard
 import Flaw.Input.Mouse
 import Flaw.Math
-
-import Control.Concurrent.STM
-import qualified Data.Text as T
+import Flaw.UI.Drawer
 
 -- | Base type for length values.
 type Metric = Int
@@ -41,19 +41,28 @@ type Size = Vec2 Metric
 
 -- | Visual is a paintable thing with layout.
 class Visual a where
-	-- | Set size of content.
-	-- If (and only if) size has changed, content should re-calculate
-	-- layout and call this method for nested content.
-	layout :: a -> Size -> STM ()
-	-- | Draw content.
-	-- Left-top corner should be (0, 0), and size is set by previous
-	-- call to 'layout'. It's parent content's responsibility to correctly
-	-- set current transform within 'Draw' monad, and optionally
-	-- scissors region, etc.
-	draw :: Context c d => a -> STM (CanvasM c d ())
+	-- | Set size of visual.
+	layoutVisual :: a -> Size -> STM ()
+	-- | Render visual.
+	renderVisual :: Context c d => a -> Drawer d -> Position -> Style -> STM (Render c ())
+
+-- | Any visual.
+data SomeVisual where
+	SomeVisual :: Visual a => !a -> SomeVisual
 
 -- | Element is a content able to react to input events.
-class Visual a => Element a where
+class Element a where
+	-- | Set size of element.
+	-- If (and only if) size has changed, element should re-calculate
+	-- layout and call this method for nested visuals/elements.
+	layoutElement :: a -> Size -> STM ()
+	-- | Check that point is in element.
+	-- Visual can return False for "holes".
+	dabElement :: a -> Position -> STM Bool
+	-- | Render element.
+	-- Size is set by previous call to 'layout'. It's parent element's responsibility
+	-- to correctly constrain viewport.
+	renderElement :: Context c d => a -> Drawer d -> Position -> STM (Render c ())
 	-- | Process input event addressed to the content.
 	-- Element may return False which means it wants to return event
 	-- back to container. It should be used for passing mouse events
@@ -64,10 +73,10 @@ class Visual a => Element a where
 	-- Child returns True if it accepts focus;
 	-- in case of False container may try to give focus to
 	-- another element.
-	focus :: a -> STM Bool
+	focusElement :: a -> STM Bool
 	-- | Container takes keyboard focus back.
 	-- Element has to release focus.
-	unfocus :: a -> STM ()
+	unfocusElement :: a -> STM ()
 
 -- | Any element.
 data SomeElement where
@@ -97,19 +106,16 @@ data InputEvent
 	-- | Mouse left the element.
 	| MouseLeaveEvent
 
-class Element a => HasContent a where
-	setContent :: Visual c => a -> c -> STM ()
+class HasText a where
+	setText :: a -> T.Text -> STM ()
 
-class Element a => HasTitle a where
-	setTitle :: a -> T.Text -> STM ()
-
-class Element a => HasClickHandler a where
+class HasClickHandler a where
 	setClickHandler :: a -> STM () -> STM ()
 
-class Element a => HasChecked a where
+class HasChecked a where
 	setChecked :: a -> Bool -> STM ()
 
-class Element a => HasProgress a where
+class HasProgress a where
 	setProgress :: a -> Progress -> STM ()
 
 data Progress = Progress Float | IndeterminateProgress

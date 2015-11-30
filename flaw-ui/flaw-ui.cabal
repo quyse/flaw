@@ -20,10 +20,13 @@ source-repository head
 library
   exposed-modules:
     Flaw.UI
+    Flaw.UI.Button
+    Flaw.UI.Drawer
+    Flaw.UI.Label
     Flaw.UI.Panel
     Flaw.UI.Window
   other-modules:
   -- other-extensions:    
-  build-depends:       base, containers, flaw-canvas, flaw-graphics, flaw-input, flaw-math, flaw-window, stm, text
+  build-depends:       base, containers, flaw-canvas, flaw-graphics, flaw-font, flaw-input, flaw-math, flaw-window, stm, text
   -- hs-source-dirs:      
   default-language:    Haskell2010
