@@ -111,8 +111,10 @@ instance Element Button where
 				else return False
 			KeyUpEvent key -> do
 				if isPressKey key then do
-					writeTVar pressedVar False
-					click
+					pressed <- readTVar pressedVar
+					when pressed $ do
+						click
+						writeTVar pressedVar False
 					return True
 				else return False
 			_ -> return False
@@ -121,8 +123,10 @@ instance Element Button where
 				writeTVar pressedVar True
 				return True
 			MouseUpEvent LeftMouseButton -> do
-				writeTVar pressedVar False
-				click
+				pressed <- readTVar pressedVar
+				when pressed $ do
+					click
+					writeTVar pressedVar False
 				return True
 			CursorMoveEvent _x _y -> do
 				writeTVar mousedVar True
@@ -147,7 +151,10 @@ instance Element Button where
 
 	unfocusElement Button
 		{ buttonFocusedVar = focusedVar
-		} = writeTVar focusedVar False
+		, buttonPressedVar = pressedVar
+		} = do
+		writeTVar focusedVar False
+		writeTVar pressedVar False
 
 instance HasClickHandler Button where
 	setClickHandler Button
