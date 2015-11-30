@@ -27,6 +27,7 @@ import Control.Concurrent.STM
 import qualified Data.Text as T
 
 import Flaw.Graphics
+import Flaw.Graphics.Font
 import Flaw.Input.Keyboard
 import Flaw.Input.Mouse
 import Flaw.Math
@@ -108,6 +109,7 @@ data InputEvent
 
 class HasText a where
 	setText :: a -> T.Text -> STM ()
+	setTextScript :: a -> FontScript -> STM ()
 
 class HasClickHandler a where
 	setClickHandler :: a -> STM () -> STM ()
