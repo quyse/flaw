@@ -16,6 +16,7 @@ module Flaw.Graphics.Font.Render
 	, renderGlyphs
 	, RenderTextCursorX(..)
 	, RenderTextCursorY(..)
+	, renderTextRuns
 	, renderTextWithScript
 	, renderText
 	) where
@@ -331,10 +332,10 @@ data RenderTextCursorX = RenderTextCursorLeft | RenderTextCursorCenter | RenderT
 
 data RenderTextCursorY = RenderTextCursorBaseline | RenderTextCursorTop | RenderTextCursorMiddle | RenderTextCursorBottom
 
--- | Shape text and output it in RenderGlyphsM monad.
-renderTextWithScript :: FontShaper s => s -> T.Text -> FontScript -> Vec2f -> RenderTextCursorX -> RenderTextCursorY -> Vec4f -> RenderGlyphsM c d ()
-renderTextWithScript shaper text script (Vec2 px py) cursorX cursorY color = do
-	(positionsAndIndices, Vec2 ax _ay) <- liftIO $ shapeText shaper text script
+-- | Shape multiple text runs and output it in RenderGlyphsM monad.
+renderTextRuns :: FontShaper s => s -> [(T.Text, Vec4f)] -> FontScript -> Vec2f -> RenderTextCursorX -> RenderTextCursorY -> RenderGlyphsM c d ()
+renderTextRuns shaper textsWithColors script (Vec2 px py) cursorX cursorY = do
+	(runsPositionsAndIndices, Vec2 ax _ay) <- liftIO $ shapeText shaper (map fst textsWithColors) script
 	RenderGlyphsState
 		{ renderGlyphsStateAddGlyph = addGlyph
 		, renderGlyphsStateRenderableFont = RenderableFont
@@ -351,12 +352,16 @@ renderTextWithScript shaper text script (Vec2 px py) cursorX cursorY color = do
 		RenderTextCursorMiddle -> py - (boxTop + boxBottom) * 0.5
 		RenderTextCursorBottom -> py - boxBottom
 	let position = Vec2 x y
-	forM_ positionsAndIndices $ \(glyphPosition, glyphIndex) -> do
+	forM_ (zip runsPositionsAndIndices $ map snd textsWithColors) $ \(positionsAndIndices, color) -> forM_ positionsAndIndices $ \(glyphPosition, glyphIndex) -> do
 		lift $ addGlyph GlyphToRender
 			{ glyphToRenderPosition = position + glyphPosition
 			, glyphToRenderIndex = glyphIndex
 			, glyphToRenderColor = color
 			}
+
+-- | Simpler method for rendering text without context.
+renderTextWithScript :: FontShaper s => s -> T.Text -> FontScript -> Vec2f -> RenderTextCursorX -> RenderTextCursorY -> Vec4f -> RenderGlyphsM c d ()
+renderTextWithScript shaper text script position cursorX cursorY color = renderTextRuns shaper [(text, color)] script position cursorX cursorY
 
 -- | Simpler method for rendering text with unspecified script.
 renderText :: FontShaper s => s -> T.Text -> Vec2f -> RenderTextCursorX -> RenderTextCursorY -> Vec4f -> RenderGlyphsM c d ()
