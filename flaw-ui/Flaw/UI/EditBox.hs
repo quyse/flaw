@@ -31,7 +31,7 @@ data EditBox = EditBox
 	-- | Start and end position of selection.
 	, editBoxSelectionVar :: !(TVar (Int, Int))
 	-- | Scroll offset in pixels. Positive means rendered text shifted to the left.
-	, editBoxScrollVar :: !(TVar Int)
+	, editBoxScrollVar :: !(TVar Float)
 	, editBoxSizeVar :: !(TVar Size)
 	, editBoxMousedVar :: !(TVar Bool)
 	, editBoxFocusedVar :: !(TVar Bool)
@@ -76,6 +76,7 @@ instance Element EditBox where
 		{ editBoxTextVar = textVar
 		, editBoxTextScriptVar = textScriptVar
 		, editBoxSelectionVar = selectionVar
+		, editBoxScrollVar = scrollVar
 		, editBoxSizeVar = sizeVar
 		, editBoxMousedVar = mousedVar
 		, editBoxFocusedVar = focusedVar
@@ -141,10 +142,35 @@ instance Element EditBox where
 				in Vec2 selectionCenterX selectionCenterX
 				else selectionLeftRight
 
+			-- offset from left side
+			let textOffsetX = 2
+
+			-- calculate current text offset
+			scroll <- liftIO $ atomically $ do
+				scroll <- readTVar scrollVar
+				-- calculate where is cursor
+				let cursorOffsetPreX = if selectionStart < selectionEnd then selectionMaxX else selectionMinX
+				let border = 3
+				-- so this should be true: border < textPreX + cursorOffsetPreX < sx - 2 - border
+				-- which means: border < textOffsetX - scroll + cursorOffsetPreX < sx - 2 - border
+				-- border - textOffsetX - cursorOffsetPreX < -scroll < sx - textOffsetX - cursorOffsetPreX - border - 2
+				-- cursorOffsetPreX + textOffsetX - sx + border + 2 < scroll < cursorOffsetPreX + textOffsetX - border
+				let minScroll = cursorOffsetPreX + textOffsetX - fromIntegral sx + border + 2
+				let maxScroll = cursorOffsetPreX + textOffsetX - border
+				do
+					if scroll <= minScroll then do
+						writeTVar scrollVar minScroll
+						return minScroll
+					else if scroll >= maxScroll then do
+						let newScroll = max 0 $ maxScroll - fromIntegral sx / 3
+						writeTVar scrollVar newScroll
+						return newScroll
+					else return scroll
+
 			-- draw selection
 			let selectionTop = (fromIntegral (sy - 2) - (boxBottom - boxTop)) * 0.5
 			let selectionBottom = (fromIntegral (sy - 2) + (boxBottom - boxTop)) * 0.5
-			let textXY@(Vec2 textX _textY) = Vec2 2 (1 + ((fromIntegral $ sy - 2) - boxTop - boxBottom) * 0.5)
+			let textXY@(Vec2 textX _textY) = Vec2 (2 - scroll) (1 + ((fromIntegral $ sy - 2) - boxTop - boxBottom) * 0.5)
 			drawBorderedRectangle canvas
 				(Vec4 (floor $ textX + selectionMinX - 1) (floor $ textX + selectionMinX) (floor $ textX + selectionMaxX) (floor $ textX + selectionMaxX + 1))
 				(Vec4 (floor selectionTop) (floor $ selectionTop + 1) (floor $ selectionBottom - 1) (floor selectionBottom))
