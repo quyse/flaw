@@ -35,6 +35,7 @@ data EditBox = EditBox
 	, editBoxSizeVar :: !(TVar Size)
 	, editBoxMousedVar :: !(TVar Bool)
 	, editBoxFocusedVar :: !(TVar Bool)
+	, editBoxBlinkVar :: !(TVar Float)
 	-- | Render-delayed commands
 	--, editBoxRenderDelayedCommands :: !(TQueue EditBoxRender
 	}
@@ -48,6 +49,7 @@ newEditBox = do
 	sizeVar <- newTVar $ Vec2 0 0
 	mousedVar <- newTVar False
 	focusedVar <- newTVar False
+	blinkVar <- newTVar 0
 	return EditBox
 		{ editBoxTextVar = textVar
 		, editBoxTextScriptVar = textScriptVar
@@ -56,6 +58,7 @@ newEditBox = do
 		, editBoxSizeVar = sizeVar
 		, editBoxMousedVar = mousedVar
 		, editBoxFocusedVar = focusedVar
+		, editBoxBlinkVar = blinkVar
 		}
 
 instance Element EditBox where
@@ -80,20 +83,24 @@ instance Element EditBox where
 		, editBoxSizeVar = sizeVar
 		, editBoxMousedVar = mousedVar
 		, editBoxFocusedVar = focusedVar
+		, editBoxBlinkVar = blinkVar
 		} Drawer
 		{ drawerCanvas = canvas
 		, drawerGlyphRenderer = glyphRenderer
-		, drawerEditFont = DrawerFont
-			{ drawerFontRenderableFont = renderableFont@RenderableFont
-				{ renderableFontMaxGlyphBox = Vec4 _boxLeft boxTop _boxRight boxBottom
+		, drawerFrameTimeVar = frameTimeVar
+		, drawerStyles = DrawerStyles
+			{ drawerEditFont = DrawerFont
+				{ drawerFontRenderableFont = renderableFont@RenderableFont
+					{ renderableFontMaxGlyphBox = Vec4 _boxLeft boxTop _boxRight boxBottom
+					}
+				, drawerFontShaper = SomeFontShaper fontShaper
 				}
-			, drawerFontShaper = SomeFontShaper fontShaper
-			}
-		, drawerLoweredStyleVariant = StyleVariant
-			{ styleVariantNormalStyle = normalStyle
-			, styleVariantMousedStyle = mousedStyle
-			, styleVariantSelectedFocusedStyle = selectedFocusedStyle
-			, styleVariantSelectedUnfocusedStyle = selectedUnfocusedStyle
+			, drawerLoweredStyleVariant = StyleVariant
+				{ styleVariantNormalStyle = normalStyle
+				, styleVariantMousedStyle = mousedStyle
+				, styleVariantSelectedFocusedStyle = selectedFocusedStyle
+				, styleVariantSelectedUnfocusedStyle = selectedUnfocusedStyle
+				}
 			}
 		} (Vec2 px py) = do
 		text <- readTVar textVar
@@ -111,7 +118,19 @@ instance Element EditBox where
 
 		let selectedStyle = if focused then selectedFocusedStyle else selectedUnfocusedStyle
 
+		-- update ticker (only do calculations if we are focused)
+		blink <- do
+			if focused then do
+				frameTime <- readTVar frameTimeVar
+				let blinkPeriod = 1
+				oldBlink <- readTVar blinkVar
+				let blink = snd (properFraction $ oldBlink + frameTime / blinkPeriod :: (Int, Float))
+				writeTVar blinkVar blink
+				return blink
+			else return 0
+
 		return $ renderScope $ do
+
 			-- draw edit box
 			drawBorderedRectangle canvas
 				(Vec4 px (px + 1) (px + sx - 1) (px + sx))
@@ -125,38 +144,35 @@ instance Element EditBox where
 			(runs@[beforeRun, selectedRun, afterRun], _advance) <- liftIO $ shapeText fontShaper [textBefore, textSelected, textAfter] textScript
 
 			-- calculate some bounds of runs
-			let selectionLeftRight = foldrTextBounds renderableFont
+			let Vec2 selectionMinX selectionMaxX = foldrTextBounds renderableFont
 				(\(Vec4 left _top right _bottom) (Vec2 minLeft maxRight) -> Vec2 (min left minLeft) (max right maxRight)) (Vec2 1e9 (-1e9)) selectedRun
 			let beforeRight = foldrTextBounds renderableFont
 				(\(Vec4 _left _top right _bottom) maxRight -> max right maxRight) (-1e9) beforeRun
 			let afterLeft = foldrTextBounds renderableFont
 				(\(Vec4 left _top _right _bottom) minLeft -> min left minLeft) 1e9 afterRun
 
-			-- get bounds for selection or cursor
-			let Vec2 selectionMinX selectionMaxX = if T.null textSelected then
-				let selectionCenterX =
+			-- get cursor x
+			let cursorX =
+				if T.null textSelected then
 					if T.null textBefore then 
 						if T.null textAfter then 0 else afterLeft
 					else
 						if T.null textAfter then beforeRight else (beforeRight + afterLeft) * 0.5
-				in Vec2 selectionCenterX selectionCenterX
-				else selectionLeftRight
+				else if selectionStart < selectionEnd then selectionMaxX else selectionMinX
 
 			-- offset from left side
 			let textOffsetX = 2
 
-			-- calculate current text offset
+			-- calculate scroll
 			scroll <- liftIO $ atomically $ do
 				scroll <- readTVar scrollVar
-				-- calculate where is cursor
-				let cursorOffsetPreX = if selectionStart < selectionEnd then selectionMaxX else selectionMinX
 				let border = 3
-				-- so this should be true: border < textPreX + cursorOffsetPreX < sx - 2 - border
-				-- which means: border < textOffsetX - scroll + cursorOffsetPreX < sx - 2 - border
-				-- border - textOffsetX - cursorOffsetPreX < -scroll < sx - textOffsetX - cursorOffsetPreX - border - 2
-				-- cursorOffsetPreX + textOffsetX - sx + border + 2 < scroll < cursorOffsetPreX + textOffsetX - border
-				let minScroll = cursorOffsetPreX + textOffsetX - fromIntegral sx + border + 2
-				let maxScroll = cursorOffsetPreX + textOffsetX - border
+				-- so this should be true: border < textPreX + cursorX < sx - 2 - border
+				-- which means: border < textOffsetX - scroll + cursorX < sx - 2 - border
+				-- border - textOffsetX - cursorX < -scroll < sx - textOffsetX - cursorX - border - 2
+				-- cursorX + textOffsetX - sx + border + 2 < scroll < cursorX + textOffsetX - border
+				let minScroll = cursorX + textOffsetX - fromIntegral sx + border + 2
+				let maxScroll = cursorX + textOffsetX - border
 				do
 					if scroll <= minScroll then do
 						writeTVar scrollVar minScroll
@@ -167,14 +183,23 @@ instance Element EditBox where
 						return newScroll
 					else return scroll
 
-			-- draw selection
+			let textXY@(Vec2 textX _textY) = Vec2 (2 - scroll) (1 + ((fromIntegral $ sy - 2) - boxTop - boxBottom) * 0.5)
 			let selectionTop = (fromIntegral (sy - 2) - (boxBottom - boxTop)) * 0.5
 			let selectionBottom = (fromIntegral (sy - 2) + (boxBottom - boxTop)) * 0.5
-			let textXY@(Vec2 textX _textY) = Vec2 (2 - scroll) (1 + ((fromIntegral $ sy - 2) - boxTop - boxBottom) * 0.5)
-			drawBorderedRectangle canvas
-				(Vec4 (floor $ textX + selectionMinX - 1) (floor $ textX + selectionMinX) (floor $ textX + selectionMaxX) (floor $ textX + selectionMaxX + 1))
-				(Vec4 (floor selectionTop) (floor $ selectionTop + 1) (floor $ selectionBottom - 1) (floor selectionBottom))
-				(styleFillColor selectedStyle) (styleBorderColor selectedStyle)
+
+			-- draw selection
+			when (not $ T.null textSelected) $ do
+				drawBorderedRectangle canvas
+					(Vec4 (floor $ textX + selectionMinX - 1) (floor $ textX + selectionMinX) (floor $ textX + selectionMaxX) (floor $ textX + selectionMaxX + 1))
+					(Vec4 (floor selectionTop) (floor $ selectionTop + 1) (floor $ selectionBottom - 1) (floor selectionBottom))
+					(styleFillColor selectedStyle) (styleBorderColor selectedStyle)
+
+			-- draw blinking cursor
+			when (blink * 2 < 1) $ do
+				drawBorderedRectangle canvas
+					(Vec4 (floor $ textX + cursorX - 1) (floor $ textX + cursorX) (floor $ textX + cursorX) (floor $ textX + cursorX + 1))
+					(Vec4 (floor selectionTop) (floor $ selectionTop + 1) (floor $ selectionBottom - 1) (floor selectionBottom))
+					(styleFillColor selectedStyle) (styleBorderColor selectedStyle)
 
 			-- render glyphs
 			renderGlyphs glyphRenderer renderableFont $ do
@@ -185,6 +210,7 @@ instance Element EditBox where
 		{ editBoxTextVar = textVar
 		, editBoxSelectionVar = selectionVar
 		, editBoxMousedVar = mousedVar
+		, editBoxBlinkVar = blinkVar
 		} inputEvent InputState
 		{ inputStateKeyboard = keyboardState
 		} = case inputEvent of
@@ -198,6 +224,7 @@ instance Element EditBox where
 						when (T.length textBefore > 0) $ do
 							writeTVar textVar $ mappend (T.init textBefore) textAfter
 							writeTVar selectionVar (selectionEnd - 1, selectionEnd - 1)
+							dontBlink
 					else replaceSelection T.empty
 					return True
 				KeyDelete -> do
@@ -207,6 +234,7 @@ instance Element EditBox where
 						let (textBefore, textAfter) = T.splitAt selectionEnd text
 						when (T.length textAfter > 0) $ do
 							writeTVar textVar $ mappend textBefore (T.tail textAfter)
+							dontBlink
 					else replaceSelection T.empty
 					return True
 				KeyLeft -> do
@@ -231,6 +259,7 @@ instance Element EditBox where
 						-- select all
 						text <- readTVar textVar
 						writeTVar selectionVar (0, T.length text)
+						dontBlink
 						return True
 					else return False
 				_ -> return False
@@ -254,6 +283,7 @@ instance Element EditBox where
 				writeTVar textVar $ mconcat [textBefore, replacementText, textAfter]
 				let newSelection = min selectionStart selectionEnd + T.length replacementText
 				writeTVar selectionVar (newSelection, newSelection)
+				dontBlink
 			moveCursor position = do
 				(selectionStart, _selectionEnd) <- readTVar selectionVar
 				text <- readTVar textVar
@@ -262,6 +292,8 @@ instance Element EditBox where
 				shiftRPressed <- getKeyState keyboardState KeyShiftR
 				let newSelectionStart = if shiftLPressed || shiftRPressed then selectionStart else newSelectionEnd
 				writeTVar selectionVar (newSelectionStart, newSelectionEnd)
+				dontBlink
+			dontBlink = writeTVar blinkVar 0
 
 	focusElement EditBox
 		{ editBoxFocusedVar = focusedVar
