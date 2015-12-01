@@ -97,6 +97,11 @@ processWindow Window
 	, windowCloseHandlerVar = closeHandlerVar
 	, windowDestroyHandlerVar = destroyHandlerVar
 	} = do
+	-- compose input state
+	let inputState = InputState
+		{ inputStateKeyboard = keyboardState
+		, inputStateMouse = mouseState
+		}
 	-- update layout
 	let updateLayout newSize = do
 		size <- readTVar sizeVar
@@ -116,12 +121,12 @@ processWindow Window
 		-- keyboard events
 		let processKeyboardEvent = do
 			keyboardEvent <- readTChan keyboardEventsChan
-			_ <- processInputEvent element $ KeyboardInputEvent keyboardEvent keyboardState
+			_ <- processInputEvent element (KeyboardInputEvent keyboardEvent) inputState
 			applyInputEvent keyboardState keyboardEvent
 		-- mouse events
 		let processMouseEvent = do
 			mouseEvent <- readTChan mouseEventsChan
-			_ <- processInputEvent element $ MouseInputEvent mouseEvent mouseState
+			_ <- processInputEvent element (MouseInputEvent mouseEvent) inputState
 			applyInputEvent mouseState mouseEvent
 		let processSomeEvent = orElse processWindowEvent (orElse processKeyboardEvent processMouseEvent)
 		join $ atomically $ orElse (processSomeEvent >> return process) (return $ return ())

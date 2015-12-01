@@ -16,6 +16,7 @@ module Flaw.UI
 	, SomeElement(..)
 	, FreeContainer(..)
 	, InputEvent(..)
+	, InputState(..)
 	, HasText(..)
 	, HasClickHandler(..)
 	, HasChecked(..)
@@ -69,7 +70,7 @@ class Element a where
 	-- back to container. It should be used for passing mouse events
 	-- in transparent areas, and for skipping non-processed keyboard
 	-- events, so container has chance to implement focus control with keys.
-	processInputEvent :: a -> InputEvent -> STM Bool
+	processInputEvent :: a -> InputEvent -> InputState -> STM Bool
 	-- | Container gives child keyboard focus.
 	-- Child returns True if it accepts focus;
 	-- in case of False container may try to give focus to
@@ -101,11 +102,17 @@ class Element a => FreeContainer a where
 -- State of keyboard/mouse is provided before applying event.
 data InputEvent
 	-- | Keyboard event. Sent to focused control.
-	= KeyboardInputEvent !KeyboardEvent !KeyboardState
+	= KeyboardInputEvent !KeyboardEvent
 	-- | Mouse event. CursorMoveEvent is adjusted to element's coordinates.
-	| MouseInputEvent !MouseEvent !MouseState
+	| MouseInputEvent !MouseEvent
 	-- | Mouse left the element.
 	| MouseLeaveEvent
+
+-- | Input state.
+data InputState = InputState
+	{ inputStateKeyboard :: !KeyboardState
+	, inputStateMouse :: !MouseState
+	}
 
 class HasText a where
 	setText :: a -> T.Text -> STM ()

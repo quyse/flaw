@@ -11,8 +11,6 @@ module Flaw.UI.Panel
 	, newPanel
 	) where
 
-import Debug.Trace
-
 import Control.Monad
 import Control.Concurrent.STM
 import Data.Foldable
@@ -131,9 +129,11 @@ instance Element Panel where
 		{ panelChildrenVar = childrenVar
 		, panelFocusedChildVar = focusedChildVar
 		, panelLastMousedChildVar = lastMousedChildVar
-		} inputEvent = case inputEvent of
+		} inputEvent inputState@InputState
+		{ inputStateKeyboard = keyboardState
+		} = case inputEvent of
 
-		KeyboardInputEvent keyboardEvent keyboardState -> do
+		KeyboardInputEvent keyboardEvent -> do
 			-- own processing: handle tab-moving focus
 			let ownProcessEvent = case keyboardEvent of
 				KeyDownEvent KeyTab -> do
@@ -159,11 +159,11 @@ instance Element Panel where
 				Just PanelChild
 					{ panelChildElement = SomeElement element
 					} -> do
-					processed <- processInputEvent element inputEvent
+					processed <- processInputEvent element inputEvent inputState
 					if processed then return True else ownProcessEvent
 				Nothing -> ownProcessEvent
 
-		MouseInputEvent mouseEvent mouseState -> do
+		MouseInputEvent mouseEvent -> do
 			children <- readTVar childrenVar
 			-- send event to last moused child (without any correction)
 			let sendToLastChild = do
@@ -171,7 +171,7 @@ instance Element Panel where
 				case lastMousedChild of
 					Just PanelChild
 						{ panelChildElement = SomeElement lastMousedChildElement
-						} -> processInputEvent lastMousedChildElement inputEvent
+						} -> processInputEvent lastMousedChildElement inputEvent inputState
 					Nothing -> return False
 			-- select by mouse event
 			case mouseEvent of
@@ -198,7 +198,7 @@ instance Element Panel where
 						case lastMousedChild of
 							Just PanelChild
 								{ panelChildElement = SomeElement lastMousedChildElement
-								} -> void $ processInputEvent lastMousedChildElement MouseLeaveEvent
+								} -> void $ processInputEvent lastMousedChildElement MouseLeaveEvent inputState
 							Nothing -> return ()
 					-- if mouse points to some element now
 					case mousedChild of
@@ -208,14 +208,14 @@ instance Element Panel where
 							} -> do
 							-- correct coordinates and send event
 							Vec2 px py <- readTVar childPositionVar
-							processInputEvent childElement $ MouseInputEvent (CursorMoveEvent (x - px) (y - py)) mouseState
+							processInputEvent childElement (MouseInputEvent (CursorMoveEvent (x - px) (y - py))) inputState
 						Nothing -> return False
 		MouseLeaveEvent -> do
 			lastMousedChild <- readTVar lastMousedChildVar
 			case lastMousedChild of
 				Just PanelChild
 					{ panelChildElement = SomeElement element
-					} -> processInputEvent element MouseLeaveEvent
+					} -> processInputEvent element MouseLeaveEvent inputState
 				Nothing -> return False
 
 	focusElement panel@Panel

@@ -74,13 +74,13 @@ instance Element Button where
 			, styleVariantMousedStyle = mousedStyle
 			, styleVariantPressedStyle = pressedStyle
 			}
-		} position@(Vec2 px py) = do
+		} (Vec2 px py) = do
 		-- get state
 		focused <- readTVar focusedVar
 		moused <- readTVar mousedVar
 		pressed <- readTVar pressedVar
 		-- get style
-		let style = if pressed then pressedStyle else if moused then mousedStyle else normalStyle
+		let style = if pressed then pressedStyle else if moused || focused then mousedStyle else normalStyle
 		-- calculate visual rendering
 		visualRender <- renderVisual visual drawer (Vec2 0 0) style
 		-- get viewport
@@ -102,8 +102,8 @@ instance Element Button where
 		{ buttonMousedVar = mousedVar
 		, buttonPressedVar = pressedVar
 		, buttonClickHandlerVar = clickHandlerVar
-		} inputEvent = case inputEvent of
-		KeyboardInputEvent keyboardEvent _keyboardState -> case keyboardEvent of
+		} inputEvent _inputState = case inputEvent of
+		KeyboardInputEvent keyboardEvent -> case keyboardEvent of
 			KeyDownEvent key -> do
 				if isPressKey key then do
 					writeTVar pressedVar True
@@ -118,7 +118,7 @@ instance Element Button where
 					return True
 				else return False
 			_ -> return False
-		MouseInputEvent mouseEvent _mouseState -> case mouseEvent of
+		MouseInputEvent mouseEvent -> case mouseEvent of
 			MouseDownEvent LeftMouseButton -> do
 				writeTVar pressedVar True
 				return True

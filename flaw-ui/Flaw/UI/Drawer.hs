@@ -10,6 +10,7 @@ module Flaw.UI.Drawer
 	( Drawer(..)
 	, StyleVariant(..)
 	, Style(..)
+	, DrawerFont(..)
 	, SomeFontShaper(..)
 	) where
 
@@ -27,14 +28,14 @@ data Drawer d = Drawer
 	  drawerCanvas :: !(Canvas d)
 	-- | Glyph renderer for all fonts.
 	, drawerGlyphRenderer :: !(GlyphRenderer d)
-	-- | Normal font for UI.
-	, drawerNormalRenderableFont :: !(RenderableFont d)
-	-- | Normal font shaper.
-	, drawerNormalFontShaper :: !SomeFontShaper
+	-- | Label font for UI.
+	-- For normal labels, buttons, etc.
+	, drawerLabelFont :: !(DrawerFont d)
+	-- | Edit font for UI.
+	-- For text entered by user.
+	, drawerEditFont :: !(DrawerFont d)
 	-- | Title font for UI.
-	, drawerTitleRenderableFont :: !(RenderableFont d)
-	-- | Title font shaper.
-	, drawerTitleFontShaper :: !SomeFontShaper
+	, drawerTitleFont :: !(DrawerFont d)
 
 	-- | "Flat" style variant.
 	-- Used for things like labels and checkboxes.
@@ -51,13 +52,19 @@ data StyleVariant = StyleVariant
 	{ styleVariantNormalStyle :: !Style
 	, styleVariantMousedStyle :: !Style
 	, styleVariantPressedStyle :: !Style
-	, styleVariantSelectedStyle :: !Style
+	, styleVariantSelectedFocusedStyle :: !Style
+	, styleVariantSelectedUnfocusedStyle :: !Style
 	}
 
 data Style = Style
 	{ styleTextColor :: !Vec4f
 	, styleFillColor :: !Vec4f
 	, styleBorderColor :: !Vec4f
+	}
+
+data DrawerFont d = DrawerFont
+	{ drawerFontRenderableFont :: !(RenderableFont d)
+	, drawerFontShaper :: !SomeFontShaper
 	}
 
 data SomeFontShaper where
