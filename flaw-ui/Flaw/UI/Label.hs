@@ -45,9 +45,11 @@ instance Visual Label where
 		, labelSizeVar = sizeVar
 		} Drawer
 		{ drawerGlyphRenderer = glyphRenderer
-		, drawerLabelFont = DrawerFont
-			{ drawerFontRenderableFont = renderableFont
-			, drawerFontShaper = SomeFontShaper fontShaper
+		, drawerStyles = DrawerStyles
+			{ drawerLabelFont = DrawerFont
+				{ drawerFontRenderableFont = renderableFont
+				, drawerFontShaper = SomeFontShaper fontShaper
+				}
 			}
 		} position Style
 		{ styleTextColor = textColor

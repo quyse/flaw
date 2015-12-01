@@ -69,10 +69,12 @@ instance Element Button where
 		, buttonPressedVar = pressedVar
 		} drawer@Drawer
 		{ drawerCanvas = canvas
-		, drawerRaisedStyleVariant = StyleVariant
-			{ styleVariantNormalStyle = normalStyle
-			, styleVariantMousedStyle = mousedStyle
-			, styleVariantPressedStyle = pressedStyle
+		, drawerStyles = DrawerStyles
+			{ drawerRaisedStyleVariant = StyleVariant
+				{ styleVariantNormalStyle = normalStyle
+				, styleVariantMousedStyle = mousedStyle
+				, styleVariantPressedStyle = pressedStyle
+				}
 			}
 		} (Vec2 px py) = do
 		-- get state

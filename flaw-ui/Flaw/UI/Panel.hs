@@ -102,10 +102,12 @@ instance Element Panel where
 		, panelSizeVar = sizeVar
 		} drawer@Drawer
 		{ drawerCanvas = canvas
-		, drawerFlatStyleVariant = StyleVariant
-			{ styleVariantNormalStyle = Style
-				{ styleFillColor = fillColor
-				, styleBorderColor = borderColor
+		, drawerStyles = DrawerStyles
+			{ drawerFlatStyleVariant = StyleVariant
+				{ styleVariantNormalStyle = Style
+					{ styleFillColor = fillColor
+					, styleBorderColor = borderColor
+					}
 				}
 			}
 		} position@(Vec2 px py) = do
