@@ -21,10 +21,14 @@ packages:
 - flaw-ui
 - flaw-webgl
 - flaw-window
+- location:
+    git: https://github.com/quyse/sdl2
+    commit: 8a5b603288a2242a7c342a2238fe3ef7ccbbee4f
+  extra-dep: true
 
 extra-deps:
 - OpenGLRaw-2.6.0.0
-- sdl2-2.1.0
+#- sdl2-2.1.0 # temporarily removed in order to use unreleased sdl2 version
 
 ghc-options:
   "*": -O3 -threaded -with-rtsopts=-N -Wall -fno-warn-unsupported-calling-conventions -funbox-strict-fields -fno-warn-tabs
