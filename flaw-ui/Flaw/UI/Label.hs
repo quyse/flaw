@@ -14,35 +14,27 @@ import qualified Data.Text as T
 
 import Flaw.Graphics.Font
 import Flaw.Graphics.Font.Render
-import Flaw.Math
 import Flaw.UI
 import Flaw.UI.Drawer
 
 data Label = Label
 	{ labelTextVar :: !(TVar T.Text)
 	, labelTextScriptVar :: !(TVar FontScript)
-	, labelSizeVar :: !(TVar Size)
 	}
 
 newLabel :: STM Label
 newLabel = do
 	textVar <- newTVar T.empty
 	textScriptVar <- newTVar fontScriptUnknown
-	sizeVar <- newTVar $ Vec2 0 0
 	return Label
 		{ labelTextVar = textVar
 		, labelTextScriptVar = textScriptVar
-		, labelSizeVar = sizeVar
 		}
 
 instance Visual Label where
-	layoutVisual Label
-		{ labelSizeVar = sizeVar
-		} size = writeTVar sizeVar size
 	renderVisual Label
 		{ labelTextVar = textVar
 		, labelTextScriptVar = textScriptVar
-		, labelSizeVar = sizeVar
 		} Drawer
 		{ drawerGlyphRenderer = glyphRenderer
 		, drawerStyles = DrawerStyles
@@ -51,12 +43,11 @@ instance Visual Label where
 				, drawerFontShaper = SomeFontShaper fontShaper
 				}
 			}
-		} position Style
+		} position size Style
 		{ styleTextColor = textColor
 		} = do
 		text <- readTVar textVar
 		textScript <- readTVar textScriptVar
-		size <- readTVar sizeVar
 		return $ do
 			renderGlyphs glyphRenderer renderableFont $ do
 				renderTexts fontShaper [(text, textColor)] textScript (fmap fromIntegral $ position + fmap (`div` 2) size) RenderTextCursorCenter RenderTextCursorMiddle

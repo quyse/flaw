@@ -43,10 +43,8 @@ type Size = Vec2 Metric
 
 -- | Visual is a paintable thing with layout.
 class Visual a where
-	-- | Set size of visual.
-	layoutVisual :: a -> Size -> STM ()
 	-- | Render visual.
-	renderVisual :: Context c d => a -> Drawer d -> Position -> Style -> STM (Render c ())
+	renderVisual :: Context c d => a -> Drawer d -> Position -> Size -> Style -> STM (Render c ())
 
 -- | Any visual.
 data SomeVisual where

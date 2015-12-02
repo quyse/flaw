@@ -48,11 +48,8 @@ newButton visual = do
 instance Element Button where
 
 	layoutElement Button
-		{ buttonVisual = SomeVisual visual
-		, buttonSizeVar = sizeVar
-		} size = do
-		layoutVisual visual size
-		writeTVar sizeVar size
+		{ buttonSizeVar = sizeVar
+		} size = writeTVar sizeVar size
 
 	dabElement Button
 		{ buttonSizeVar = sizeVar
@@ -78,15 +75,14 @@ instance Element Button where
 			}
 		} (Vec2 px py) = do
 		-- get state
+		size@(Vec2 sx sy) <- readTVar sizeVar
 		focused <- readTVar focusedVar
 		moused <- readTVar mousedVar
 		pressed <- readTVar pressedVar
 		-- get style
 		let style = if pressed then pressedStyle else if moused || focused then mousedStyle else normalStyle
 		-- calculate visual rendering
-		visualRender <- renderVisual visual drawer (Vec2 0 0) style
-		-- get viewport
-		Vec2 sx sy <- readTVar sizeVar
+		visualRender <- renderVisual visual drawer (Vec2 0 0) size style
 		-- return rendering monad
 		return $ renderScope $ do
 			drawBorderedRectangle canvas
