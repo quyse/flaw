@@ -118,7 +118,7 @@ instance Element EditBox where
 
 		let selectedStyle = if focused then selectedFocusedStyle else selectedUnfocusedStyle
 
-		-- update ticker (only do calculations if we are focused)
+		-- update blinking phase (only do calculations if we are focused)
 		blink <- do
 			if focused then do
 				frameTime <- readTVar frameTimeVar
@@ -213,6 +213,8 @@ instance Element EditBox where
 		, editBoxBlinkVar = blinkVar
 		} inputEvent InputState
 		{ inputStateKeyboard = keyboardState
+		, inputStateGetClipboardText = getClipboardText
+		, inputStateSetClipboardText = setClipboardText
 		} = case inputEvent of
 		KeyboardInputEvent keyboardEvent -> case keyboardEvent of
 			KeyDownEvent key -> case key of
@@ -235,7 +237,11 @@ instance Element EditBox where
 						when (T.length textAfter > 0) $ do
 							writeTVar textVar $ mappend textBefore (T.tail textAfter)
 							dontBlink
-					else replaceSelection T.empty
+					else do
+						shiftPressed <- isShiftPressed
+						-- Shift+Del - cut to clipboard
+						when shiftPressed $ setClipboardText =<< getSelectedText
+						replaceSelection T.empty
 					return True
 				KeyLeft -> do
 					(_selectionStart, selectionEnd) <- readTVar selectionVar
@@ -252,14 +258,50 @@ instance Element EditBox where
 					text <- readTVar textVar
 					moveCursor $ T.length text
 					return True
+				KeyInsert -> do
+					controlPressed <- isControlPressed
+					shiftPressed <- isShiftPressed
+					if controlPressed then
+						if shiftPressed then return False
+						else do
+							-- Ctrl+Ins - copy to clipboard
+							setClipboardText =<< getSelectedText
+							return True
+					else
+						if shiftPressed then do
+							-- Shift+Ins - paste from clipboard
+							getClipboardText replaceSelection
+							return True
+						else return False
 				KeyA -> do
-					controlLPressed <- getKeyState keyboardState KeyControlL
-					controlRPressed <- getKeyState keyboardState KeyControlR
-					if controlLPressed || controlRPressed then do
+					controlPressed <- isControlPressed
+					if controlPressed then do
 						-- select all
 						text <- readTVar textVar
 						writeTVar selectionVar (0, T.length text)
 						dontBlink
+						return True
+					else return False
+				KeyC -> do
+					controlPressed <- isControlPressed
+					if controlPressed then do
+						-- Ctrl+C - copy to clipboard
+						setClipboardText =<< getSelectedText
+						return True
+					else return False
+				KeyV -> do
+					controlPressed <- isControlPressed
+					if controlPressed then do
+						-- Ctrl+V - paste from clipboard
+						getClipboardText replaceSelection
+						return True
+					else return False
+				KeyX -> do
+					controlPressed <- isControlPressed
+					if controlPressed then do
+						-- Ctrl+X - cut to clipboard
+						setClipboardText =<< getSelectedText
+						replaceSelection T.empty
 						return True
 					else return False
 				_ -> return False
@@ -288,12 +330,24 @@ instance Element EditBox where
 				(selectionStart, _selectionEnd) <- readTVar selectionVar
 				text <- readTVar textVar
 				let newSelectionEnd = max 0 $ min (T.length text) position
-				shiftLPressed <- getKeyState keyboardState KeyShiftL
-				shiftRPressed <- getKeyState keyboardState KeyShiftR
-				let newSelectionStart = if shiftLPressed || shiftRPressed then selectionStart else newSelectionEnd
+				shiftPressed <- isShiftPressed
+				let newSelectionStart = if shiftPressed then selectionStart else newSelectionEnd
 				writeTVar selectionVar (newSelectionStart, newSelectionEnd)
 				dontBlink
 			dontBlink = writeTVar blinkVar 0
+			isControlPressed = do
+				controlLPressed <- getKeyState keyboardState KeyControlL
+				controlRPressed <- getKeyState keyboardState KeyControlR
+				return $ controlLPressed || controlRPressed
+			isShiftPressed = do
+				shiftLPressed <- getKeyState keyboardState KeyShiftL
+				shiftRPressed <- getKeyState keyboardState KeyShiftR
+				return $ shiftLPressed || shiftRPressed
+			getSelectedText = do
+				text <- readTVar textVar
+				(selectionStart, selectionEnd) <- readTVar selectionVar
+				let (_textBefore, textSelected, _textAfter) = splitTextBySelection text selectionStart selectionEnd
+				return textSelected
 
 	focusElement EditBox
 		{ editBoxFocusedVar = focusedVar

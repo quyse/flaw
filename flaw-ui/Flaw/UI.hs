@@ -110,6 +110,11 @@ data InputEvent
 data InputState = InputState
 	{ inputStateKeyboard :: !KeyboardState
 	, inputStateMouse :: !MouseState
+	-- | Function to get (asynchronously) clipboard text.
+	-- Text will be returned to the callback in separate transaction.
+	, inputStateGetClipboardText :: (T.Text -> STM ()) -> STM ()
+	-- | Function to set (asynchronously) clipboard text.
+	, inputStateSetClipboardText :: T.Text -> STM ()
 	}
 
 class HasText a where

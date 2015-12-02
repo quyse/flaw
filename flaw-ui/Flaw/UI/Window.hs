@@ -38,6 +38,7 @@ data Window = Window
 	, windowSizeVar :: !(TVar (Vec2 Int))
 	, windowCloseHandlerVar :: !(TVar (STM ()))
 	, windowDestroyHandlerVar :: !(TVar (STM ()))
+	, windowActionsQueue :: !(TQueue (IO ()))
 	}
 
 data SomeNativeWindow where
@@ -61,6 +62,9 @@ newWindow nativeWindow inputManager element = do
 	closeHandlerVar <- newTVar $ return ()
 	destroyHandlerVar <- newTVar $ return ()
 
+	-- queue for delayed IO actions
+	actionsQueue <- newTQueue
+
 	-- return window
 	return Window
 		{ windowNativeWindow = SomeNativeWindow nativeWindow
@@ -73,6 +77,7 @@ newWindow nativeWindow inputManager element = do
 		, windowSizeVar = sizeVar
 		, windowCloseHandlerVar = closeHandlerVar
 		, windowDestroyHandlerVar = destroyHandlerVar
+		, windowActionsQueue = actionsQueue
 		}
 
 -- | Set window close handler.
@@ -96,11 +101,14 @@ processWindow Window
 	, windowSizeVar = sizeVar
 	, windowCloseHandlerVar = closeHandlerVar
 	, windowDestroyHandlerVar = destroyHandlerVar
+	, windowActionsQueue = actionsQueue
 	} = do
 	-- compose input state
 	let inputState = InputState
 		{ inputStateKeyboard = keyboardState
 		, inputStateMouse = mouseState
+		, inputStateGetClipboardText = \callback -> writeTQueue actionsQueue $ (atomically . callback) =<< W.getWindowClipboardText nativeWindow
+		, inputStateSetClipboardText = writeTQueue actionsQueue . W.setWindowClipboardText nativeWindow
 		}
 	-- update layout
 	let updateLayout newSize = do
@@ -131,6 +139,16 @@ processWindow Window
 		let processSomeEvent = orElse processWindowEvent (orElse processKeyboardEvent processMouseEvent)
 		join $ atomically $ orElse (processSomeEvent >> return process) (return $ return ())
 	process
+
+	-- process IO actions
+	let processActions = do
+		maybeAction <- atomically $ tryReadTQueue actionsQueue
+		case maybeAction of
+			Just action -> do
+				action
+				processActions
+			Nothing -> return ()
+	processActions
 
 	-- update layout one more time, just in case there was no resize events
 	(clientWidth, clientHeight) <- W.getWindowClientSize nativeWindow
