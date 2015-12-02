@@ -23,6 +23,12 @@ class Window w where
 	-- | Get chan of window messages.
 	chanWindowEvents :: w -> STM (TChan WindowEvent)
 
+	-- Clipboard functions.
+	-- | Get clipboard contents as a text.
+	getWindowClipboardText :: w -> IO T.Text
+	-- | Set text as a content of clipboard.
+	setWindowClipboardText :: w -> T.Text -> IO ()
+
 data WindowEvent
 	-- | User is trying to close window.
 	= CloseWindowEvent

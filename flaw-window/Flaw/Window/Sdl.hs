@@ -30,6 +30,7 @@ import Foreign.Marshal.Alloc
 import Foreign.Marshal.Utils
 import Foreign.Ptr
 import Foreign.Storable
+import qualified SDL.Raw.Basic as SDL
 import qualified SDL.Raw.Enum as SDL
 import qualified SDL.Raw.Event as SDL
 import qualified SDL.Raw.Types as SDL
@@ -64,6 +65,15 @@ instance Window SdlWindow where
 	chanWindowEvents SdlWindow
 		{ swEventsChan = chan
 		} = dupTChan chan
+	getWindowClipboardText _ = do
+		cStr <- SDL.getClipboardText
+		if cStr == nullPtr then return T.empty
+		else do
+			bytes <- B.packCString cStr
+			SDL.free $ castPtr cStr
+			return $ T.decodeUtf8 bytes
+	setWindowClipboardText _ text = do
+		B.useAsCString (T.encodeUtf8 text) $ void . SDL.setClipboardText
 
 initSdlWindowSystem :: Bool -> IO (SdlWindowSystem, IO ())
 initSdlWindowSystem debug = do
