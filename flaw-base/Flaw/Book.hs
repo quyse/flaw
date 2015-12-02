@@ -10,6 +10,7 @@ module Flaw.Book
 	, freeBook
 	, book
 	, withBook
+	, withSpecialBook
 	) where
 
 import Control.Exception
@@ -35,5 +36,13 @@ book (Book ref) q = do
 
 withBook :: (Book -> IO a) -> IO a
 withBook f = do
-	b <- newBook
-	finally (f b) $ freeBook b
+	bk <- newBook
+	finally (f bk) $ freeBook bk
+
+-- | Helper method for dealing with possible exceptions during construction of objects.
+-- User function uses separate book for construction, and if exception is thrown, book got freed.
+withSpecialBook :: (Book -> IO a) -> IO (a, IO ())
+withSpecialBook f = do
+	bk <- newBook
+	r <- onException (f bk) (freeBook bk)
+	return (r, freeBook bk)
