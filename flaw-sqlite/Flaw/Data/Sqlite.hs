@@ -15,6 +15,7 @@ module Flaw.Data.Sqlite
 	, sqliteStmt
 	, sqliteQuery
 	, sqliteStep
+	, sqliteFinalStep
 	, sqliteTransaction
 	, SqliteData(..)
 	, sqliteLastInsertRowId
@@ -128,6 +129,12 @@ sqliteStep (SqliteQuery SqliteStmt
 		SQLITE_ROW -> return True
 		SQLITE_DONE -> return False
 		_ -> throwSqliteError dbPtr
+
+-- | Perform query step, and check that it returned SQLITE_DONE.
+sqliteFinalStep :: SqliteQuery -> IO ()
+sqliteFinalStep query = do
+	r <- sqliteStep query
+	when r $ throwIO $ DescribeFirstException "non-final SQLite step"
 
 -- | Perform SQLite transaction.
 sqliteTransaction :: SqliteDb -> (IO () -> IO a) -> IO a
