@@ -9,6 +9,8 @@ License: MIT
 module Flaw.Oil.ClientRepo
 	( ClientRepo()
 	, openClientRepo
+	, clientRepoGetValue
+	, clientRepoChange
 	, ClientRepoPushState(..)
 	, pushClientRepo
 	, ClientRepoPullInfo(..)
@@ -224,6 +226,15 @@ changeKeyItemStatus ClientRepo
 	sqliteBind query 2 newStatus
 	sqliteFinalStep query
 
+getKeyItemValue :: ClientRepo -> ItemId -> IO B.ByteString
+getKeyItemValue ClientRepo
+	{ clientRepoStmtGetKeyItemValue = stmtGetKeyItemValue
+	} itemId = sqliteQuery stmtGetKeyItemValue $ \query -> do
+	sqliteBind query 1 itemId
+	r <- sqliteStep query
+	when (not r) $ throwIO $ DescribeFirstException "failed to get key item value"
+	sqliteColumn query 0
+
 getKeyItemValueLength :: ClientRepo -> ItemId -> IO Int64
 getKeyItemValueLength ClientRepo
 	{ clientRepoStmtGetKeyItemValueLength = stmtGetKeyItemValueLength
@@ -271,6 +282,36 @@ getKeyItemsByOneItemId ClientRepo
 	} itemId = sqliteQuery stmtGetKeyItemsByOneItemId $ \query -> do
 	sqliteBind query 1 itemId
 	fillKeyItems query
+
+getKeyValue :: ClientRepo -> B.ByteString -> IO B.ByteString
+getKeyValue repo key = do
+	KeyItems keyItemIds <- getKeyItems repo key
+	let
+		step (status : restStatuses) = do
+			let itemId = keyItemIds VU.! status
+			if itemId > 0 then getKeyItemValue repo itemId
+			else step restStatuses
+		step [] = return B.empty
+	-- check key items in this particular order
+	step [ItemStatusPostponed, ItemStatusTransient, ItemStatusClient, ItemStatusServer]
+
+-- | Get value by key.
+clientRepoGetValue :: ClientRepo -> B.ByteString -> IO B.ByteString
+clientRepoGetValue repo@ClientRepo
+	{ clientRepoDb = db
+	} key = sqliteTransaction db $ \_commit -> getKeyValue repo key
+
+-- | Change value for given key.
+clientRepoChange :: ClientRepo -> B.ByteString -> B.ByteString -> IO ()
+clientRepoChange repo@ClientRepo
+	{ clientRepoDb = db
+	} key value = sqliteTransaction db $ \commit -> do
+	KeyItems keyItemIds <- getKeyItems repo key
+	let status = if (keyItemIds VU.! ItemStatusTransient) > 0 then ItemStatusPostponed else ItemStatusClient
+	let statusItemId = keyItemIds VU.! status
+	if statusItemId > 0 then changeKeyItemValue repo statusItemId value
+	else addKeyItem repo key value $ fromIntegral status
+	commit
 
 -- | State of push, needed for pull.
 newtype ClientRepoPushState = ClientRepoPushState

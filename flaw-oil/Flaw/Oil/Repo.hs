@@ -12,7 +12,7 @@ module Flaw.Oil.Repo
 	, clientRepoVersion
 	, Manifest(..)
 	, protocolVersion
-	, defaultRepoManifest
+	, defaultManifest
 	, openRepoDb
 	, Revision
 	, UserId
@@ -63,8 +63,8 @@ data Manifest = Manifest
 protocolVersion :: Int32
 protocolVersion = 0x306c696f -- "oil0"
 
-defaultRepoManifest :: Manifest
-defaultRepoManifest = Manifest
+defaultManifest :: Manifest
+defaultManifest = Manifest
 	{ manifestProtocolVersion = protocolVersion
 	, manifestMaxKeySize = 128
 	, manifestMaxValueSize = 1024 * 1024
