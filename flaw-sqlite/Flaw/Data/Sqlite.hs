@@ -199,7 +199,8 @@ instance SqliteData B.ByteString where
 		}) column bytes = do
 		sqliteCheckError dbPtr (== SQLITE_OK) $ do
 			B.unsafeUseAsCStringLen bytes $ \(ptr, len) -> do
-				sqlite3_bind_blob stmtPtr column (castPtr ptr) (fromIntegral len) $ castPtrToFunPtr $ intPtrToPtr SQLITE_TRANSIENT
+				-- note: we are forcing non-null pointer in case of zero-length bytestring, in order to bind a blob and not a NULL value
+				sqlite3_bind_blob stmtPtr column (if len > 0 then castPtr ptr else intPtrToPtr 1) (fromIntegral len) $ castPtrToFunPtr $ intPtrToPtr SQLITE_TRANSIENT
 	sqliteColumn (SqliteQuery SqliteStmt
 		{ sqliteStmtPtr = stmtPtr
 		}) column = do
@@ -214,7 +215,8 @@ instance SqliteData T.Text where
 		}) column text = do
 		sqliteCheckError dbPtr (== SQLITE_OK) $ do
 			B.unsafeUseAsCStringLen (T.encodeUtf8 text) $ \(ptr, len) -> do
-				sqlite3_bind_text stmtPtr column ptr (fromIntegral len) $ castPtrToFunPtr $ intPtrToPtr SQLITE_TRANSIENT
+				-- note: we are forcing non-null pointer in case of zero-length string, in order to bind a string and not a NULL value
+				sqlite3_bind_text stmtPtr column (if len > 0 then ptr else intPtrToPtr 1) (fromIntegral len) $ castPtrToFunPtr $ intPtrToPtr SQLITE_TRANSIENT
 	sqliteColumn (SqliteQuery SqliteStmt
 		{ sqliteStmtPtr = stmtPtr
 		}) column = do
