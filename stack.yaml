@@ -15,6 +15,7 @@ packages:
 - flaw-graphics
 - flaw-input
 - flaw-math
+- flaw-oil
 - flaw-physics
 - flaw-sdl
 - flaw-sl
