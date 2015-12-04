@@ -1,4 +1,4 @@
-resolver: lts-3.15
+resolver: lts-3.16
 
 packages:
 - flaw-app
@@ -16,6 +16,7 @@ packages:
 - flaw-input
 - flaw-math
 - flaw-oil
+- flaw-oil-server
 - flaw-physics
 - flaw-sdl
 - flaw-sl
