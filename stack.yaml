@@ -16,6 +16,7 @@ packages:
 - flaw-input
 - flaw-math
 - flaw-oil
+- flaw-oil-client
 - flaw-oil-server
 - flaw-physics
 - flaw-sdl
