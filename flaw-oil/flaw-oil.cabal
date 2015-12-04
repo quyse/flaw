@@ -30,7 +30,7 @@ library
 
 test-suite repo-test
   type:                exitcode-stdio-1.0
-  main-is:             Flaw/Oil/RepoTest.hs
+  main-is:             repotest.hs
   other-modules:
     Flaw.Oil.ClientRepo
     Flaw.Oil.Repo
