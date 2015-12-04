@@ -20,11 +20,12 @@ source-repository head
 library
   exposed-modules:
     Flaw.Oil.ClientRepo
+    Flaw.Oil.RemoteRepo
     Flaw.Oil.Repo
     Flaw.Oil.ServerRepo
   other-modules:
   -- other-extensions:    
-  build-depends:       base, bytestring, cereal, flaw-base, flaw-sqlite, stm, text, vector
+  build-depends:       base, bytestring, cereal, flaw-base, flaw-sqlite, http-client, http-types, stm, text, time, vector
   -- hs-source-dirs:      
   default-language:    Haskell2010
 
