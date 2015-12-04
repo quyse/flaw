@@ -16,7 +16,6 @@ import qualified Data.ByteString.Lazy as BL
 import Data.Monoid
 import qualified Data.Serialize as S
 import qualified Data.Text as T
-import qualified Data.Text.Encoding as T
 import qualified Network.HTTP.Types as H
 import qualified Network.Wai as W
 import qualified Network.Wai.Middleware.Gzip as W
@@ -95,14 +94,14 @@ run Options
 
 		-- helper methods
 		let respondFail status msg = respond $ W.responseLBS status
-			[(H.hContentType, T.encodeUtf8 "text/plain; charset=utf-8")] $
-			BL.fromStrict $ T.encodeUtf8 msg
+			[(H.hContentType, "text/plain; charset=utf-8")] $
+			BL.fromStrict $ msg
 
-		case W.pathInfo request of
-			["manifest"] -> respond $ W.responseLBS H.status200
-				[(H.hContentType, T.encodeUtf8 "application/x-flawoil-manifest")] $
+		case W.queryString request of
+			[("manifest", Nothing)] -> respond $ W.responseLBS H.status200
+				[(H.hContentType, "application/x-flawoil-manifest")] $
 				S.encodeLazy manifest
-			["sync"] -> do
+			[("sync", Nothing)] -> do
 				-- read request
 				body <- liftM (BL.take $ fromIntegral $ syncRequestBodyLimit + 1) $ W.lazyRequestBody request
 				if BL.length body <= fromIntegral syncRequestBodyLimit then do
@@ -114,7 +113,7 @@ run Options
 							pull <- operation $ syncServerRepo repo manifest push userId
 							-- respond with pull
 							respond $ W.responseLBS H.status200
-								[(H.hContentType, T.encodeUtf8 "application/x-flawoil-sync")] $
+								[(H.hContentType, "application/x-flawoil-sync")] $
 								S.encodeLazy pull
 						Left _ -> respondFail H.status400 "wrong push format"
 				else respondFail H.status400 "too big sync request"
