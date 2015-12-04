@@ -27,6 +27,7 @@ import Control.Monad
 import qualified Data.ByteString as B
 import Data.Foldable
 import Data.Int
+import qualified Data.Serialize as S
 import qualified Data.Text as T
 import Foreign.C.Types
 import GHC.Generics
@@ -56,7 +57,9 @@ data Manifest = Manifest
 	, manifestMaxPushValuesTotalSize :: !Int
 	, manifestMaxPullItemsCount :: !Int
 	, manifestMaxPullValuesTotalSize :: !Int
-	}
+	} deriving Generic
+
+instance S.Serialize Manifest
 
 -- | Current protocol version.
 -- Convention: oil<digit starting from 0> in little-endian.
@@ -117,7 +120,9 @@ data Push = Push
 	, pushClientUpperRevision :: !Revision
 	-- | Pushed (key, value) pairs.
 	, pushItems :: [(B.ByteString, B.ByteString)]
-	}
+	} deriving Generic
+
+instance S.Serialize Push
 
 -- | Data sent by server to client.
 data Pull = Pull
@@ -133,6 +138,8 @@ data Pull = Pull
 	-- | New client revision after whole operation.
 	, pullNewClientRevision :: !Revision
 	} deriving Generic
+
+instance S.Serialize Pull
 
 -- | Check push limits.
 checkPushLimits :: Manifest -> Push -> Maybe SyncError
