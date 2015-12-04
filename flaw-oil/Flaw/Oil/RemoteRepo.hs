@@ -7,6 +7,7 @@ License: MIT
 module Flaw.Oil.RemoteRepo
 	( AsyncRepo(..)
 	, HttpRemoteRepo()
+	, AsyncRepoNotification(..)
 	, initHttpRemoteRepo
 	) where
 
@@ -17,7 +18,6 @@ import Control.Monad
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
 import Data.Int
-import Data.Monoid
 import qualified Data.Serialize as S
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
@@ -33,16 +33,28 @@ import Flaw.Oil.ClientRepo
 class AsyncRepo r where
 	-- | Get channel with changes happening to repo.
 	asyncRepoChangesChan :: r -> STM (TChan (B.ByteString, B.ByteString))
-	-- | Get channel informing about approximate lag (how many items client repo is behind).
-	asyncRepoLagChan :: r -> STM (TChan Int64)
+	-- | Get notifications channel.
+	asyncRepoNotificationsChan :: r -> STM (TChan AsyncRepoNotification)
 	-- | Perform change.
 	sendAsyncRepoChange :: r -> B.ByteString -> B.ByteString -> STM ()
+
+-- | Notifications async repo may send.
+data AsyncRepoNotification
+	-- | Update approximate lag (number of items local repo needs to pull from remote repo in order to catch up).
+	= AsyncRepoLag Int64
+	-- | Warning about some problems with connection to remote repo.
+	-- Repo will try to reconnect, so connection may be restored.
+	| AsyncRepoWarning String
+	-- | Error report about problems with connection to remote repo.
+	-- Repo will not try to reconnect, error is considered fatal.
+	| AsyncRepoError String
+	deriving Show
 
 -- | Implementation for a local client repo, synchronized with remote server repo.
 data HttpRemoteRepo = HttpRemoteRepo
 	{ httpRemoteRepoClientRepo :: !ClientRepo
 	, httpRemoteRepoChangesChan :: !(TChan (B.ByteString, B.ByteString))
-	, httpRemoteRepoLagChan :: !(TChan Int64)
+	, httpRemoteRepoNotificationsChan :: !(TChan AsyncRepoNotification)
 	, httpRemoteRepoOperationsQueue :: !(TQueue (IO ()))
 	}
 
@@ -50,9 +62,9 @@ instance AsyncRepo HttpRemoteRepo where
 	asyncRepoChangesChan HttpRemoteRepo
 		{ httpRemoteRepoChangesChan = changesChan
 		} = dupTChan changesChan
-	asyncRepoLagChan HttpRemoteRepo
-		{ httpRemoteRepoLagChan = lagChan
-		} = dupTChan lagChan
+	asyncRepoNotificationsChan HttpRemoteRepo
+		{ httpRemoteRepoNotificationsChan = notificationsChan
+		} = dupTChan notificationsChan
 	sendAsyncRepoChange HttpRemoteRepo
 		{ httpRemoteRepoClientRepo = repo
 		, httpRemoteRepoChangesChan = changesChan
@@ -68,7 +80,7 @@ initHttpRemoteRepo httpManager repo url = withSpecialBook $ \bk -> do
 	templateRequest <- H.parseUrl $ T.unpack url
 	-- create channels
 	changesChan <- newBroadcastTChanIO
-	lagChan <- newBroadcastTChanIO
+	notificationsChan <- newBroadcastTChanIO
 
 	-- operation thread
 	-- only this thread does anything with repo
@@ -88,13 +100,25 @@ initHttpRemoteRepo httpManager repo url = withSpecialBook $ \bk -> do
 			takeMVar stoppedVar
 		return ((), stop)
 
+	-- helper function to pause before another try
+	let throttle timeBefore = do
+		let throttlePause = 5000000 -- microseconds
+		timeAfter <- getCurrentTime
+		let pause = max 0 $ min throttlePause $ throttlePause - (floor $ diffUTCTime timeAfter timeBefore)
+		when (pause > 0) $ threadDelay $ pause
+
 	-- helper function to do something http-related multiple times
 	let tryFewTimes io = do
 		let triesCount = 3 :: Int
-		let trying i es = do
-			if i < triesCount then catch io $ \e -> trying (i + 1) (e : es)
-			else throwIO $ DescribeFirstException ("failed to do HTTP operation", es :: [H.HttpException])
-		trying 0 []
+		let trying i = do
+			timeBefore <- getCurrentTime
+			catch io $ \e -> do
+				atomically $ writeTChan notificationsChan $ AsyncRepoWarning $ show (e :: H.HttpException)
+				if i < triesCount then do
+					throttle timeBefore
+					trying $ i + 1
+				else throwIO $ DescribeFirstException "failed to do HTTP operation"
+		trying 1
 
 	-- networking thread
 	let networking = do
@@ -136,12 +160,9 @@ initHttpRemoteRepo httpManager repo url = withSpecialBook $ \bk -> do
 						-- send notifications
 						atomically $ do
 							forM_ changes $ writeTChan changesChan
-							writeTChan lagChan lag
-					-- make pause before another sync if needed
-					let throttlePause = 5000000 -- microseconds
-					timeAfter <- getCurrentTime
-					let pause = max 0 $ min throttlePause $ throttlePause - (floor $ diffUTCTime timeAfter timeBefore)
-					when (pause > 0) $ threadDelay $ pause
+							writeTChan notificationsChan $ AsyncRepoLag lag
+					-- make pause before another sync
+					throttle timeBefore
 					-- sync again
 					sync
 				Left err -> throwIO $ DescribeFirstException ("failed to decode pull", err)
@@ -149,7 +170,8 @@ initHttpRemoteRepo httpManager repo url = withSpecialBook $ \bk -> do
 
 	book bk $ do
 		stoppedVar <- newEmptyMVar
-		threadId <- forkFinally networking $ \_ -> putMVar stoppedVar ()
+		let work = catch networking $ \e -> atomically $ writeTChan notificationsChan $ AsyncRepoError $ show (e :: SomeException)
+		threadId <- forkFinally work $ \_ -> putMVar stoppedVar ()
 		let stop = do
 			killThread threadId
 			takeMVar stoppedVar
@@ -158,6 +180,6 @@ initHttpRemoteRepo httpManager repo url = withSpecialBook $ \bk -> do
 	return HttpRemoteRepo
 		{ httpRemoteRepoClientRepo = repo
 		, httpRemoteRepoChangesChan = changesChan
-		, httpRemoteRepoLagChan = lagChan
+		, httpRemoteRepoNotificationsChan = notificationsChan
 		, httpRemoteRepoOperationsQueue = operationsQueue
 		}
