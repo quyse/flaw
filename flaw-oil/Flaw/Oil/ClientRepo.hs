@@ -16,6 +16,7 @@ module Flaw.Oil.ClientRepo
 	, pushClientRepo
 	, ClientRepoPullInfo(..)
 	, pullClientRepo
+	, cleanupClientRepo
 	) where
 
 import Control.Exception
@@ -381,6 +382,7 @@ data ClientRepoPullInfo = ClientRepoPullInfo
 	, clientRepoPullChanges :: [(B.ByteString, B.ByteString)]
 	}
 
+-- | Perform pull, i.e. process answer from server, marking pushed changes and remembering outside changes.
 pullClientRepo :: ClientRepo -> Pull -> ClientRepoPushState -> IO ClientRepoPullInfo
 pullClientRepo repo@ClientRepo
 	{ clientRepoDb = db
@@ -443,3 +445,23 @@ pullClientRepo repo@ClientRepo
 		, clientRepoPullLag = lag
 		, clientRepoPullChanges = itemsToPull
 		}
+
+-- | Perform cleanup after interrupted sync (i.e. after push, but without pull).
+-- It's harmless to do it without push.
+cleanupClientRepo :: ClientRepo -> IO ()
+cleanupClientRepo ClientRepo
+	{ clientRepoDb = db
+	, clientRepoStmtMassChangeStatus = stmtMassChangeStatus
+	} = sqliteTransaction db $ \commit -> do
+	-- change 'transient' items to 'client'
+	sqliteQuery stmtMassChangeStatus $ \query -> do
+		sqliteBind query 1 (ItemStatusTransient :: CInt)
+		sqliteBind query 2 (ItemStatusClient :: CInt)
+		sqliteFinalStep query
+	-- change 'postponed' items to 'client' (possibly replacing former 'transient' items)
+	sqliteQuery stmtMassChangeStatus $ \query -> do
+		sqliteBind query 1 (ItemStatusPostponed :: CInt)
+		sqliteBind query 2 (ItemStatusClient :: CInt)
+		sqliteFinalStep query
+	-- commit
+	commit

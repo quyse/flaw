@@ -142,38 +142,40 @@ initHttpRemoteRepo httpManager repo url = withSpecialBook $ \bk -> do
 
 		-- sync routine
 		let sync = do
-			-- perform push on client repo
-			(push, pushState) <- operation $ pushClientRepo repo manifest
-			-- prepare request
-			let request = templateRequest
-				{ H.method = H.methodPost
-				, H.queryString = T.encodeUtf8 $ T.pack "sync"
-				, H.requestBody = H.RequestBodyLBS $ S.encodeLazy push
-				}
-			-- measure time before sending request, to correctly do throttling
+			-- measure time before this round, to correctly throttle requests
 			timeBefore <- getCurrentTime
-			-- send request
-			body <- tryFewTimes $ H.withResponse request httpManager $ liftM BL.fromChunks . H.brConsume . H.responseBody
-			-- decode body
-			case S.decodeLazy body of
-				Right pull -> do
-					operation $ do
-						-- perform pull
-						ClientRepoPullInfo
-							{ clientRepoPullRevision = revision
-							, clientRepoPullLag = lag
-							, clientRepoPullChanges = changes
-							} <- pullClientRepo repo pull pushState
-						-- set revision and send notifications
-						atomically $ do
-							writeTVar revisionVar revision
-							forM_ changes $ writeTChan changesChan
-							writeTChan notificationsChan $ RemoteRepoLag lag
-					-- make pause before another sync
-					throttle timeBefore
-					-- sync again
-					sync
-				Left err -> throwIO $ DescribeFirstException ("failed to decode pull", err)
+			-- perform cleanup in case of any failure
+			(flip onException) (cleanupClientRepo repo) $ do
+				-- perform push on client repo
+				(push, pushState) <- operation $ pushClientRepo repo manifest
+				-- prepare request
+				let request = templateRequest
+					{ H.method = H.methodPost
+					, H.queryString = T.encodeUtf8 $ T.pack "sync"
+					, H.requestBody = H.RequestBodyLBS $ S.encodeLazy push
+					}
+				-- send request
+				body <- tryFewTimes $ H.withResponse request httpManager $ liftM BL.fromChunks . H.brConsume . H.responseBody
+				-- decode body
+				pull <- case S.decodeLazy body of
+					Right p -> return p
+					Left err -> throwIO $ DescribeFirstException ("failed to decode pull", err)
+				operation $ do
+					-- perform pull
+					ClientRepoPullInfo
+						{ clientRepoPullRevision = revision
+						, clientRepoPullLag = lag
+						, clientRepoPullChanges = changes
+						} <- pullClientRepo repo pull pushState
+					-- set revision and send notifications
+					atomically $ do
+						writeTVar revisionVar revision
+						forM_ changes $ writeTChan changesChan
+						writeTChan notificationsChan $ RemoteRepoLag lag
+			-- make pause before another sync
+			throttle timeBefore
+			-- sync again
+			sync
 		sync
 
 	book bk $ do
