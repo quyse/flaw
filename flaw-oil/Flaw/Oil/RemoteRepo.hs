@@ -28,9 +28,12 @@ import qualified Network.HTTP.Types as H
 import Flaw.Book
 import Flaw.Exception
 import Flaw.Oil.ClientRepo
+import Flaw.Oil.Repo
 
 -- | Asynchronous eventually-consistent repo.
 class AsyncRepo r where
+	-- | Get current revision.
+	asyncRepoRevision :: r -> STM Revision
 	-- | Get channel with changes happening to repo.
 	asyncRepoChangesChan :: r -> STM (TChan (B.ByteString, B.ByteString))
 	-- | Get notifications channel.
@@ -53,12 +56,16 @@ data AsyncRepoNotification
 -- | Implementation for a local client repo, synchronized with remote server repo.
 data HttpRemoteRepo = HttpRemoteRepo
 	{ httpRemoteRepoClientRepo :: !ClientRepo
+	, httpRemoteRepoRevisionVar :: !(TVar Revision)
 	, httpRemoteRepoChangesChan :: !(TChan (B.ByteString, B.ByteString))
 	, httpRemoteRepoNotificationsChan :: !(TChan AsyncRepoNotification)
 	, httpRemoteRepoOperationsQueue :: !(TQueue (IO ()))
 	}
 
 instance AsyncRepo HttpRemoteRepo where
+	asyncRepoRevision HttpRemoteRepo
+		{ httpRemoteRepoRevisionVar = revisionVar
+		} = readTVar revisionVar
 	asyncRepoChangesChan HttpRemoteRepo
 		{ httpRemoteRepoChangesChan = changesChan
 		} = dupTChan changesChan
@@ -78,7 +85,8 @@ initHttpRemoteRepo :: H.Manager -> ClientRepo -> T.Text -> IO (HttpRemoteRepo, I
 initHttpRemoteRepo httpManager repo url = withSpecialBook $ \bk -> do
 	-- create template request by parsing url
 	templateRequest <- H.parseUrl $ T.unpack url
-	-- create channels
+	-- create things
+	revisionVar <- newTVarIO =<< clientRepoRevision repo
 	changesChan <- newBroadcastTChanIO
 	notificationsChan <- newBroadcastTChanIO
 
@@ -154,11 +162,13 @@ initHttpRemoteRepo httpManager repo url = withSpecialBook $ \bk -> do
 					operation $ do
 						-- perform pull
 						ClientRepoPullInfo
-							{ clientRepoPullLag = lag
+							{ clientRepoPullRevision = revision
+							, clientRepoPullLag = lag
 							, clientRepoPullChanges = changes
 							} <- pullClientRepo repo pull pushState
-						-- send notifications
+						-- set revision and send notifications
 						atomically $ do
+							writeTVar revisionVar revision
 							forM_ changes $ writeTChan changesChan
 							writeTChan notificationsChan $ AsyncRepoLag lag
 					-- make pause before another sync
@@ -179,6 +189,7 @@ initHttpRemoteRepo httpManager repo url = withSpecialBook $ \bk -> do
 
 	return HttpRemoteRepo
 		{ httpRemoteRepoClientRepo = repo
+		, httpRemoteRepoRevisionVar = revisionVar
 		, httpRemoteRepoChangesChan = changesChan
 		, httpRemoteRepoNotificationsChan = notificationsChan
 		, httpRemoteRepoOperationsQueue = operationsQueue

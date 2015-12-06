@@ -9,6 +9,7 @@ License: MIT
 module Flaw.Oil.ClientRepo
 	( ClientRepo()
 	, openClientRepo
+	, clientRepoRevision
 	, clientRepoGetValue
 	, clientRepoChange
 	, ClientRepoPushState(..)
@@ -177,8 +178,8 @@ setManifestValue ClientRepo
 
 -- | Get global revision in client repo.
 -- Tries to increase global revision found in manifest, by using chunks, and then removes those chunks.
-getGlobalRevision :: ClientRepo -> IO Revision
-getGlobalRevision repo@ClientRepo
+clientRepoRevision :: ClientRepo -> IO Revision
+clientRepoRevision repo@ClientRepo
 	{ clientRepoStmtPreCutChunks = stmtPreCutChunks
 	, clientRepoStmtCutChunks = stmtCutChunks
 	} = do
@@ -330,7 +331,7 @@ pushClientRepo repo@ClientRepo
 	} = describeException "failed to push client repo" $ sqliteTransaction db $ \commit -> do
 
 	-- get global revision
-	clientRevision <- getGlobalRevision repo
+	clientRevision <- clientRepoRevision repo
 
 	-- get upper revision
 	clientUpperRevision <- sqliteQuery stmtGetUpperRevision $ \query -> do
@@ -375,7 +376,8 @@ pushClientRepo repo@ClientRepo
 		})
 
 data ClientRepoPullInfo = ClientRepoPullInfo
-	{ clientRepoPullLag :: !Int64
+	{ clientRepoPullRevision :: !Revision
+	, clientRepoPullLag :: !Int64
 	, clientRepoPullChanges :: [(B.ByteString, B.ByteString)]
 	}
 
@@ -437,6 +439,7 @@ pullClientRepo repo@ClientRepo
 	commit
 
 	return ClientRepoPullInfo
-		{ clientRepoPullLag = lag
+		{ clientRepoPullRevision = newClientRevision
+		, clientRepoPullLag = lag
 		, clientRepoPullChanges = itemsToPull
 		}
