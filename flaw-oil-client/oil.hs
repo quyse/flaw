@@ -50,11 +50,11 @@ run Options
 	clientRepo <- book bk $ openClientRepo $ T.pack localRepoFileName
 	httpManager <- H.newManager H.defaultManagerSettings
 	remoteRepo <- book bk $ initHttpRemoteRepo httpManager clientRepo $ T.pack remoteRepoUrl
-	notificationsChan <- atomically $ asyncRepoNotificationsChan remoteRepo
+	notificationsChan <- atomically $ remoteRepoNotificationsChan remoteRepo
 	let step = do
 		notification <- atomically $ readTChan notificationsChan
 		putStrLn $ show notification
 		case notification of
-			AsyncRepoError _ -> return ()
+			RemoteRepoError _ -> return ()
 			_ -> step
 	step

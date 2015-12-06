@@ -1,13 +1,13 @@
 {-|
 Module: Flaw.Oil.RemoteRepo
-Description: Asynchronous abstraction for local and remote repo.
+Description: Remote repo abstraction.
 License: MIT
 -}
 
 module Flaw.Oil.RemoteRepo
-	( AsyncRepo(..)
+	( RemoteRepo(..)
 	, HttpRemoteRepo()
-	, AsyncRepoNotification(..)
+	, RemoteRepoNotification(..)
 	, initHttpRemoteRepo
 	) where
 
@@ -30,27 +30,28 @@ import Flaw.Exception
 import Flaw.Oil.ClientRepo
 import Flaw.Oil.Repo
 
--- | Asynchronous eventually-consistent repo.
-class AsyncRepo r where
+-- | Remote repo.
+class RemoteRepo r where
 	-- | Get current revision.
-	asyncRepoRevision :: r -> STM Revision
-	-- | Get channel with changes happening to repo.
-	asyncRepoChangesChan :: r -> STM (TChan (B.ByteString, B.ByteString))
+	remoteRepoRevision :: r -> STM Revision
+	-- | Get channel with changes coming to repo from outside.
+	remoteRepoChangesChan :: r -> STM (TChan (B.ByteString, B.ByteString))
 	-- | Get notifications channel.
-	asyncRepoNotificationsChan :: r -> STM (TChan AsyncRepoNotification)
-	-- | Perform change.
-	sendAsyncRepoChange :: r -> B.ByteString -> B.ByteString -> STM ()
+	remoteRepoNotificationsChan :: r -> STM (TChan RemoteRepoNotification)
+	-- | Perform async change.
+	-- It won't be sent to changes chan.
+	remoteRepoChange :: r -> B.ByteString -> B.ByteString -> STM ()
 
--- | Notifications async repo may send.
-data AsyncRepoNotification
+-- | Notifications remote repo may send.
+data RemoteRepoNotification
 	-- | Update approximate lag (number of items local repo needs to pull from remote repo in order to catch up).
-	= AsyncRepoLag Int64
+	= RemoteRepoLag Int64
 	-- | Warning about some problems with connection to remote repo.
 	-- Repo will try to reconnect, so connection may be restored.
-	| AsyncRepoWarning String
+	| RemoteRepoWarning String
 	-- | Error report about problems with connection to remote repo.
 	-- Repo will not try to reconnect, error is considered fatal.
-	| AsyncRepoError String
+	| RemoteRepoError String
 	deriving Show
 
 -- | Implementation for a local client repo, synchronized with remote server repo.
@@ -58,27 +59,24 @@ data HttpRemoteRepo = HttpRemoteRepo
 	{ httpRemoteRepoClientRepo :: !ClientRepo
 	, httpRemoteRepoRevisionVar :: !(TVar Revision)
 	, httpRemoteRepoChangesChan :: !(TChan (B.ByteString, B.ByteString))
-	, httpRemoteRepoNotificationsChan :: !(TChan AsyncRepoNotification)
+	, httpRemoteRepoNotificationsChan :: !(TChan RemoteRepoNotification)
 	, httpRemoteRepoOperationsQueue :: !(TQueue (IO ()))
 	}
 
-instance AsyncRepo HttpRemoteRepo where
-	asyncRepoRevision HttpRemoteRepo
+instance RemoteRepo HttpRemoteRepo where
+	remoteRepoRevision HttpRemoteRepo
 		{ httpRemoteRepoRevisionVar = revisionVar
 		} = readTVar revisionVar
-	asyncRepoChangesChan HttpRemoteRepo
+	remoteRepoChangesChan HttpRemoteRepo
 		{ httpRemoteRepoChangesChan = changesChan
 		} = dupTChan changesChan
-	asyncRepoNotificationsChan HttpRemoteRepo
+	remoteRepoNotificationsChan HttpRemoteRepo
 		{ httpRemoteRepoNotificationsChan = notificationsChan
 		} = dupTChan notificationsChan
-	sendAsyncRepoChange HttpRemoteRepo
+	remoteRepoChange HttpRemoteRepo
 		{ httpRemoteRepoClientRepo = repo
-		, httpRemoteRepoChangesChan = changesChan
 		, httpRemoteRepoOperationsQueue = operationsQueue
-		} key value = writeTQueue operationsQueue $ do
-		clientRepoChange repo key value
-		atomically $ writeTChan changesChan (key, value)
+		} key value = writeTQueue operationsQueue $ clientRepoChange repo key value
 
 -- | Initialize remote repo with HTTP connection to server.
 initHttpRemoteRepo :: H.Manager -> ClientRepo -> T.Text -> IO (HttpRemoteRepo, IO ())
@@ -121,7 +119,7 @@ initHttpRemoteRepo httpManager repo url = withSpecialBook $ \bk -> do
 		let trying i = do
 			timeBefore <- getCurrentTime
 			catch io $ \e -> do
-				atomically $ writeTChan notificationsChan $ AsyncRepoWarning $ show (e :: H.HttpException)
+				atomically $ writeTChan notificationsChan $ RemoteRepoWarning $ show (e :: H.HttpException)
 				if i < triesCount then do
 					throttle timeBefore
 					trying $ i + 1
@@ -170,7 +168,7 @@ initHttpRemoteRepo httpManager repo url = withSpecialBook $ \bk -> do
 						atomically $ do
 							writeTVar revisionVar revision
 							forM_ changes $ writeTChan changesChan
-							writeTChan notificationsChan $ AsyncRepoLag lag
+							writeTChan notificationsChan $ RemoteRepoLag lag
 					-- make pause before another sync
 					throttle timeBefore
 					-- sync again
@@ -180,7 +178,7 @@ initHttpRemoteRepo httpManager repo url = withSpecialBook $ \bk -> do
 
 	book bk $ do
 		stoppedVar <- newEmptyMVar
-		let work = catch networking $ \e -> atomically $ writeTChan notificationsChan $ AsyncRepoError $ show (e :: SomeException)
+		let work = catch networking $ \e -> atomically $ writeTChan notificationsChan $ RemoteRepoError $ show (e :: SomeException)
 		threadId <- forkFinally work $ \_ -> putMVar stoppedVar ()
 		let stop = do
 			killThread threadId
