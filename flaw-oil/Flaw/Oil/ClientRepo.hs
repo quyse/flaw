@@ -465,3 +465,6 @@ cleanupClientRepo ClientRepo
 		sqliteFinalStep query
 	-- commit
 	commit
+
+instance Repo ClientRepo where
+	repoDb = clientRepoDb

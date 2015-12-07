@@ -177,3 +177,6 @@ syncServerRepo repo@ServerRepo
 		, pullItems = itemsToPull
 		, pullNewClientRevision = newClientRevision
 		}
+
+instance Repo ServerRepo where
+	repoDb = serverRepoDb

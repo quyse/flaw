@@ -20,6 +20,9 @@ module Flaw.Oil.Repo
 	, Pull(..)
 	, checkPushLimits
 	, SyncError(..)
+	, Repo(..)
+	, repoDbCheckIntegrity
+	, repoDbVacuum
 	) where
 
 import Control.Exception
@@ -171,3 +174,26 @@ data SyncError
 	| SyncTooBigPushValuesTotalSize
 	| SyncFatalError
 	deriving Generic
+
+class Repo r where
+	-- | Get SQLite DB.
+	repoDb :: r -> SqliteDb
+
+-- | Check integrity of DB.
+repoDbCheckIntegrity :: SqliteDb -> IO (Bool, T.Text)
+repoDbCheckIntegrity db = withBook $ \bk -> do
+	stmt <- book bk $ sqliteStmt db $ T.pack "PRAGMA integrity_check"
+	lns <- sqliteQuery stmt $ \query -> do
+		let step = do
+			r <- sqliteStep query
+			if r then do
+				line <- sqliteColumn query 0
+				restLines <- step
+				return $ line : restLines
+			else return []
+		step
+	return (lns == [T.pack "ok"], T.unlines lns)
+
+-- | Optimize DB.
+repoDbVacuum :: SqliteDb -> IO ()
+repoDbVacuum db = sqliteExec db $ T.pack "VACUUM"
