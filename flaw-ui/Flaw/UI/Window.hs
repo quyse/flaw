@@ -39,6 +39,7 @@ data Window = Window
 	, windowCloseHandlerVar :: !(TVar (STM ()))
 	, windowDestroyHandlerVar :: !(TVar (STM ()))
 	, windowActionsQueue :: !(TQueue (IO ()))
+	, windowMouseCursorVar :: !(TVar MouseCursor)
 	}
 
 data SomeNativeWindow where
@@ -65,6 +66,9 @@ newWindow nativeWindow inputManager element = do
 	-- queue for delayed IO actions
 	actionsQueue <- newTQueue
 
+	-- current mouse cursor
+	mouseCursorVar <- newTVar MouseCursorArrow
+
 	-- return window
 	return Window
 		{ windowNativeWindow = SomeNativeWindow nativeWindow
@@ -78,6 +82,7 @@ newWindow nativeWindow inputManager element = do
 		, windowCloseHandlerVar = closeHandlerVar
 		, windowDestroyHandlerVar = destroyHandlerVar
 		, windowActionsQueue = actionsQueue
+		, windowMouseCursorVar = mouseCursorVar
 		}
 
 -- | Set window close handler.
@@ -102,6 +107,7 @@ processWindow Window
 	, windowCloseHandlerVar = closeHandlerVar
 	, windowDestroyHandlerVar = destroyHandlerVar
 	, windowActionsQueue = actionsQueue
+	, windowMouseCursorVar = mouseCursorVar
 	} = do
 	-- compose input state
 	let inputState = InputState
@@ -139,6 +145,15 @@ processWindow Window
 		let processSomeEvent = orElse processWindowEvent (orElse processKeyboardEvent processMouseEvent)
 		join $ atomically $ orElse (processSomeEvent >> return process) (return $ return ())
 	process
+
+	-- update mouse cursor if needed
+	atomically $ do
+		(mouseCursorX, mouseCursorY) <- getMouseCursor mouseState
+		mouseCursor <- elementMouseCursor element $ Vec2 mouseCursorX mouseCursorY
+		currentMouseCursor <- readTVar mouseCursorVar
+		when (mouseCursor /= currentMouseCursor) $ do
+			writeTQueue actionsQueue $ W.setWindowMouseCursor nativeWindow mouseCursor
+			writeTVar mouseCursorVar mouseCursor
 
 	-- process IO actions
 	let processActions = do

@@ -22,6 +22,7 @@ module Flaw.UI
 	, HasChecked(..)
 	, HasProgress(..)
 	, Progress(..)
+	, MouseCursor(..) -- re-export from Flaw.Window
 	) where
 
 import Control.Concurrent.STM
@@ -33,6 +34,7 @@ import Flaw.Input.Keyboard
 import Flaw.Input.Mouse
 import Flaw.Math
 import Flaw.UI.Drawer
+import Flaw.Window
 
 -- | Base type for length values.
 type Metric = Int
@@ -59,6 +61,9 @@ class Element a where
 	-- | Check that point is in element.
 	-- Visual can return False for "holes".
 	dabElement :: a -> Position -> STM Bool
+	-- | Get mouse cursor element wants to show over.
+	elementMouseCursor :: a -> Position -> STM MouseCursor
+	elementMouseCursor _ _ = return MouseCursorArrow
 	-- | Render element.
 	-- Size is set by previous call to 'layout'. It's parent element's responsibility
 	-- to correctly constrain viewport.

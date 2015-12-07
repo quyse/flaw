@@ -75,6 +75,8 @@ instance Element EditBox where
 			Vec2 sx sy <- readTVar sizeVar
 			return $ x < sx && y < sy
 
+	elementMouseCursor _ _ = return MouseCursorIBeam
+
 	renderElement EditBox
 		{ editBoxTextVar = textVar
 		, editBoxTextScriptVar = textScriptVar
@@ -351,8 +353,11 @@ instance Element EditBox where
 
 	focusElement EditBox
 		{ editBoxFocusedVar = focusedVar
+		, editBoxBlinkVar = blinkVar
 		} = do
 		writeTVar focusedVar True
+		-- reset blinking (it's just more pleasant to see cursor immediately)
+		writeTVar blinkVar 0
 		return True
 
 	unfocusElement EditBox
