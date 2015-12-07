@@ -177,7 +177,30 @@ instance Element Panel where
 					Nothing -> return False
 			-- select by mouse event
 			case mouseEvent of
-				MouseDownEvent _mouseButton -> sendToLastChild
+				MouseDownEvent _mouseButton -> do
+					-- focus-by-click
+					lastMousedChild <- readTVar lastMousedChildVar
+					case lastMousedChild of
+						Just PanelChild
+							{ panelChildElement = SomeElement lastMousedChildElement
+							} -> do
+							-- get currently focused child
+							focusedChild <- readTVar focusedChildVar
+							-- if it's not the same one
+							when (lastMousedChild /= focusedChild) $ do
+								-- try to focus element under mouse
+								focusAccepted <- focusElement lastMousedChildElement
+								when focusAccepted $ do
+									writeTVar focusedChildVar lastMousedChild
+									-- unfocus previously focused child
+									case focusedChild of
+										Just PanelChild
+											{ panelChildElement = SomeElement focusedElement
+											} -> unfocusElement focusedElement
+										Nothing -> return ()
+							-- send mouse event in any case
+							processInputEvent lastMousedChildElement inputEvent inputState
+						Nothing -> return False
 				MouseUpEvent _mouseButton -> sendToLastChild
 				RawMouseMoveEvent _dx _dy _dz -> sendToLastChild
 				CursorMoveEvent x y -> do
