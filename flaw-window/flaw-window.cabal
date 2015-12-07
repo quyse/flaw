@@ -45,4 +45,4 @@ library
     else
       exposed-modules:
         Flaw.Window.Sdl
-      build-depends:       bytestring, flaw-base, flaw-sdl, sdl2 >= 2, unordered-containers
+      build-depends:       bytestring, flaw-base, flaw-sdl, sdl2 >= 2, unordered-containers, vector

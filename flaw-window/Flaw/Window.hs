@@ -9,6 +9,7 @@ License: MIT
 module Flaw.Window
 	( Window(..)
 	, WindowEvent(..)
+	, MouseCursor(..)
 	) where
 
 import Control.Concurrent.STM
@@ -29,6 +30,9 @@ class Window w where
 	-- | Set text as a content of clipboard.
 	setWindowClipboardText :: w -> T.Text -> IO ()
 
+	-- | Set mouse cursor.
+	setWindowMouseCursor :: w -> MouseCursor -> IO ()
+
 data WindowEvent
 	-- | User is trying to close window.
 	= CloseWindowEvent
@@ -38,3 +42,16 @@ data WindowEvent
 	| ResizeWindowEvent !Int !Int
 	-- | Window is activated or deactivated.
 	| ActivateWindowEvent !Bool
+
+data MouseCursor
+	= MouseCursorArrow
+	| MouseCursorWait
+	| MouseCursorWaitArrow
+	| MouseCursorIBeam
+	| MouseCursorSizeNWSE
+	| MouseCursorSizeNESW
+	| MouseCursorSizeWE
+	| MouseCursorSizeNS
+	| MouseCursorSizeAll
+	| MouseCursorHand
+	deriving (Eq, Bounded, Enum)

@@ -24,6 +24,7 @@ import Data.IORef
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
+import qualified Data.Vector as V
 import Data.Word
 import Foreign.C.String
 import Foreign.Marshal.Alloc
@@ -43,6 +44,7 @@ import Flaw.Window
 data SdlWindowSystem = SdlWindowSystem
 	{ swsWindows :: TVar (HashMap.HashMap Word32 SdlWindow)
 	, swsInvokeUserEventCode :: !Int32
+	, swsMouseCursors :: V.Vector SDL.Cursor
 	}
 
 data SdlWindow = SdlWindow
@@ -74,9 +76,14 @@ instance Window SdlWindow where
 			return $ T.decodeUtf8 bytes
 	setWindowClipboardText _ text = do
 		B.useAsCString (T.encodeUtf8 text) $ void . SDL.setClipboardText
+	setWindowMouseCursor SdlWindow
+		{ swSystem = SdlWindowSystem
+			{ swsMouseCursors = mouseCursors
+			}
+		} mouseCursor = SDL.setCursor $ mouseCursors V.! (fromEnum mouseCursor)
 
 initSdlWindowSystem :: Bool -> IO (SdlWindowSystem, IO ())
-initSdlWindowSystem debug = do
+initSdlWindowSystem debug = withSpecialBook $ \bk -> do
 
 	-- var for returning initialization result from SDL thread
 	initResultVar <- newEmptyMVar
@@ -85,8 +92,6 @@ initSdlWindowSystem debug = do
 	_ <- forkOS $ do
 
 		-- initialize
-
-		bk <- newBook
 
 		book bk initSdlVideo
 
@@ -107,11 +112,28 @@ initSdlWindowSystem debug = do
 
 		book bk $ return ((), shutdown)
 
+		-- mouse cursors
+		mouseCursors <- V.forM (V.fromList [minBound .. maxBound]) $ \mouseCursor -> do
+			let sdlSystemCursor = case mouseCursor of
+				MouseCursorArrow -> SDL.SDL_SYSTEM_CURSOR_ARROW
+				MouseCursorWait -> SDL.SDL_SYSTEM_CURSOR_WAIT
+				MouseCursorWaitArrow -> SDL.SDL_SYSTEM_CURSOR_WAITARROW
+				MouseCursorIBeam -> SDL.SDL_SYSTEM_CURSOR_IBEAM
+				MouseCursorSizeNWSE -> SDL.SDL_SYSTEM_CURSOR_SIZENWSE
+				MouseCursorSizeNESW -> SDL.SDL_SYSTEM_CURSOR_SIZENESW
+				MouseCursorSizeWE -> SDL.SDL_SYSTEM_CURSOR_SIZEWE
+				MouseCursorSizeNS -> SDL.SDL_SYSTEM_CURSOR_SIZENS
+				MouseCursorSizeAll -> SDL.SDL_SYSTEM_CURSOR_SIZEALL
+				MouseCursorHand -> SDL.SDL_SYSTEM_CURSOR_HAND
+			sdlCursor <- SDL.createSystemCursor sdlSystemCursor
+			book bk $ return (sdlCursor, SDL.freeCursor sdlCursor)
+
 		-- return result into initial thread
-		putMVar initResultVar (SdlWindowSystem
+		putMVar initResultVar SdlWindowSystem
 			{ swsWindows = windowsVar
 			, swsInvokeUserEventCode = invokeUserEventCode
-			}, freeBook bk)
+			, swsMouseCursors = mouseCursors
+			}
 
 		-- set common attributes
 		mapM_ (\(attr, value) -> checkSdlError (== 0) $ SDL.glSetAttribute attr value)
