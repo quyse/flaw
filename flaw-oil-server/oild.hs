@@ -36,17 +36,16 @@ main = run =<< O.execParser parser where
 		)
 	opts = Options
 		<$> O.strOption
-			(  O.long "repo"
-			<> O.short 'r'
+			(  O.short 'f'
 			<> O.metavar "FILE"
-			<> O.help "server repo database file"
+			<> O.help "Server repo file"
 			)
 		<*> O.option O.auto
 			(  O.long "port"
 			<> O.short 'p'
 			<> O.value 8080 <> O.showDefault
 			<> O.metavar "PORT"
-			<> O.help "port to listen at"
+			<> O.help "Port to listen at"
 			)
 
 data Options = Options
