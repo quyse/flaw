@@ -89,7 +89,7 @@ instance Element Button where
 				(Vec4 px (px + 1) (px + sx - 1) (px + sx))
 				(Vec4 py (py + 1) (py + sy - 1) (py + sy))
 				(styleFillColor style) (styleBorderColor style)
-			renderViewport $ Vec4 (px + 1) (py + 1) (px + sx - 2) (py + sy - 2)
+			renderRelativeViewport $ Vec4 (px + 1) (py + 1) (px + sx - 2) (py + sy - 2)
 			visualRender
 			when focused $ drawBorderedRectangle canvas
 				(Vec4 2 3 (sx - 5) (sx - 4))

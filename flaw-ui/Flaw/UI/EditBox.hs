@@ -140,7 +140,7 @@ instance Element EditBox where
 				(styleFillColor style) (styleBorderColor style)
 
 			-- constrain further rendering
-			renderViewport $ Vec4 (px + 1) (py + 1) (px + sx - 1) (py + sy - 1)
+			renderRelativeViewport $ Vec4 (px + 1) (py + 1) (px + sx - 1) (py + sy - 1)
 
 			-- manually shape glyphs
 			(runs@[beforeRun, selectedRun, afterRun], _advance) <- liftIO $ shapeText fontShaper [textBefore, textSelected, textAfter] textScript

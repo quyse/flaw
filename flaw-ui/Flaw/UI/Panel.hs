@@ -140,7 +140,7 @@ instance Element Panel where
 		renderChildren <- foldrM (\a b -> liftM (>> b) a) (return ()) $ map drawChild $ S.toAscList children
 		-- return
 		return $ renderScope $ do
-			renderViewport $ Vec4 px py (px + sx) (py + sy)
+			renderRelativeViewport $ Vec4 px py (px + sx) (py + sy)
 			drawBorderedRectangle canvas (Vec4 0 1 (sx - 1) sx) (Vec4 0 1 (sy - 1) sy) fillColor borderColor
 			renderChildren
 

@@ -37,6 +37,14 @@ module Flaw.Graphics
 	, renderPlay
 	, render
 	, present
+	, renderRelativeViewport
 	) where
 
 import Flaw.Graphics.Internal
+import Flaw.Math
+
+-- | Helper function to set up viewport relatively to currently set viewport.
+renderRelativeViewport :: Context c d => Vec4 Int -> Render c ()
+renderRelativeViewport (Vec4 left top right bottom) = do
+	Vec4 currentLeft currentTop _ _ <- renderGetViewport
+	renderViewport $ Vec4 (left + currentLeft) (top + currentTop) (right + currentLeft) (bottom + currentTop)
