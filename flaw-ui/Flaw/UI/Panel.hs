@@ -31,7 +31,6 @@ data Panel = Panel
 	, panelLayoutHandlerVar :: !(TVar (Size -> STM ()))
 	, panelSizeVar :: !(TVar Size)
 	, panelFocusedChildVar :: !(TVar (Maybe PanelChild))
-	, panelLastMouseCursorVar :: !(TVar (Maybe Position))
 	, panelLastMousedChildVar :: !(TVar (Maybe PanelChild))
 	}
 
@@ -48,7 +47,6 @@ newPanel = do
 	layoutHandlerVar <- newTVar $ \_ -> return ()
 	sizeVar <- newTVar $ Vec2 0 0
 	focusedChildVar <- newTVar Nothing
-	lastMouseCursorVar <- newTVar Nothing
 	lastMousedChildVar <- newTVar Nothing
 	return Panel
 		{ panelChildrenVar = childrenVar
@@ -56,7 +54,6 @@ newPanel = do
 		, panelLayoutHandlerVar = layoutHandlerVar
 		, panelSizeVar = sizeVar
 		, panelFocusedChildVar = focusedChildVar
-		, panelLastMouseCursorVar = lastMouseCursorVar
 		, panelLastMousedChildVar = lastMousedChildVar
 		}
 
@@ -150,6 +147,7 @@ instance Element Panel where
 		, panelLastMousedChildVar = lastMousedChildVar
 		} inputEvent inputState@InputState
 		{ inputStateKeyboard = keyboardState
+		, inputStateMouse = mouseState
 		} = case inputEvent of
 
 		KeyboardInputEvent keyboardEvent -> do
@@ -221,27 +219,32 @@ instance Element Panel where
 				MouseUpEvent _mouseButton -> sendToLastChild
 				RawMouseMoveEvent _dx _dy _dz -> sendToLastChild
 				CursorMoveEvent x y -> do
-					-- determine child with the mouse on it
-					let
-						pickChild (child@PanelChild
-							{ panelChildElement = SomeElement element
-							, panelChildPositionVar = childPositionVar
-							} : restChildren) point = do
-							-- correct position and ask child element
-							childPosition <- readTVar childPositionVar
-							r <- dabElement element $ point - childPosition
-							if r then return $ Just child else pickChild restChildren point
-						pickChild [] _point = return Nothing
-					mousedChild <- pickChild (S.toDescList children) $ Vec2 x y
-					-- update last moused child
-					lastMousedChild <- readTVar lastMousedChildVar
-					when (mousedChild /= lastMousedChild) $ do
-						writeTVar lastMousedChildVar mousedChild
-						case lastMousedChild of
-							Just PanelChild
-								{ panelChildElement = SomeElement lastMousedChildElement
-								} -> void $ processInputEvent lastMousedChildElement MouseLeaveEvent inputState
-							Nothing -> return ()
+					-- if no mouse button is pressed, we can update "moused" child
+					-- so we do "mouse capture" by default
+					mousePressed <- liftM or $ forM [minBound .. maxBound] $ getMouseButtonState mouseState
+					mousedChild <- if mousePressed then readTVar lastMousedChildVar else do
+						-- determine child with the mouse on it
+						let
+							pickChild (child@PanelChild
+								{ panelChildElement = SomeElement element
+								, panelChildPositionVar = childPositionVar
+								} : restChildren) point = do
+								-- correct position and ask child element
+								childPosition <- readTVar childPositionVar
+								r <- dabElement element $ point - childPosition
+								if r then return $ Just child else pickChild restChildren point
+							pickChild [] _point = return Nothing
+						mousedChild <- pickChild (S.toDescList children) $ Vec2 x y
+						-- update last moused child
+						lastMousedChild <- readTVar lastMousedChildVar
+						when (mousedChild /= lastMousedChild) $ do
+							writeTVar lastMousedChildVar mousedChild
+							case lastMousedChild of
+								Just PanelChild
+									{ panelChildElement = SomeElement lastMousedChildElement
+									} -> void $ processInputEvent lastMousedChildElement MouseLeaveEvent inputState
+								Nothing -> return ()
+						return mousedChild
 					-- if mouse points to some element now
 					case mousedChild of
 						Just PanelChild
