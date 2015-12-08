@@ -23,6 +23,7 @@ library
     Flaw.UI.Button
     Flaw.UI.Drawer
     Flaw.UI.EditBox
+    Flaw.UI.Frame
     Flaw.UI.Label
     Flaw.UI.Panel
     Flaw.UI.Window

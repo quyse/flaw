@@ -76,6 +76,10 @@ data DrawerStyles d = DrawerStyles
 	-- | "Raised" style variant.
 	-- Used for buttons.
 	, drawerRaisedStyleVariant :: !StyleVariant
+
+	, drawerFrameOuterNormalStyle :: !Style
+	, drawerFrameOuterFocusedStyle :: !Style
+	, drawerFrameInnerStyle :: !Style
 	}
 
 data StyleVariant = StyleVariant
