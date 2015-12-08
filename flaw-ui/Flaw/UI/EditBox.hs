@@ -308,8 +308,11 @@ instance Element EditBox where
 					else return False
 				_ -> return False
 			CharEvent char -> do
-				replaceSelection $ T.singleton char
-				return True
+				-- ignore control characters
+				if char > '\x1f' then do
+					replaceSelection $ T.singleton char
+					return True
+				else return False
 			_ -> return False
 		MouseInputEvent mouseEvent -> case mouseEvent of
 			CursorMoveEvent _x _y -> do
