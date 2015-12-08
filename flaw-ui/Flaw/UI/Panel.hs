@@ -18,12 +18,10 @@ import Data.Maybe
 import qualified Data.Set as S
 
 import Flaw.Graphics
-import Flaw.Graphics.Canvas
 import Flaw.Input.Keyboard
 import Flaw.Input.Mouse
 import Flaw.Math
 import Flaw.UI
-import Flaw.UI.Drawer
 
 data Panel = Panel
 	{ panelChildrenVar :: !(TVar (S.Set PanelChild))
@@ -114,17 +112,7 @@ instance Element Panel where
 	renderElement Panel
 		{ panelChildrenVar = childrenVar
 		, panelSizeVar = sizeVar
-		} drawer@Drawer
-		{ drawerCanvas = canvas
-		, drawerStyles = DrawerStyles
-			{ drawerFlatStyleVariant = StyleVariant
-				{ styleVariantNormalStyle = Style
-					{ styleFillColor = fillColor
-					, styleBorderColor = borderColor
-					}
-				}
-			}
-		} position@(Vec2 px py) = do
+		} drawer (Vec2 px py) = do
 		Vec2 sx sy <- readTVar sizeVar
 		-- compose rendering of children
 		children <- readTVar childrenVar
@@ -133,12 +121,11 @@ instance Element Panel where
 			, panelChildPositionVar = childPositionVar
 			} = do
 			childPosition <- readTVar childPositionVar
-			renderElement element drawer $ position + childPosition
+			renderElement element drawer childPosition
 		renderChildren <- foldrM (\a b -> liftM (>> b) a) (return ()) $ map drawChild $ S.toAscList children
 		-- return
 		return $ renderScope $ do
 			renderRelativeViewport $ Vec4 px py (px + sx) (py + sy)
-			drawBorderedRectangle canvas (Vec4 0 1 (sx - 1) sx) (Vec4 0 1 (sy - 1) sy) fillColor borderColor
 			renderChildren
 
 	processInputEvent panel@Panel
