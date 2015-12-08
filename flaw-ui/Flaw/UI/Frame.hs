@@ -188,7 +188,7 @@ instance Element FrameResizeElement where
 
 	elementMouseCursor FrameResizeElement
 		{ freMouseCursor = mouseCursor
-		} _ = return mouseCursor
+		} = return mouseCursor
 
 	renderElement _ _ _ = return $ return ()
 
@@ -208,7 +208,7 @@ instance Element Frame where
 
 	elementMouseCursor Frame
 		{ framePanel = panel
-		} point = elementMouseCursor panel point
+		} = elementMouseCursor panel
 
 	renderElement Frame
 		{ framePanel = panel@Panel

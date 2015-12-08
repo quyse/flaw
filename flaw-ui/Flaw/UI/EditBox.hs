@@ -75,7 +75,7 @@ instance Element EditBox where
 			Vec2 sx sy <- readTVar sizeVar
 			return $ x < sx && y < sy
 
-	elementMouseCursor _ _ = return MouseCursorIBeam
+	elementMouseCursor _ = return MouseCursorIBeam
 
 	renderElement EditBox
 		{ editBoxTextVar = textVar

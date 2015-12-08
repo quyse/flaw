@@ -93,21 +93,14 @@ instance Element Panel where
 				dabChildren $ S.toDescList children
 
 	elementMouseCursor Panel
-		{ panelChildrenVar = childrenVar
-		} point = do
-		children <- readTVar childrenVar
-		let
-			childrenMouseCursor (PanelChild
-				{ panelChildElement = SomeElement element
-				, panelChildPositionVar = childPositionVar
-				} : restChildren) = do
-				childPosition <- readTVar childPositionVar
-				let childPoint = point - childPosition
-				r <- dabElement element childPoint
-				if r then elementMouseCursor element childPoint
-				else childrenMouseCursor restChildren
-			childrenMouseCursor [] = return MouseCursorArrow
-		childrenMouseCursor $ S.toDescList children
+		{ panelLastMousedChildVar = lastMousedChildVar
+		} = do
+		lastMousedChild <- readTVar lastMousedChildVar
+		case lastMousedChild of
+			Just PanelChild
+				{ panelChildElement = SomeElement childElement
+				} -> elementMouseCursor childElement
+			Nothing -> return MouseCursorArrow
 
 	renderElement Panel
 		{ panelChildrenVar = childrenVar

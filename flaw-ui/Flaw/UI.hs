@@ -64,8 +64,8 @@ class Element a where
 	-- Visual can return False for "holes".
 	dabElement :: a -> Position -> STM Bool
 	-- | Get mouse cursor element wants to show over.
-	elementMouseCursor :: a -> Position -> STM MouseCursor
-	elementMouseCursor _ _ = return MouseCursorArrow
+	elementMouseCursor :: a -> STM MouseCursor
+	elementMouseCursor _ = return MouseCursorArrow
 	-- | Render element.
 	-- Size is set by previous call to 'layout'. It's parent element's responsibility
 	-- to correctly constrain viewport.

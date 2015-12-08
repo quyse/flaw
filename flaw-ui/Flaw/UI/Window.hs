@@ -148,8 +148,7 @@ processWindow Window
 
 	-- update mouse cursor if needed
 	atomically $ do
-		(mouseCursorX, mouseCursorY) <- getMouseCursor mouseState
-		mouseCursor <- elementMouseCursor element $ Vec2 mouseCursorX mouseCursorY
+		mouseCursor <- elementMouseCursor element
 		currentMouseCursor <- readTVar mouseCursorVar
 		when (mouseCursor /= currentMouseCursor) $ do
 			writeTQueue actionsQueue $ W.setWindowMouseCursor nativeWindow mouseCursor
