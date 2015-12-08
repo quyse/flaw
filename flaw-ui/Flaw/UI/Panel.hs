@@ -336,6 +336,10 @@ instance FreeContainer Panel where
 		{ panelChildPositionVar = childPositionVar
 		} position = writeTVar childPositionVar position
 
+	placeFreeChildRelatively _panel PanelChild
+		{ panelChildPositionVar = childPositionVar
+		} positionChange = modifyTVar' childPositionVar (+positionChange)
+
 -- | Helper function, trying to focus first child in a list accepting the focus.
 -- Writes index of a child accepted focus to panel.
 focusSomeChild :: Panel -> [PanelChild] -> STM Bool

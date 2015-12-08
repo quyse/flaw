@@ -13,15 +13,17 @@ module Flaw.UI
 	, Visual(..)
 	, SomeVisual(..)
 	, Element(..)
-	, SomeElement(..)
-	, FreeContainer(..)
 	, InputEvent(..)
 	, InputState(..)
+	, SomeElement(..)
 	, HasText(..)
 	, HasClickHandler(..)
 	, HasChecked(..)
 	, HasProgress(..)
 	, Progress(..)
+	, FreeContainer(..)
+	, DraggableInFreeContainer(..)
+	, SomeFreeChild(..)
 	, MouseCursor(..) -- re-export from Flaw.Window
 	) where
 
@@ -79,27 +81,11 @@ class Element a where
 	-- in case of False container may try to give focus to
 	-- another element.
 	focusElement :: a -> STM Bool
+	focusElement _ = return False
 	-- | Container takes keyboard focus back.
 	-- Element has to release focus.
 	unfocusElement :: a -> STM ()
-
--- | Any element.
-data SomeElement where
-	SomeElement :: Element a => !a -> SomeElement
-
--- | Free container is an element able to place other elements
--- freely with explicit positions.
-class Element a => FreeContainer a where
-	-- | Handle of child element added to free container.
-	type FreeContainerChild a :: *
-	-- | Set free container handler of 'layout' method.
-	setLayoutHandler :: a -> (Size -> STM ()) -> STM ()
-	-- | Add child element to free container.
-	addFreeChild :: Element e => a -> e -> STM (FreeContainerChild a)
-	-- | Remove child element from free container.
-	removeFreeChild :: a -> FreeContainerChild a -> STM ()
-	-- | Set position of child element in free container.
-	placeFreeChild :: a -> FreeContainerChild a -> Position -> STM ()
+	unfocusElement _ = return ()
 
 -- | Input events.
 -- State of keyboard/mouse is provided before applying event.
@@ -122,6 +108,10 @@ data InputState = InputState
 	, inputStateSetClipboardText :: T.Text -> STM ()
 	}
 
+-- | Any element.
+data SomeElement where
+	SomeElement :: Element a => !a -> SomeElement
+
 class HasText a where
 	setText :: a -> T.Text -> STM ()
 	setTextScript :: a -> FontScript -> STM ()
@@ -136,3 +126,28 @@ class HasProgress a where
 	setProgress :: a -> Progress -> STM ()
 
 data Progress = Progress Float | IndeterminateProgress
+
+-- | Free container is an element able to place other elements
+-- freely with explicit positions.
+class Element a => FreeContainer a where
+	-- | Handle of child element added to free container.
+	type FreeContainerChild a :: *
+	-- | Set free container handler of 'layout' method.
+	setLayoutHandler :: a -> (Size -> STM ()) -> STM ()
+	-- | Add child element to free container.
+	addFreeChild :: Element e => a -> e -> STM (FreeContainerChild a)
+	-- | Remove child element from free container.
+	removeFreeChild :: a -> FreeContainerChild a -> STM ()
+	-- | Set position of child element in free container.
+	placeFreeChild :: a -> FreeContainerChild a -> Position -> STM ()
+	-- | Move child element relatively its current position.
+	placeFreeChildRelatively :: a -> FreeContainerChild a -> Vec2 Int -> STM ()
+
+-- | Class of element which could be moved by mouse.
+class Element a => DraggableInFreeContainer a where
+	-- | Tell element a "free child" object used for placement this element.
+	-- After that element becomes movable.
+	setSelfFreeChild :: FreeContainer fc => a -> fc -> FreeContainerChild fc -> STM ()
+
+data SomeFreeChild where
+	SomeFreeChild :: FreeContainer fc => fc -> FreeContainerChild fc -> SomeFreeChild
