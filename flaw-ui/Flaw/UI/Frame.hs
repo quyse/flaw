@@ -203,8 +203,14 @@ instance Element Frame where
 		} size = layoutElement panel size
 
 	dabElement Frame
-		{ framePanel = panel
-		} size = dabElement panel size
+		{ framePanel = Panel
+			{ panelSizeVar = sizeVar
+			}
+		} (Vec2 x y) = do
+		if x < 0 || y < 0 then return False
+		else do
+			Vec2 sx sy <- readTVar sizeVar
+			return $ x < sx && y < sy
 
 	elementMouseCursor Frame
 		{ framePanel = panel
