@@ -7,9 +7,25 @@ const TCHAR wndClassName[] = TEXT("wc");
 
 typedef void (*InvokeCallback)();
 
+// must correspond to MouseCursor haskell enumeration.
+const LPCTSTR cursorNames[] =
+{
+	IDC_ARROW,
+	IDC_WAIT,
+	IDC_APPSTARTING,
+	IDC_IBEAM,
+	IDC_SIZENWSE,
+	IDC_SIZENESW,
+	IDC_SIZEWE,
+	IDC_SIZENS,
+	IDC_SIZEALL,
+	IDC_HAND
+};
+
 typedef struct
 {
 	HANDLE thread;
+	HCURSOR cursors[sizeof(cursorNames) / sizeof(cursorNames[0])];
 } Win32WindowSystem;
 
 typedef void (*Win32WindowCallback)(UINT msg, WPARAM wParam, LPARAM lParam);
@@ -24,6 +40,7 @@ typedef struct
 	Win32WindowCallback callback;
 	int clientWidth;
 	int clientHeight;
+	HCURSOR cursor;
 } Win32Window;
 
 Win32Window* initWin32Window(Win32WindowSystem* windowSystem, Win32WindowCallback callback)
@@ -36,7 +53,8 @@ Win32Window* initWin32Window(Win32WindowSystem* windowSystem, Win32WindowCallbac
 	window->bmpLayeredData = NULL;
 	window->callback = callback;
 	window->clientWidth = 0;
-	window->clientHeight =0;
+	window->clientHeight = 0;
+	window->cursor = windowSystem->cursors[0];
 	return window;
 }
 
@@ -73,6 +91,14 @@ LRESULT WINAPI wndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		SetWindowLongPtr(hWnd, GWLP_USERDATA, 0);
 		freeWin32Window(window);
 		break;
+	case WM_SETCURSOR:
+		if(LOWORD(lParam) == HTCLIENT)
+		{
+			SetCursor(window->cursor);
+			return 0;
+		}
+		else
+			return DefWindowProc(hWnd, msg, wParam, lParam);
 	}
 
 	// callback
@@ -109,6 +135,12 @@ Win32WindowSystem* initWin32WindowSystem()
 	HANDLE currentThread = GetCurrentThread();
 	DuplicateHandle(GetCurrentProcess(), currentThread, GetCurrentProcess(), &windowSystem->thread, THREAD_SET_CONTEXT, FALSE, 0);
 
+	// load cursors
+	for(size_t i = 0; i < sizeof(cursorNames) / sizeof(cursorNames[i]); ++i)
+	{
+		windowSystem->cursors[i] = LoadCursor(NULL, cursorNames[i]);
+	}
+
 	return windowSystem;
 }
 
@@ -139,6 +171,12 @@ void runWin32WindowSystem(Win32WindowSystem* windowSystem)
 			// anything else is an error
 			return;
 	}
+}
+
+void setMouseCursor(HWND hWnd, int cursor)
+{
+	Win32Window* window = getWin32Window(hWnd);
+	window->cursor = window->windowSystem->cursors[cursor];
 }
 
 void createLayeredBitmap(Win32Window* window, HDC hdcScreen)
@@ -231,6 +269,50 @@ void getLayeredWin32WindowBitmapData(HWND hWnd, void** bmpData, int* width, int*
 	*width = window->clientWidth;
 	*height = window->clientHeight;
 	*pitch = window->clientWidth * 4;
+}
+
+LPCWSTR getClipboardTextBegin(HWND hWnd, HANDLE* phMem, int* pLen)
+{
+	if(!OpenClipboard(hWnd))
+		return NULL;
+	*phMem = GetClipboardData(CF_UNICODETEXT);
+	if(!*phMem)
+	{
+		CloseClipboard();
+		return NULL;
+	}
+	LPCWSTR str = (LPCWSTR)GlobalLock(*phMem);
+	if(!str)
+	{
+		CloseClipboard();
+		return NULL;
+	}
+	*pLen = wcslen(str);
+	return str;
+}
+
+void getClipboardTextEnd(HANDLE hMem)
+{
+	GlobalUnlock(hMem);
+	CloseClipboard();
+}
+
+void setClipboardText(HWND hWnd, LPWSTR str)
+{
+	if(OpenClipboard(hWnd))
+	{
+		EmptyClipboard();
+		size_t size = (wcslen(str) + 1) * sizeof(WCHAR);
+		HANDLE hMem = GlobalAlloc(GMEM_MOVEABLE, size);
+		if(hMem)
+		{
+			void* strCopy = GlobalLock(hMem);
+			memcpy(strCopy, str, size);
+			GlobalUnlock(hMem);
+			SetClipboardData(CF_UNICODETEXT, hMem);
+		}
+		CloseClipboard();
+	}
 }
 
 void setWin32WindowTitle(HWND hWnd, LPCTSTR title)

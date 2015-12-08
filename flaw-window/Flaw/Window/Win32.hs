@@ -26,9 +26,11 @@ import Control.Monad
 import Control.Monad.Fix
 import Data.IORef
 import qualified Data.Text as T
+import qualified Data.Text.Foreign as T
 import Foreign.C.String
 import Foreign.C.Types
 import Foreign.Marshal.Alloc
+import Foreign.Marshal.Array
 import Foreign.Ptr
 import Foreign.Storable
 
@@ -65,6 +67,31 @@ instance Window Win32Window where
 	chanWindowEvents Win32Window
 		{ wEventsChan = eventsChan
 		} = dupTChan eventsChan
+	getWindowClipboardText Win32Window
+		{ wWindowSystem = ws
+		, wHandle = hwnd
+		} = invokeWin32WindowSystem ws $ do
+		alloca $ \memPtr -> alloca $ \lenPtr -> do
+			strPtr <- c_getClipboardTextBegin hwnd memPtr lenPtr
+			if strPtr /= nullPtr then do
+				len <- peek lenPtr
+				text <- T.fromPtr strPtr $ fromIntegral len
+				c_getClipboardTextEnd =<< peek memPtr
+				return text
+			else return T.empty
+	setWindowClipboardText Win32Window
+		{ wWindowSystem = ws
+		, wHandle = hwnd
+		} text = invokeWin32WindowSystem ws $ do
+		let len = T.lengthWord16 text
+		allocaArray (len + 1) $ \ptr -> do
+			T.unsafeCopyToPtr text ptr
+			pokeElemOff ptr len 0
+			c_setClipboardText hwnd ptr
+	setWindowMouseCursor Win32Window
+		{ wWindowSystem = ws
+		, wHandle = hwnd
+		} mouseCursor = invokeWin32WindowSystem_ ws $ c_setMouseCursor hwnd $ fromIntegral $ fromEnum mouseCursor
 
 initWin32WindowSystem :: IO (Win32WindowSystem, IO ())
 initWin32WindowSystem = do
@@ -214,6 +241,10 @@ foreign import ccall unsafe "createWin32Window" c_createWin32Window
 foreign import ccall unsafe "setWin32WindowTitle" c_setWin32WindowTitle :: HWND -> LPWSTR -> IO ()
 foreign import ccall unsafe "getWin32WindowClientSize" c_getWin32WindowClientSize :: HWND -> Ptr CInt -> Ptr CInt -> IO ()
 foreign import ccall unsafe "destroyWin32Window" c_destroyWin32Window :: HWND -> IO ()
+foreign import ccall unsafe "getClipboardTextBegin" c_getClipboardTextBegin :: HWND -> Ptr HANDLE -> Ptr CInt -> IO (Ptr WCHAR)
+foreign import ccall unsafe "getClipboardTextEnd" c_getClipboardTextEnd :: HANDLE -> IO ()
+foreign import ccall unsafe "setClipboardText" c_setClipboardText :: HWND -> Ptr WCHAR -> IO ()
+foreign import ccall unsafe "setMouseCursor" c_setMouseCursor :: HWND -> CInt -> IO ()
 foreign import ccall unsafe "updateLayeredWin32Window" c_updateLayeredWin32Window :: HWND -> IO ()
 foreign import ccall unsafe "getLayeredWin32WindowBitmapData" c_getLayeredWin32WindowBitmapData :: HWND -> Ptr (Ptr CUChar) -> Ptr CInt -> Ptr CInt -> Ptr CInt -> IO ()
 
