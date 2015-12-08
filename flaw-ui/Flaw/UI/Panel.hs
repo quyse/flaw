@@ -14,6 +14,7 @@ module Flaw.UI.Panel
 import Control.Monad
 import Control.Concurrent.STM
 import Data.Foldable
+import Data.List
 import Data.Maybe
 import qualified Data.Set as S
 
@@ -26,6 +27,7 @@ import Flaw.UI
 data Panel = Panel
 	{ panelChildrenVar :: !(TVar (S.Set PanelChild))
 	, panelChildIndexVar :: !(TVar Int)
+	, panelChildrenRenderOrderVar :: !(TVar [PanelChild])
 	, panelLayoutHandlerVar :: !(TVar (Size -> STM ()))
 	, panelSizeVar :: !(TVar Size)
 	, panelFocusedChildVar :: !(TVar (Maybe PanelChild))
@@ -42,6 +44,7 @@ newPanel :: STM Panel
 newPanel = do
 	childrenVar <- newTVar S.empty
 	childIndexVar <- newTVar 0
+	childrenRenderOrderVar <- newTVar []
 	layoutHandlerVar <- newTVar $ \_ -> return ()
 	sizeVar <- newTVar $ Vec2 0 0
 	focusedChildVar <- newTVar Nothing
@@ -49,6 +52,7 @@ newPanel = do
 	return Panel
 		{ panelChildrenVar = childrenVar
 		, panelChildIndexVar = childIndexVar
+		, panelChildrenRenderOrderVar = childrenRenderOrderVar
 		, panelLayoutHandlerVar = layoutHandlerVar
 		, panelSizeVar = sizeVar
 		, panelFocusedChildVar = focusedChildVar
@@ -103,19 +107,19 @@ instance Element Panel where
 			Nothing -> return MouseCursorArrow
 
 	renderElement Panel
-		{ panelChildrenVar = childrenVar
+		{ panelChildrenRenderOrderVar = childrenRenderOrderVar
 		, panelSizeVar = sizeVar
 		} drawer (Vec2 px py) = do
 		Vec2 sx sy <- readTVar sizeVar
 		-- compose rendering of children
-		children <- readTVar childrenVar
+		childrenRenderOrder <- readTVar childrenRenderOrderVar
 		let drawChild PanelChild
 			{ panelChildElement = SomeElement element
 			, panelChildPositionVar = childPositionVar
 			} = do
 			childPosition <- readTVar childPositionVar
 			renderElement element drawer childPosition
-		renderChildren <- foldrM (\a b -> liftM (>> b) a) (return ()) $ map drawChild $ S.toAscList children
+		renderChildren <- foldrM (\a b -> liftM (>> b) a) (return ()) $ map drawChild childrenRenderOrder
 		-- return
 		return $ renderScope $ do
 			renderRelativeViewport $ Vec4 px py (px + sx) (py + sy)
@@ -123,6 +127,7 @@ instance Element Panel where
 
 	processInputEvent panel@Panel
 		{ panelChildrenVar = childrenVar
+		, panelChildrenRenderOrderVar = childrenRenderOrderVar
 		, panelFocusedChildVar = focusedChildVar
 		, panelLastMousedChildVar = lastMousedChildVar
 		} inputEvent inputState@InputState
@@ -161,7 +166,6 @@ instance Element Panel where
 				Nothing -> ownProcessEvent
 
 		MouseInputEvent mouseEvent -> do
-			children <- readTVar childrenVar
 			-- send event to last moused child (without any correction)
 			let sendToLastChild = do
 				lastMousedChild <- readTVar lastMousedChildVar
@@ -214,7 +218,8 @@ instance Element Panel where
 								r <- dabElement element $ point - childPosition
 								if r then return $ Just child else pickChild restChildren point
 							pickChild [] _point = return Nothing
-						mousedChild <- pickChild (S.toDescList children) $ Vec2 x y
+						childrenRenderOrder <- readTVar childrenRenderOrderVar
+						mousedChild <- pickChild (reverse childrenRenderOrder) $ Vec2 x y
 						-- update last moused child
 						lastMousedChild <- readTVar lastMousedChildVar
 						when (mousedChild /= lastMousedChild) $ do
@@ -276,6 +281,7 @@ instance FreeContainer Panel where
 	addFreeChild Panel
 		{ panelChildrenVar = childrenVar
 		, panelChildIndexVar = childIndexVar
+		, panelChildrenRenderOrderVar = childrenRenderOrderVar
 		} element = do
 		-- get index for new child
 		childIndex <- readTVar childIndexVar
@@ -287,14 +293,17 @@ instance FreeContainer Panel where
 			, panelChildElement = SomeElement element
 			, panelChildPositionVar = positionVar
 			}
-		-- add it to map
+		-- add it
 		children <- readTVar childrenVar
 		writeTVar childrenVar $ S.insert child children
+		childrenRenderOrder <- readTVar childrenRenderOrderVar
+		writeTVar childrenRenderOrderVar $ child : childrenRenderOrder
 		-- return
 		return child
 
 	removeFreeChild panel@Panel
 		{ panelChildrenVar = childrenVar
+		, panelChildrenRenderOrderVar = childrenRenderOrderVar
 		, panelFocusedChildVar = focusedChildVar
 		} child@PanelChild
 		{ panelChildElement = SomeElement element
@@ -314,6 +323,8 @@ instance FreeContainer Panel where
 			return ()
 		-- write new children
 		writeTVar childrenVar newChildren
+		-- remove from render order
+		modifyTVar' childrenRenderOrderVar $ delete child
 
 	placeFreeChild _panel PanelChild
 		{ panelChildPositionVar = childPositionVar
@@ -322,6 +333,10 @@ instance FreeContainer Panel where
 	placeFreeChildRelatively _panel PanelChild
 		{ panelChildPositionVar = childPositionVar
 		} positionChange = modifyTVar' childPositionVar (+positionChange)
+
+	bringFreeChildOnTop Panel
+		{ panelChildrenRenderOrderVar = childrenRenderOrderVar
+		} child = modifyTVar' childrenRenderOrderVar $ (++ [child]) . delete child
 
 -- | Helper function, trying to focus first child in a list accepting the focus.
 -- Writes index of a child accepted focus to panel.

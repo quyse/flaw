@@ -271,9 +271,15 @@ instance Element Frame where
 	focusElement Frame
 		{ framePanel = panel
 		, frameFocusedVar = focusedVar
+		, frameFreeChildVar = freeChildVar
 		} = do
 		writeTVar focusedVar True
 		void $ focusElement panel
+		-- try to bring frame to top
+		maybeSomeFreeChild <- readTVar freeChildVar
+		case maybeSomeFreeChild of
+			Just (SomeFreeChild container freeChild) -> bringFreeChildOnTop container freeChild
+			Nothing -> return ()
 		return True
 
 	unfocusElement Frame

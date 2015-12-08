@@ -142,6 +142,8 @@ class Element a => FreeContainer a where
 	placeFreeChild :: a -> FreeContainerChild a -> Position -> STM ()
 	-- | Move child element relatively its current position.
 	placeFreeChildRelatively :: a -> FreeContainerChild a -> Vec2 Int -> STM ()
+	-- | Bring element to the end of render list (in order to render on top of everything).
+	bringFreeChildOnTop :: a -> FreeContainerChild a -> STM ()
 
 -- | Class of element which could be moved by mouse.
 class Element a => DraggableInFreeContainer a where
