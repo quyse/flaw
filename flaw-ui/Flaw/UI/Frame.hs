@@ -22,6 +22,7 @@ import Flaw.Input.Mouse
 import Flaw.Math
 import Flaw.UI
 import Flaw.UI.Drawer
+import Flaw.UI.Metrics
 import Flaw.UI.Panel
 
 data Frame = Frame
@@ -34,22 +35,13 @@ data Frame = Frame
 	, frameResizableVar :: !(TVar Bool)
 	}
 
--- TODO: do something with hardcoded metrics
-frameClientLeft :: Int
-frameClientLeft = 5
-frameClientTop :: Int
-frameClientTop = 25
-frameClientRight :: Int
-frameClientRight = 5
-frameClientBottom :: Int
-frameClientBottom = 5
-frameTopBorder :: Int
-frameTopBorder = 5
-
 -- | Create frame.
 -- Internally frame uses panel, and places multiple special elements on it.
-newFrame :: Element e => e -> STM Frame
-newFrame element = do
+newFrame :: Element e => e -> Metrics -> STM Frame
+newFrame element Metrics
+	{ metricsFrameClient = Vec4 clientLeft clientTop clientRight clientBottom
+	, metricsFrameTopBorder = topBorder
+	} = do
 	-- create panel
 	panel@Panel
 		{ panelSizeVar = pnlSizeVar
@@ -86,11 +78,10 @@ newFrame element = do
 				MouseDownEvent LeftMouseButton -> do
 					-- if we don't have free child, don't even remember last mouse position
 					maybeSomeFreeChild <- readTVar freeChildVar
-					if isJust maybeSomeFreeChild then do
+					when (isJust maybeSomeFreeChild) $ do
 						(x, y) <- getMouseCursor mouseState
 						writeTVar lastMousePositionVar $ Just $ Vec2 x y
-						return True
-					else return False
+					return True
 				CursorMoveEvent _x _y -> do
 					lastMousePosition <- readTVar lastMousePositionVar
 					case lastMousePosition of
@@ -149,35 +140,35 @@ newFrame element = do
 	-- set layout function
 	setLayoutHandler panel $ \(Vec2 sx sy) -> do
 		-- element
-		placeFreeChild panel elementChild $ Vec2 frameClientLeft frameClientTop
-		layoutElement element $ Vec2 (sx - frameClientLeft - frameClientRight) (sy - frameClientTop - frameClientBottom)
+		placeFreeChild panel elementChild $ Vec2 clientLeft clientTop
+		layoutElement element $ Vec2 (sx - clientLeft - clientRight) (sy - clientTop - clientBottom)
 		-- NW
 		placeFreeChild panel freNWChild $ Vec2 0 0
-		layoutElement freNW $ Vec2 frameClientLeft frameTopBorder
+		layoutElement freNW $ Vec2 clientLeft topBorder
 		-- W
-		placeFreeChild panel freWChild $ Vec2 0 frameTopBorder
-		layoutElement freW $ Vec2 frameClientLeft (sy - frameTopBorder - frameClientBottom)
+		placeFreeChild panel freWChild $ Vec2 0 topBorder
+		layoutElement freW $ Vec2 clientLeft (sy - topBorder - clientBottom)
 		-- SW
-		placeFreeChild panel freSWChild $ Vec2 0 (sy - frameClientBottom)
-		layoutElement freSW $ Vec2 frameClientLeft frameClientBottom
+		placeFreeChild panel freSWChild $ Vec2 0 (sy - clientBottom)
+		layoutElement freSW $ Vec2 clientLeft clientBottom
 		-- N
-		placeFreeChild panel freNChild $ Vec2 frameClientLeft 0
-		layoutElement freN $ Vec2 (sx - frameClientLeft - frameClientRight) frameTopBorder
+		placeFreeChild panel freNChild $ Vec2 clientLeft 0
+		layoutElement freN $ Vec2 (sx - clientLeft - clientRight) topBorder
 		-- M
-		placeFreeChild panel freMChild $ Vec2 frameClientLeft frameTopBorder
-		layoutElement freM $ Vec2 (sx - frameClientLeft - frameClientRight) (frameClientTop - frameTopBorder)
+		placeFreeChild panel freMChild $ Vec2 clientLeft topBorder
+		layoutElement freM $ Vec2 (sx - clientLeft - clientRight) (clientTop - topBorder)
 		-- S
-		placeFreeChild panel freSChild $ Vec2 frameClientLeft (sy - frameClientBottom)
-		layoutElement freS $ Vec2 (sx - frameClientLeft - frameClientRight) frameClientBottom
+		placeFreeChild panel freSChild $ Vec2 clientLeft (sy - clientBottom)
+		layoutElement freS $ Vec2 (sx - clientLeft - clientRight) clientBottom
 		-- NE
-		placeFreeChild panel freNEChild $ Vec2 (sx - frameClientRight) 0
-		layoutElement freNE $ Vec2 frameClientRight frameTopBorder
+		placeFreeChild panel freNEChild $ Vec2 (sx - clientRight) 0
+		layoutElement freNE $ Vec2 clientRight topBorder
 		-- E
-		placeFreeChild panel freEChild $ Vec2 (sx - frameClientRight) frameTopBorder
-		layoutElement freE $ Vec2 frameClientRight (sy - frameTopBorder - frameClientBottom)
+		placeFreeChild panel freEChild $ Vec2 (sx - clientRight) topBorder
+		layoutElement freE $ Vec2 clientRight (sy - topBorder - clientBottom)
 		-- SE
-		placeFreeChild panel freSEChild $ Vec2 (sx - frameClientRight) (sy - frameClientBottom)
-		layoutElement freSE $ Vec2 frameClientRight frameClientBottom
+		placeFreeChild panel freSEChild $ Vec2 (sx - clientRight) (sy - clientBottom)
+		layoutElement freSE $ Vec2 clientRight clientBottom
 
 	return frame
 
@@ -245,7 +236,11 @@ instance Element Frame where
 		{ drawerCanvas = canvas
 		, drawerGlyphRenderer = glyphRenderer
 		, drawerStyles = DrawerStyles
-			{ drawerTitleFont = DrawerFont
+			{ drawerMetrics = Metrics
+				{ metricsFrameClient = Vec4 clientLeft clientTop clientRight clientBottom
+				, metricsFrameTopBorder = topBorder
+				}
+			, drawerTitleFont = DrawerFont
 				{ drawerFontRenderableFont = renderableFont
 				, drawerFontShaper = SomeFontShaper fontShaper
 				}
@@ -270,13 +265,13 @@ instance Element Frame where
 			-- render text
 			renderGlyphs glyphRenderer renderableFont $ do
 				renderTexts fontShaper [(text, styleTextColor outerStyle)] textScript
-					(Vec2 (fromIntegral $ px + (sx - frameClientLeft - frameClientRight) `div` 2) (fromIntegral $ py + frameTopBorder + (frameClientTop - frameTopBorder) `div` 2))
+					(Vec2 (fromIntegral $ px + (sx - clientLeft - clientRight) `div` 2) (fromIntegral $ py + topBorder + (clientTop - topBorder) `div` 2))
 					RenderTextCursorCenter RenderTextCursorMiddle
 
 			-- draw inner frame
 			drawBorderedRectangle canvas
-				(Vec4 (px + frameClientLeft - 1) (px + frameClientLeft) (px + sx - frameClientRight) (px + sx - frameClientRight + 1))
-				(Vec4 (py + frameClientTop - 1) (py + frameClientTop) (py + sy - frameClientBottom) (py + sy - frameClientBottom + 1))
+				(Vec4 (px + clientLeft - 1) (px + clientLeft) (px + sx - clientRight) (px + sx - clientRight + 1))
+				(Vec4 (py + clientTop - 1) (py + clientTop) (py + sy - clientBottom) (py + sy - clientBottom + 1))
 				(styleFillColor innerStyle) (styleFillColor innerStyle)
 
 			-- render panel

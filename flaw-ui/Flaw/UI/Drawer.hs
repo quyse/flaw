@@ -23,6 +23,7 @@ import Flaw.Graphics.Canvas
 import Flaw.Graphics.Font
 import Flaw.Graphics.Font.Render
 import Flaw.Math
+import Flaw.UI.Metrics
 
 -- | Drawer data.
 data Drawer d = Drawer
@@ -58,9 +59,11 @@ setDrawerFrameTime Drawer
 -- | Style information.
 data DrawerStyles d = DrawerStyles
 	{
+	-- | Metrics.
+	  drawerMetrics :: !Metrics
 	-- | Label font for UI.
 	-- For normal labels, buttons, etc.
-	  drawerLabelFont :: !(DrawerFont d)
+	, drawerLabelFont :: !(DrawerFont d)
 	-- | Edit font for UI.
 	-- For text entered by user.
 	, drawerEditFont :: !(DrawerFont d)

@@ -10,6 +10,7 @@ module Flaw.UI
 	( Metric
 	, Position
 	, Size
+	, Rect
 	, Visual(..)
 	, SomeVisual(..)
 	, Element(..)
@@ -36,14 +37,8 @@ import Flaw.Input.Keyboard
 import Flaw.Input.Mouse
 import Flaw.Math
 import Flaw.UI.Drawer
+import Flaw.UI.Metrics
 import Flaw.Window
-
--- | Base type for length values.
-type Metric = Int
--- | Base type for two-dimensional position values.
-type Position = Vec2 Metric
--- | Base type for two-dimensional length values.
-type Size = Vec2 Metric
 
 -- | Visual is a paintable thing with layout.
 class Visual a where
