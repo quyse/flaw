@@ -112,6 +112,7 @@ data GlContext = GlContext
 data GlContextState = GlContextState
 	{ glContextStateFrameBuffer :: !(IORef (FrameBufferId GlDevice))
 	, glContextStateViewport :: !(IORef (Vec4 Int))
+	, glContextStateScissor :: !(IORef (Maybe (Vec4 Int)))
 	, glContextStateVertexBuffers :: !(VM.IOVector (VertexBufferId GlDevice))
 	, glContextStateIndexBuffer :: !(IORef (IndexBufferId GlDevice))
 	, glContextStateUniformBuffers :: !(VM.IOVector (UniformBufferId GlDevice))
@@ -879,23 +880,23 @@ instance Device GlContext where
 
 instance Context GlContext GlContext where
 	contextClearColor context targetIndex color = do
-		glUpdateFrameBufferAndViewport context
+		glUpdateFrameBufferViewportScissor context
 		with color $ glClearBufferfv gl_COLOR (fromIntegral targetIndex) . castPtr
 		glCheckErrors 1 "clear color"
 
 	contextClearDepth context depth = do
-		glUpdateFrameBufferAndViewport context
+		glUpdateFrameBufferViewportScissor context
 		glEnableDepthWriteForClearing context
 		with (coerce depth) $ glClearBufferfv gl_DEPTH 0
 		glCheckErrors 1 "clear depth"
 
 	contextClearStencil context stencil = do
-		glUpdateFrameBufferAndViewport context
+		glUpdateFrameBufferViewportScissor context
 		with (fromIntegral stencil) $ glClearBufferiv gl_STENCIL 0
 		glCheckErrors 1 "clear stencil"
 
 	contextClearDepthStencil context depth stencil = do
-		glUpdateFrameBufferAndViewport context
+		glUpdateFrameBufferViewportScissor context
 		glEnableDepthWriteForClearing context
 		glClearBufferfi gl_DEPTH_STENCIL 0 (coerce depth) (fromIntegral stencil)
 		glCheckErrors 1 "clear depth stencil"
@@ -972,6 +973,23 @@ instance Context GlContext GlContext where
 			{ glContextStateViewport = viewportRef
 			}
 		} = readIORef viewportRef
+
+	contextSetScissor GlContext
+		{ glContextDesiredState = GlContextState
+			{ glContextStateScissor = scissorRef
+			}
+		} scissor scope = do
+		oldScissor <- readIORef scissorRef
+		writeIORef scissorRef scissor
+		r <- scope
+		writeIORef scissorRef oldScissor
+		return r
+
+	contextGetScissor GlContext
+		{ glContextDesiredState = GlContextState
+			{ glContextStateScissor = scissorRef
+			}
+		} = readIORef scissorRef
 
 	contextSetVertexBuffer GlContext
 		{ glContextDesiredState = GlContextState
@@ -1237,6 +1255,7 @@ glCreateContextState = do
 		, glFrameBufferHeight = 0
 		}
 	viewport <- newIORef $ Vec4 0 0 0 0
+	scissor <- newIORef Nothing
 	vertexBuffers <- VM.replicate 8 $ GlVertexBufferId 0 0
 	indexBuffer <- newIORef $ GlIndexBufferId 0 gl_UNSIGNED_SHORT
 	uniformBuffers <- VM.replicate 8 GlNullUniformBufferId
@@ -1248,6 +1267,7 @@ glCreateContextState = do
 	return GlContextState
 		{ glContextStateFrameBuffer = frameBuffer
 		, glContextStateViewport = viewport
+		, glContextStateScissor = scissor
 		, glContextStateVertexBuffers = vertexBuffers
 		, glContextStateIndexBuffer = indexBuffer
 		, glContextStateUniformBuffers = uniformBuffers
@@ -1262,6 +1282,7 @@ glSetDefaultContextState :: GlContextState -> IO ()
 glSetDefaultContextState GlContextState
 	{ glContextStateFrameBuffer = frameBufferRef
 	, glContextStateViewport = viewportRef
+	, glContextStateScissor = scissorRef
 	, glContextStateVertexBuffers = vertexBuffersVector
 	, glContextStateIndexBuffer = indexBufferRef
 	, glContextStateUniformBuffers = uniformBuffersVector
@@ -1277,6 +1298,7 @@ glSetDefaultContextState GlContextState
 		, glFrameBufferHeight = 0
 		}
 	writeIORef viewportRef $ Vec4 0 0 0 0
+	writeIORef scissorRef Nothing
 	VM.set vertexBuffersVector $ GlVertexBufferId 0 0
 	writeIORef indexBufferRef $ GlIndexBufferId 0 gl_UNSIGNED_SHORT
 	VM.set uniformBuffersVector GlNullUniformBufferId
@@ -1356,8 +1378,7 @@ glUpdateContext context@GlContext
 		, glCapsArbInstancedArrays = capArbInstancedArrays
 		}
 	, glContextActualState = GlContextState
-		{ glContextStateViewport = actualViewportRef
-		, glContextStateVertexBuffers = actualVertexBuffersVector
+		{ glContextStateVertexBuffers = actualVertexBuffersVector
 		, glContextStateIndexBuffer = actualIndexBufferRef
 		, glContextStateUniformBuffers = actualUniformBuffersVector
 		, glContextStateSamplers = actualSamplersVector
@@ -1367,9 +1388,7 @@ glUpdateContext context@GlContext
 		, glContextStateBlendState = actualBlendStateRef
 		}
 	, glContextDesiredState = GlContextState
-		{ glContextStateFrameBuffer = desiredFrameBufferRef
-		, glContextStateViewport = desiredViewportRef
-		, glContextStateVertexBuffers = desiredVertexBuffersVector
+		{ glContextStateVertexBuffers = desiredVertexBuffersVector
 		, glContextStateIndexBuffer = desiredIndexBufferRef
 		, glContextStateUniformBuffers = desiredUniformBuffersVector
 		, glContextStateSamplers = desiredSamplersVector
@@ -1380,8 +1399,8 @@ glUpdateContext context@GlContext
 		}
 	, glContextBoundAttributesCount = boundAttributesCountRef
 	} = do
-	-- framebuffer and viewport
-	frameBufferUpdated <- glUpdateFrameBufferAndViewport context
+	-- framebuffer, viewport and scissor
+	glUpdateFrameBufferViewportScissor context
 
 	-- samplers
 	vectorSetup actualSamplersVector desiredSamplersVector $ \i (GlTextureId textureName, GlSamplerStateId samplerName) -> do
@@ -1636,31 +1655,56 @@ glUpdateContext context@GlContext
 			glDisable gl_BLEND
 			glCheckErrors 0 "disable blending"
 
-glUpdateFrameBufferAndViewport :: GlContext -> IO ()
-glUpdateFrameBufferAndViewport GlContext
+glUpdateFrameBufferViewportScissor :: GlContext -> IO ()
+glUpdateFrameBufferViewportScissor GlContext
 	{ glContextActualState = GlContextState
 		{ glContextStateFrameBuffer = actualFrameBufferRef
 		, glContextStateViewport = actualViewportRef
+		, glContextStateScissor = actualScissorRef
 		}
 	, glContextDesiredState = GlContextState
 		{ glContextStateFrameBuffer = desiredFrameBufferRef
 		, glContextStateViewport = desiredViewportRef
+		, glContextStateScissor = desiredScissorRef
 		}
 	} = do
 	actualFrameBufferId <- readIORef actualFrameBufferRef
-	desiredFrameBufferId <- readIORef desiredFrameBufferRef
+	desiredFrameBufferId@GlFrameBufferId
+		{ glFrameBufferWidth = frameBufferWidth
+		, glFrameBufferHeight = frameBufferHeight
+		} <- readIORef desiredFrameBufferRef
 	actualViewport <- readIORef actualViewportRef
 	desiredViewport <- readIORef desiredViewportRef
+	actualScissor <- readIORef actualScissorRef
+	desiredScissor <- readIORef desiredScissorRef
+
+	let clipX = max 0 . min frameBufferWidth
+	let clipY = max 0 . min frameBufferHeight
+
+	-- framebuffer
 	when (actualFrameBufferId /= desiredFrameBufferId) $ do
 		glBindFramebuffer gl_FRAMEBUFFER $ glFrameBufferName desiredFrameBufferId
 		glCheckErrors 0 "bind framebuffer"
 		writeIORef actualFrameBufferRef desiredFrameBufferId
+
+	-- viewport
 	when (actualViewport /= desiredViewport || actualFrameBufferId /= desiredFrameBufferId) $ do
 		let Vec4 left top right bottom = desiredViewport
-		let height = glFrameBufferHeight desiredFrameBufferId
-		glViewport (fromIntegral left) (fromIntegral $ height - bottom) (fromIntegral $ right - left) (fromIntegral $ bottom - top)
+		glViewport (fromIntegral $ clipX left) (fromIntegral $ clipY $ frameBufferHeight - bottom) (fromIntegral $ clipX $ right - left) (fromIntegral $ clipY $ bottom - top)
 		glCheckErrors 0 "bind viewport"
 		writeIORef actualViewportRef desiredViewport
+
+	-- scissor
+	when (actualScissor /= desiredScissor || actualViewport /= desiredViewport || actualFrameBufferId /= desiredFrameBufferId) $ do
+		case desiredScissor of
+			Just (Vec4 left top right bottom) -> do
+				glEnable gl_SCISSOR_TEST
+				glScissor (fromIntegral $ clipX left) (fromIntegral $ clipY $ frameBufferHeight - bottom) (fromIntegral $ clipX $ right - left) (fromIntegral $ clipY $ bottom - top)
+				glCheckErrors 0 "bind scissor"
+			Nothing -> do
+				glDisable gl_SCISSOR_TEST
+				glCheckErrors 0 "disable scissor"
+		writeIORef actualScissorRef desiredScissor
 
 glEnableDepthWriteForClearing :: GlContext -> IO ()
 glEnableDepthWriteForClearing GlContext

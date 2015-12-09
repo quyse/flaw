@@ -20,6 +20,8 @@ module Flaw.Graphics
 	, renderFrameBuffer
 	, renderViewport
 	, renderGetViewport
+	, renderScissor
+	, renderGetScissor
 	, renderVertexBuffer
 	, renderIndexBuffer
 	, renderUniformBuffer
@@ -184,6 +186,10 @@ class Device d => Context c d | c -> d where
 	contextSetViewport :: c -> Vec4 Int -> IO a -> IO a
 	-- | Get current viewport.
 	contextGetViewport :: c -> IO (Vec4 Int)
+	-- | Set scissor (left, top, right, bottom).
+	contextSetScissor :: c -> Maybe (Vec4 Int) -> IO a -> IO a
+	-- | Get current scissor.
+	contextGetScissor :: c -> IO (Maybe (Vec4 Int))
 	-- | Set vertex buffer.
 	contextSetVertexBuffer :: c -> Int -> VertexBufferId d -> IO a -> IO a
 	-- | Set index buffer.
@@ -270,6 +276,14 @@ renderViewport viewport = renderSetup $ \c q -> contextSetViewport c viewport q
 -- | Get current viewport.
 renderGetViewport :: Context c d => Render c (Vec4 Int)
 renderGetViewport = renderAction contextGetViewport
+
+-- | Set current scissor (vector with left, top, right, bottom).
+renderScissor :: Context c d => Maybe (Vec4 Int) -> Render c ()
+renderScissor scissor = renderSetup $ \c q -> contextSetScissor c scissor q
+
+-- | Get current scissor.
+renderGetScissor :: Context c d => Render c (Maybe (Vec4 Int))
+renderGetScissor = renderAction contextGetScissor
 
 -- | Set vertex buffer.
 renderVertexBuffer :: Context c d => Int -> VertexBufferId d -> Render c ()
