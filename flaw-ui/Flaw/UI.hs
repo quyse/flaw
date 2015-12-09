@@ -148,8 +148,13 @@ class Element a => FreeContainer a where
 -- | Class of element which could be moved by mouse.
 class Element a => DraggableInFreeContainer a where
 	-- | Tell element a "free child" object used for placement this element.
-	-- After that element becomes movable.
-	setSelfFreeChild :: FreeContainer fc => a -> fc -> FreeContainerChild fc -> STM ()
+	-- After that element becomes movable and resizable (if flag is set).
+	setSelfFreeChild :: FreeContainer fc
+		=> a -- ^ Element.
+		-> fc -- ^ Container.
+		-> FreeContainerChild fc -- ^ Free child in container.
+		-> Bool -- ^ Resizable?
+		-> STM ()
 
 data SomeFreeChild where
 	SomeFreeChild :: FreeContainer fc => fc -> FreeContainerChild fc -> SomeFreeChild

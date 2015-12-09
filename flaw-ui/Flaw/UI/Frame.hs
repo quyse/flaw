@@ -11,6 +11,7 @@ module Flaw.UI.Frame
 
 import Control.Concurrent.STM
 import Control.Monad
+import Data.Maybe
 import qualified Data.Text as T
 
 import Flaw.Graphics
@@ -30,6 +31,7 @@ data Frame = Frame
 	, frameTextScriptVar :: !(TVar FontScript)
 	, frameFocusedVar :: !(TVar Bool)
 	, frameFreeChildVar :: !(TVar (Maybe SomeFreeChild))
+	, frameResizableVar :: !(TVar Bool)
 	}
 
 -- TODO: do something with hardcoded metrics
@@ -58,6 +60,7 @@ newFrame element = do
 	textScriptVar <- newTVar fontScriptUnknown
 	focusedVar <- newTVar False
 	freeChildVar <- newTVar Nothing
+	resizableVar <- newTVar False
 
 	-- create frame
 	let frame = Frame
@@ -67,6 +70,7 @@ newFrame element = do
 		, frameTextScriptVar = textScriptVar
 		, frameFocusedVar = focusedVar
 		, frameFreeChildVar = freeChildVar
+		, frameResizableVar = resizableVar
 		}
 
 	-- add element to panel
@@ -80,28 +84,37 @@ newFrame element = do
 			} = case inputEvent of
 			MouseInputEvent mouseEvent -> case mouseEvent of
 				MouseDownEvent LeftMouseButton -> do
-					(x, y) <- getMouseCursor mouseState
-					writeTVar lastMousePositionVar $ Just $ Vec2 x y
-					return True
+					-- if we don't have free child, don't even remember last mouse position
+					maybeSomeFreeChild <- readTVar freeChildVar
+					if isJust maybeSomeFreeChild then do
+						(x, y) <- getMouseCursor mouseState
+						writeTVar lastMousePositionVar $ Just $ Vec2 x y
+						return True
+					else return False
 				CursorMoveEvent _x _y -> do
 					lastMousePosition <- readTVar lastMousePositionVar
 					case lastMousePosition of
 						Just (Vec2 lx ly) -> do
-							(x, y) <- getMouseCursor mouseState
-							let dx = x - lx
-							let dy = y - ly
-							-- change position if needed
-							when (kx /= 0 || ky /= 0) $ do
-								maybeSomeFreeChild <- readTVar freeChildVar
-								case maybeSomeFreeChild of
-									Just (SomeFreeChild freeContainer freeChild) -> placeFreeChildRelatively freeContainer freeChild $ Vec2 (dx * kx) (dy * ky)
-									Nothing -> return ()
-							-- change size if needed
-							when (kw /= 0 || kh /= 0) $ do
-								Vec2 sx sy <- readTVar pnlSizeVar
-								layoutElement frame $ Vec2 (sx + dx * kw) (sy + dy * kh)
-							-- remember new coordinates
-							writeTVar lastMousePositionVar $ Just $ Vec2 x y
+							maybeSomeFreeChild <- readTVar freeChildVar
+							case maybeSomeFreeChild of
+								Just (SomeFreeChild freeContainer freeChild) -> do
+									-- check that we are resizable (or we don't need to resize anything)
+									resizable <- readTVar resizableVar
+									let needSizeChange = kw /= 0 || kh /= 0
+									when (resizable || not needSizeChange) $ do
+										(x, y) <- getMouseCursor mouseState
+										let dx = x - lx
+										let dy = y - ly
+										-- change position if needed
+										when (kx /= 0 || ky /= 0) $ do
+											placeFreeChildRelatively freeContainer freeChild $ Vec2 (dx * kx) (dy * ky)
+										-- change size if needed
+										when needSizeChange $ do
+											Vec2 sx sy <- readTVar pnlSizeVar
+											layoutElement frame $ Vec2 (sx + dx * kw) (sy + dy * kh)
+										-- remember new coordinates
+										writeTVar lastMousePositionVar $ Just $ Vec2 x y
+								Nothing -> return ()
 							return True
 						Nothing -> return False
 				MouseUpEvent LeftMouseButton -> do
@@ -118,6 +131,7 @@ newFrame element = do
 			{ freProcessInput = processInput
 			, freMouseCursor = mouseCursor
 			, freSizeVar = sizeVar
+			, freShowCursorExp = if kw == 0 && kh == 0 then liftM isJust $ readTVar freeChildVar else readTVar resizableVar
 			}
 		freeChild <- addFreeChild panel fre
 		return (fre, freeChild)
@@ -171,6 +185,7 @@ data FrameResizeElement = FrameResizeElement
 	{ freProcessInput :: !(InputEvent -> InputState -> STM Bool)
 	, freMouseCursor :: !MouseCursor
 	, freSizeVar :: !(TVar (Vec2 Int))
+	, freShowCursorExp :: !(STM Bool)
 	}
 
 instance Element FrameResizeElement where
@@ -188,7 +203,10 @@ instance Element FrameResizeElement where
 
 	elementMouseCursor FrameResizeElement
 		{ freMouseCursor = mouseCursor
-		} = return mouseCursor
+		, freShowCursorExp = showCursorExp
+		} = do
+		showCursor <- showCursorExp
+		return $ if showCursor then mouseCursor else MouseCursorArrow
 
 	renderElement _ _ _ = return $ return ()
 
@@ -300,4 +318,7 @@ instance HasText Frame where
 instance DraggableInFreeContainer Frame where
 	setSelfFreeChild Frame
 		{ frameFreeChildVar = freeChildVar
-		} container freeChild = writeTVar freeChildVar $ Just $ SomeFreeChild container freeChild
+		, frameResizableVar = resizableVar
+		} container freeChild resizable = do
+		writeTVar freeChildVar $ Just $ SomeFreeChild container freeChild
+		writeTVar resizableVar resizable
