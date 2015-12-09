@@ -47,7 +47,7 @@ import Foreign.ForeignPtr.Unsafe
 import Foreign.Ptr
 import Foreign.Storable
 
-import Flaw.Graphics.Internal
+import Flaw.Graphics
 import Flaw.Graphics.Program.Internal
 import Flaw.Math
 

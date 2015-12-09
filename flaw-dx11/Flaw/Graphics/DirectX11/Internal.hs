@@ -39,12 +39,12 @@ import Flaw.Exception
 import Flaw.FFI
 import Flaw.FFI.Win32
 import Flaw.FFI.COM
+import Flaw.Graphics
 import Flaw.Graphics.Blend
 import Flaw.Graphics.DirectX11.FFI
 import Flaw.Graphics.DirectX11.HLSL
 import Flaw.Graphics.DXGI.FFI
 import Flaw.Graphics.DXGI.Internal
-import Flaw.Graphics.Internal
 import Flaw.Graphics.Program.Internal
 import Flaw.Graphics.Sampler
 import Flaw.Graphics.Texture

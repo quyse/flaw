@@ -21,7 +21,6 @@ library
   exposed-modules:
     Flaw.Graphics
     Flaw.Graphics.Blend
-    Flaw.Graphics.Internal
     Flaw.Graphics.Program
     Flaw.Graphics.Program.Internal
     Flaw.Graphics.Sampler

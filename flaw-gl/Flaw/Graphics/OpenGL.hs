@@ -44,9 +44,9 @@ import qualified SDL.Raw.Video as SDL
 
 import Flaw.Book
 import Flaw.Exception
+import Flaw.Graphics
 import Flaw.Graphics.Blend
 import Flaw.Graphics.GLSL
-import Flaw.Graphics.Internal
 import Flaw.Graphics.Program.Internal
 import Flaw.Graphics.Sampler
 import Flaw.Graphics.Texture
