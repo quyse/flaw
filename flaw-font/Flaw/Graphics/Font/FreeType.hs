@@ -100,9 +100,9 @@ createFreeTypeGlyphs FreeTypeFont
 
 		-- load and render glyph
 		do
-			ftErrorCheck "FT_Load_Glyph" =<< ft_Load_Glyph ftFace (fromIntegral glyphIndex) ft_LOAD_NO_HINTING
+			ftErrorCheck "FT_Load_Glyph" =<< ft_Load_Glyph ftFace (fromIntegral glyphIndex) FT_LOAD_NO_HINTING
 			ftGlyphSlot <- flaw_ft_get_glyph_slot ftFace
-			ftErrorCheck "ft_Render_Glyph" =<< ft_Render_Glyph ftGlyphSlot ft_RENDER_MODE_NORMAL
+			ftErrorCheck "ft_Render_Glyph" =<< ft_Render_Glyph ftGlyphSlot FT_RENDER_MODE_NORMAL
 
 		-- read bitmap info
 		ftGlyphSlot <- flaw_ft_get_glyph_slot ftFace

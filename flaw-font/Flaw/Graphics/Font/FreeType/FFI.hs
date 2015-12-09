@@ -4,7 +4,7 @@ Description: FreeType FFI.
 License: MIT
 -}
 
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE PatternSynonyms, TemplateHaskell #-}
 
 module Flaw.Graphics.Font.FreeType.FFI
 	( FT_Error
@@ -18,8 +18,8 @@ module Flaw.Graphics.Font.FreeType.FFI
 	, ft_Set_Pixel_Sizes
 	, ft_Load_Glyph
 	, ft_Render_Glyph
-	, ft_LOAD_NO_HINTING
-	, ft_RENDER_MODE_NORMAL
+	, pattern FT_LOAD_NO_HINTING
+	, pattern FT_RENDER_MODE_NORMAL
 	, FT_Bitmap(..)
 	, flaw_ft_get_glyph_slot
 	, flaw_ft_get_num_glyphs
@@ -53,11 +53,9 @@ foreign import ccall unsafe "FT_Set_Pixel_Sizes" ft_Set_Pixel_Sizes :: FT_Face -
 foreign import ccall unsafe "FT_Load_Glyph" ft_Load_Glyph :: FT_Face -> CUInt -> Int32 -> IO FT_Error
 foreign import ccall unsafe "FT_Render_Glyph" ft_Render_Glyph :: FT_GlyphSlot -> CInt -> IO FT_Error
 
-ft_LOAD_NO_HINTING :: Int32
-ft_LOAD_NO_HINTING = 2
+pattern FT_LOAD_NO_HINTING = 2
 
-ft_RENDER_MODE_NORMAL :: CInt
-ft_RENDER_MODE_NORMAL = 0
+pattern FT_RENDER_MODE_NORMAL = 0
 
 genStruct "FT_Bitmap"
 	[ ([t| CUInt |], "rows")
