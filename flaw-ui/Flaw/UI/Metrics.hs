@@ -39,14 +39,17 @@ data Metrics = Metrics
 	, metricsButtonSize :: !Size
 	-- | Height of edit box.
 	, metricsEditBoxHeight :: !Metric
+	-- | Height of label.
+	, metricsLabelHeight :: !Metric
 	}
 
 defaultMetrics :: Metrics
 defaultMetrics = Metrics
-	{ metricsGap = 10
-	, metricsBigGap = 15
+	{ metricsGap = 7
+	, metricsBigGap = 10
 	, metricsFrameClient = Vec4 5 25 5 5
 	, metricsFrameTopBorder = 5
-	, metricsButtonSize = Vec2 100 30
-	, metricsEditBoxHeight = 30
+	, metricsButtonSize = Vec2 80 24
+	, metricsEditBoxHeight = 24
+	, metricsLabelHeight = 20
 	}
