@@ -22,6 +22,7 @@ module Flaw.Graphics
 	, renderGetViewport
 	, renderScissor
 	, renderGetScissor
+	, renderIntersectScissor
 	, renderVertexBuffer
 	, renderIndexBuffer
 	, renderUniformBuffer
@@ -284,6 +285,15 @@ renderScissor scissor = renderSetup $ \c q -> contextSetScissor c scissor q
 -- | Get current scissor.
 renderGetScissor :: Context c d => Render c (Maybe (Vec4 Int))
 renderGetScissor = renderAction contextGetScissor
+
+-- | Set intersection between specified and current scissor as scissor.
+renderIntersectScissor :: Context c d => Vec4 Int -> Render c ()
+renderIntersectScissor scissor@(Vec4 left top right bottom) = do
+	currentScissor <- renderGetScissor
+	renderScissor $ Just $ case currentScissor of
+		Just (Vec4 currentLeft currentTop currentRight currentBottom) ->
+			Vec4 (max left currentLeft) (max top currentTop) (min right currentRight) (min bottom currentBottom)
+		Nothing -> scissor
 
 -- | Set vertex buffer.
 renderVertexBuffer :: Context c d => Int -> VertexBufferId d -> Render c ()

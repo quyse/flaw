@@ -109,7 +109,7 @@ instance Element Panel where
 	renderElement Panel
 		{ panelChildrenRenderOrderVar = childrenRenderOrderVar
 		, panelSizeVar = sizeVar
-		} drawer (Vec2 px py) = do
+		} drawer position@(Vec2 px py) = do
 		Vec2 sx sy <- readTVar sizeVar
 		-- compose rendering of children
 		childrenRenderOrder <- readTVar childrenRenderOrderVar
@@ -118,11 +118,11 @@ instance Element Panel where
 			, panelChildPositionVar = childPositionVar
 			} = do
 			childPosition <- readTVar childPositionVar
-			renderElement element drawer childPosition
+			renderElement element drawer $ position + childPosition
 		renderChildren <- foldrM (\a b -> liftM (>> b) a) (return ()) $ map drawChild childrenRenderOrder
 		-- return
 		return $ renderScope $ do
-			renderRelativeViewport $ Vec4 px py (px + sx) (py + sy)
+			renderIntersectScissor $ Vec4 px py (px + sx) (py + sy)
 			renderChildren
 
 	processInputEvent panel@Panel

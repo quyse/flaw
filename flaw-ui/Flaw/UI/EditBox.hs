@@ -140,7 +140,7 @@ instance Element EditBox where
 				(styleFillColor style) (styleBorderColor style)
 
 			-- constrain further rendering
-			renderRelativeViewport $ Vec4 (px + 1) (py + 1) (px + sx - 1) (py + sy - 1)
+			renderIntersectScissor $ Vec4 (px + 1) (py + 1) (px + sx - 1) (py + sy - 1)
 
 			-- manually shape glyphs
 			(runs@[beforeRun, selectedRun, afterRun], _advance) <- liftIO $ shapeText fontShaper [textBefore, textSelected, textAfter] textScript
@@ -185,9 +185,9 @@ instance Element EditBox where
 						return newScroll
 					else return scroll
 
-			let textXY@(Vec2 textX _textY) = Vec2 (2 - scroll) (1 + ((fromIntegral $ sy - 2) - boxTop - boxBottom) * 0.5)
-			let selectionTop = (fromIntegral (sy - 2) - (boxBottom - boxTop)) * 0.5
-			let selectionBottom = (fromIntegral (sy - 2) + (boxBottom - boxTop)) * 0.5
+			let textXY@(Vec2 textX _textY) = Vec2 (fromIntegral px + 1 + textOffsetX - scroll) (fromIntegral py + 1 + ((fromIntegral $ sy - 2) - boxTop - boxBottom) * 0.5)
+			let selectionTop = fromIntegral (py + 1) + (fromIntegral (sy - 2) - (boxBottom - boxTop)) * 0.5
+			let selectionBottom = fromIntegral (py + 1) + (fromIntegral (sy - 2) + (boxBottom - boxTop)) * 0.5
 
 			-- draw selection
 			when (not $ T.null textSelected) $ do

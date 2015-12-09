@@ -82,18 +82,18 @@ instance Element Button where
 		-- get style
 		let style = if pressed then pressedStyle else if moused || focused then mousedStyle else normalStyle
 		-- calculate visual rendering
-		visualRender <- renderVisual visual drawer (Vec2 0 0) size style
+		visualRender <- renderVisual visual drawer (Vec2 (px + 1) (py + 1)) size style
 		-- return rendering monad
 		return $ renderScope $ do
 			drawBorderedRectangle canvas
 				(Vec4 px (px + 1) (px + sx - 1) (px + sx))
 				(Vec4 py (py + 1) (py + sy - 1) (py + sy))
 				(styleFillColor style) (styleBorderColor style)
-			renderRelativeViewport $ Vec4 (px + 1) (py + 1) (px + sx - 2) (py + sy - 2)
+			renderIntersectScissor $ Vec4 (px + 1) (py + 1) (px + sx - 1) (py + sy - 1)
 			visualRender
 			when focused $ drawBorderedRectangle canvas
-				(Vec4 2 3 (sx - 5) (sx - 4))
-				(Vec4 2 3 (sy - 5) (sy - 4))
+				(Vec4 (px + 3) (px + 4) (px + sx - 4) (px + sx - 3))
+				(Vec4 (py + 3) (py + 4) (py + sy - 4) (py + sy - 3))
 				(Vec4 0 0 0 0) (Vec4 1 1 1 0.5)
 
 	processInputEvent Button
