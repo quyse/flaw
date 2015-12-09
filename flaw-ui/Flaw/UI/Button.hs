@@ -7,6 +7,8 @@ License: MIT
 module Flaw.UI.Button
 	( Button(..)
 	, newButton
+	, setButtonDefault
+	, setButtonCancel
 	) where
 
 import Control.Concurrent.STM
@@ -27,6 +29,8 @@ data Button = Button
 	, buttonMousedVar :: !(TVar Bool)
 	, buttonPressedVar :: !(TVar Bool)
 	, buttonClickHandlerVar :: !(TVar (STM ()))
+	, buttonDefaultVar :: !(TVar Bool)
+	, buttonCancelVar :: !(TVar Bool)
 	}
 
 newButton :: Visual v => v -> STM Button
@@ -36,6 +40,8 @@ newButton visual = do
 	mousedVar <- newTVar False
 	pressedVar <- newTVar False
 	clickHandlerVar <- newTVar $ return ()
+	defaultVar <- newTVar False
+	cancelVar <- newTVar False
 	return Button
 		{ buttonVisual = SomeVisual visual
 		, buttonSizeVar = sizeVar
@@ -43,7 +49,19 @@ newButton visual = do
 		, buttonMousedVar = mousedVar
 		, buttonPressedVar = pressedVar
 		, buttonClickHandlerVar = clickHandlerVar
+		, buttonDefaultVar = defaultVar
+		, buttonCancelVar = cancelVar
 		}
+
+setButtonDefault :: Button -> STM ()
+setButtonDefault Button
+	{ buttonDefaultVar = defaultVar
+	} = writeTVar defaultVar True
+
+setButtonCancel :: Button -> STM ()
+setButtonCancel Button
+	{ buttonCancelVar = cancelVar
+	} = writeTVar cancelVar True
 
 instance Element Button where
 
@@ -100,15 +118,18 @@ instance Element Button where
 		{ buttonMousedVar = mousedVar
 		, buttonPressedVar = pressedVar
 		, buttonClickHandlerVar = clickHandlerVar
+		, buttonCancelVar = cancelVar
 		} inputEvent _inputState = case inputEvent of
 		KeyboardInputEvent keyboardEvent -> case keyboardEvent of
 			KeyDownEvent key -> do
-				if isPressKey key then do
+				press <- isPressKey key
+				if press then do
 					writeTVar pressedVar True
 					return True
 				else return False
 			KeyUpEvent key -> do
-				if isPressKey key then do
+				press <- isPressKey key
+				if press then do
 					pressed <- readTVar pressedVar
 					when pressed $ do
 						click
@@ -137,9 +158,10 @@ instance Element Button where
 		where
 			click = join $ readTVar clickHandlerVar
 			isPressKey key = case key of
-				KeyReturn -> True
-				KeySpace -> True
-				_ -> False
+				KeyReturn -> return True
+				KeySpace -> return True
+				KeyEscape -> readTVar cancelVar
+				_ -> return False
 
 	focusElement Button
 		{ buttonFocusedVar = focusedVar

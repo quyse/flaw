@@ -32,6 +32,8 @@ data Panel = Panel
 	, panelSizeVar :: !(TVar Size)
 	, panelFocusedChildVar :: !(TVar (Maybe PanelChild))
 	, panelLastMousedChildVar :: !(TVar (Maybe PanelChild))
+	, panelDefaultElementVar :: !(TVar (Maybe SomeElement))
+	, panelCancelElementVar :: !(TVar (Maybe SomeElement))
 	}
 
 data PanelChild = PanelChild
@@ -49,6 +51,8 @@ newPanel = do
 	sizeVar <- newTVar $ Vec2 0 0
 	focusedChildVar <- newTVar Nothing
 	lastMousedChildVar <- newTVar Nothing
+	defaultElementVar <- newTVar Nothing
+	cancelElementVar <- newTVar Nothing
 	return Panel
 		{ panelChildrenVar = childrenVar
 		, panelChildIndexVar = childIndexVar
@@ -57,6 +61,8 @@ newPanel = do
 		, panelSizeVar = sizeVar
 		, panelFocusedChildVar = focusedChildVar
 		, panelLastMousedChildVar = lastMousedChildVar
+		, panelDefaultElementVar = defaultElementVar
+		, panelCancelElementVar = cancelElementVar
 		}
 
 instance Eq PanelChild where
@@ -130,13 +136,25 @@ instance Element Panel where
 		, panelChildrenRenderOrderVar = childrenRenderOrderVar
 		, panelFocusedChildVar = focusedChildVar
 		, panelLastMousedChildVar = lastMousedChildVar
+		, panelDefaultElementVar = defaultElementVar
+		, panelCancelElementVar = cancelElementVar
 		} inputEvent inputState@InputState
 		{ inputStateKeyboard = keyboardState
 		, inputStateMouse = mouseState
 		} = case inputEvent of
 
 		KeyboardInputEvent keyboardEvent -> do
-			-- own processing: handle tab-moving focus
+			-- own processing: handle tab-moving focus, default and cancel elements
+			let tryPassToDefaultElement = do
+				defaultElement <- readTVar defaultElementVar
+				case defaultElement of
+					Just (SomeElement element) -> processInputEvent element inputEvent inputState
+					Nothing -> return False
+			let tryPassToCancelElement = do
+				cancelElement <- readTVar cancelElementVar
+				case cancelElement of
+					Just (SomeElement element) -> processInputEvent element inputEvent inputState
+					Nothing -> return False
 			let ownProcessEvent = case keyboardEvent of
 				KeyDownEvent KeyTab -> do
 					focusedChild <- readTVar focusedChildVar
@@ -153,6 +171,10 @@ instance Element Panel where
 							when focusedNewChild $ unfocusElement focusedElement
 							return focusedNewChild
 						Nothing -> focusSomeChild panel $ (if keyShiftPressed then S.toDescList else S.toAscList) children
+				KeyDownEvent KeyReturn -> tryPassToDefaultElement
+				KeyUpEvent KeyReturn -> tryPassToDefaultElement
+				KeyDownEvent KeyEscape -> tryPassToCancelElement
+				KeyUpEvent KeyEscape -> tryPassToCancelElement
 				_ -> return False
 
 			-- send keyboard event to focused element
@@ -354,3 +376,11 @@ focusSomeChild Panel
 		else tryToFocus restChildren
 	tryToFocus [] = do
 		return False
+
+instance DefaultActionRedirector Panel where
+	setDefaultElement Panel
+		{ panelDefaultElementVar = defaultElementVar
+		} element = writeTVar defaultElementVar $ Just $ SomeElement element
+	setCancelElement Panel
+		{ panelCancelElementVar = cancelElementVar
+		} element = writeTVar cancelElementVar $ Just $ SomeElement element
