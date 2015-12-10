@@ -23,6 +23,7 @@ packages:
 - flaw-sl
 - flaw-sqlite
 - flaw-ui
+- flaw-ui-default-style
 - flaw-webgl
 - flaw-window
 - location:

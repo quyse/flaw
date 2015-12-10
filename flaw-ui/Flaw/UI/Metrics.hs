@@ -10,7 +10,6 @@ module Flaw.UI.Metrics
 	, Size
 	, Rect
 	, Metrics(..)
-	, defaultMetrics
 	) where
 
 import Flaw.Math
@@ -41,15 +40,4 @@ data Metrics = Metrics
 	, metricsEditBoxHeight :: !Metric
 	-- | Height of label.
 	, metricsLabelHeight :: !Metric
-	}
-
-defaultMetrics :: Metrics
-defaultMetrics = Metrics
-	{ metricsGap = 7
-	, metricsBigGap = 10
-	, metricsFrameClient = Vec4 5 25 5 5
-	, metricsFrameTopBorder = 5
-	, metricsButtonSize = Vec2 80 24
-	, metricsEditBoxHeight = 24
-	, metricsLabelHeight = 20
 	}
