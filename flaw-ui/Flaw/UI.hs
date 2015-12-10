@@ -18,6 +18,7 @@ module Flaw.UI
 	, InputState(..)
 	, SomeElement(..)
 	, HasText(..)
+	, HasPassword(..)
 	, HasClickHandler(..)
 	, HasChecked(..)
 	, HasProgress(..)
@@ -111,6 +112,9 @@ data SomeElement where
 class HasText a where
 	setText :: a -> T.Text -> STM ()
 	setTextScript :: a -> FontScript -> STM ()
+
+class HasText a => HasPassword a where
+	setPasswordMode :: a -> Bool -> STM ()
 
 class HasClickHandler a where
 	setClickHandler :: a -> STM () -> STM ()

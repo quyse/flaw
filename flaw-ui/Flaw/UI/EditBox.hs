@@ -28,6 +28,7 @@ import Flaw.UI.Drawer
 data EditBox = EditBox
 	{ editBoxTextVar :: !(TVar T.Text)
 	, editBoxTextScriptVar :: !(TVar FontScript)
+	, editBoxPasswordModeVar :: !(TVar Bool)
 	-- | Start and end position of selection.
 	, editBoxSelectionVar :: !(TVar (Int, Int))
 	-- | Scroll offset in pixels. Positive means rendered text shifted to the left.
@@ -44,6 +45,7 @@ newEditBox :: STM EditBox
 newEditBox = do
 	textVar <- newTVar T.empty
 	textScriptVar <- newTVar fontScriptUnknown
+	passwordModeVar <- newTVar False
 	selectionVar <- newTVar (0, 0)
 	scrollVar <- newTVar 0
 	sizeVar <- newTVar $ Vec2 0 0
@@ -53,6 +55,7 @@ newEditBox = do
 	return EditBox
 		{ editBoxTextVar = textVar
 		, editBoxTextScriptVar = textScriptVar
+		, editBoxPasswordModeVar = passwordModeVar
 		, editBoxSelectionVar = selectionVar
 		, editBoxScrollVar = scrollVar
 		, editBoxSizeVar = sizeVar
@@ -80,6 +83,7 @@ instance Element EditBox where
 	renderElement EditBox
 		{ editBoxTextVar = textVar
 		, editBoxTextScriptVar = textScriptVar
+		, editBoxPasswordModeVar = passwordModeVar
 		, editBoxSelectionVar = selectionVar
 		, editBoxScrollVar = scrollVar
 		, editBoxSizeVar = sizeVar
@@ -105,7 +109,8 @@ instance Element EditBox where
 				}
 			}
 		} (Vec2 px py) = do
-		text <- readTVar textVar
+		passwordMode <- readTVar passwordModeVar
+		text <- liftM (\text -> if passwordMode then T.map (const '●') text else text) $ readTVar textVar
 		textScript <- readTVar textScriptVar
 		Vec2 sx sy <- readTVar sizeVar
 		moused <- readTVar mousedVar
@@ -377,6 +382,11 @@ instance HasText EditBox where
 	setTextScript EditBox
 		{ editBoxTextScriptVar = textScriptVar
 		} textScript = writeTVar textScriptVar textScript
+
+instance HasPassword EditBox where
+	setPasswordMode EditBox
+		{ editBoxPasswordModeVar = passwordModeVar
+		} passwordMode = writeTVar passwordModeVar passwordMode
 
 splitTextBySelection :: T.Text -> Int -> Int -> (T.Text, T.Text, T.Text)
 splitTextBySelection text start end = (before, selected, after) where
