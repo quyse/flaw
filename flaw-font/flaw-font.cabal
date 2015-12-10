@@ -89,9 +89,10 @@ library
     src/harfbuzz/src/hb-ot-shape-complex-indic-table.cc
     src/harfbuzz/src/hb-ot-shape-complex-indic.cc
     src/harfbuzz/src/hb-ot-shape-complex-myanmar.cc
-    src/harfbuzz/src/hb-ot-shape-complex-sea.cc
     src/harfbuzz/src/hb-ot-shape-complex-thai.cc
     src/harfbuzz/src/hb-ot-shape-complex-tibetan.cc
+    src/harfbuzz/src/hb-ot-shape-complex-use.cc
+    src/harfbuzz/src/hb-ot-shape-complex-use-table.cc
     src/harfbuzz/src/hb-ot-shape-fallback.cc
     src/harfbuzz/src/hb-ot-shape-normalize.cc
     src/harfbuzz/src/hb-ot-tag.cc
