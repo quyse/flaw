@@ -797,9 +797,10 @@ instance Device Dx11Device where
 
 -- | Create DirectX11 device.
 dx11CreateDevice :: DeviceId DXGISystem -> Bool -> IO ((Dx11Device, Dx11Context), IO ())
-dx11CreateDevice (DXGIDeviceId system adapter) debug = describeException "failed to create DirectX11 graphics device" $ do
+dx11CreateDevice (DXGIDeviceId system adapter) debug = describeException "failed to create DirectX11 graphics device" $ withSpecialBook $ \bk -> do
 
-	(deviceInterface, contextInterface) <- alloca $ \devicePtr -> alloca $ \deviceContextPtr -> do
+	-- create device and context interfaces
+	(deviceInterface, contextInterface) <- book bk $ alloca $ \devicePtr -> alloca $ \deviceContextPtr -> do
 		let featureLevels = [D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_1, D3D_FEATURE_LEVEL_10_0]
 		withArray featureLevels $ \featureLevelsPtr -> alloca $ \realFeatureLevelPtr -> do
 			describeException "failed to create D3D11 device" $ do
@@ -810,8 +811,13 @@ dx11CreateDevice (DXGIDeviceId system adapter) debug = describeException "failed
 		deviceInterface <- peekCOMObject =<< peek devicePtr
 		contextInterface <- peekCOMObject =<< peek deviceContextPtr
 
-		return (deviceInterface, contextInterface)
+		let destroy = do
+			void $ m_IUnknown_Release deviceInterface
+			void $ m_IUnknown_Release contextInterface
 
+		return ((deviceInterface, contextInterface), destroy)
+
+	-- load shader compiler and get compile function
 	d3dCompileProc <- liftM mkD3DCompile $ loadLibraryAndGetProcAddress "D3DCompiler_43.dll" "D3DCompile"
 
 	let device = Dx11Device
@@ -822,16 +828,28 @@ dx11CreateDevice (DXGIDeviceId system adapter) debug = describeException "failed
 		, dx11DeviceDebug = debug
 		}
 
-	(context, destroyContext) <- dx11CreateContextFromInterface device contextInterface
+	-- create context from interface
+	context <- book bk $ dx11CreateContextFromInterface device contextInterface
 
-	-- destroy function
-	let destroy = do
-		destroyContext
-		_ <- m_IUnknown_Release deviceInterface
-		_ <- m_IUnknown_Release contextInterface
-		return ()
+	-- create and set rasterizer state, in order to enable scissor
+	-- we don't use rasterizer state for something else yet, so just set it into context and forget
+	do
+		let desc = D3D11_RASTERIZER_DESC
+			{ f_D3D11_RASTERIZER_DESC_FillMode = D3D11_FILL_SOLID
+			, f_D3D11_RASTERIZER_DESC_CullMode = D3D11_CULL_BACK
+			, f_D3D11_RASTERIZER_DESC_FrontCounterClockwise = False
+			, f_D3D11_RASTERIZER_DESC_DepthBias = 0
+			, f_D3D11_RASTERIZER_DESC_SlopeScaledDepthBias = 0
+			, f_D3D11_RASTERIZER_DESC_DepthBiasClamp = 0
+			, f_D3D11_RASTERIZER_DESC_DepthClipEnable = True
+			, f_D3D11_RASTERIZER_DESC_ScissorEnable = True
+			, f_D3D11_RASTERIZER_DESC_MultisampleEnable = False
+			, f_D3D11_RASTERIZER_DESC_AntialiasedLineEnable = False
+			}
+		rasterizerStateInterface <- book bk $ allocateCOMObject $ with desc $ \descPtr -> createCOMObjectViaPtr $ m_ID3D11Device_CreateRasterizerState deviceInterface descPtr
+		m_ID3D11DeviceContext_RSSetState contextInterface (pokeCOMObject rasterizerStateInterface)
 
-	return ((device, context), destroy)
+	return (device, context)
 
 -- | DirectX11 graphics context.
 data Dx11Context = Dx11Context
@@ -848,6 +866,7 @@ data Dx11Context = Dx11Context
 data Dx11ContextState = Dx11ContextState
 	{ dx11ContextStateFrameBuffer :: !(IORef (FrameBufferId Dx11Device))
 	, dx11ContextStateViewport :: !(IORef (Vec4 Int))
+	, dx11ContextStateScissor :: !(IORef (Maybe (Vec4 Int)))
 	, dx11ContextStateVertexBuffers :: !(VM.IOVector (VertexBufferId Dx11Device))
 	, dx11ContextStateIndexBuffer :: !(IORef (IndexBufferId Dx11Device))
 	, dx11ContextStateUniformBuffers :: !(VM.IOVector (UniformBufferId Dx11Device))
@@ -880,6 +899,7 @@ dx11CreateContextState :: IO Dx11ContextState
 dx11CreateContextState = do
 	frameBuffer <- newIORef $ Dx11FrameBufferId [] Dx11NullDepthStencilTargetId
 	viewport <- newIORef $ Vec4 0 0 0 0
+	scissor <- newIORef Nothing
 	vertexBuffers <- VM.replicate 8 Dx11NullVertexBufferId
 	indexBuffer <- newIORef $ Dx11NullIndexBufferId D3D11_PRIMITIVE_TOPOLOGY_UNDEFINED
 	uniformBuffers <- VM.replicate 8 Dx11NullUniformBufferId
@@ -891,6 +911,7 @@ dx11CreateContextState = do
 	return Dx11ContextState
 		{ dx11ContextStateFrameBuffer = frameBuffer
 		, dx11ContextStateViewport = viewport
+		, dx11ContextStateScissor = scissor
 		, dx11ContextStateVertexBuffers = vertexBuffers
 		, dx11ContextStateIndexBuffer = indexBuffer
 		, dx11ContextStateUniformBuffers = uniformBuffers
@@ -905,6 +926,7 @@ dx11SetDefaultContextState :: Dx11ContextState -> IO ()
 dx11SetDefaultContextState Dx11ContextState
 	{ dx11ContextStateFrameBuffer = frameBufferRef
 	, dx11ContextStateViewport = viewportRef
+	, dx11ContextStateScissor = scissorRef
 	, dx11ContextStateVertexBuffers = vertexBuffersVector
 	, dx11ContextStateIndexBuffer = indexBufferRef
 	, dx11ContextStateUniformBuffers = uniformBuffersVector
@@ -916,6 +938,7 @@ dx11SetDefaultContextState Dx11ContextState
 	} = do
 	writeIORef frameBufferRef $ Dx11FrameBufferId [] Dx11NullDepthStencilTargetId
 	writeIORef viewportRef $ Vec4 0 0 0 0
+	writeIORef scissorRef Nothing
 	VM.set vertexBuffersVector Dx11NullVertexBufferId
 	writeIORef indexBufferRef $ Dx11NullIndexBufferId D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST
 	VM.set uniformBuffersVector Dx11NullUniformBufferId
@@ -1012,6 +1035,23 @@ instance Context Dx11Context Dx11Device where
 			{ dx11ContextStateViewport = viewportRef
 			}
 		} = readIORef viewportRef
+
+	contextSetScissor Dx11Context
+		{ dx11ContextDesiredState = Dx11ContextState
+			{ dx11ContextStateScissor = scissorRef
+			}
+		} scissor scope = do
+		oldScissor <- readIORef scissorRef
+		writeIORef scissorRef scissor
+		r <- scope
+		writeIORef scissorRef oldScissor
+		return r
+
+	contextGetScissor Dx11Context
+		{ dx11ContextDesiredState = Dx11ContextState
+			{ dx11ContextStateScissor = scissorRef
+			}
+		} = readIORef scissorRef
 
 	contextSetVertexBuffer Dx11Context
 		{ dx11ContextDesiredState = Dx11ContextState
@@ -1463,6 +1503,7 @@ dx11UpdateContext context@Dx11Context
 	, dx11ContextActualState = Dx11ContextState
 		{ dx11ContextStateFrameBuffer = actualFrameBufferRef
 		, dx11ContextStateViewport = actualViewportRef
+		, dx11ContextStateScissor = actualScissorRef
 		, dx11ContextStateVertexBuffers = actualVertexBuffersVector
 		, dx11ContextStateIndexBuffer = actualIndexBufferRef
 		, dx11ContextStateUniformBuffers = actualUniformBuffersVector
@@ -1475,6 +1516,7 @@ dx11UpdateContext context@Dx11Context
 	, dx11ContextDesiredState = Dx11ContextState
 		{ dx11ContextStateFrameBuffer = desiredFrameBufferRef
 		, dx11ContextStateViewport = desiredViewportRef
+		, dx11ContextStateScissor = desiredScissorRef
 		, dx11ContextStateVertexBuffers = desiredVertexBuffersVector
 		, dx11ContextStateIndexBuffer = desiredIndexBufferRef
 		, dx11ContextStateUniformBuffers = desiredUniformBuffersVector
@@ -1535,6 +1577,17 @@ dx11UpdateContext context@Dx11Context
 			}
 		with viewport $ \viewportPtr -> do
 			m_ID3D11DeviceContext_RSSetViewports contextInterface 1 viewportPtr
+
+	-- scissor
+	refSetup actualScissorRef desiredScissorRef $ \maybeScissor -> do
+		case maybeScissor of
+			Just (Vec4 left top right bottom) -> with RECT
+				{ f_RECT_left = fromIntegral left
+				, f_RECT_top = fromIntegral top
+				, f_RECT_right = fromIntegral right
+				, f_RECT_bottom = fromIntegral bottom
+				} $ m_ID3D11DeviceContext_RSSetScissorRects contextInterface 1
+			Nothing -> m_ID3D11DeviceContext_RSSetScissorRects contextInterface 0 nullPtr
 
 	-- vertex buffers
 	vectorSetup actualVertexBuffersVector desiredVertexBuffersVector $ \desiredVertexBuffers -> do
