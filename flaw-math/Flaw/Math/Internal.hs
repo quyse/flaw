@@ -11,6 +11,7 @@ module Flaw.Math.Internal
 	, vecComponents
 	, mathTypeNames
 	, mathTypeNamesWithChar
+	, mathQuaternionTypeNamesWithChar
 	, swizzleVariantFilter
 	, genSwizzleVariants
 	) where
@@ -31,6 +32,10 @@ mathTypeNames :: [Name]
 mathTypeNames = map fst mathTypeNamesWithChar
 mathTypeNamesWithChar :: [(Name, Char)]
 mathTypeNamesWithChar = [(''Float, 'f'), (''Double, 'd'), (''Int32, 'i'), (''Word32, 'u')]
+
+-- | Meaningful types for quaternions.
+mathQuaternionTypeNamesWithChar :: [(Name, Char)]
+mathQuaternionTypeNamesWithChar = [(''Float, 'f'), (''Double, 'd')]
 
 swizzleVariantFilter :: String -> String -> Bool
 swizzleVariantFilter components variant = all (\c -> elem c components) variant && elem (last components) variant

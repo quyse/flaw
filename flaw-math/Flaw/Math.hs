@@ -572,7 +572,7 @@ do
 		tySynD (mkName $ name ++ [elemChar]) [] [t| $(conT $ mkName name) $elemType |]
 	matSynonyms <- sequence [matSynonym n m (conT t) c | n <- [1..maxVecDimension], m <- [1..maxVecDimension], (t, c) <- mathTypeNamesWithChar]
 	let quaternionSynonym elemType elemChar = tySynD (mkName $ "Quaternion" ++ [elemChar]) [] [t| Quaternion $elemType |]
-	quaternionSynonyms <- sequence [quaternionSynonym (conT t) c | (t, c) <- mathTypeNamesWithChar]
+	quaternionSynonyms <- sequence [quaternionSynonym (conT t) c | (t, c) <- mathQuaternionTypeNamesWithChar]
 	return $ vecSynonyms ++ matSynonyms ++ quaternionSynonyms
 
 -- | Cross.
