@@ -37,6 +37,6 @@ extra-deps:
 #- sdl2-2.1.0 # temporarily removed in order to use unreleased sdl2 version
 
 ghc-options:
-  "*": -O3 -threaded -with-rtsopts=-N -Wall -fno-warn-unsupported-calling-conventions -funbox-strict-fields -fno-warn-tabs
+  "*": -O3 -threaded -with-rtsopts=-N -Wall -fno-warn-unsupported-calling-conventions -fno-warn-tabs
 
 rebuild-ghc-options: true
