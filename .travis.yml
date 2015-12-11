@@ -4,11 +4,17 @@ sudo: false
 # choose a lightweight base image
 language: c
 
-# GMP needed for GHC
 addons:
   apt:
+    sources:
+    - llvm-toolchain-precise
     packages:
+    - llvm-3.5
     - libgmp-dev
+
+env:
+- OPTS=
+- OPTS="--ghc-options -fllvm"
 
 before_install:
 # download and unpack the stack executable
@@ -20,7 +26,7 @@ before_install:
 - export PKG_CONFIG_PATH=$HOME/.deps/lib/pkgconfig
 - export LD_LIBRARY_PATH=$HOME/.deps/lib
 
-script: stack --no-terminal --install-ghc test flaw-app flaw-asset flaw-base flaw-build flaw-canvas flaw-ffi flaw-font flaw-game flaw-gl flaw-glsl flaw-graphics flaw-input flaw-math flaw-oil flaw-oil-client flaw-oil-server flaw-physics flaw-sdl flaw-sl flaw-sqlite flaw-ui flaw-ui-default-style flaw-window
+script: stack --no-terminal --install-ghc $OPTS test flaw-app flaw-asset flaw-base flaw-build flaw-canvas flaw-ffi flaw-font flaw-game flaw-gl flaw-glsl flaw-graphics flaw-input flaw-math flaw-oil flaw-oil-client flaw-oil-server flaw-physics flaw-sdl flaw-sl flaw-sqlite flaw-ui flaw-ui-default-style flaw-window
 
 cache:
   directories:
