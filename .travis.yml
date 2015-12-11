@@ -6,11 +6,13 @@ language: c
 
 addons:
   apt:
+    packages:
+    - libgmp-dev
+  apt:
     sources:
     - llvm-toolchain-precise
     packages:
     - llvm-3.5
-    - libgmp-dev
 
 env:
 - OPTS=
