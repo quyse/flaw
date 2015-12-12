@@ -16,28 +16,32 @@ module Flaw.Math.Geometry
 
 import Flaw.Math
 
-affineIdentity :: Num a => Mat4x4 a
+{-# INLINE affineIdentity #-}
+affineIdentity :: (Vectorized a, Num a) => Mat4x4 a
 affineIdentity = Mat4x4
 	1 0 0 0
 	0 1 0 0
 	0 0 1 0
 	0 0 0 1
 
-affineTranslation :: Num a => Vec3 a -> Mat4x4 a
+{-# INLINE affineTranslation #-}
+affineTranslation :: (Vectorized a, Num a) => Vec3 a -> Mat4x4 a
 affineTranslation (Vec3 x y z) = Mat4x4
 	1 0 0 x
 	0 1 0 y
 	0 0 1 z
 	0 0 0 1
 
-affineScaling :: Num a => Vec3 a -> Mat4x4 a
+{-# INLINE affineScaling #-}
+affineScaling :: (Vectorized a, Num a) => Vec3 a -> Mat4x4 a
 affineScaling (Vec3 x y z) = Mat4x4
 	x 0 0 0
 	0 y 0 0
 	0 0 z 0
 	0 0 0 1
 
-affineLookAt :: Floating a => Vec3 a -> Vec3 a -> Vec3 a -> Mat4x4 a
+{-# INLINE affineLookAt #-}
+affineLookAt :: (Vectorized a, Floating a) => Vec3 a -> Vec3 a -> Vec3 a -> Mat4x4 a
 affineLookAt eye target up = r where
 	z@(Vec3 zx zy zz) = normalize $ eye - target
 	x@(Vec3 xx xy xz) = normalize $ cross up z
@@ -51,15 +55,17 @@ affineLookAt eye target up = r where
 		zx zy zz (-oz)
 		0 0 0 1
 
-affineAxisRotation :: Floating a => Vec3 a -> a -> Quaternion a
+{-# INLINE affineAxisRotation #-}
+affineAxisRotation :: Quaternionized a => Vec3 a -> a -> Quat a
 affineAxisRotation (Vec3 x y z) angle = r where
 	ha = angle * 0.5
 	sa = sin ha
 	ca = cos ha
-	r = Quaternion $ Vec4 (x * sa) (y * sa) (z * sa) ca
+	r = Quat $ Vec4 (x * sa) (y * sa) (z * sa) ca
 
-affineFromQuaternion :: Num a => Quaternion a -> Mat4x4 a
-affineFromQuaternion (Quaternion (Vec4 x y z w)) = r where
+{-# INLINE affineFromQuaternion #-}
+affineFromQuaternion :: Quaternionized a => Quat a -> Mat4x4 a
+affineFromQuaternion (Quat (Vec4 x y z w)) = r where
 	ww = w * w
 	xx = x * x
 	yy = y * y
@@ -76,7 +82,8 @@ affineFromQuaternion (Quaternion (Vec4 x y z w)) = r where
 		(xz2 - wy2) (yz2 + wx2) (ww - xx - yy + zz) 0
 		0 0 0 1
 
-projectionPerspectiveFov :: Floating a => a -> a -> a -> a -> Mat4x4 a
+{-# INLINE projectionPerspectiveFov #-}
+projectionPerspectiveFov :: (Vectorized a, Floating a) => a -> a -> a -> a -> Mat4x4 a
 projectionPerspectiveFov fovY aspect zn zf = r where
 	ys = 1 / tan (fovY * 0.5)
 	xs = ys / aspect
