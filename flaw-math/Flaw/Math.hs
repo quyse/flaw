@@ -4,13 +4,16 @@ Description: Math.
 License: MIT
 -}
 
-{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, ScopedTypeVariables, TemplateHaskell, TypeFamilies #-}
+{-# LANGUAGE FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, ScopedTypeVariables, TemplateHaskell, TypeFamilies #-}
 
 module Flaw.Math
 	( maxVecDimension
 	, vecComponents
 	, Vec(..)
 	, VecX(..), VecY(..), VecZ(..), VecW(..)
+	, Vectorized(..)
+	, Vec1(..), Vec2(..), Vec3(..), Vec4(..)
+	, Mat3x4(..), Mat4x4(..)
 	, SwizzleVecX1(..), SwizzleVecX2(..), SwizzleVecX3(..), SwizzleVecX4(..)
 	, SwizzleVecY1(..), SwizzleVecY2(..), SwizzleVecY3(..), SwizzleVecY4(..)
 	, SwizzleVecZ1(..), SwizzleVecZ2(..), SwizzleVecZ3(..), SwizzleVecZ4(..)
@@ -19,40 +22,26 @@ module Flaw.Math
 	, Combine2Vec(..)
 	, Combine3Vec(..)
 	, Combine4Vec(..)
-	, Vec1(..), Vec2(..), Vec3(..), Vec4(..)
-	, Vec1f, Vec2f, Vec3f, Vec4f
-	, Vec1d, Vec2d, Vec3d, Vec4d
-	, Vec1i, Vec2i, Vec3i, Vec4i
-	, Vec1u, Vec2u, Vec3u, Vec4u
+	, Float1, Float2, Float3, Float4
+	, Double1, Double2, Double3, Double4
+	, Int32_1, Int32_2, Int32_3, Int32_4
+	, Word32_1, Word32_2, Word32_3, Word32_4
+	, Int1, Int2, Int3, Int4
 	, Dot(..)
 	, Cross(..)
 	, Norm(..)
 	, Normalize(..)
 	, Mat(..)
 	, Mul(..)
-	, Mat1x1(..), Mat1x2(..), Mat1x3(..), Mat1x4(..)
-	, Mat2x1(..), Mat2x2(..), Mat2x3(..), Mat2x4(..)
-	, Mat3x1(..), Mat3x2(..), Mat3x3(..), Mat3x4(..)
-	, Mat4x1(..), Mat4x2(..), Mat4x3(..), Mat4x4(..)
-	, Mat1x1f, Mat1x2f, Mat1x3f, Mat1x4f
-	, Mat2x1f, Mat2x2f, Mat2x3f, Mat2x4f
-	, Mat3x1f, Mat3x2f, Mat3x3f, Mat3x4f
-	, Mat4x1f, Mat4x2f, Mat4x3f, Mat4x4f
-	, Mat1x1d, Mat1x2d, Mat1x3d, Mat1x4d
-	, Mat2x1d, Mat2x2d, Mat2x3d, Mat2x4d
-	, Mat3x1d, Mat3x2d, Mat3x3d, Mat3x4d
-	, Mat4x1d, Mat4x2d, Mat4x3d, Mat4x4d
-	, Mat1x1i, Mat1x2i, Mat1x3i, Mat1x4i
-	, Mat2x1i, Mat2x2i, Mat2x3i, Mat2x4i
-	, Mat3x1i, Mat3x2i, Mat3x3i, Mat3x4i
-	, Mat4x1i, Mat4x2i, Mat4x3i, Mat4x4i
-	, Mat1x1u, Mat1x2u, Mat1x3u, Mat1x4u
-	, Mat2x1u, Mat2x2u, Mat2x3u, Mat2x4u
-	, Mat3x1u, Mat3x2u, Mat3x3u, Mat3x4u
-	, Mat4x1u, Mat4x2u, Mat4x3u, Mat4x4u
-	, Quaternion(..)
+	, Float3x4, Float4x4
+	, Double3x4, Double4x4
+	, Int32_3x4, Int32_4x4
+	, Word32_3x4, Word32_4x4
+	, Int3x4, Int4x4
+	, Quaternionized(..)
+	, Quat(..)
 	, Conjugate(..)
-	, Quaternionf, Quaterniond
+	, FloatQ, DoubleQ
 	) where
 
 import Control.Monad
@@ -73,7 +62,7 @@ class Vec v where
 	-- | Create vector from scalar (put scalar into every component).
 	vecFromScalar :: VecElement v -> v
 
--- | Generates classes VecX..VecW with only method to access components.
+-- | Generate classes VecX..VecW with only method to access components.
 {- Example:
 class Vec v => VecX v where
 	x_ :: v -> VecElement v
@@ -85,6 +74,28 @@ forM vecComponents $ \c -> do
 	classD (return [AppT (ConT $ mkName "Vec") $ VarT tvV]) className [PlainTV tvV] []
 		[ sigD methodName [t| $(varT tvV) -> VecElement $(varT tvV) |]
 		]
+
+-- | Generate class Vectorized.
+{-
+class Vectorized a where
+	data Vec{1234} a :: *
+	vec{n=1234} :: a...{n} -> Vec{n} a
+	data Mat{1234}x{1234} a :: *
+	mat{n=1234}x{m=1234} :: a...{n*m} -> Mat{n}x{m} a
+-}
+liftM return $ do
+	tvA <- newName "a"
+	vecDecs <- liftM concat $ forM [1..maxVecDimension] $ \dim -> do
+		let dimStr = [intToDigit dim]
+		let dataDec = familyKindD dataFam (mkName $ "Vec" ++ dimStr) [PlainTV tvA] StarT
+		let conFuncDec = sigD (mkName $ "vec" ++ dimStr) $ foldr (\a b -> [t| $a -> $b |]) (appT (conT $ mkName $ "Vec" ++ dimStr) (varT tvA)) $ replicate dim $ varT tvA
+		return [dataDec, conFuncDec]
+	matDecs <- liftM concat $ forM matDimensions $ \(dimN, dimM) -> do
+		let dimStr = [intToDigit dimN, 'x', intToDigit dimM]
+		let dataDec = familyKindD dataFam (mkName $ "Mat" ++ dimStr) [PlainTV tvA] StarT
+		let conFuncDec = sigD (mkName $ "mat" ++ dimStr) $ foldr (\a b -> [t| $a -> $b |]) (appT (conT $ mkName $ "Mat" ++ dimStr) (varT tvA)) $ replicate (dimN * dimM) $ varT tvA
+		return [dataDec, conFuncDec]
+	classD (sequence []) (mkName "Vectorized") [PlainTV tvA] [] $ vecDecs ++ matDecs
 
 -- | Class for dot operation.
 class Vec v => Dot v where
@@ -167,417 +178,479 @@ forM [(len, maxComp) | len <- [1..4], maxComp <- [1..4]] $ \(len, maxComp) -> do
 	classD (sequence [ [t| $(conT $ mkName $ "Vec" ++ [toUpper c]) $(varT tvV) |] | c <- components])
 		className [PlainTV tvV] [] $ (familyKindD typeFam resultTypeName [PlainTV tvV] StarT) : map genSig variants
 
--- | Generate actual vector data with instances.
-{- Example:
+-- | Generate per-math type declarations.
+liftM concat $ forM mathTypeNamesWithPrefix $ \(mathTypeName, mathTypePrefix) -> do
 
-data Vec4 a = Vec4 a a a a deriving Show
+	let elemType = conT mathTypeName
 
-instance Vec (Vec4 a) where
-	type VecElement (Vec4 a) = a
-	vecLength _ = 4
-	vecToList (Vec4 x y z w) = [x, y, z, w]
-	vecFromScalar a = Vec4 a a a a
-
-instance VecX (Vec4 a) where
-	x_ (Vec4 x _ _ _) = x
--- VecY, ...
-
-instance Num a => Num (Vec4 a) where
-	...
--}
-liftM concat $ forM [1..maxVecDimension] $ \dim -> do
-	-- name of data (Vec{dim})
-	let dataName = mkName $ "Vec" ++ [intToDigit dim]
-	-- name of type parameter
-	tvA <- newName "a"
-	let tyVarBinds = [PlainTV tvA]
-	-- data declaration
-	let dataDec = dataD (return []) dataName tyVarBinds
-		[ normalC dataName (replicate dim (return (IsStrict, VarT tvA)))
-		] [''Eq, ''Ord, ''Show]
-
-	---- instance declarations
-
-	-- string with symbols of components, like "xyz"
-	let components = take dim vecComponents
-	-- names for component-parameters
-	componentParams <- forM components $ \c -> newName [c]
-
-	-- instance for Vec class
-	let vecInstance = do
-		let vecFromScalarDecl = do
-			a <- newName "a"
-			funD 'vecFromScalar [clause [varP a] (normalB $ foldl appE (conE dataName) $ map varE $ replicate dim a) []]
-		instanceD (return []) [t| Vec ($(conT dataName) $(varT tvA)) |]
-			[ tySynInstD ''VecElement $ tySynEqn [ [t| $(conT dataName) $(varT tvA) |] ] $ varT tvA
-			, funD 'vecLength [clause [wildP] (normalB $ litE $ integerL $ fromIntegral dim) []]
-			, funD 'vecToList [clause [conP dataName $ map varP componentParams] (normalB $ listE $ map varE componentParams) []]
-			, vecFromScalarDecl
-			]
-
-	-- instances for VecX .. VecW classes
-	let genVecComponentInstance component = do
-		let className = mkName $ "Vec" ++ [toUpper component]
-		let funName = mkName [component, '_']
-		varName <- newName [component]
-		instanceD (return []) [t| $(conT className) ($(conT dataName) $(varT tvA)) |]
-			[ funD funName [clause [conP dataName [if c == component then (varP varName) else wildP | c <- components]] (normalB (varE varName)) []]
-			]
-
-	-- instance for Dot class
-	let dotInstance = do
-		as <- forM components $ \c -> newName $ ['a', c]
-		bs <- forM components $ \c -> newName $ ['b', c]
-		instanceD (sequence [ [t| Num $(varT tvA) |] ]) [t| Dot ($(conT dataName) $(varT tvA)) |]
-			[ funD 'dot
-				[ clause
-					[ conP dataName $ map varP as
-					, conP dataName $ map varP bs
-					]
-					(normalB $ foldl1 (\a b -> [| $a + $b |]) $ map (\(a, b) -> [| $(varE a) * $(varE b) |]) $ zip as bs) []
+	-- Vectorized instance, like Vectorized Float
+	vectorizedInstance <- do
+		-- things per vector dimension
+		vecDecs <- liftM concat $ forM [1..maxVecDimension] $ \dim -> do
+			let dimStr = [intToDigit dim]
+			let dataName = mkName $ "Vec" ++ dimStr
+			let conName = mkName $ mathTypePrefix ++ dimStr
+			components <- forM (take dim vecComponents) $ newName . return
+			addInlines
+				[ dataInstD (sequence []) dataName [elemType] [normalC conName (replicate dim $ return (Unpacked, ConT mathTypeName))] [''Eq, ''Ord, ''Show]
+				, funD (mkName $ "vec" ++ dimStr) [clause (map varP components) (normalB $ foldl appE (conE conName) $ map varE components) []]
 				]
-			]
+		-- things per matrix dimension
+		matDecs <- liftM concat $ forM matDimensions $ \(dimN, dimM) -> do
+			let dimStr = [intToDigit dimN, 'x', intToDigit dimM]
+			let dataName = mkName $ "Mat" ++ dimStr
+			let conName = mkName $ mathTypePrefix ++ dimStr
+			components <- forM [(i, j) | i <- [1..dimN], j <- [1..dimM]] $ \(i, j) -> newName ['m', intToDigit i, intToDigit j]
+			addInlines
+				[ dataInstD (sequence []) dataName [elemType] [normalC conName (replicate (dimN * dimM) $ return (Unpacked, ConT mathTypeName))] [''Eq, ''Ord, ''Show]
+				, funD (mkName $ "mat" ++ dimStr) [clause (map varP components) (normalB $ foldl appE (conE conName) $ map varE components) []]
+				]
+		instanceD (sequence []) (appT (conT $ mkName "Vectorized") elemType) $ vecDecs ++ matDecs
 
-	-- instance for Norm class
-	let normInstance = do
-		as <- forM components $ \c -> newName [c]
-		instanceD (sequence [ [t| Floating $(varT tvA) |] ]) [t| Norm ($(conT dataName) $(varT tvA)) |]
-			[ funD 'norm [clause [] (normalB $ [| sqrt . norm2 |]) []]
-			, funD 'norm2 [clause [conP dataName $ map varP as]
-				(normalB $ foldl1 (\a b -> [| $a + $b |]) $ map (\a -> [| $a * $a |]) $ map varE as) []]
-			]
+	-- instances per vector dimension, like VecX (Vec4 Float)
+	vecInstances <- liftM concat $ forM [1..maxVecDimension] $ \dim -> do
 
-	-- instance for Normalize class
-	let normalizeInstance = do
-		a <- newName "a"
-		instanceD (sequence [ [t| Floating $(varT tvA) |] ]) [t| Normalize ($(conT dataName) $(varT tvA)) |]
-			[ funD 'normalize [clause [varP a] (normalB [| $(varE a) * (vecFromScalar (1 / norm $(varE a))) |]) []]
-			]
+		let dimStr = [intToDigit dim]
+		let dataName = mkName $ "Vec" ++ dimStr
+		let conName = mkName $ mathTypePrefix ++ dimStr
 
-	-- instance for SwizzleVec{maxComp}{dim} class
-	let swizzleVecInstances = map swizzleVecInstance [(srcDim, maxComp) | srcDim <- [1..4], maxComp <- [1..srcDim]] where
-		swizzleVecInstance (srcDim, maxComp) = do
+		-- string with symbols of components, like "xyz"
+		let components = take dim vecComponents
+		-- names for component-parameters
+		componentParams <- forM components $ \c -> newName [c]
+
+		-- get some info about instances of math type
+		hasFractional <- isInstance ''Fractional [ConT mathTypeName]
+		hasFloating <- isInstance ''Floating [ConT mathTypeName]
+
+		-- instance for Vec class
+		vecInstance <- do
+			let vecFromScalarDecl = do
+				a <- newName "a"
+				funD 'vecFromScalar [clause [varP a] (normalB $ foldl appE (conE conName) $ map varE $ replicate dim a) []]
+			instanceD (return []) [t| Vec ($(conT dataName) $elemType) |] =<< addInlines
+				[ tySynInstD ''VecElement $ tySynEqn [ [t| $(conT dataName) $elemType |] ] $ elemType
+				, funD 'vecLength [clause [wildP] (normalB $ litE $ integerL $ fromIntegral dim) []]
+				, funD 'vecToList [clause [conP conName $ map varP componentParams] (normalB $ listE $ map varE componentParams) []]
+				, vecFromScalarDecl
+				]
+
+		-- instances for VecX .. VecW classes
+		vecComponentInstances <- forM components $ \component -> do
+			let className = mkName $ "Vec" ++ [toUpper component]
+			let funName = mkName [component, '_']
+			varName <- newName [component]
+			instanceD (return []) [t| $(conT className) ($(conT dataName) $elemType) |] =<< addInlines
+				[ funD funName [clause [conP conName [if c == component then (varP varName) else wildP | c <- components]] (normalB (varE varName)) []]
+				]
+
+		-- instance for Dot class
+		dotInstance <- do
+			as <- forM components $ \c -> newName $ ['a', c]
+			bs <- forM components $ \c -> newName $ ['b', c]
+			instanceD (sequence []) [t| Dot ($(conT dataName) $elemType) |] =<< addInlines
+				[ funD 'dot
+					[ clause
+						[ conP conName $ map varP as
+						, conP conName $ map varP bs
+						]
+						(normalB $ foldl1 (\a b -> [| $a + $b |]) $ map (\(a, b) -> [| $(varE a) * $(varE b) |]) $ zip as bs) []
+					]
+				]
+
+		-- instance for Norm class
+		normInstances <- if hasFloating then do
+			as <- forM components $ \c -> newName [c]
+			inst <- instanceD (sequence []) [t| Norm ($(conT dataName) $elemType) |] =<< addInlines
+				[ funD 'norm [clause [] (normalB $ [| sqrt . norm2 |]) []]
+				, funD 'norm2 [clause [conP conName $ map varP as]
+					(normalB $ foldl1 (\a b -> [| $a + $b |]) $ map (\a -> [| $a * $a |]) $ map varE as) []]
+				]
+			return [inst]
+			else return []
+
+		-- instance for Normalize class
+		normalizeInstances <- if hasFloating then do
+			a <- newName "a"
+			inst <- instanceD (sequence []) [t| Normalize ($(conT dataName) $elemType) |] =<< addInlines
+				[ funD 'normalize [clause [varP a] (normalB [| $(varE a) * (vecFromScalar (1 / norm $(varE a))) |]) []]
+				]
+			return [inst]
+			else return []
+
+		-- instance for SwizzleVec{maxComp}{dim} class
+		swizzleVecInstances <- forM [(srcDim, maxComp) | srcDim <- [1..4], maxComp <- [1..srcDim]] $ \(srcDim, maxComp) -> do
 			let swizzleComponents = take maxComp vecComponents
 			let nameSuffix = [toUpper $ last swizzleComponents, intToDigit dim]
 			let instanceName = mkName $ "SwizzleVec" ++ nameSuffix
 			tvV <- newName "v"
 			let srcDataName = mkName $ "Vec" ++ [intToDigit srcDim]
-			let resultDecl = tySynInstD (mkName $ "SwizzleVecResult" ++ nameSuffix) $ tySynEqn [ [t| $(conT srcDataName) $(varT tvA) |] ] $ [t| $(conT dataName) $(varT tvA) |]
+			let resultDecl = tySynInstD (mkName $ "SwizzleVecResult" ++ nameSuffix) $ tySynEqn [ [t| $(conT srcDataName) $elemType |] ] $ [t| $(conT dataName) $elemType |]
 			let variants = filter (swizzleVariantFilter swizzleComponents) $ genSwizzleVariants dim
 			let funDecl variant = do
-				let expr = foldl (\v c -> appE v [| $(varE (mkName $ [c, '_'])) $(varE tvV) |]) (conE dataName) variant
+				let expr = foldl (\v c -> appE v [| $(varE (mkName $ [c, '_'])) $(varE tvV) |]) (conE conName) variant
 				funD (mkName $ variant ++ "__") [clause [varP tvV] (normalB expr) []]
-			instanceD (return []) [t| $(conT instanceName) ($(conT srcDataName) $(varT tvA)) |] $ resultDecl : map funDecl variants
+			instanceD (return []) [t| $(conT instanceName) ($(conT srcDataName) $elemType) |] =<< addInlines (resultDecl : (map funDecl variants))
 
-	-- instances for CombineVec class
-	let
-		genCombineVecVariants :: Int -> [[Int]]
-		genCombineVecVariants 0 = [[]]
-		genCombineVecVariants n = [a : as | a <- [1..(if n == dim then n - 1 else n)], as <- genCombineVecVariants (n - a)]
-		combineVecInstance variant = do
-			pes <- forM variant $ \c -> do
-				p <- newName "p"
-				let es = if c > 1 then map (\q -> appE (varE $ mkName [q, '_']) $ varE p) $ take c vecComponents else [varE p]
-				return (varP p, es)
-			let instanceDecl elemType = do
+		-- instances for CombineVec class
+		let
+			genCombineVecVariants :: Int -> [[Int]]
+			genCombineVecVariants 0 = [[]]
+			genCombineVecVariants n = [a : as | a <- [1..(if n == dim then n - 1 else n)], as <- genCombineVecVariants (n - a)]
+			combineVecInstance variant = do
+				pes <- forM variant $ \c -> do
+					p <- newName "p"
+					let es = if c > 1 then map (\q -> appE (varE $ mkName [q, '_']) $ varE p) $ take c vecComponents else [varE p]
+					return (varP p, es)
 				let paramTypes = map (\c -> if c > 1 then [t| $(conT $ mkName $ "Vec" ++ [intToDigit c]) $elemType |] else elemType) variant
-				let expr = foldl appE (conE dataName) $ concat $ map snd pes
-				instanceD (return []) (foldl appT (conT $ mkName $ "Combine" ++ [intToDigit $ length variant] ++ "Vec") paramTypes)
+				let expr = foldl appE (conE conName) $ concat $ map snd pes
+				instanceD (return []) (foldl appT (conT $ mkName $ "Combine" ++ [intToDigit $ length variant] ++ "Vec") paramTypes) =<< addInlines
 					[ tySynInstD (mkName $ "Combine" ++ [intToDigit $ length variant] ++ "VecResult") $ tySynEqn paramTypes [t| $(conT dataName) $elemType |]
 					, funD (mkName $ "combine" ++ [intToDigit $ length variant] ++ "Vec") [clause (map fst pes) (normalB expr) []]
 					]
-			return $ map (instanceDecl . conT) mathTypeNames
-	combineVecInstances <- liftM concat $ mapM combineVecInstance (genCombineVecVariants dim)
+		combineVecInstances <- mapM combineVecInstance (genCombineVecVariants dim)
 
-	paramName <- newName "a"
-	aParams <- mapM (\c -> newName $ ['a', c]) components
-	bParams <- mapM (\c -> newName $ ['b', c]) components
-	let binaryOp opName = funD opName
-		[ clause
-			[ conP dataName $ map varP aParams
-			, conP dataName $ map varP bParams
-			]
-			(normalB $ foldl appE (conE dataName) $ map (\(a, b) -> [| $(varE opName) $(varE a) $(varE b) |]) $ zip aParams bParams)
-			[]
-		]
-	let unaryOp opName = funD opName
-		[ clause
-			[ conP dataName $ map varP aParams
-			]
-			(normalB $ foldl appE (conE dataName) $ map (\a -> [| $(varE opName) $(varE a) |]) aParams)
-			[]
-		]
-	let nullaryOp opName = funD opName
-		[ clause []
-			(normalB $ foldl appE (conE dataName) $ map (\_ -> varE opName) aParams)
-			[]
-		]
-
-	-- instance for Num class
-	let numInstance = do
-		let fromIntegerDecl = do
-			iParam <- newName "i"
-			fiParam <- newName "fi"
-			funD 'fromInteger [clause [varP iParam]
-				(normalB $ foldl appE (conE dataName) $ replicate dim $ varE fiParam)
-				[valD (varP fiParam) (normalB [| fromInteger $(varE iParam) |]) []]]
-
-		instanceD (sequence [ [t| Num $(varT paramName) |] ]) [t| Num ($(conT dataName) $(varT paramName)) |]
-			[ binaryOp '(+)
-			, binaryOp '(*)
-			, binaryOp '(-)
-			, unaryOp 'negate
-			, unaryOp 'abs
-			, unaryOp 'signum
-			, fromIntegerDecl
-			]
-
-	-- instance for Fractional class
-	let fractionalInstance = do
-		let fromRationalDecl = do
-			rParam <- newName "r"
-			frParam <- newName "fr"
-			funD 'fromRational [clause [varP rParam]
-				(normalB $ foldl appE (conE dataName) $ replicate dim $ varE frParam)
-				[valD (varP frParam) (normalB [| fromRational $(varE rParam) |]) []]]
-		instanceD (sequence [ [t| Fractional $(varT paramName) |] ]) [t| Fractional ($(conT dataName) $(varT paramName)) |]
-			[ binaryOp '(/)
-			, unaryOp 'recip
-			, fromRationalDecl
-			]
-
-	-- instance for Floating class
-	let floatingInstance = do
-		instanceD (sequence [ [t| Floating $(varT paramName) |] ]) [t| Floating ($(conT dataName) $(varT paramName)) |] $ concat
-			[ [nullaryOp 'pi]
-			, map binaryOp
-				[ '(**)
-				, 'logBase
-				]
-			, map unaryOp
-				[ 'exp
-				, 'sqrt
-				, 'log
-				, 'sin
-				, 'tan
-				, 'cos
-				, 'asin
-				, 'atan
-				, 'acos
-				, 'sinh
-				, 'tanh
-				, 'cosh
-				, 'asinh
-				, 'atanh
-				, 'acosh
-				]
-			]
-
-	-- instance for Storable class
-	let storableInstance = do
-		p <- newName "p"
-		let params = zip [0..(dim - 1)] aParams
-		instanceD (sequence [ [t| Storable $(varT paramName) |] ]) [t| Storable ($(conT dataName) $(varT paramName)) |]
-			[ funD 'sizeOf [clause [wildP] (normalB [| $(litE $ integerL $ fromIntegral dim) * sizeOf (undefined :: $(varT paramName)) |]) []]
-			, funD 'alignment [clause [wildP] (normalB [| alignment (undefined :: $(varT paramName)) |]) []]
-			, funD 'peek [clause [varP p] (normalB $ doE $ [bindS (varP a) [| peekElemOff (castPtr $(varE p)) $(litE $ integerL $ fromIntegral i) |] | (i, a) <- params] ++
-				[noBindS [| return $(foldl appE (conE dataName) $ map (varE . snd) params) |]]) []]
-			, funD 'poke [clause [varP p, conP dataName $ map (varP . snd) params]
-				(normalB $ doE [noBindS [| pokeElemOff (castPtr $(varE p)) $(litE $ integerL $ fromIntegral i) $(varE a) |] | (i, a) <- params]) []]
-			]
-
-	-- instance for Functor class
-	let functorInstance = do
-		f <- newName "f"
-		instanceD (return []) [t| Functor $(conT dataName) |]
-			[ funD 'fmap [clause [varP f, conP dataName $ map varP aParams] (normalB $ foldl appE (conE dataName) $ map (appE (varE f) . varE) aParams) []]
-			]
-
-	sequence $ dataDec : vecInstance : dotInstance : normInstance : normalizeInstance : numInstance : fractionalInstance : floatingInstance : storableInstance : functorInstance : (map genVecComponentInstance components) ++ swizzleVecInstances ++ combineVecInstances
-
--- Generate matrix datatypes.
-liftM concat $ forM [(i, j) | i <- [1..maxVecDimension], j <- [1..maxVecDimension]] $ \(n, m) -> do
-	-- name of data (Mat{n}x{m})
-	let dataName = mkName $ "Mat" ++ [intToDigit n, 'x', intToDigit m]
-
-	-- name of type parameter
-	tvA <- newName "a"
-	-- some params
-	paramName <- newName "a"
-	aParams <- sequence [newName $ ['a', '_', intToDigit i, '_', intToDigit j] | i <- [1..n], j <- [1..m]]
-	bParams <- sequence [newName $ ['b', '_', intToDigit i, '_', intToDigit j] | i <- [1..n], j <- [1..m]]
-
-	-- data declaration
-	let dataDec = dataD (return []) dataName [PlainTV tvA]
-		[ normalC dataName (replicate (n * m) $ return (IsStrict, VarT tvA))
-		] [''Eq, ''Ord, ''Show]
-
-	-- instance for Mat class
-	let matInstance = instanceD (return []) [t| Mat ($(conT dataName) $(varT tvA)) |]
-		[ tySynInstD ''MatElement $ tySynEqn [ [t| $(conT dataName) $(varT tvA) |] ] $ varT tvA
-		, funD 'matSize [clause [wildP] (normalB [| ($(litE $ integerL $ toInteger n), $(litE $ integerL $ toInteger m)) |]) []]
-		]
-
-	-- instance for Num class
-	let numInstance = do
+		aParams <- mapM (\c -> newName $ ['a', c]) components
+		bParams <- mapM (\c -> newName $ ['b', c]) components
 		let binaryOp opName = funD opName
 			[ clause
-				[ conP dataName $ map varP aParams
-				, conP dataName $ map varP bParams
+				[ conP conName $ map varP aParams
+				, conP conName $ map varP bParams
 				]
-				(normalB $ foldl appE (conE dataName) $ map (\(a, b) -> [| $(varE opName) $(varE a) $(varE b) |]) $ zip aParams bParams)
+				(normalB $ foldl appE (conE conName) $ map (\(a, b) -> [| $(varE opName) $(varE a) $(varE b) |]) $ zip aParams bParams)
 				[]
 			]
 		let unaryOp opName = funD opName
 			[ clause
-				[ conP dataName $ map varP aParams
+				[ conP conName $ map varP aParams
 				]
-				(normalB $ foldl appE (conE dataName) $ map (\a -> [| $(varE opName) $(varE a) |]) aParams)
+				(normalB $ foldl appE (conE conName) $ map (\a -> [| $(varE opName) $(varE a) |]) aParams)
+				[]
+			]
+		let nullaryOp opName = funD opName
+			[ clause []
+				(normalB $ foldl appE (conE conName) $ map (\_ -> varE opName) aParams)
 				[]
 			]
 
-		let fromIntegerDecl = do
-			iParam <- newName "i"
-			fiParam <- newName "fi"
-			funD 'fromInteger [clause [varP iParam]
-				(normalB $ foldl appE (conE dataName) $ replicate (n * m) $ varE fiParam)
-				[valD (varP fiParam) (normalB [| fromInteger $(varE iParam) |]) []]]
+		-- instance for Num class
+		numInstance <- do
+			let fromIntegerDecl = do
+				iParam <- newName "i"
+				fiParam <- newName "fi"
+				funD 'fromInteger [clause [varP iParam]
+					(normalB $ foldl appE (conE conName) $ replicate dim $ varE fiParam)
+					[valD (varP fiParam) (normalB [| fromInteger $(varE iParam) |]) []]]
 
-		instanceD (sequence [ [t| Num $(varT paramName) |] ]) [t| Num ($(conT dataName) $(varT paramName)) |]
-			[ binaryOp '(+)
-			, binaryOp '(*)
-			, binaryOp '(-)
-			, unaryOp 'negate
-			, unaryOp 'abs
-			, unaryOp 'signum
-			, fromIntegerDecl
+			instanceD (sequence []) [t| Num ($(conT dataName) $elemType) |] =<< addInlines
+				[ binaryOp '(+)
+				, binaryOp '(*)
+				, binaryOp '(-)
+				, unaryOp 'negate
+				, unaryOp 'abs
+				, unaryOp 'signum
+				, fromIntegerDecl
+				]
+
+		-- instance for Fractional class
+		fractionalInstances <- if hasFractional then do
+			let fromRationalDecl = do
+				rParam <- newName "r"
+				frParam <- newName "fr"
+				funD 'fromRational [clause [varP rParam]
+					(normalB $ foldl appE (conE conName) $ replicate dim $ varE frParam)
+					[valD (varP frParam) (normalB [| fromRational $(varE rParam) |]) []]]
+			inst <- instanceD (sequence []) [t| Fractional ($(conT dataName) $elemType) |] =<< addInlines
+				[ binaryOp '(/)
+				, unaryOp 'recip
+				, fromRationalDecl
+				]
+			return [inst]
+			else return []
+
+		-- instance for Floating class
+		floatingInstances <- if hasFloating then do
+			decls <- addInlines $ concat
+				[ [nullaryOp 'pi]
+				, map binaryOp
+					[ '(**)
+					, 'logBase
+					]
+				, map unaryOp
+					[ 'exp
+					, 'sqrt
+					, 'log
+					, 'sin
+					, 'tan
+					, 'cos
+					, 'asin
+					, 'atan
+					, 'acos
+					, 'sinh
+					, 'tanh
+					, 'cosh
+					, 'asinh
+					, 'atanh
+					, 'acosh
+					]
+				]
+			inst <- instanceD (sequence []) [t| Floating ($(conT dataName) $elemType) |] decls
+			return [inst]
+			else return []
+
+		-- instance for Storable class
+		storableInstance <- do
+			p <- newName "p"
+			let params = zip [0..(dim - 1)] aParams
+			instanceD (sequence []) [t| Storable ($(conT dataName) $elemType) |] =<< addInlines
+				[ funD 'sizeOf [clause [wildP] (normalB [| $(litE $ integerL $ fromIntegral dim) * sizeOf (undefined :: $elemType) |]) []]
+				, funD 'alignment [clause [wildP] (normalB [| alignment (undefined :: $elemType) |]) []]
+				, funD 'peek [clause [varP p] (normalB $ doE $ [bindS (varP a) [| peekElemOff (castPtr $(varE p)) $(litE $ integerL $ fromIntegral i) |] | (i, a) <- params] ++
+					[noBindS [| return $(foldl appE (conE conName) $ map (varE . snd) params) |]]) []]
+				, funD 'poke [clause [varP p, conP conName $ map (varP . snd) params]
+					(normalB $ doE [noBindS [| pokeElemOff (castPtr $(varE p)) $(litE $ integerL $ fromIntegral i) $(varE a) |] | (i, a) <- params]) []]
+				]
+
+		-- type synonym
+		synonym <- tySynD conName [] [t| $(conT dataName) $elemType |]
+
+		return $ vecInstance : dotInstance : numInstance : storableInstance : synonym :
+			vecComponentInstances ++ swizzleVecInstances ++ combineVecInstances ++ normInstances ++ normalizeInstances ++ fractionalInstances ++ floatingInstances
+
+	-- Cross instance
+	crossInstance <- do
+		names@[ax, ay, az, bx, by, bz] <- mapM newName ["ax", "ay", "az", "bx", "by", "bz"]
+		let [axe, aye, aze, bxe, bye, bze] = map varE names
+		let conName = mkName $ mathTypePrefix ++ "3"
+		instanceD (sequence []) [t| Cross (Vec3 $elemType) |] =<< addInlines
+			[ funD 'cross [clause [conP conName [varP ax, varP ay, varP az], conP conName [varP bx, varP by, varP bz]] (normalB
+				[| $(conE conName)
+					($aye * $bze - $aze * $bye)
+					($aze * $bxe - $axe * $bze)
+					($axe * $bye - $aye * $bxe)
+					|]) [] ]
 			]
 
-	-- instance for Storable class (column-major)
-	let storableInstance = do
-		p <- newName "p"
-		let params = zip [(i, j) | i <- [0..(n - 1)], j <- [0..(m - 1)]] aParams
-		instanceD (sequence [ [t| Storable $(varT paramName) |] ]) [t| Storable ($(conT dataName) $(varT paramName)) |]
-			[ funD 'sizeOf [clause [wildP] (normalB [| $(litE $ integerL $ fromIntegral (n * m)) * sizeOf (undefined :: $(varT paramName)) |]) []]
-			, funD 'alignment [clause [wildP] (normalB [| alignment (undefined :: $(varT paramName)) |]) []]
-			, funD 'peek [clause [varP p] (normalB $ doE $ [bindS (varP a) [| peekElemOff (castPtr $(varE p)) $(litE $ integerL $ fromIntegral (j * n + i)) |] | ((i, j), a) <- params] ++
-				[noBindS [| return $(foldl appE (conE dataName) $ map (varE . snd) params) |]]) []]
-			, funD 'poke [clause [varP p, conP dataName $ map (varP . snd) params]
-				(normalB $ doE [noBindS [| pokeElemOff (castPtr $(varE p)) $(litE $ integerL $ fromIntegral (j * n + i)) $(varE a) |] | ((i, j), a) <- params]) []]
+	-- matrix instances
+	matInstances <- liftM concat $ forM matDimensions $ \(dimN, dimM) -> do
+
+		let dimStr = [intToDigit dimN, 'x', intToDigit dimM]
+		let dataName = mkName $ "Mat" ++ dimStr
+		let conName = mkName $ mathTypePrefix ++ dimStr
+
+		-- some params
+		aParams <- mapM newName [['a', intToDigit i, intToDigit j] | i <- [1..dimN], j <- [1..dimM]]
+		bParams <- mapM newName [['b', intToDigit i, intToDigit j] | i <- [1..dimN], j <- [1..dimM]]
+
+		-- Mat instance
+		matInstance <- instanceD (sequence []) [t| Mat ($(conT dataName) $elemType) |] =<< addInlines
+			[ tySynInstD ''MatElement $ tySynEqn [ [t| $(conT dataName) $elemType |] ] elemType
+			, funD 'matSize [clause [wildP] (normalB [| ($(litE $ integerL $ toInteger dimN), $(litE $ integerL $ toInteger dimM)) |]) []]
 			]
 
-	sequence $ [dataDec, matInstance, numInstance, storableInstance]
+		-- Num instance
+		numInstance <- do
+			let binaryOp opName = funD opName
+				[ clause
+					[ conP conName $ map varP aParams
+					, conP conName $ map varP bParams
+					]
+					(normalB $ foldl appE (conE conName) $ map (\(a, b) -> infixApp (varE a) (varE opName) (varE b)) $ zip aParams bParams)
+					[]
+				]
+			let unaryOp opName = funD opName
+				[ clause
+					[ conP conName $ map varP aParams
+					]
+					(normalB $ foldl appE (conE conName) $ map (\a -> [| $(varE opName) $(varE a) |]) aParams)
+					[]
+				]
+			let fromIntegerDecl = do
+				iParam <- newName "i"
+				fiParam <- newName "fi"
+				funD 'fromInteger [clause [varP iParam]
+					(normalB $ foldl appE (conE conName) $ replicate (dimN * dimM) $ varE fiParam)
+					[valD (varP fiParam) (normalB [| fromInteger $(varE iParam) |]) []]]
 
--- Generate multiplications.
-let
-	dimensions = [1..maxVecDimension]
-	dimensions2 = [(n, m) | n <- dimensions, m <- dimensions]
-	dimensions3 = [(n, m, k) | n <- dimensions, m <- dimensions, k <- dimensions]
-	genVecMatMuls = sequence [genVecMatMul n m | (n, m) <- dimensions2]
-	genMatVecMuls = sequence [genMatVecMul n m | (n, m) <- dimensions2]
-	genMatMatMuls = sequence [genMatMatMul n m k | (n, m, k) <- dimensions3]
+			instanceD (sequence []) [t| Num ($(conT dataName) $elemType) |] =<< addInlines
+				[ binaryOp '(+)
+				, binaryOp '(*)
+				, binaryOp '(-)
+				, unaryOp 'negate
+				, unaryOp 'abs
+				, unaryOp 'signum
+				, fromIntegerDecl
+				]
 
-	gen aName bName cName funDecl = do
-		eName <- newName "e"
-		let eType = varT eName
-		instanceD (sequence [ [t| Num $(varT eName) |] ]) [t| Mul ($(conT aName) $eType) ($(conT bName) $eType) |]
-			[ tySynInstD ''MulResult $ tySynEqn [ [t| $(conT aName) $eType |], [t| $(conT bName) $eType |] ] [t| $(conT cName) $eType |]
+		-- Storable instance (column-major)
+		storableInstance <- do
+			p <- newName "p"
+			let params = zip [(i, j) | i <- [0..(dimN - 1)], j <- [0..(dimM - 1)]] aParams
+			instanceD (sequence []) [t| Storable ($(conT dataName) $elemType) |] =<< addInlines
+				[ funD 'sizeOf [clause [wildP] (normalB [| $(litE $ integerL $ fromIntegral (dimN * dimM)) * sizeOf (undefined :: $elemType) |]) []]
+				, funD 'alignment [clause [wildP] (normalB [| alignment (undefined :: $elemType) |]) []]
+				, funD 'peek [clause [varP p] (normalB $ doE $ [bindS (varP a) [| peekElemOff (castPtr $(varE p)) $(litE $ integerL $ fromIntegral (j * dimN + i)) |] | ((i, j), a) <- params] ++
+					[noBindS [| return $(foldl appE (conE conName) $ map (varE . snd) params) |]]) []]
+				, funD 'poke [clause [varP p, conP conName $ map (varP . snd) params]
+					(normalB $ doE [noBindS [| pokeElemOff (castPtr $(varE p)) $(litE $ integerL $ fromIntegral (j * dimN + i)) $(varE a) |] | ((i, j), a) <- params]) []]
+				]
+
+		-- type synonym
+		synonym <- tySynD conName [] [t| $(conT dataName) $elemType |]
+
+		return [matInstance, numInstance, storableInstance, synonym]
+
+	-- Generate multiplications.
+	mulInstances <- do
+		let gen aName bName cName funDecl = instanceD (sequence []) [t| Mul ($(conT aName) $elemType) ($(conT bName) $elemType) |] =<< addInlines
+			[ tySynInstD ''MulResult $ tySynEqn [ [t| $(conT aName) $elemType |], [t| $(conT bName) $elemType |] ] [t| $(conT cName) $elemType |]
 			, funDecl
 			]
 
-	genVecMatMul n m = do
-		let aName = mkName $ "Vec" ++ [intToDigit n]
-		let bName = mkName $ "Mat" ++ [intToDigit n, 'x', intToDigit m]
-		let cName = mkName $ "Vec" ++ [intToDigit m]
-		let aElemName i = mkName ['a', intToDigit i]
-		let bElemName i j = mkName ['b', intToDigit i, intToDigit j]
-		let cElemResult j = foldl1 (\a b -> [| $a + $b |]) [ [| $(varE $ aElemName i) * $(varE $ bElemName i j) |] | i <- [1..n]]
-		let aElems = map aElemName [1..n]
-		let bElems = [bElemName i j | i <- [1..n], j <- [1..m]]
-		let cElems = foldl appE (conE cName) $ map cElemResult [1..m]
-		let aPat = conP aName $ map varP aElems
-		let bPat = conP bName $ map varP bElems
-		gen aName bName cName $ funD 'mul [clause [aPat, bPat] (normalB cElems) []]
-	genMatVecMul n m = do
-		let aName = mkName $ "Mat" ++ [intToDigit n, 'x', intToDigit m]
-		let bName = mkName $ "Vec" ++ [intToDigit m]
-		let cName = mkName $ "Vec" ++ [intToDigit n]
-		let aElemName i j = mkName ['a', intToDigit i, intToDigit j]
-		let bElemName j = mkName ['b', intToDigit j]
-		let cElemResult i = foldl1 (\a b -> [| $a + $b |]) [ [| $(varE $ aElemName i j) * $(varE $ bElemName j) |] | j <- [1..m]]
-		let aElems = [aElemName i j | i <- [1..n], j <- [1..m]]
-		let bElems = map bElemName [1..m]
-		let cElems = foldl appE (conE cName) $ map cElemResult [1..n]
-		let aPat = conP aName $ map varP aElems
-		let bPat = conP bName $ map varP bElems
-		gen aName bName cName $ funD 'mul [clause [aPat, bPat] (normalB cElems) []]
-	genMatMatMul n m k = do
-		let aName = mkName $ "Mat" ++ [intToDigit n, 'x', intToDigit m]
-		let bName = mkName $ "Mat" ++ [intToDigit m, 'x', intToDigit k]
-		let cName = mkName $ "Mat" ++ [intToDigit n, 'x', intToDigit k]
-		let aElemName i j = mkName ['a', intToDigit i, intToDigit j]
-		let bElemName i j = mkName ['b', intToDigit i, intToDigit j]
-		let cElemResult i j = foldl1 (\a b -> [| $a + $b |]) [ [| $(varE $ aElemName i t) * $(varE $ bElemName t j) |] | t <- [1..m]]
-		let aElems = [aElemName i j | i <- [1..n], j <- [1..m]]
-		let bElems = [bElemName i j | i <- [1..m], j <- [1..k]]
-		let cElems = foldl appE (conE cName) [cElemResult i j | i <- [1..n], j <- [1..k]]
-		let aPat = conP aName $ map varP aElems
-		let bPat = conP bName $ map varP bElems
-		gen aName bName cName $ funD 'mul [clause [aPat, bPat] (normalB cElems) []]
-	in liftM concat $ sequence [genVecMatMuls, genMatVecMuls, genMatMatMuls]
+		let genVecMatMul (n, m) = do
+			let aName = mkName $ "Vec" ++ [intToDigit n]
+			let aConName = mkName $ mathTypePrefix ++ [intToDigit n]
+			let bName = mkName $ "Mat" ++ [intToDigit n, 'x', intToDigit m]
+			let bConName = mkName $ mathTypePrefix ++ [intToDigit n, 'x', intToDigit m]
+			let cName = mkName $ "Vec" ++ [intToDigit m]
+			let cConName = mkName $ mathTypePrefix ++ [intToDigit m]
+			let aElemName i = mkName ['a', intToDigit i]
+			let bElemName i j = mkName ['b', intToDigit i, intToDigit j]
+			let cElemResult j = foldl1 (\a b -> [| $a + $b |]) [ [| $(varE $ aElemName i) * $(varE $ bElemName i j) |] | i <- [1..n]]
+			let aElems = map aElemName [1..n]
+			let bElems = [bElemName i j | i <- [1..n], j <- [1..m]]
+			let cElems = foldl appE (conE cConName) $ map cElemResult [1..m]
+			let aPat = conP aConName $ map varP aElems
+			let bPat = conP bConName $ map varP bElems
+			gen aName bName cName $ funD 'mul [clause [aPat, bPat] (normalB cElems) []]
+		let genMatVecMul (n, m) = do
+			let aName = mkName $ "Mat" ++ [intToDigit n, 'x', intToDigit m]
+			let aConName = mkName $ mathTypePrefix ++ [intToDigit n, 'x', intToDigit m]
+			let bName = mkName $ "Vec" ++ [intToDigit m]
+			let bConName = mkName $ mathTypePrefix ++ [intToDigit m]
+			let cName = mkName $ "Vec" ++ [intToDigit n]
+			let cConName = mkName $ mathTypePrefix ++ [intToDigit n]
+			let aElemName i j = mkName ['a', intToDigit i, intToDigit j]
+			let bElemName j = mkName ['b', intToDigit j]
+			let cElemResult i = foldl1 (\a b -> [| $a + $b |]) [ [| $(varE $ aElemName i j) * $(varE $ bElemName j) |] | j <- [1..m]]
+			let aElems = [aElemName i j | i <- [1..n], j <- [1..m]]
+			let bElems = map bElemName [1..m]
+			let cElems = foldl appE (conE cConName) $ map cElemResult [1..n]
+			let aPat = conP aConName $ map varP aElems
+			let bPat = conP bConName $ map varP bElems
+			gen aName bName cName $ funD 'mul [clause [aPat, bPat] (normalB cElems) []]
+		let genMatMatMul (n, m, k) = do
+			let aName = mkName $ "Mat" ++ [intToDigit n, 'x', intToDigit m]
+			let aConName = mkName $ mathTypePrefix ++ [intToDigit n, 'x', intToDigit m]
+			let bName = mkName $ "Mat" ++ [intToDigit m, 'x', intToDigit k]
+			let bConName = mkName $ mathTypePrefix ++ [intToDigit m, 'x', intToDigit k]
+			let cName = mkName $ "Mat" ++ [intToDigit n, 'x', intToDigit k]
+			let cConName = mkName $ mathTypePrefix ++ [intToDigit n, 'x', intToDigit k]
+			let aElemName i j = mkName ['a', intToDigit i, intToDigit j]
+			let bElemName i j = mkName ['b', intToDigit i, intToDigit j]
+			let cElemResult i j = foldl1 (\a b -> [| $a + $b |]) [ [| $(varE $ aElemName i t) * $(varE $ bElemName t j) |] | t <- [1..m]]
+			let aElems = [aElemName i j | i <- [1..n], j <- [1..m]]
+			let bElems = [bElemName i j | i <- [1..m], j <- [1..k]]
+			let cElems = foldl appE (conE cConName) [cElemResult i j | i <- [1..n], j <- [1..k]]
+			let aPat = conP aConName $ map varP aElems
+			let bPat = conP bConName $ map varP bElems
+			gen aName bName cName $ funD 'mul [clause [aPat, bPat] (normalB cElems) []]
 
--- | Quaternion type.
-newtype Quaternion a = Quaternion (Vec4 a) deriving Show
+		vecMatMuls <- mapM genVecMatMul $ do
+			n <- [1..maxVecDimension]
+			(m, k) <- matDimensions
+			if n == m then [(m, k)]
+			else []
+		matVecMuls <- mapM genMatVecMul $ do
+			(n, m) <- matDimensions
+			k <- [1..maxVecDimension]
+			if m == k then [(n, m)]
+			else []
+		matMatMuls <- mapM genMatMatMul $ do
+			(n, m1) <- matDimensions
+			(m2, k) <- matDimensions
+			if m1 == m2 then [(n, m1, k)]
+			else []
+		
+		return $ concat [vecMatMuls, matVecMuls, matMatMuls]
 
-instance Vec (Quaternion a) where
-	type VecElement (Quaternion a) = a
-	vecLength _ = 4
-	vecToList (Quaternion v) = vecToList v
-	vecFromScalar a = Quaternion (vecFromScalar a)
+	return $ vectorizedInstance : crossInstance : vecInstances ++ matInstances ++ mulInstances
 
-instance Floating a => Norm (Quaternion a) where
-	norm (Quaternion v) = norm v
-	norm2 (Quaternion v) = norm2 v
-
-instance Floating a => Normalize (Quaternion a) where
-	normalize (Quaternion v) = Quaternion (normalize v)
-
--- | Num for quaternions.
-instance Num a => Num (Quaternion a) where
-	(Quaternion v1) + (Quaternion v2) = Quaternion (v1 + v2)
-	(Quaternion v1) - (Quaternion v2) = Quaternion (v1 - v2)
-	(Quaternion (Vec4 x1 y1 z1 w1)) * (Quaternion (Vec4 x2 y2 z2 w2)) = Quaternion (Vec4
-		(w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2)
-		(w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2)
-		(w1 * z2 - x1 * y2 - y1 * x2 + z1 * w2)
-		(w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2))
-	negate (Quaternion v) = Quaternion (negate v)
-	abs (Quaternion v) = Quaternion (abs v)
-	signum = undefined
-	fromInteger = undefined
+-- | Class of things which has quaternions.
+class Vectorized a => Quaternionized a where
+	data Quat a :: *
+	quat :: Vec4 a -> Quat a
 
 -- | Conjugation.
 class Conjugate q where
 	conjugate :: q -> q
 
-instance Num a => Conjugate (Quaternion a) where
-	conjugate (Quaternion (Vec4 x y z w)) = Quaternion (Vec4 (-x) (-y) (-z) w)
+-- | Generate per-math type declarations for quaternions.
+liftM concat $ forM mathQuaternionTypeNamesWithPrefix $ \(mathTypeName, mathTypePrefix) -> do
 
--- Generate type synonyms for frequently used types
-do
-	let vecSynonym n elemType elemChar = let name = "Vec" ++ [intToDigit n] in
-		tySynD (mkName $ name ++ [elemChar]) [] [t| $(conT $ mkName name) $elemType |]
-	vecSynonyms <- sequence [vecSynonym n (conT t) c | n <- [1..maxVecDimension], (t, c) <- mathTypeNamesWithChar]
-	let matSynonym n m elemType elemChar = let name = "Mat" ++ [intToDigit n, 'x', intToDigit m] in
-		tySynD (mkName $ name ++ [elemChar]) [] [t| $(conT $ mkName name) $elemType |]
-	matSynonyms <- sequence [matSynonym n m (conT t) c | n <- [1..maxVecDimension], m <- [1..maxVecDimension], (t, c) <- mathTypeNamesWithChar]
-	let quaternionSynonym elemType elemChar = tySynD (mkName $ "Quaternion" ++ [elemChar]) [] [t| Quaternion $elemType |]
-	quaternionSynonyms <- sequence [quaternionSynonym (conT t) c | (t, c) <- mathQuaternionTypeNamesWithChar]
-	return $ vecSynonyms ++ matSynonyms ++ quaternionSynonyms
+	let elemType = conT mathTypeName
+	let conName = mkName $ mathTypePrefix ++ "Q"
+	a <- newName "a"
+	v <- newName "v"
+	v1 <- newName "v1"
+	v2 <- newName "v2"
+	args1 <- mapM (newName . (: "1")) vecComponents
+	args2 <- mapM (newName . (: "2")) vecComponents
+	let [x1, y1, z1, w1] = map varE args1
+	let [x2, y2, z2, w2] = map varE args2
+	let vecConName = mkName $ mathTypePrefix ++ "4"
 
--- | Cross.
-instance Num a => Cross (Vec3 a) where
-	cross (Vec3 ax ay az) (Vec3 bx by bz) = Vec3
-		(ay * bz - by * az)
-		(az * bx - ax * bz)
-		(ax * by - ay * bx)
+	-- Quaternionized instance
+	quaternionizedInstance <- instanceD (sequence []) [t| Quaternionized $elemType |] =<< addInlines
+		[ newtypeInstD (sequence []) ''Quat [elemType] (normalC conName [liftM (\t -> (NotStrict, t)) [t| Vec4 $elemType |]]) [''Eq, ''Show]
+		, funD 'quat [clause [varP v] (normalB [| $(conE conName) $(varE v) |]) []]
+		]
+
+	-- Vec instance
+	vecInstance <- instanceD (return []) [t| Vec (Quat $elemType) |] =<< addInlines
+		[ tySynInstD ''VecElement $ tySynEqn [ [t| Quat $elemType |] ] elemType
+		, funD 'vecLength [clause [conP conName [varP v]] (normalB [| vecLength $(varE v) |]) []]
+		, funD 'vecToList [clause [conP conName [varP v]] (normalB [| vecToList $(varE v) |]) []]
+		, funD 'vecFromScalar [clause [varP a] (normalB [| $(conE conName) (vecFromScalar $(varE a)) |]) []]
+		]
+
+	-- Norm instance
+	normInstance <- instanceD (sequence []) [t| Norm (Quat $elemType) |] =<< addInlines
+		[ funD 'norm [clause [conP conName [varP v]] (normalB [| norm $(varE v) |]) []]
+		, funD 'norm2 [clause [conP conName [varP v]] (normalB [| norm2 $(varE v) |]) []]
+		]
+
+	-- Normalize instance
+	normalizeInstance <- instanceD (sequence []) [t| Normalize (Quat $elemType) |] =<< addInlines
+		[ funD 'normalize [clause [conP conName [varP v]] (normalB [| $(conE conName) (normalize $(varE v)) |]) []]
+		]
+
+	-- Num instance
+	numInstance <- do
+		instanceD (sequence []) [t| Num (Quat $elemType) |] =<< addInlines
+			[ funD '(+) [clause [conP conName [varP v1], conP conName [varP v2]] (normalB [| $(conE conName) ($(varE v1) + $(varE v2)) |]) []]
+			, funD '(-) [clause [conP conName [varP v1], conP conName [varP v2]] (normalB [| $(conE conName) ($(varE v1) - $(varE v2)) |]) []]
+			, funD '(*) [clause
+				[ conP conName [conP vecConName $ map varP args1]
+				, conP conName [conP vecConName $ map varP args2]
+				] (normalB [| $(conE conName) ($(conE vecConName)
+					($w1 * $x2 + $x1 * $w2 + $y1 * $z2 - $z1 * $y2)
+					($w1 * $y2 - $x1 * $z2 + $y1 * $w2 + $z1 * $x2)
+					($w1 * $z2 - $x1 * $y2 - $y1 * $x2 + $z1 * $w2)
+					($w1 * $w2 - $x1 * $x2 - $y1 * $y2 - $z1 * $z2)
+					)|]) []]
+			, funD 'negate [clause [conP conName [varP v]] (normalB [| $(conE conName) (negate $(varE v)) |]) []]
+			, funD 'abs [clause [conP conName [varP v]] (normalB [| $(conE conName) (abs $(varE v)) |]) []]
+			, funD 'signum [clause [] (normalB [| undefined |]) []]
+			, funD 'fromInteger [clause [] (normalB [| undefined |]) []]
+			]
+
+	-- Conjugate instance
+	conjugateInstance <- instanceD (sequence []) [t| Conjugate (Quat $elemType) |] =<< addInlines
+		[ funD 'conjugate [clause [conP conName [conP vecConName $ map varP args1]] (normalB [| $(conE conName) ($(conE vecConName) (- $x1) (- $y1) (- $z1) $w1) |]) []]
+		]
+
+	-- synonym
+	synonym <- tySynD conName [] [t| Quat $elemType |]
+
+	return [quaternionizedInstance, vecInstance, normInstance, normalizeInstance, numInstance, conjugateInstance, synonym]

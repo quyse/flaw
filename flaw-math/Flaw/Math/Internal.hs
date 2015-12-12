@@ -9,13 +9,15 @@ License: MIT
 module Flaw.Math.Internal
 	( maxVecDimension
 	, vecComponents
-	, mathTypeNames
-	, mathTypeNamesWithChar
-	, mathQuaternionTypeNamesWithChar
+	, matDimensions
+	, mathTypeNamesWithPrefix
+	, mathQuaternionTypeNamesWithPrefix
 	, swizzleVariantFilter
 	, genSwizzleVariants
+	, addInlines
 	) where
 
+import Control.Monad
 import Data.Int
 import Data.Word
 import Language.Haskell.TH
@@ -26,16 +28,17 @@ maxVecDimension = 4
 vecComponents :: String
 vecComponents = "xyzw"
 
+-- | Whitelisted matrix dimensions.
+matDimensions :: [(Int, Int)]
+matDimensions = [(3, 4), (4, 4)] -- GHC 7.10.3 hangs if I add (3, 3), WTF???
+
 -- | Meaningful types for math.
--- Some data structures could specialise on this types.
-mathTypeNames :: [Name]
-mathTypeNames = map fst mathTypeNamesWithChar
-mathTypeNamesWithChar :: [(Name, Char)]
-mathTypeNamesWithChar = [(''Float, 'f'), (''Double, 'd'), (''Int32, 'i'), (''Word32, 'u')]
+mathTypeNamesWithPrefix :: [(Name, String)]
+mathTypeNamesWithPrefix = [(''Float, "Float"), (''Double, "Double"), (''Int32, "Int32_"), (''Word32, "Word32_"), (''Int, "Int")]
 
 -- | Meaningful types for quaternions.
-mathQuaternionTypeNamesWithChar :: [(Name, Char)]
-mathQuaternionTypeNamesWithChar = [(''Float, 'f'), (''Double, 'd')]
+mathQuaternionTypeNamesWithPrefix :: [(Name, String)]
+mathQuaternionTypeNamesWithPrefix = [(''Float, "Float"), (''Double, "Double")]
 
 swizzleVariantFilter :: String -> String -> Bool
 swizzleVariantFilter components variant = all (\c -> elem c components) variant && elem (last components) variant
@@ -44,3 +47,11 @@ swizzleVariantFilter components variant = all (\c -> elem c components) variant 
 genSwizzleVariants :: Int -> [String]
 genSwizzleVariants 0 = [""]
 genSwizzleVariants len = [c : v | c <- vecComponents, v <- genSwizzleVariants $ len - 1]
+
+-- | Add inline pragmas for all functions.
+addInlines :: [DecQ] -> Q [DecQ]
+addInlines qdecs = liftM concat $ forM qdecs $ \qdec -> do
+	dec <- qdec
+	return $ case dec of
+		FunD funName _clauses -> [return dec, pragInlD funName Inline FunLike AllPhases]
+		_ -> [return dec]
