@@ -82,7 +82,7 @@ initCanvas device = do
 		aY <- attribute 0 16 0 (AttributeVec4 AttributeFloat32)
 		aC <- attribute 0 32 0 (AttributeVec2 AttributeFloat32)
 		color <- temp (uFillColor * vecFromScalar (x_ aC) + uBorderColor * vecFromScalar (y_ aC))
-		rasterize (cvec4 (dot aX uX) (dot aY uY) (constf 0) (constf 1)) $ colorTarget 0 color
+		rasterize (cvec1111 (dot aX uX) (dot aY uY) (constf 0) (constf 1)) $ colorTarget 0 color
 
 	let renderBorderedRectangle xs ys fillColor borderColor = do
 		-- setup stuff

@@ -4,6 +4,8 @@ Description: Shader program support.
 License: MIT
 -}
 
+{-# LANGUAGE TemplateHaskell #-}
+
 module Flaw.Graphics.Program
 	( Program
 	, AttributeFormat(..)
@@ -11,7 +13,7 @@ module Flaw.Graphics.Program
 	, Node
 	, cnst
 	, constf, const2f, const3f, const4f
-	, cvec2, cvec3, cvec4
+	, cvec11, cvec111, cvec12, cvec21, cvec1111, cvec112, cvec121, cvec211, cvec13, cvec31
 	, attribute
 	, UniformBufferSlot
 	, UniformStorage
@@ -42,12 +44,14 @@ module Flaw.Graphics.Program
 
 import Control.Monad.Reader
 import qualified Data.ByteString.Unsafe as B
+import Data.Char
 import Data.IORef
 import Data.Word
 import Foreign.ForeignPtr
 import Foreign.ForeignPtr.Unsafe
 import Foreign.Ptr
 import Foreign.Storable
+import Language.Haskell.TH
 
 import Flaw.Graphics
 import Flaw.Graphics.Program.Internal
@@ -64,17 +68,26 @@ withUndefined q = q undefined
 withUndefinedM :: (a -> m (Node a)) -> m (Node a)
 withUndefinedM q = q undefined
 
--- | Create Vec2 from two scalars.
-cvec2 :: (OfScalarType a, Vectorized a) => Node a -> Node a -> Node (Vec2 a)
-cvec2 x y = withUndefined $ \u -> Combine2VecNode (nodeValueType x) (valueType u) x y
-
--- | Create Vec3 from three scalars.
-cvec3 :: (OfScalarType a, Vectorized a) => Node a -> Node a -> Node a -> Node (Vec3 a)
-cvec3 x y z = withUndefined $ \u -> Combine3VecNode (nodeValueType x) (valueType u) x y z
-
--- | Create Vec4 from four scalars.
-cvec4 :: (OfScalarType a, Vectorized a) => Node a -> Node a -> Node a -> Node a -> Node (Vec4 a)
-cvec4 x y z w = withUndefined $ \u -> Combine4VecNode (nodeValueType x) (valueType u) x y z w
+-- | Create vector as a combination of scalars/vectors.
+liftM concat $ forM
+	[ [1, 1]
+	, [1, 1, 1], [1, 2], [2, 1]
+	, [1, 1, 1, 1], [1, 1, 2], [1, 2, 1], [2, 1, 1], [1, 3], [3, 1]]
+	$ \cs -> do
+	ps <- forM (zip cs [1..]) $ \(_c, i) -> newName ['p', intToDigit i]
+	let funName = mkName $ "cvec" ++ map intToDigit cs
+	tvA <- newName "a"
+	u <- newName "u"
+	let vecType n = appT (conT $ mkName $ "Vec" ++ [intToDigit n]) (varT tvA)
+	let argType n = [t| Node $(if n > 1 then vecType n else varT tvA) |]
+	let funType = forallT [PlainTV tvA] (sequence [ [t| OfScalarType $(varT tvA) |], [t| Vectorized $(varT tvA) |] ]) $
+		foldr (\a b -> [t| $a -> $b |]) [t| Node $(vecType $ sum cs) |] $ map argType cs
+	let construction = foldl appE (conE $ mkName $ "Combine" ++ [intToDigit $ length cs] ++ "VecNode") $
+		(map (\a -> [| nodeValueType $(varE a) |]) ps) ++ [ [| valueType $(varE u) |] ] ++ (map varE ps)
+	sequence
+		[ sigD funName funType
+		, funD funName [clause (map varP ps) (normalB [| withUndefined $ \ $(varP u) -> $construction |]) []]
+		]
 
 attribute :: OfAttributeType a => Int -> Int -> Int -> AttributeFormat a -> Program (Node a)
 attribute slot offset divisor format = withUndefinedM $ \u -> withState $ \state@State

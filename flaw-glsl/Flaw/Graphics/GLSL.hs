@@ -505,9 +505,9 @@ glslGenerateProgram GlslConfig
 						Dimension4 -> mempty
 					MatrixValueType _ _ _ -> mempty
 			CastNode _ t a -> valueTypeSource t <> "(" <> nodeSource a <> ")"
-			Combine2VecNode _ t a b -> func2Source (valueTypeSource t) a b
-			Combine3VecNode _ t a b c -> func3Source (valueTypeSource t) a b c
-			Combine4VecNode _ t a b c d -> func4Source (valueTypeSource t) a b c d
+			Combine2VecNode _ _ t a b -> func2Source (valueTypeSource t) a b
+			Combine3VecNode _ _ _ t a b c -> func3Source (valueTypeSource t) a b c
+			Combine4VecNode _ _ _ _ t a b c d -> func4Source (valueTypeSource t) a b c d
 
 		binaryOpSource :: Char -> Node a -> Node b -> Builder
 		binaryOpSource op a b = "(" <> nodeSource a <> ") " <> singleton op <> " (" <> nodeSource b <> ")"

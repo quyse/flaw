@@ -108,17 +108,17 @@ initGlyphRenderer device subpixelMode = do
 		position <- temp $ uPositions ! instanceId
 		texcoordCoefs <- temp $ uTexcoords ! instanceId
 		color <- temp $ uColors ! instanceId
-		texcoord <- temp $ cvec2 (dot (xz__ aCorner) (xz__ texcoordCoefs)) (dot (yw__ aCorner) (yw__ texcoordCoefs))
-		rasterize (cvec4
+		texcoord <- temp $ cvec11 (dot (xz__ aCorner) (xz__ texcoordCoefs)) (dot (yw__ aCorner) (yw__ texcoordCoefs))
+		rasterize (cvec1111
 			(dot (xz__ aCorner) (xz__ position))
 			(dot (yw__ aCorner) (yw__ position))
 			(constf 0)
 			(constf 1)
 			) $ do
 			case subpixelMode of
-				GlyphSubpixelModeNone -> colorTarget 0 $ cvec4 (x_ color) (y_ color) (z_ color) (w_ color * sample (sampler2Df 0) texcoord)
+				GlyphSubpixelModeNone -> colorTarget 0 $ cvec31 (xyz__ color) (w_ color * sample (sampler2Df 0) texcoord)
 				_ -> do
-					colorTarget 0 $ cvec4 (x_ color) (y_ color) (z_ color) (constf 1)
+					colorTarget 0 $ cvec31 (xyz__ color) (constf 1)
 					let (dxr, dxg, dxb, dyr, dyg, dyb) = case subpixelMode of
 						GlyphSubpixelModeNone -> undefined -- GHC warning defence, meh :(
 						GlyphSubpixelModeHorizontalRGB -> (-1, 0, 1, 0, 0, 0)
@@ -134,7 +134,7 @@ initGlyphRenderer device subpixelMode = do
 					let b = w_ color * (sample (sampler2Df 0) $ texcoord
 						+ (ddx texcoord) * (vecFromScalar $ constf $ dxb / 3)
 						+ (ddy texcoord) * (vecFromScalar $ constf $ dyb / 3))
-					colorTarget 1 $ cvec4 r g b (constf 1)
+					colorTarget 1 $ cvec1111 r g b (constf 1)
 
 	buffer <- VSM.new $ capacity * 3
 

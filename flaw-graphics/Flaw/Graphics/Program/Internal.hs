@@ -349,9 +349,12 @@ data Node a where
 	SwizzleNode :: (OfVectorType a, OfVectorType b) => ValueType -> ValueType -> String -> Node a -> Node b
 	SampleNode :: SamplerNode s c -> Node c -> Node s
 	CastNode :: (OfValueType a, OfValueType b) => ValueType -> ValueType -> Node a -> Node b
-	Combine2VecNode :: OfScalarType a => ValueType -> ValueType -> Node a -> Node a -> Node (Vec2 a)
-	Combine3VecNode :: OfScalarType a => ValueType -> ValueType -> Node a -> Node a -> Node a -> Node (Vec3 a)
-	Combine4VecNode :: OfScalarType a => ValueType -> ValueType -> Node a -> Node a -> Node a -> Node a -> Node (Vec4 a)
+	Combine2VecNode :: (OfValueType a, OfValueType b, OfValueType r)
+		=> ValueType -> ValueType -> ValueType -> Node a -> Node b -> Node r
+	Combine3VecNode :: (OfValueType a, OfValueType b, OfValueType c, OfValueType r)
+		=> ValueType -> ValueType -> ValueType -> ValueType -> Node a -> Node b -> Node c -> Node r
+	Combine4VecNode :: (OfValueType a, OfValueType b, OfValueType c, OfValueType d, OfValueType r)
+		=> ValueType -> ValueType -> ValueType -> ValueType -> ValueType -> Node a -> Node b -> Node c -> Node d -> Node r
 
 deriving instance Show (Node a)
 
