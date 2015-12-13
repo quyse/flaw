@@ -23,17 +23,17 @@ data Motion
 class World w where
 	data Shape w :: *
 	data Body w :: *
-	createBoxShape :: w -> Vec3f -> IO (Shape w, IO ())
+	createBoxShape :: w -> Float3 -> IO (Shape w, IO ())
 	createSphereShape :: w -> Float -> IO (Shape w, IO ())
 	-- | Create rigid body.
 	createBody
 		:: w
 		-> Shape w
 		-> Motion
-		-> Vec3f -- ^ Initial position.
-		-> Quaternionf -- ^ Initial orientation.
+		-> Float3 -- ^ Initial position.
+		-> FloatQ -- ^ Initial orientation.
 		-> IO (Body w, IO ())
-	getBodyTransform :: w -> Body w -> IO (Vec3f, Quaternionf)
+	getBodyTransform :: w -> Body w -> IO (Float3, FloatQ)
 	-- | Advance simulation.
 	stepWorld
 		:: w
