@@ -35,7 +35,7 @@ data Window = Window
 	, windowMouseEventsChan :: !(TChan MouseEvent)
 	, windowMouseState :: !MouseState
 	, windowElement :: !SomeElement
-	, windowSizeVar :: !(TVar (Vec2 Int))
+	, windowSizeVar :: !(TVar Int2)
 	, windowCloseHandlerVar :: !(TVar (STM ()))
 	, windowDestroyHandlerVar :: !(TVar (STM ()))
 	, windowActionsQueue :: !(TQueue (IO ()))

@@ -52,7 +52,7 @@ data GlyphRenderer d = GlyphRenderer
 	, glyphRendererBlendState :: !(BlendStateId d)
 	, glyphRendererProgram :: !(ProgramId d)
 	, glyphRendererCapacity :: !Int
-	, glyphRendererBuffer :: !(VSM.IOVector Vec4f)
+	, glyphRendererBuffer :: !(VSM.IOVector Float4)
 	}
 
 -- | Subpixel antialiasing mode.
@@ -67,9 +67,9 @@ initGlyphRenderer :: Device d => d -> GlyphSubpixelMode -> IO (GlyphRenderer d, 
 initGlyphRenderer device subpixelMode = do
 	bk <- newBook
 
-	let vbStride = sizeOf (undefined :: Vec4f)
+	let vbStride = sizeOf (undefined :: Float4)
 	vb <- book bk $ withArray
-		[ Vec4 0 1 1 0 :: Vec4f
+		[ Vec4 0 1 1 0 :: Float4
 		, Vec4 1 1 0 0
 		, Vec4 1 0 0 1
 		, Vec4 0 1 1 0
@@ -80,7 +80,7 @@ initGlyphRenderer device subpixelMode = do
 		createStaticVertexBuffer device bytes vbStride
 	let ib = nullIndexBuffer
 	let capacity = 256;
-	ub <- book bk $ createUniformBuffer device (capacity * 3 * sizeOf (undefined :: Vec4f))
+	ub <- book bk $ createUniformBuffer device (capacity * 3 * sizeOf (undefined :: Float4))
 
 	let nonSubpixelBlendStateInfo = defaultBlendStateInfo
 		{ blendSourceColor = ColorSourceSrcAlpha
@@ -100,46 +100,41 @@ initGlyphRenderer device subpixelMode = do
 		GlyphSubpixelModeVerticalBGR -> subpixelBlendStateInfo
 
 	ubs <- uniformBufferSlot 0
-	uPositions <- uniformArray capacity ubs :: IO (Node [Vec4f])
-	uTexcoords <- uniformArray capacity ubs :: IO (Node [Vec4f])
-	uColors <- uniformArray capacity ubs :: IO (Node [Vec4f])
+	uPositions <- uniformArray capacity ubs :: IO (Node [Float4])
+	uTexcoords <- uniformArray capacity ubs :: IO (Node [Float4])
+	uColors <- uniformArray capacity ubs :: IO (Node [Float4])
 	program <- book bk $ createProgram device $ do
 		aCorner <- attribute 0 0 0 (AttributeVec4 AttributeFloat32)
 		position <- temp $ uPositions ! instanceId
 		texcoordCoefs <- temp $ uTexcoords ! instanceId
 		color <- temp $ uColors ! instanceId
-		texcoord <- temp $ combineVec
-			( dot (xz__ aCorner) (xz__ texcoordCoefs)
-			, dot (yw__ aCorner) (yw__ texcoordCoefs)
-			)
-		rasterize (combineVec
-			( dot (xz__ aCorner) (xz__ position)
-			, dot (yw__ aCorner) (yw__ position)
-			, constf 0
-			, constf 1
-			)) $ do
+		texcoord <- temp $ cvec2 (dot (xz__ aCorner) (xz__ texcoordCoefs)) (dot (yw__ aCorner) (yw__ texcoordCoefs))
+		rasterize (cvec4
+			(dot (xz__ aCorner) (xz__ position))
+			(dot (yw__ aCorner) (yw__ position))
+			(constf 0)
+			(constf 1)
+			) $ do
 			case subpixelMode of
-				GlyphSubpixelModeNone -> colorTarget 0 $ combineVec (xyz__ color, w_ color * sample (sampler2Df 0) texcoord)
+				GlyphSubpixelModeNone -> colorTarget 0 $ cvec4 (x_ color) (y_ color) (z_ color) (w_ color * sample (sampler2Df 0) texcoord)
 				_ -> do
-					colorTarget 0 $ combineVec (xyz__ color, constf 1)
+					colorTarget 0 $ cvec4 (x_ color) (y_ color) (z_ color) (constf 1)
 					let (dxr, dxg, dxb, dyr, dyg, dyb) = case subpixelMode of
 						GlyphSubpixelModeNone -> undefined -- GHC warning defence, meh :(
 						GlyphSubpixelModeHorizontalRGB -> (-1, 0, 1, 0, 0, 0)
 						GlyphSubpixelModeHorizontalBGR -> (1, 0, -1, 0, 0, 0)
 						GlyphSubpixelModeVerticalRGB -> (0, 0, 0, -1, 0, 1)
 						GlyphSubpixelModeVerticalBGR -> (0, 0, 0, 1, 0, -1)
-					colorTarget 1 $ combineVec
-						( w_ color * (sample (sampler2Df 0) $ texcoord
-							+ (ddx texcoord) * (vecFromScalar $ constf $ dxr / 3)
-							+ (ddy texcoord) * (vecFromScalar $ constf $ dyr / 3))
-						, w_ color * (sample (sampler2Df 0) $ texcoord
-							+ (ddx texcoord) * (vecFromScalar $ constf $ dxg / 3)
-							+ (ddy texcoord) * (vecFromScalar $ constf $ dyg / 3))
-						, w_ color * (sample (sampler2Df 0) $ texcoord
-							+ (ddx texcoord) * (vecFromScalar $ constf $ dxb / 3)
-							+ (ddy texcoord) * (vecFromScalar $ constf $ dyb / 3))
-						, constf 1
-						)
+					let r = w_ color * (sample (sampler2Df 0) $ texcoord
+						+ (ddx texcoord) * (vecFromScalar $ constf $ dxr / 3)
+						+ (ddy texcoord) * (vecFromScalar $ constf $ dyr / 3))
+					let g = w_ color * (sample (sampler2Df 0) $ texcoord
+						+ (ddx texcoord) * (vecFromScalar $ constf $ dxg / 3)
+						+ (ddy texcoord) * (vecFromScalar $ constf $ dyg / 3))
+					let b = w_ color * (sample (sampler2Df 0) $ texcoord
+						+ (ddx texcoord) * (vecFromScalar $ constf $ dxb / 3)
+						+ (ddy texcoord) * (vecFromScalar $ constf $ dyb / 3))
+					colorTarget 1 $ cvec4 r g b (constf 1)
 
 	buffer <- VSM.new $ capacity * 3
 
@@ -155,8 +150,8 @@ initGlyphRenderer device subpixelMode = do
 
 -- | Runtime data about glyph of particular font.
 data RenderableGlyph = RenderableGlyph
-	{ renderableGlyphUV :: !Vec4f -- ^ Left-bottom + right-top UV coordinates.
-	, renderableGlyphOffset :: !Vec4f -- ^ Offset from pen point to left-bottom + right-top corner, in pixels.
+	{ renderableGlyphUV :: !Float4 -- ^ Left-bottom + right-top UV coordinates.
+	, renderableGlyphOffset :: !Float4 -- ^ Offset from pen point to left-bottom + right-top corner, in pixels.
 	}
 
 -- | Runtime data about particular font.
@@ -164,7 +159,7 @@ data RenderableFont d = RenderableFont
 	{ renderableFontTexture :: !(TextureId d)
 	, renderableFontGlyphs :: !(V.Vector RenderableGlyph)
 	-- | Maximum glyph box (left, top, right, bottom values relative to pen point, i.e. left-baseline).
-	, renderableFontMaxGlyphBox :: !Vec4f
+	, renderableFontMaxGlyphBox :: !Float4
 	}
 
 createRenderableFont :: Device d => d -> Glyphs -> IO (RenderableFont d, IO ())
@@ -246,9 +241,9 @@ createRenderableFont device Glyphs
 		}, destroy)
 
 data GlyphToRender = GlyphToRender
-	{ glyphToRenderPosition :: !Vec2f
+	{ glyphToRenderPosition :: !Float2
 	, glyphToRenderIndex :: !Int
-	, glyphToRenderColor :: !Vec4f
+	, glyphToRenderColor :: !Float4
 	}
 
 data RenderGlyphsState c d = RenderGlyphsState
@@ -288,7 +283,7 @@ renderGlyphs GlyphRenderer
 		if count > 0 then do
 			-- upload data to uniform buffer
 			let (foreignPtr, len) = VSM.unsafeToForeignPtr0 buffer
-			bytes <- liftIO $ B.unsafePackCStringLen (castPtr $ unsafeForeignPtrToPtr foreignPtr, len * sizeOf (undefined :: Vec4f))
+			bytes <- liftIO $ B.unsafePackCStringLen (castPtr $ unsafeForeignPtrToPtr foreignPtr, len * sizeOf (undefined :: Float4))
 			renderUploadUniformBuffer ub bytes
 			liftIO $ touchForeignPtr foreignPtr
 			-- render batch
@@ -333,7 +328,7 @@ data RenderTextCursorX = RenderTextCursorLeft | RenderTextCursorCenter | RenderT
 data RenderTextCursorY = RenderTextCursorBaseline | RenderTextCursorTop | RenderTextCursorMiddle | RenderTextCursorBottom
 
 -- | Render raw glyphs.
-renderTextRun :: V.Vector (Vec2f, Int) -> Vec2f -> Vec4f -> RenderGlyphsM c d ()
+renderTextRun :: V.Vector (Float2, Int) -> Float2 -> Float4 -> RenderGlyphsM c d ()
 renderTextRun positionsAndIndices position color = do
 	RenderGlyphsState
 		{ renderGlyphsStateAddGlyph = addGlyph
@@ -346,7 +341,7 @@ renderTextRun positionsAndIndices position color = do
 			}
 
 -- | Shape multiple text runs and output it in RenderGlyphsM monad.
-renderTexts :: FontShaper s => s -> [(T.Text, Vec4f)] -> FontScript -> Vec2f -> RenderTextCursorX -> RenderTextCursorY -> RenderGlyphsM c d ()
+renderTexts :: FontShaper s => s -> [(T.Text, Float4)] -> FontScript -> Float2 -> RenderTextCursorX -> RenderTextCursorY -> RenderGlyphsM c d ()
 renderTexts shaper textsWithColors script (Vec2 px py) cursorX cursorY = do
 	(runsPositionsAndIndices, Vec2 ax _ay) <- liftIO $ shapeText shaper (map fst textsWithColors) script
 	RenderGlyphsState
@@ -366,10 +361,10 @@ renderTexts shaper textsWithColors script (Vec2 px py) cursorX cursorY = do
 	forM_ (zip runsPositionsAndIndices $ map snd textsWithColors) $ \(positionsAndIndices, color) -> renderTextRun positionsAndIndices (Vec2 x y) color
 
 -- | Perform right fold on bounds of glyphs.
-foldrTextBounds :: RenderableFont d -> (Vec4f -> a -> a) -> a -> V.Vector (Vec2f, Int) -> a
+foldrTextBounds :: RenderableFont d -> (Float4 -> a -> a) -> a -> V.Vector (Float2, Int) -> a
 foldrTextBounds RenderableFont
 	{ renderableFontGlyphs = renderableGlyphs
 	} f z positionsAndIndices = foldr f z bs where
 	bs = fmap glyphBounds positionsAndIndices
-	glyphBounds :: (Vec2f, Int) -> Vec4f
+	glyphBounds :: (Float2, Int) -> Float4
 	glyphBounds (glyphPosition, glyphIndex) = xyxy__ glyphPosition + renderableGlyphOffset (renderableGlyphs V.! glyphIndex)

@@ -11,6 +11,7 @@ module Flaw.Graphics.Program
 	, Node
 	, cnst
 	, constf, const2f, const3f, const4f
+	, cvec2, cvec3, cvec4
 	, attribute
 	, UniformBufferSlot
 	, UniformStorage
@@ -42,6 +43,7 @@ module Flaw.Graphics.Program
 import Control.Monad.Reader
 import qualified Data.ByteString.Unsafe as B
 import Data.IORef
+import Data.Word
 import Foreign.ForeignPtr
 import Foreign.ForeignPtr.Unsafe
 import Foreign.Ptr
@@ -54,16 +56,33 @@ import Flaw.Math
 cnst :: OfValueType a => a -> Node a
 cnst value = ConstNode (valueType value) value
 
+-- | Helper method to know return value.
+withUndefined :: (a -> Node a) -> Node a
+withUndefined q = q undefined
+
+-- | Helper method to know return value in monad.
+withUndefinedM :: (a -> m (Node a)) -> m (Node a)
+withUndefinedM q = q undefined
+
+-- | Create Vec2 from two scalars.
+cvec2 :: (OfScalarType a, Vectorized a) => Node a -> Node a -> Node (Vec2 a)
+cvec2 x y = withUndefined $ \u -> Combine2VecNode (nodeValueType x) (valueType u) x y
+
+-- | Create Vec3 from three scalars.
+cvec3 :: (OfScalarType a, Vectorized a) => Node a -> Node a -> Node a -> Node (Vec3 a)
+cvec3 x y z = withUndefined $ \u -> Combine3VecNode (nodeValueType x) (valueType u) x y z
+
+-- | Create Vec4 from four scalars.
+cvec4 :: (OfScalarType a, Vectorized a) => Node a -> Node a -> Node a -> Node a -> Node (Vec4 a)
+cvec4 x y z w = withUndefined $ \u -> Combine4VecNode (nodeValueType x) (valueType u) x y z w
+
 attribute :: OfAttributeType a => Int -> Int -> Int -> AttributeFormat a -> Program (Node a)
-attribute slot offset divisor format = withState $ \state@State
+attribute slot offset divisor format = withUndefinedM $ \u -> withState $ \state@State
 	{ stateStage = stage
 	} -> do
 	if stage /= VertexStage then fail "attribute can only be defined in vertex program"
 	else return ()
-	let
-		withUndefined :: (a -> Node a) -> Node a
-		withUndefined q = q undefined
-	tempInternal (withUndefined $ \u -> AttributeNode Attribute
+	tempInternal (AttributeNode Attribute
 		{ attributeSlot = slot
 		, attributeOffset = offset
 		, attributeDivisor = divisor
@@ -96,28 +115,25 @@ uniform :: (OfValueType a, Storable a) => UniformBufferSlot -> IO (Node a)
 uniform UniformBufferSlot
 	{ uniformBufferSlotIndex = slot
 	, uniformBufferSlotSizeRef = sizeRef
-	} = withUndefined func where
-	withUndefined :: (a -> IO (Node a)) -> IO (Node a)
-	withUndefined f = f undefined
-	func u = do
-		bufferSize <- readIORef sizeRef
-		let align = alignment u
-		let alignedBufferSize = ((bufferSize + align - 1) `div` align) * align
-		writeIORef sizeRef $ alignedBufferSize + sizeOf u
-		return $ UniformNode Uniform
-			{ uniformSlot = slot
-			, uniformOffset = alignedBufferSize
-			, uniformSize = 0
-			, uniformType = valueType u
-			}
+	} = withUndefinedM $ \u -> do
+	bufferSize <- readIORef sizeRef
+	let align = alignment u
+	let alignedBufferSize = ((bufferSize + align - 1) `div` align) * align
+	writeIORef sizeRef $ alignedBufferSize + sizeOf u
+	return $ UniformNode Uniform
+		{ uniformSlot = slot
+		, uniformOffset = alignedBufferSize
+		, uniformSize = 0
+		, uniformType = valueType u
+		}
 
 uniformArray :: (OfValueType a, Storable a) => Int -> UniformBufferSlot -> IO (Node [a])
 uniformArray size UniformBufferSlot
 	{ uniformBufferSlotIndex = slot
 	, uniformBufferSlotSizeRef = sizeRef
-	} = withUndefined func where
-	withUndefined :: (a -> IO (Node [a])) -> IO (Node [a])
-	withUndefined f = f undefined
+	} = wu func where
+	wu :: (a -> IO (Node [a])) -> IO (Node [a])
+	wu f = f undefined
 	func u = do
 		bufferSize <- readIORef sizeRef
 		let align = alignment u
@@ -233,7 +249,7 @@ tempInternal node state@State
 		, stateTempsCount = tempsCount + 1
 		}, TempNode tempsCount)
 
-rasterize :: Node Vec4f -> Program () -> Program ()
+rasterize :: Node Float4 -> Program () -> Program ()
 rasterize positionNode pixelProgram = withState $ \state@State
 	{ stateStage = stage
 	, stateTargets = targets
@@ -251,7 +267,7 @@ rasterize positionNode pixelProgram = withState $ \state@State
 		{ stateStage = EndStage
 		}, ())
 
-colorTarget :: Int -> Node Vec4f -> Program ()
+colorTarget :: Int -> Node Float4 -> Program ()
 colorTarget i colorNode = withState $ \state@State
 	{ stateStage = stage
 	, stateTargets = targets
@@ -277,47 +293,47 @@ depthTarget depthNode = withState $ \state@State
 
 constf :: Float -> Node Float
 constf = cnst
-const2f :: Vec2f -> Node Vec2f
+const2f :: Float2 -> Node Float2
 const2f = cnst
-const3f :: Vec3f -> Node Vec3f
+const3f :: Float3 -> Node Float3
 const3f = cnst
-const4f :: Vec4f -> Node Vec4f
+const4f :: Float4 -> Node Float4
 const4f = cnst
 
 sampler1Df :: Int -> SamplerNode Float Float
 sampler1Df slot = sampler slot Sampler1D
-sampler1D2f :: Int -> SamplerNode Vec2f Float
+sampler1D2f :: Int -> SamplerNode Float2 Float
 sampler1D2f slot = sampler slot Sampler1D
-sampler1D3f :: Int -> SamplerNode Vec3f Float
+sampler1D3f :: Int -> SamplerNode Float3 Float
 sampler1D3f slot = sampler slot Sampler1D
-sampler1D4f :: Int -> SamplerNode Vec4f Float
+sampler1D4f :: Int -> SamplerNode Float4 Float
 sampler1D4f slot = sampler slot Sampler1D
 
-sampler2Df :: Int -> SamplerNode Float Vec2f
+sampler2Df :: Int -> SamplerNode Float Float2
 sampler2Df slot = sampler slot Sampler2D
-sampler2D2f :: Int -> SamplerNode Vec2f Vec2f
+sampler2D2f :: Int -> SamplerNode Float2 Float2
 sampler2D2f slot = sampler slot Sampler2D
-sampler2D3f :: Int -> SamplerNode Vec3f Vec2f
+sampler2D3f :: Int -> SamplerNode Float3 Float2
 sampler2D3f slot = sampler slot Sampler2D
-sampler2D4f :: Int -> SamplerNode Vec4f Vec2f
+sampler2D4f :: Int -> SamplerNode Float4 Float2
 sampler2D4f slot = sampler slot Sampler2D
 
-sampler3Df :: Int -> SamplerNode Float Vec3f
+sampler3Df :: Int -> SamplerNode Float Float3
 sampler3Df slot = sampler slot Sampler3D
-sampler3D2f :: Int -> SamplerNode Vec2f Vec3f
+sampler3D2f :: Int -> SamplerNode Float2 Float3
 sampler3D2f slot = sampler slot Sampler3D
-sampler3D3f :: Int -> SamplerNode Vec3f Vec3f
+sampler3D3f :: Int -> SamplerNode Float3 Float3
 sampler3D3f slot = sampler slot Sampler3D
-sampler3D4f :: Int -> SamplerNode Vec4f Vec3f
+sampler3D4f :: Int -> SamplerNode Float4 Float3
 sampler3D4f slot = sampler slot Sampler3D
 
-samplerCubef :: Int -> SamplerNode Float Vec3f
+samplerCubef :: Int -> SamplerNode Float Float3
 samplerCubef slot = sampler slot SamplerCube
-samplerCube2f :: Int -> SamplerNode Vec2f Vec3f
+samplerCube2f :: Int -> SamplerNode Float2 Float3
 samplerCube2f slot = sampler slot SamplerCube
-samplerCube3f :: Int -> SamplerNode Vec3f Vec3f
+samplerCube3f :: Int -> SamplerNode Float3 Float3
 samplerCube3f slot = sampler slot SamplerCube
-samplerCube4f :: Int -> SamplerNode Vec4f Vec3f
+samplerCube4f :: Int -> SamplerNode Float4 Float3
 samplerCube4f slot = sampler slot SamplerCube
 
 (!) :: (OfValueType a, OfValueType b, Integral b) => Node [a] -> Node b -> Node a
@@ -335,5 +351,5 @@ ddx a = DdxNode (nodeValueType a) a
 ddy :: OfValueType a => Node a -> Node a
 ddy a = DdyNode (nodeValueType a) a
 
-instanceId :: Node Word
+instanceId :: Node Word32
 instanceId = InstanceIdNode

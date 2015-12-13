@@ -69,9 +69,9 @@ nodeInfo node = case node of
 	SwizzleNode _ _ _ a -> nodeInfo a
 	SampleNode (SamplerNode s) c -> mergeNodeInfo ([], [], [], [s]) (nodeInfo c)
 	CastNode _ _ a -> nodeInfo a
-	Combine2VecNode _ _ _ a b -> mergeNodeInfo (nodeInfo a) (nodeInfo b)
-	Combine3VecNode _ _ _ _ a b c -> mergeNodeInfo (nodeInfo a) $ mergeNodeInfo (nodeInfo b) (nodeInfo c)
-	Combine4VecNode _ _ _ _ _ a b c d -> mergeNodeInfo (nodeInfo a) $ mergeNodeInfo (nodeInfo b) $ mergeNodeInfo (nodeInfo c) (nodeInfo d)
+	Combine2VecNode _ _ a b -> mergeNodeInfo (nodeInfo a) (nodeInfo b)
+	Combine3VecNode _ _ a b c -> mergeNodeInfo (nodeInfo a) $ mergeNodeInfo (nodeInfo b) (nodeInfo c)
+	Combine4VecNode _ _ a b c d -> mergeNodeInfo (nodeInfo a) $ mergeNodeInfo (nodeInfo b) $ mergeNodeInfo (nodeInfo c) (nodeInfo d)
 
 targetNodeInfo :: Target -> NodeInfo
 targetNodeInfo target = case target of

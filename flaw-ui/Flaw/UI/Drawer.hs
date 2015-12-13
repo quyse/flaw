@@ -94,9 +94,9 @@ data StyleVariant = StyleVariant
 	}
 
 data Style = Style
-	{ styleTextColor :: !Vec4f
-	, styleFillColor :: !Vec4f
-	, styleBorderColor :: !Vec4f
+	{ styleTextColor :: !Float4
+	, styleFillColor :: !Float4
+	, styleBorderColor :: !Float4
 	}
 
 data DrawerFont d = DrawerFont

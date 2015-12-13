@@ -14,6 +14,7 @@ import qualified Data.Text as T
 
 import Flaw.Graphics.Font
 import Flaw.Graphics.Font.Render
+import Flaw.Math
 import Flaw.UI
 import Flaw.UI.Drawer
 
@@ -43,14 +44,17 @@ instance Visual Label where
 				, drawerFontShaper = SomeFontShaper fontShaper
 				}
 			}
-		} position size Style
+		} (Vec2 px py) (Vec2 sx sy) Style
 		{ styleTextColor = textColor
 		} = do
 		text <- readTVar textVar
 		textScript <- readTVar textScriptVar
 		return $ do
 			renderGlyphs glyphRenderer renderableFont $ do
-				renderTexts fontShaper [(text, textColor)] textScript (fmap fromIntegral $ position + fmap (`div` 2) size) RenderTextCursorCenter RenderTextCursorMiddle
+				let position = Vec2
+					(fromIntegral $ px + sx `div` 2)
+					(fromIntegral $ py + sy `div` 2)
+				renderTexts fontShaper [(text, textColor)] textScript position RenderTextCursorCenter RenderTextCursorMiddle
 
 instance HasText Label where
 	setText Label

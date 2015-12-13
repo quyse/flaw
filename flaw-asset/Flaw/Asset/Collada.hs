@@ -63,8 +63,8 @@ data ColladaCache = ColladaCache
 
 data ColladaSettings = ColladaSettings
 	{ csUnit :: Float
-	, csUnitMat :: Mat4x4f
-	, csInvUnitMat :: Mat4x4f
+	, csUnitMat :: Float4x4
+	, csInvUnitMat :: Float4x4
 	}
 
 type ColladaM a = StateT ColladaCache (Either String) a
@@ -290,10 +290,10 @@ parseInput inputElement = do
 data ColladaVerticesData = ColladaVerticesData
 	{ cvdCount :: !Int
 	, cvdPositionIndices :: ColladaM (VU.Vector Int)
-	, cvdPositions :: ColladaM (V.Vector Vec3f)
-	, cvdNormals :: ColladaM (V.Vector Vec3f)
-	, cvdTexcoords :: ColladaM (V.Vector Vec3f)
-	, cvdWeights :: ColladaM (V.Vector Vec4f)
+	, cvdPositions :: ColladaM (V.Vector Float3)
+	, cvdNormals :: ColladaM (V.Vector Float3)
+	, cvdTexcoords :: ColladaM (V.Vector Float3)
+	, cvdWeights :: ColladaM (V.Vector Float4)
 	, cvdBones :: ColladaM (V.Vector (Vec4 Word8))
 	}
 
@@ -359,9 +359,9 @@ parseGeometry element = parseMesh =<< getSingleChildWithTag "mesh" element
 
 -- | Transform.
 data ColladaTransformTag
-	= ColladaTranslateTag Vec3f
-	| ColladaRotateTag Vec3f Float
-	| ColladaMatrixTag Mat4x4f
+	= ColladaTranslateTag Float3
+	| ColladaRotateTag Float3 Float
+	| ColladaMatrixTag Float4x4
 	deriving Show
 
 -- | Node.
@@ -415,7 +415,7 @@ parseNode element@XML.Element
 				maybeTransformSID <- tryGetElementAttr "sid" subElement
 				mat <- liftM (`constructStridable` 0) $ parseArray subElement
 				return node
-					{ cntTransforms = transforms ++ [(maybeTransformSID, ColladaMatrixTag (unitMat `mul` (mat :: Mat4x4f) `mul` invUnitMat))]
+					{ cntTransforms = transforms ++ [(maybeTransformSID, ColladaMatrixTag (unitMat `mul` (mat :: Float4x4) `mul` invUnitMat))]
 					}
 			_ -> return node
 		_ -> return node
@@ -535,23 +535,23 @@ animateNode ColladaNodeTag
 		foldr (\transformTagAnimator transform ->
 			combineTransform (transformTagAnimator time) transform) identityTransform transformTagAnimators
 
-class Stridable s where
+class Stridable s a where
 	stridableStride :: s a -> Int
 	constructStridable :: VG.Vector v a => v a -> Int -> s a
 
-instance Stridable Vec2 where
+instance Vectorized a => Stridable Vec2 a where
 	stridableStride _ = 2
 	constructStridable v i = Vec2 (q 0) (q 1) where q j = v VG.! (i + j)
 
-instance Stridable Vec3 where
+instance Vectorized a => Stridable Vec3 a where
 	stridableStride _ = 3
 	constructStridable v i = Vec3 (q 0) (q 1) (q 2) where q j = v VG.! (i + j)
 
-instance Stridable Vec4 where
+instance Vectorized a => Stridable Vec4 a where
 	stridableStride _ = 4
 	constructStridable v i = Vec4 (q 0) (q 1) (q 2) (q 3) where q j = v VG.! (i + j)
 
-instance Stridable Mat4x4 where
+instance Vectorized a => Stridable Mat4x4 a where
 	stridableStride _ = 16
 	constructStridable v i = Mat4x4
 		(q 0) (q 1) (q 2) (q 3)
@@ -561,15 +561,15 @@ instance Stridable Mat4x4 where
 		where q j = v VG.! (i + j)
 
 -- | Convert vector of primitive values to vector of Stridables.
-stridableStream :: (Stridable s, VG.Vector v a) => v a -> V.Vector (s a)
+stridableStream :: (Stridable s a, VG.Vector v a) => v a -> V.Vector (s a)
 stridableStream q = f undefined q where
-	f :: (Stridable s, VG.Vector v a) => s a -> v a -> V.Vector (s a)
+	f :: (Stridable s a, VG.Vector v a) => s a -> v a -> V.Vector (s a)
 	f u v = V.generate (VG.length v `div` stride) $ \i -> constructStridable v $ i * stride where
 		stride = stridableStride u
 
-parseStridables :: (Stridable s, VG.Vector v a) => (v a, Int) -> ColladaM (V.Vector (s a))
+parseStridables :: (Stridable s a, VG.Vector v a) => (v a, Int) -> ColladaM (V.Vector (s a))
 parseStridables (q, stride) = f undefined q where
-	f :: (Stridable s, VG.Vector v a) => s a -> v a -> ColladaM (V.Vector (s a))
+	f :: (Stridable s a, VG.Vector v a) => s a -> v a -> ColladaM (V.Vector (s a))
 	f u v = if stride == stridableStride u
 		then return $ stridableStream v
 		else throwError "wrong stride"
@@ -584,7 +584,7 @@ instance Animatable Float where
 	animatableConstructor v i = v VG.! i
 	interpolateAnimatable t a b = a * (1 - t) + b * t
 
-instance Animatable (Vec3 Float) where
+instance Animatable Float3 where
 	animatableStride _ = 3
 	animatableConstructor v i = Vec3 (v VG.! i) (v VG.! (i + 1)) (v VG.! (i + 2))
 	interpolateAnimatable t a b = a * vecFromScalar (1 - t) + b * vecFromScalar t
@@ -671,7 +671,7 @@ parseSkin (ColladaSkeleton nodes) skinElement = do
 	let unitMat = csUnitMat settings
 	let invUnitMat = csInvUnitMat settings
 
-	bindShapeTransform <- liftM (\v -> constructStridable v 0 :: Mat4x4f) (parseArray =<< getSingleChildWithTag "bind_shape_matrix" skinElement)
+	bindShapeTransform <- liftM (\v -> constructStridable v 0 :: Float4x4) (parseArray =<< getSingleChildWithTag "bind_shape_matrix" skinElement)
 
 	jointsElement <- getSingleChildWithTag "joints" skinElement
 	jointsInputs <- mapM parseInput =<< getChildrenWithTag "input" jointsElement
@@ -693,7 +693,7 @@ parseSkin (ColladaSkeleton nodes) skinElement = do
 			} -> T.pack sid == jointName) nodes of
 			Just nodeIndex -> return ColladaBone
 				{ cboneSkeletonIndex = nodeIndex
-				, cboneInvBindTransform = transformFromMatrix $ unitMat `mul` (jointInvBindTransform :: Mat4x4f) `mul` bindShapeTransform `mul` invUnitMat
+				, cboneInvBindTransform = transformFromMatrix $ unitMat `mul` (jointInvBindTransform :: Float4x4) `mul` bindShapeTransform `mul` invUnitMat
 				}
 			Nothing -> throwError $ "missing skeleton node for joint " ++ T.unpack jointName
 

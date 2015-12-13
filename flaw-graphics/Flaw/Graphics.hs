@@ -160,7 +160,7 @@ class Device d where
 class Device d => Context c d | c -> d where
 	------- Immediate commands.
 	-- | Clear render target.
-	contextClearColor :: c -> Int -> Vec4f -> IO ()
+	contextClearColor :: c -> Int -> Float4 -> IO ()
 	-- | Clear depth.
 	contextClearDepth :: c -> Float -> IO ()
 	-- | Clear stencil.
@@ -184,13 +184,13 @@ class Device d => Context c d | c -> d where
 	-- | Set framebuffer.
 	contextSetFrameBuffer :: c -> FrameBufferId d -> IO a -> IO a
 	-- | Set viewport (left, top, right, bottom).
-	contextSetViewport :: c -> Vec4 Int -> IO a -> IO a
+	contextSetViewport :: c -> Int4 -> IO a -> IO a
 	-- | Get current viewport.
-	contextGetViewport :: c -> IO (Vec4 Int)
+	contextGetViewport :: c -> IO Int4
 	-- | Set scissor (left, top, right, bottom).
-	contextSetScissor :: c -> Maybe (Vec4 Int) -> IO a -> IO a
+	contextSetScissor :: c -> Maybe Int4 -> IO a -> IO a
 	-- | Get current scissor.
-	contextGetScissor :: c -> IO (Maybe (Vec4 Int))
+	contextGetScissor :: c -> IO (Maybe Int4)
 	-- | Set vertex buffer.
 	contextSetVertexBuffer :: c -> Int -> VertexBufferId d -> IO a -> IO a
 	-- | Set index buffer.
@@ -271,23 +271,23 @@ renderFrameBuffer :: Context c d => FrameBufferId d -> Render c ()
 renderFrameBuffer fb = renderSetup $ \c q -> contextSetFrameBuffer c fb q
 
 -- | Set current viewport (vector with left, top, right, bottom).
-renderViewport :: Context c d => Vec4 Int -> Render c ()
+renderViewport :: Context c d => Int4 -> Render c ()
 renderViewport viewport = renderSetup $ \c q -> contextSetViewport c viewport q
 
 -- | Get current viewport.
-renderGetViewport :: Context c d => Render c (Vec4 Int)
+renderGetViewport :: Context c d => Render c Int4
 renderGetViewport = renderAction contextGetViewport
 
 -- | Set current scissor (vector with left, top, right, bottom).
-renderScissor :: Context c d => Maybe (Vec4 Int) -> Render c ()
+renderScissor :: Context c d => Maybe Int4 -> Render c ()
 renderScissor scissor = renderSetup $ \c q -> contextSetScissor c scissor q
 
 -- | Get current scissor.
-renderGetScissor :: Context c d => Render c (Maybe (Vec4 Int))
+renderGetScissor :: Context c d => Render c (Maybe Int4)
 renderGetScissor = renderAction contextGetScissor
 
 -- | Set intersection between specified and current scissor as scissor.
-renderIntersectScissor :: Context c d => Vec4 Int -> Render c ()
+renderIntersectScissor :: Context c d => Int4 -> Render c ()
 renderIntersectScissor scissor@(Vec4 left top right bottom) = do
 	currentScissor <- renderGetScissor
 	renderScissor $ Just $ case currentScissor of
@@ -328,7 +328,7 @@ renderProgram :: Context c d => ProgramId d -> Render c ()
 renderProgram p = renderSetup $ \c q -> contextSetProgram c p q
 
 -- | Clear render target.
-renderClearColor :: Context c d => Int -> Vec4f -> Render c ()
+renderClearColor :: Context c d => Int -> Float4 -> Render c ()
 renderClearColor i color = renderAction $ \c -> contextClearColor c i color
 
 -- | Clear depth.

@@ -36,7 +36,7 @@ data QuadRenderer d = QuadRenderer
 	, quadRendererBlendState :: !(BlendStateId d)
 	, quadRendererProgram :: !(ProgramId d)
 	, quadRendererCapacity :: !Int -- ^ Max number of quads.
-	, quadRendererBuffer :: !(VSM.IOVector Vec4f)
+	, quadRendererBuffer :: !(VSM.IOVector Float4)
 	}
 
 initQuadRenderer :: Device d => d -> IO (QuadRenderer d, IO ())
@@ -46,7 +46,7 @@ initQuadRenderer device = do
 	let capacity = 256;
 
 	-- vertex buffer
-	let vbStride = sizeOf (undefined :: Vec4f)
+	let vbStride = sizeOf (undefined :: Float4)
 	vb <- book bk $ createDynamicVertexBuffer device (capacity * 6 * vbStride) vbStride
 
 	ss <- book bk $ createSamplerState device defaultSamplerStateInfo
@@ -67,7 +67,7 @@ initQuadRenderer device = do
 	program <- book bk $ createProgram device $ do
 		aVertex <- attribute 0 0 0 (AttributeVec4 AttributeFloat32)
 		texcoord <- temp $ zw__ aVertex
-		rasterize (combineVec (xy__ aVertex, constf 0, constf 1)) $ do
+		rasterize (cvec4 (x_ aVertex) (y_ aVertex) (constf 0) (constf 1)) $ do
 			colorTarget 0 $ sample (sampler2D4f 0) texcoord
 
 	buffer <- VSM.new $ capacity * 6
@@ -82,8 +82,8 @@ initQuadRenderer device = do
 		}, freeBook bk)
 
 data QuadToRender = QuadToRender
-	{ quadToRenderPosition :: !Vec4f -- ^ Left-bottom (XY) and right-top (ZW) position in pixels.
-	, quadToRenderTexcoord :: !Vec4f -- ^ Left-bottom (XY) and right-top (ZW) texcoords.
+	{ quadToRenderPosition :: !Float4 -- ^ Left-bottom (XY) and right-top (ZW) position in pixels.
+	, quadToRenderTexcoord :: !Float4 -- ^ Left-bottom (XY) and right-top (ZW) texcoords.
 	}
 
 type RenderQuadsM c = ReaderT (QuadToRender -> Render c ()) (Render c)
@@ -113,7 +113,7 @@ renderQuads QuadRenderer
 		if count > 0 then do
 			-- upload data to vertex buffer
 			let (foreignPtr, _size) = VSM.unsafeToForeignPtr0 buffer
-			bytes <- liftIO $ B.unsafePackCStringLen (castPtr $ unsafeForeignPtrToPtr foreignPtr, count * 6 * sizeOf (undefined :: Vec4f))
+			bytes <- liftIO $ B.unsafePackCStringLen (castPtr $ unsafeForeignPtrToPtr foreignPtr, count * 6 * sizeOf (undefined :: Float4))
 			renderUploadVertexBuffer vb bytes
 			liftIO $ touchForeignPtr foreignPtr
 			-- render batch
@@ -150,11 +150,11 @@ renderQuads QuadRenderer
 
 -- | Runtime data about one sprite of particular sprite set.
 data RenderableIcon = RenderableIcon
-	{ renderableIconPosition :: !Vec4f -- ^ Left-top and right-bottom position in pixels, relative to main point.
-	, renderableIconTexcoord :: !Vec4f -- ^ Left-top and right-bottom UV.
+	{ renderableIconPosition :: !Float4 -- ^ Left-top and right-bottom position in pixels, relative to main point.
+	, renderableIconTexcoord :: !Float4 -- ^ Left-top and right-bottom UV.
 	}
 
-renderIcon :: RenderableIcon -> Vec2f -> RenderQuadsM c ()
+renderIcon :: RenderableIcon -> Float2 -> RenderQuadsM c ()
 renderIcon RenderableIcon
 	{ renderableIconPosition = position
 	, renderableIconTexcoord = texcoord
@@ -166,15 +166,15 @@ renderIcon RenderableIcon
 		}
 
 data RenderableQuad = RenderableQuad
-	{ renderableQuadTexcoord :: !Vec4f -- ^ Left-top and right-bottom UV.
+	{ renderableQuadTexcoord :: !Float4 -- ^ Left-top and right-bottom UV.
 	}
 
-renderQuad :: RenderableQuad -> Vec2f -> Vec2f -> RenderQuadsM c ()
+renderQuad :: RenderableQuad -> Float2 -> Float2 -> RenderQuadsM c ()
 renderQuad RenderableQuad
 	{ renderableQuadTexcoord = texcoord
-	} leftTop rightBottom = do
+	} (Vec2 left top) (Vec2 right bottom) = do
 	addQuad <- ask
 	lift $ addQuad QuadToRender
-		{ quadToRenderPosition = combineVec (leftTop, rightBottom)
+		{ quadToRenderPosition = Vec4 left top right bottom
 		, quadToRenderTexcoord = texcoord
 		}

@@ -865,8 +865,8 @@ data Dx11Context = Dx11Context
 
 data Dx11ContextState = Dx11ContextState
 	{ dx11ContextStateFrameBuffer :: !(IORef (FrameBufferId Dx11Device))
-	, dx11ContextStateViewport :: !(IORef (Vec4 Int))
-	, dx11ContextStateScissor :: !(IORef (Maybe (Vec4 Int)))
+	, dx11ContextStateViewport :: !(IORef Int4)
+	, dx11ContextStateScissor :: !(IORef (Maybe Int4))
 	, dx11ContextStateVertexBuffers :: !(VM.IOVector (VertexBufferId Dx11Device))
 	, dx11ContextStateIndexBuffer :: !(IORef (IndexBufferId Dx11Device))
 	, dx11ContextStateUniformBuffers :: !(VM.IOVector (UniformBufferId Dx11Device))

@@ -13,7 +13,6 @@ module Flaw.Asset.Vertex
 	) where
 
 import qualified Data.Vector as V
-import Data.Word
 
 import Flaw.Asset.Collada
 import Flaw.FFI
@@ -23,9 +22,9 @@ class ColladaVertex q where
 	createColladaVertices :: ColladaVerticesData -> ColladaM (V.Vector q)
 
 genStruct "VertexPNT"
-	[ ([t| Vec3f |], "position")
-	, ([t| Vec3f |], "normal")
-	, ([t| Vec2f |], "texcoord")
+	[ ([t| Float3 |], "position")
+	, ([t| Float3 |], "normal")
+	, ([t| Float2 |], "texcoord")
 	]
 
 deriving instance Eq VertexPNT
@@ -43,11 +42,11 @@ instance ColladaVertex VertexPNT where
 			}
 
 genStruct "VertexPNTWB"
-	[ ([t| Vec3f |], "position")
-	, ([t| Vec3f |], "normal")
-	, ([t| Vec2f |], "texcoord")
-	, ([t| Vec4f |], "weights")
-	, ([t| Vec4 Word8 |], "bones")
+	[ ([t| Float3 |], "position")
+	, ([t| Float3 |], "normal")
+	, ([t| Float2 |], "texcoord")
+	, ([t| Float4 |], "weights")
+	, ([t| Word8_4 |], "bones")
 	]
 
 deriving instance Eq VertexPNTWB

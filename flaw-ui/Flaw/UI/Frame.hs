@@ -175,7 +175,7 @@ newFrame element Metrics
 data FrameResizeElement = FrameResizeElement
 	{ freProcessInput :: !(InputEvent -> InputState -> STM Bool)
 	, freMouseCursor :: !MouseCursor
-	, freSizeVar :: !(TVar (Vec2 Int))
+	, freSizeVar :: !(TVar Int2)
 	, freShowCursorExp :: !(STM Bool)
 	}
 

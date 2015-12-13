@@ -37,10 +37,13 @@ module Flaw.Graphics.Program.Internal
 import Control.Monad
 import Control.Monad.Reader
 import Data.Char
+import Data.Int
+import Data.Word
 import Data.IORef
 import Language.Haskell.TH
 
 import Flaw.Math
+import Flaw.Math.Internal
 
 -- | Supported scalar types in programs.
 data ScalarType
@@ -88,9 +91,9 @@ instance OfScalarType Float where
 	scalarType _ = ScalarFloat
 instance OfScalarType Double where
 	scalarType _ = ScalarDouble
-instance OfScalarType Int where
+instance OfScalarType Int32 where
 	scalarType _ = ScalarInt
-instance OfScalarType Word where
+instance OfScalarType Word32 where
 	scalarType _ = ScalarUint
 instance OfScalarType Bool where
 	scalarType _ = ScalarBool
@@ -105,34 +108,34 @@ instance OfValueType Float where
 	valueType _ = ScalarValueType ScalarFloat
 instance OfValueType Double where
 	valueType _ = ScalarValueType ScalarDouble
-instance OfValueType Int where
+instance OfValueType Int32 where
 	valueType _ = ScalarValueType ScalarInt
-instance OfValueType Word where
+instance OfValueType Word32 where
 	valueType _ = ScalarValueType ScalarUint
 instance OfValueType Bool where
 	valueType _ = ScalarValueType ScalarBool
 
--- instance OfScalarType a => OfValueType (Vec{1..4} a)
-liftM concat $ forM ['1'..'4'] $ \c -> do
-	let name = mkName $ "Vec" ++ [c]
+-- instance (OfScalarType a, Vectorized a) => OfValueType (Vec{1..4} a)
+liftM concat $ forM [1..maxVecDimension] $ \c -> do
+	let name = mkName $ "Vec" ++ [intToDigit c]
 	let t = conT name
-	let d = conE $ mkName $ "Dimension" ++ [c]
-	ps <- forM ['1'..c] $ \p -> newName ['p', p]
+	let d = conE $ mkName $ "Dimension" ++ [intToDigit c]
+	ps <- forM [1..c] $ \p -> newName ['p', intToDigit p]
 	[d|
-		instance OfScalarType a => OfValueType ($t a) where
+		instance (OfScalarType a, Vectorized a) => OfValueType ($t a) where
 			valueType _ = VectorValueType $d $ scalarType (undefined :: a)
 			valueToShowList $(conP name $ map varP ps) = $(listE $ map (\p -> appE (varE 'show) $ varE p) ps)
 		|]
 
--- instance OfScalarType a => OfValueType (Mat{1..4}x{1..4} a)
-liftM concat $ forM [(i, j) | i <- ['1'..'4'], j <- ['1'..'4']] $ \(ci, cj) -> do
-	let name = mkName $ "Mat" ++ [ci, 'x', cj]
+-- instance (OfScalarType a, Vectorized a) => OfValueType (Mat{1..4}x{1..4} a)
+liftM concat $ forM matDimensions $ \(ci, cj) -> do
+	let name = mkName $ "Mat" ++ [intToDigit ci, 'x', intToDigit cj]
 	let t = conT name
-	let di = conE $ mkName $ "Dimension" ++ [ci]
-	let dj = conE $ mkName $ "Dimension" ++ [cj]
-	ps <- forM [(i, j) | i <- ['1'..ci], j <- ['1'..cj]] $ \(i, j) -> newName ['p', i, j]
+	let di = conE $ mkName $ "Dimension" ++ [intToDigit ci]
+	let dj = conE $ mkName $ "Dimension" ++ [intToDigit cj]
+	ps <- forM [(intToDigit i, intToDigit j) | i <- [1..ci], j <- [1..cj]] $ \(i, j) -> newName ['p', i, j]
 	[d|
-		instance OfScalarType a => OfValueType ($t a) where
+		instance (OfScalarType a, Vectorized a) => OfValueType ($t a) where
 			valueType _ = MatrixValueType $di $dj $ scalarType (undefined :: a)
 			valueToShowList $(conP name $ map varP ps) = $(listE $ map (\p -> appE (varE 'show) $ varE p) ps)
 		|]
@@ -140,10 +143,10 @@ liftM concat $ forM [(i, j) | i <- ['1'..'4'], j <- ['1'..'4']] $ \(ci, cj) -> d
 -- | Class of vector types which can be used in program.
 class (OfValueType a, Vec a, OfScalarType (VecElement a)) => OfVectorType a
 
-instance OfScalarType a => OfVectorType (Vec1 a)
-instance OfScalarType a => OfVectorType (Vec2 a)
-instance OfScalarType a => OfVectorType (Vec3 a)
-instance OfScalarType a => OfVectorType (Vec4 a)
+instance (OfScalarType a, Vectorized a) => OfVectorType (Vec1 a)
+instance (OfScalarType a, Vectorized a) => OfVectorType (Vec2 a)
+instance (OfScalarType a, Vectorized a) => OfVectorType (Vec3 a)
+instance (OfScalarType a, Vectorized a) => OfVectorType (Vec4 a)
 
 -- | Class of types which can be used in vertex attribute.
 class OfValueType a => OfAttributeType a where
@@ -197,8 +200,8 @@ instance OfAttributeType Float where
 		AttributeFloat32 -> ATFloat32
 		AttributeFloat16 -> ATFloat16
 
-instance OfAttributeType Int where
-	data AttributeFormat Int
+instance OfAttributeType Int32 where
+	data AttributeFormat Int32
 		= AttributeInt32 !Normalization
 		| AttributeInt16 !Normalization
 		| AttributeInt8 !Normalization
@@ -207,8 +210,8 @@ instance OfAttributeType Int where
 		AttributeInt16 n -> ATInt16 n
 		AttributeInt8 n -> ATInt8 n
 
-instance OfAttributeType Word where
-	data AttributeFormat Word
+instance OfAttributeType Word32 where
+	data AttributeFormat Word32
 		= AttributeUint32 !Normalization
 		| AttributeUint16 !Normalization
 		| AttributeUint8 !Normalization
@@ -217,30 +220,30 @@ instance OfAttributeType Word where
 		AttributeUint16 n -> ATUint16 n
 		AttributeUint8 n -> ATUint8 n
 
--- instance (OfScalarType a, OfAttributeType a) => OfAttributeType (Vec{1..4} a)
+-- instance (OfScalarType a, Vectorized a, OfAttributeType a) => OfAttributeType (Vec{1..4} a)
 forM ['1'..'4'] $ \c -> do
 	let v = mkName $ "Vec" ++ [c]
 	a <- newName "a"
 	let conName = mkName $ "AttributeVec" ++ [c]
 	b <- newName "b"
-	instanceD (sequence [ [t| OfScalarType $(varT a) |], [t| OfAttributeType $(varT a) |] ]) (appT (conT ''OfAttributeType) $ appT (conT v) $ varT a)
+	instanceD (sequence [ [t| OfScalarType $(varT a) |], [t| Vectorized $(varT a) |], [t| OfAttributeType $(varT a) |] ]) (appT (conT ''OfAttributeType) $ appT (conT v) $ varT a)
 		[ dataInstD (return []) ''AttributeFormat [appT (conT v) $ varT a]
 			[ normalC conName [return (NotStrict, AppT (ConT ''AttributeFormat) $ VarT a)]
 			] []
 		, funD 'attributeFormatToType [clause [conP conName [varP b]] (normalB [| $(conE $ mkName $ "ATVec" ++ [c]) (attributeFormatToType $(varE b)) |]) []]
 		]
 
--- instance (OfScalarType a, OfAttributeType a) => OfAttributeType (Mat{1..4}x{1..4} a)
-forM [(ci, cj) | ci <- ['1'..'4'], cj <- ['1'..'4']] $ \(ci, cj) -> do
-	let v = mkName $ "Mat" ++ [ci, 'x', cj]
+-- instance (OfScalarType a, Vectorized a, OfAttributeType a) => OfAttributeType (Mat{1..4}x{1..4} a)
+forM matDimensions $ \(ci, cj) -> do
+	let v = mkName $ "Mat" ++ [intToDigit ci, 'x', intToDigit cj]
 	a <- newName "a"
-	let conName = mkName $ "AttributeMat" ++ [ci, 'x', cj]
+	let conName = mkName $ "AttributeMat" ++ [intToDigit ci, 'x', intToDigit cj]
 	b <- newName "b"
-	instanceD (sequence [ [t| OfScalarType $(varT a) |], [t| OfAttributeType $(varT a) |] ]) (appT (conT ''OfAttributeType) $ appT (conT v) $ varT a)
+	instanceD (sequence [ [t| OfScalarType $(varT a) |], [t| Vectorized $(varT a) |], [t| OfAttributeType $(varT a) |] ]) (appT (conT ''OfAttributeType) $ appT (conT v) $ varT a)
 		[ dataInstD (return []) ''AttributeFormat [appT (conT v) $ varT a]
 			[ normalC conName [return (NotStrict, AppT (ConT ''AttributeFormat) $ VarT a)]
 			] []
-		, funD 'attributeFormatToType [clause [conP conName [varP b]] (normalB [| $(conE $ mkName $ "ATMat" ++ [ci, 'x', cj]) (attributeFormatToType $(varE b)) |]) []]
+		, funD 'attributeFormatToType [clause [conP conName [varP b]] (normalB [| $(conE $ mkName $ "ATMat" ++ [intToDigit ci, 'x', intToDigit cj]) (attributeFormatToType $(varE b)) |]) []]
 		]
 
 -- | State of the program while constructing.
@@ -281,8 +284,8 @@ data SamplerDimension
 	deriving (Eq, Ord, Show)
 
 data Target
-	= PositionTarget (Node Vec4f)
-	| ColorTarget !Int (Node Vec4f)
+	= PositionTarget (Node Float4)
+	| ColorTarget !Int (Node Float4)
 	| DepthTarget (Node Float)
 	deriving Show
 
@@ -341,20 +344,14 @@ data Node a where
 	NormalizeNode :: (OfVectorType v, Normalize v) => ValueType -> Node v -> Node v
 	DdxNode :: OfValueType a => ValueType -> Node a -> Node a
 	DdyNode :: OfValueType a => ValueType -> Node a -> Node a
-	InstanceIdNode :: Node Word
+	InstanceIdNode :: Node Word32
 	ComponentNode :: OfVectorType v => ValueType -> ValueType -> Char -> Node v -> Node (VecElement v)
 	SwizzleNode :: (OfVectorType a, OfVectorType b) => ValueType -> ValueType -> String -> Node a -> Node b
 	SampleNode :: SamplerNode s c -> Node c -> Node s
 	CastNode :: (OfValueType a, OfValueType b) => ValueType -> ValueType -> Node a -> Node b
-	Combine2VecNode
-		:: (OfValueType a, OfValueType b, Combine2Vec a b, OfValueType (Combine2VecResult a b))
-		=> ValueType -> ValueType -> ValueType -> Node a -> Node b -> Node (Combine2VecResult a b)
-	Combine3VecNode
-		:: (OfValueType a, OfValueType b, OfValueType c, Combine3Vec a b c, OfValueType (Combine3VecResult a b c))
-		=> ValueType -> ValueType -> ValueType -> ValueType -> Node a -> Node b -> Node c -> Node (Combine3VecResult a b c)
-	Combine4VecNode
-		:: (OfValueType a, OfValueType b, OfValueType c, OfValueType d, Combine4Vec a b c d, OfValueType (Combine4VecResult a b c d))
-		=> ValueType -> ValueType -> ValueType -> ValueType -> ValueType -> Node a -> Node b -> Node c -> Node d -> Node (Combine4VecResult a b c d)
+	Combine2VecNode :: OfScalarType a => ValueType -> ValueType -> Node a -> Node a -> Node (Vec2 a)
+	Combine3VecNode :: OfScalarType a => ValueType -> ValueType -> Node a -> Node a -> Node a -> Node (Vec3 a)
+	Combine4VecNode :: OfScalarType a => ValueType -> ValueType -> Node a -> Node a -> Node a -> Node a -> Node (Vec4 a)
 
 deriving instance Show (Node a)
 
@@ -463,29 +460,6 @@ forM [(maxComp, dim) | maxComp <- [1..4], dim <- [1..4]] $ \(maxComp, dim) -> do
 		, [t| $(conT sv) $(varT v) |]
 		])
 		[t| $(conT sv) (Node $(varT v)) |] $ resultTypeDecl : map funDecl variants
-
----- Combine{2..4}Vec instances.
-instance (OfValueType a, OfValueType b, Combine2Vec a b, OfValueType (Combine2VecResult a b)) => Combine2Vec (Node a) (Node b) where
-	type Combine2VecResult (Node a) (Node b) = Node (Combine2VecResult a b)
-	combine2Vec = Combine2VecNode
-		(valueType (undefined :: a))
-		(valueType (undefined :: b))
-		(valueType (undefined :: Combine2VecResult a b))
-instance (OfValueType a, OfValueType b, OfValueType c, Combine3Vec a b c, OfValueType (Combine3VecResult a b c)) => Combine3Vec (Node a) (Node b) (Node c) where
-	type Combine3VecResult (Node a) (Node b) (Node c) = Node (Combine3VecResult a b c)
-	combine3Vec = Combine3VecNode
-		(valueType (undefined :: a))
-		(valueType (undefined :: b))
-		(valueType (undefined :: c))
-		(valueType (undefined :: Combine3VecResult a b c))
-instance (OfValueType a, OfValueType b, OfValueType c, OfValueType d, Combine4Vec a b c d, OfValueType (Combine4VecResult a b c d)) => Combine4Vec (Node a) (Node b) (Node c) (Node d) where
-	type Combine4VecResult (Node a) (Node b) (Node c) (Node d) = Node (Combine4VecResult a b c d)
-	combine4Vec = Combine4VecNode
-		(valueType (undefined :: a))
-		(valueType (undefined :: b))
-		(valueType (undefined :: c))
-		(valueType (undefined :: d))
-		(valueType (undefined :: Combine4VecResult a b c d))
 
 -- | Program monad.
 type Program a = ReaderT (IORef State) IO a

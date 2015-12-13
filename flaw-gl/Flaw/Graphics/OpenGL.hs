@@ -111,8 +111,8 @@ data GlContext = GlContext
 
 data GlContextState = GlContextState
 	{ glContextStateFrameBuffer :: !(IORef (FrameBufferId GlDevice))
-	, glContextStateViewport :: !(IORef (Vec4 Int))
-	, glContextStateScissor :: !(IORef (Maybe (Vec4 Int)))
+	, glContextStateViewport :: !(IORef Int4)
+	, glContextStateScissor :: !(IORef (Maybe Int4))
 	, glContextStateVertexBuffers :: !(VM.IOVector (VertexBufferId GlDevice))
 	, glContextStateIndexBuffer :: !(IORef (IndexBufferId GlDevice))
 	, glContextStateUniformBuffers :: !(VM.IOVector (UniformBufferId GlDevice))

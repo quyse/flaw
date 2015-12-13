@@ -34,7 +34,7 @@ matDimensions = [(3, 4), (4, 4)] -- GHC 7.10.3 hangs if I add (3, 3), WTF???
 
 -- | Meaningful types for math.
 mathTypeNamesWithPrefix :: [(Name, String)]
-mathTypeNamesWithPrefix = [(''Float, "Float"), (''Double, "Double"), (''Int32, "Int32_"), (''Word32, "Word32_"), (''Int, "Int")]
+mathTypeNamesWithPrefix = [(''Float, "Float"), (''Double, "Double"), (''Int32, "Int32_"), (''Word32, "Word32_"), (''Int, "Int"), (''Word8, "Word8_")]
 
 -- | Meaningful types for quaternions.
 mathQuaternionTypeNamesWithPrefix :: [(Name, String)]

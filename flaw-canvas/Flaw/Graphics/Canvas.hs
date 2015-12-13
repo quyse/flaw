@@ -28,8 +28,8 @@ data Canvas d = Canvas
 	{
 	-- | Blend state for usual blending.
 	  canvasBlendState :: !(BlendStateId d)
-	-- | Function for rendering bordered triangle.
-	, canvasRenderBorderedRectangle :: forall c. Context c d => Vec4f -> Vec4f -> Vec4f -> Vec4f -> Render c ()
+	-- | Function for rendering bordered rectangle.
+	, canvasRenderBorderedRectangle :: forall c. Context c d => Float4 -> Float4 -> Float4 -> Float4 -> Render c ()
 	}
 
 initCanvas :: Device d => d -> IO (Canvas d, IO ())
@@ -69,20 +69,20 @@ initCanvas device = do
 	-- shader for rendering bordered rectangles
 	ubs <- uniformBufferSlot 0
 	-- uniform containing four X coordinates (from left to right)
-	uX <- uniform ubs :: IO (Node Vec4f)
+	uX <- uniform ubs :: IO (Node Float4)
 	-- uniform containing four Y coordinates (from bottom to top)
-	uY <- uniform ubs :: IO (Node Vec4f)
+	uY <- uniform ubs :: IO (Node Float4)
 	-- uniform with fill color
-	uFillColor <- uniform ubs :: IO (Node Vec4f)
+	uFillColor <- uniform ubs :: IO (Node Float4)
 	-- uniform with border color
-	uBorderColor <- uniform ubs :: IO (Node Vec4f)
+	uBorderColor <- uniform ubs :: IO (Node Float4)
 	us <- book bk $ createUniformStorage device ubs
 	program <- book bk $ createProgram device $ do
 		aX <- attribute 0 0 0 (AttributeVec4 AttributeFloat32)
 		aY <- attribute 0 16 0 (AttributeVec4 AttributeFloat32)
 		aC <- attribute 0 32 0 (AttributeVec2 AttributeFloat32)
 		color <- temp (uFillColor * vecFromScalar (x_ aC) + uBorderColor * vecFromScalar (y_ aC))
-		rasterize (combineVec (dot aX uX, dot aY uY, constf 0, constf 1)) $ colorTarget 0 color
+		rasterize (cvec4 (dot aX uX) (dot aY uY) (constf 0) (constf 1)) $ colorTarget 0 color
 
 	let renderBorderedRectangle xs ys fillColor borderColor = do
 		-- setup stuff
@@ -112,11 +112,21 @@ initCanvas device = do
 
 -- | Draw bordered rectangle.
 -- Coordinates are integer pixels. Y directed down.
-drawBorderedRectangle :: Context c d => Canvas d -> Vec4 Int -> Vec4 Int -> Vec4f -> Vec4f -> Render c ()
+drawBorderedRectangle :: Context c d => Canvas d -> Int4 -> Int4 -> Float4 -> Float4 -> Render c ()
 drawBorderedRectangle Canvas
 	{ canvasRenderBorderedRectangle = renderBorderedRectangle
-	} xs ys fillColor borderColor = renderScope $ do
+	} (Int4 x1 x2 x3 x4) (Int4 y1 y2 y3 y4) fillColor borderColor = renderScope $ do
 	Vec4 viewportLeft viewportTop viewportRight viewportBottom <- renderGetViewport
-	let x = (fmap fromIntegral xs) * xxxx__ (Vec1 $ 2 / fromIntegral (viewportRight - viewportLeft)) - Vec4 1 1 1 1
-	let y = (wzyx__ $ fmap fromIntegral ys) * xxxx__ (Vec1 $ 2 / fromIntegral (viewportTop - viewportBottom)) + Vec4 1 1 1 1
+	let scaleX = 2 / fromIntegral (viewportRight - viewportLeft)
+	let scaleY = 2 / fromIntegral (viewportTop - viewportBottom)
+	let x = Float4
+		(fromIntegral x1 * scaleX - 1)
+		(fromIntegral x2 * scaleX - 1)
+		(fromIntegral x3 * scaleX - 1)
+		(fromIntegral x4 * scaleX - 1)
+	let y = Float4 -- note reverse order of y's
+		(fromIntegral y4 * scaleY + 1)
+		(fromIntegral y3 * scaleY + 1)
+		(fromIntegral y2 * scaleY + 1)
+		(fromIntegral y1 * scaleY + 1)
 	renderBorderedRectangle x y fillColor borderColor

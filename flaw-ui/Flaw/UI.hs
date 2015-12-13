@@ -141,7 +141,7 @@ class Element a => FreeContainer a where
 	-- | Set position of child element in free container.
 	placeFreeChild :: a -> FreeContainerChild a -> Position -> STM ()
 	-- | Move child element relatively its current position.
-	placeFreeChildRelatively :: a -> FreeContainerChild a -> Vec2 Int -> STM ()
+	placeFreeChildRelatively :: a -> FreeContainerChild a -> Int2 -> STM ()
 	-- | Bring element to the end of render list (in order to render on top of everything).
 	bringFreeChildOnTop :: a -> FreeContainerChild a -> STM ()
 

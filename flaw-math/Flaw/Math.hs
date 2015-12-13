@@ -26,6 +26,7 @@ module Flaw.Math
 	, Int32_1, Int32_2, Int32_3, Int32_4
 	, Word32_1, Word32_2, Word32_3, Word32_4
 	, Int1, Int2, Int3, Int4
+	, Word8_1, Word8_2, Word8_3, Word8_4
 	, Dot(..)
 	, Cross(..)
 	, Norm(..)
@@ -37,6 +38,7 @@ module Flaw.Math
 	, Int32_3x4, Int32_4x4
 	, Word32_3x4, Word32_4x4
 	, Int3x4, Int4x4
+	, Word8_3x4, Word8_4x4
 	, Quaternionized(..)
 	, Quat(..)
 	, Conjugate(..)
