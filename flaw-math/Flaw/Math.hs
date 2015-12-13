@@ -181,7 +181,7 @@ liftM concat $ forM mathTypeNamesWithPrefix $ \(mathTypeName, mathTypePrefix) ->
 			let conName = mkName $ mathTypePrefix ++ dimStr
 			components <- forM (take dim vecComponents) $ newName . return
 			return
-				[ dataInstD (sequence []) dataName [elemType] [normalC conName (replicate dim $ return (Unpacked, ConT mathTypeName))] [''Eq, ''Ord, ''Show]
+				[ dataInstD (sequence []) dataName [elemType] [normalC conName (replicate dim $ return (Unpacked, ConT mathTypeName))] []
 				, funD (mkName $ "vec" ++ dimStr) [clause (map varP components) (normalB $ foldl appE (conE conName) $ map varE components) []]
 				, funD (mkName $ "unvec" ++ dimStr) [clause [conP conName $ map varP components] (normalB $ tupE $ map varE components) []]
 				]
@@ -193,7 +193,7 @@ liftM concat $ forM mathTypeNamesWithPrefix $ \(mathTypeName, mathTypePrefix) ->
 			let conName = mkName $ mathTypePrefix ++ dimStr
 			components <- forM [(i, j) | i <- [1..dimN], j <- [1..dimM]] $ \(i, j) -> newName ['m', intToDigit i, intToDigit j]
 			return
-				[ dataInstD (sequence []) dataName [elemType] [normalC conName (replicate (dimN * dimM) $ return (Unpacked, ConT mathTypeName))] [''Eq, ''Ord, ''Show]
+				[ dataInstD (sequence []) dataName [elemType] [normalC conName (replicate (dimN * dimM) $ return (Unpacked, ConT mathTypeName))] []
 				, funD (mkName $ "mat" ++ dimStr) [clause (map varP components) (normalB $ foldl appE (conE conName) $ map varE components) []]
 				, funD (mkName $ "unmat" ++ dimStr) [clause [conP conName $ map varP components] (normalB $ tupE $ map varE components) []]
 				]
@@ -217,8 +217,8 @@ do
 	tvE <- newName "e"
 	let elemType = varT tvE
 
-	-- instances per vector dimension, like VecX (Vec4 Float)
-	vecInstances <- liftM concat $ forM [1..maxVecDimension] $ \dim -> do
+	-- vector declarations
+	vecDecs <- liftM concat $ forM [1..maxVecDimension] $ \dim -> do
 
 		let dimStr = [intToDigit dim]
 		let dataName = mkName $ "Vec" ++ dimStr
@@ -228,18 +228,17 @@ do
 		let components = take dim vecComponents
 		-- names for component-parameters
 		componentParams <- forM components $ \c -> newName [c]
+		as <- forM components $ \c -> newName $ ['a', c]
+		bs <- forM components $ \c -> newName $ ['b', c]
+		p <- newName "p"
 
 		-- instance for Vec class
-		vecInstance <- do
-			let vecFromScalarDecl = do
-				a <- newName "a"
-				funD 'vecFromScalar [clause [varP a] (normalB $ foldl appE (conE conName) $ map varE $ replicate dim a) []]
-			instanceD (sequence [ [t| Vectorized $elemType |] ]) [t| Vec ($(conT dataName) $elemType) |] =<< addInlines
-				[ tySynInstD ''VecElement $ tySynEqn [ [t| $(conT dataName) $elemType |] ] $ elemType
-				, funD 'vecLength [clause [wildP] (normalB $ litE $ integerL $ fromIntegral dim) []]
-				, funD 'vecToList [clause [conP conName $ map varP componentParams] (normalB $ listE $ map varE componentParams) []]
-				, vecFromScalarDecl
-				]
+		vecInstance <- instanceD (sequence [ [t| Vectorized $elemType |] ]) [t| Vec ($(conT dataName) $elemType) |] =<< addInlines
+			[ tySynInstD ''VecElement $ tySynEqn [ [t| $(conT dataName) $elemType |] ] $ elemType
+			, funD 'vecLength [clause [wildP] (normalB $ litE $ integerL $ fromIntegral dim) []]
+			, funD 'vecToList [clause [conP conName $ map varP componentParams] (normalB $ listE $ map varE componentParams) []]
+			, funD 'vecFromScalar [clause [varP p] (normalB $ foldl appE (conE conName) $ replicate dim (varE p)) []]
+			]
 
 		-- instances for VecX .. VecW classes
 		vecComponentInstances <- forM components $ \component -> do
@@ -251,33 +250,27 @@ do
 				]
 
 		-- instance for Dot class
-		dotInstance <- do
-			as <- forM components $ \c -> newName $ ['a', c]
-			bs <- forM components $ \c -> newName $ ['b', c]
-			instanceD (sequence [ [t| Vectorized $elemType |], [t| Num $elemType |] ]) [t| Dot ($(conT dataName) $elemType) |] =<< addInlines
-				[ funD 'dot
-					[ clause
-						[ conP conName $ map varP as
-						, conP conName $ map varP bs
-						]
-						(normalB $ foldl1 (\a b -> [| $a + $b |]) $ map (\(a, b) -> [| $(varE a) * $(varE b) |]) $ zip as bs) []
+		dotInstance <- instanceD (sequence [ [t| Vectorized $elemType |], [t| Num $elemType |] ]) [t| Dot ($(conT dataName) $elemType) |] =<< addInlines
+			[ funD 'dot
+				[ clause
+					[ conP conName $ map varP as
+					, conP conName $ map varP bs
 					]
+					(normalB $ foldl1 (\a b -> [| $a + $b |]) $ map (\(a, b) -> [| $(varE a) * $(varE b) |]) $ zip as bs) []
 				]
+			]
 
 		-- instance for Norm class
-		normInstance <- do
-			as <- forM components $ \c -> newName [c]
-			instanceD (sequence [ [t| Vectorized $elemType |], [t| Floating $elemType |] ]) [t| Norm ($(conT dataName) $elemType) |] =<< addInlines
-				[ funD 'norm [clause [] (normalB $ [| sqrt . norm2 |]) []]
-				, funD 'norm2 [clause [conP conName $ map varP as]
-					(normalB $ foldl1 (\a b -> [| $a + $b |]) $ map (\a -> [| $a * $a |]) $ map varE as) []]
-				]
+		normInstance <- instanceD (sequence [ [t| Vectorized $elemType |], [t| Floating $elemType |] ]) [t| Norm ($(conT dataName) $elemType) |] =<< addInlines
+			[ funD 'norm [clause [] (normalB $ [| sqrt . norm2 |]) []]
+			, funD 'norm2 [clause [conP conName $ map varP as]
+				(normalB $ foldl1 (\a b -> [| $a + $b |]) $ map (\a -> [| $a * $a |]) $ map varE as) []]
+			]
 
 		-- instance for Normalize class
 		normalizeInstance <- do
-			a <- newName "a"
 			instanceD (sequence [ [t| Vectorized $elemType |], [t| Floating $elemType |] ]) [t| Normalize ($(conT dataName) $elemType) |] =<< addInlines
-				[ funD 'normalize [clause [varP a] (normalB [| $(varE a) * (vecFromScalar (1 / norm $(varE a))) |]) []]
+				[ funD 'normalize [clause [varP p] (normalB [| $(varE p) * (vecFromScalar (1 / norm $(varE p))) |]) []]
 				]
 
 		-- instance for SwizzleVec{maxComp}{dim} class
@@ -294,26 +287,24 @@ do
 				funD (mkName $ variant ++ "__") [clause [varP tvV] (normalB expr) []]
 			instanceD (sequence [ [t| Vectorized $elemType |] ]) [t| $(conT instanceName) ($(conT srcDataName) $elemType) |] =<< addInlines (resultDecl : (map funDecl variants))
 
-		aParams <- mapM (\c -> newName $ ['a', c]) components
-		bParams <- mapM (\c -> newName $ ['b', c]) components
 		let binaryOp opName = funD opName
 			[ clause
-				[ conP conName $ map varP aParams
-				, conP conName $ map varP bParams
+				[ conP conName $ map varP as
+				, conP conName $ map varP bs
 				]
-				(normalB $ foldl appE (conE conName) $ map (\(a, b) -> [| $(varE opName) $(varE a) $(varE b) |]) $ zip aParams bParams)
+				(normalB $ foldl appE (conE conName) $ map (\(a, b) -> [| $(varE opName) $(varE a) $(varE b) |]) $ zip as bs)
 				[]
 			]
 		let unaryOp opName = funD opName
 			[ clause
-				[ conP conName $ map varP aParams
+				[ conP conName $ map varP as
 				]
-				(normalB $ foldl appE (conE conName) $ map (\a -> [| $(varE opName) $(varE a) |]) aParams)
+				(normalB $ foldl appE (conE conName) $ map (\a -> [| $(varE opName) $(varE a) |]) as)
 				[]
 			]
 		let nullaryOp opName = funD opName
 			[ clause []
-				(normalB $ foldl appE (conE conName) $ map (\_ -> varE opName) aParams)
+				(normalB $ foldl appE (conE conName) $ map (\_ -> varE opName) as)
 				[]
 			]
 
@@ -378,8 +369,7 @@ do
 
 		-- instance for Storable class
 		storableInstance <- do
-			p <- newName "p"
-			let params = zip [0..(dim - 1)] aParams
+			let params = zip [0..(dim - 1)] as
 			instanceD (sequence [ [t| Vectorized $elemType |], [t| Storable $elemType |] ]) [t| Storable ($(conT dataName) $elemType) |] =<< addInlines
 				[ funD 'sizeOf [clause [wildP] (normalB [| $(litE $ integerL $ fromIntegral dim) * sizeOf (undefined :: $elemType) |]) []]
 				, funD 'alignment [clause [wildP] (normalB [| alignment (undefined :: $elemType) |]) []]
@@ -389,7 +379,40 @@ do
 					(normalB $ doE [noBindS [| pokeElemOff (castPtr $(varE p)) $(litE $ integerL $ fromIntegral i) $(varE a) |] | (i, a) <- params]) []]
 				]
 
-		return $ vecInstance : dotInstance : numInstance : normInstance : normalizeInstance : fractionalInstance : floatingInstance : storableInstance :
+		-- Eq instance
+		eqInstance <- instanceD (sequence [ [t| Vectorized $elemType |], [t| Eq $elemType |] ]) [t| Eq ($(conT dataName) $elemType) |] =<< addInlines
+			[ funD '(==) [clause [conP conName $ map varP as, conP conName $ map varP bs] (normalB $ foldl1 (\a b -> [| $a && $b |]) $ map (\(a, b) -> [| $(varE a) == $(varE b) |]) $ zip as bs) []]
+			]
+
+		-- Ord instance
+		ordInstance <- instanceD (sequence [ [t| Vectorized $elemType |], [t| Ord $elemType |] ]) [t| Ord ($(conT dataName) $elemType) |] =<< addInlines
+			[ funD 'compare [clause [conP conName $ map varP as, conP conName $ map varP bs] (normalB $ foldr ($) [| EQ |] $ map (\(a, b) c ->
+				[| case compare $(varE a) $(varE b) of
+					EQ -> $c
+					r -> r
+					|]) $ zip as bs) []]
+			]
+
+		-- Show instance
+		{- Example:
+		showsPrec p (Vec4 x y z w) q = if p >= 10 then '(' : s (')' : q) else s q where
+			s h = "Vec4" ++ f x (f y (f z (f w h)))
+			f t h = ' ' : (showsPrec 10 t h)
+		-}
+		showInstance <- do
+			q <- newName "q"
+			s <- newName "s"
+			f <- newName "f"
+			h <- newName "h"
+			t <- newName "t"
+			instanceD (sequence [ [t| Vectorized $elemType |], [t| Show $elemType |] ]) [t| Show ($(conT dataName) $elemType) |] =<< addInlines
+				[ funD 'showsPrec [clause [varP p, conP conName $ map varP as, varP q] (normalB [| if $(varE p) >= 10 then '(' : $(varE s) (')' : $(varE q)) else $(varE s) $(varE q) |])
+					[ funD s [clause [varP h] (normalB [| $(litE $ stringL $ "Vec" ++ dimStr) ++ $(foldr appE (varE h) $ map (appE (varE f) . varE) as) |]) []]
+					, funD f [clause [varP t, varP h] (normalB [| ' ' : (showsPrec 10 $(varE t) $(varE h)) |]) []]
+					]]
+				]
+
+		return $ vecInstance : dotInstance : numInstance : normInstance : normalizeInstance : fractionalInstance : floatingInstance : storableInstance : eqInstance : ordInstance : showInstance :
 			vecComponentInstances ++ swizzleVecInstances
 
 	-- Cross instance
@@ -405,8 +428,8 @@ do
 					|]) [] ]
 			]
 
-	-- matrix instances
-	matInstances <- liftM concat $ forM matDimensions $ \(dimN, dimM) -> do
+	-- matrix declarations
+	matDecs <- liftM concat $ forM matDimensions $ \(dimN, dimM) -> do
 
 		let dimStr = [intToDigit dimN, 'x', intToDigit dimM]
 		let dataName = mkName $ "Mat" ++ dimStr
@@ -545,7 +568,7 @@ do
 		
 		return $ concat [vecMatMuls, matVecMuls, matMatMuls]
 
-	return $ crossInstance : vecInstances ++ matInstances ++ mulInstances
+	return $ crossInstance : vecDecs ++ matDecs ++ mulInstances
 
 -- | Class of things which has quaternions.
 class (Vectorized a, Floating a) => Quaternionized a where
@@ -568,7 +591,7 @@ liftM concat $ forM mathQuaternionTypeNamesWithPrefix $ \(mathTypeName, mathType
 
 	-- Quaternionized instance
 	quaternionizedInstance <- instanceD (sequence []) [t| Quaternionized $elemType |] =<< addInlines
-		[ newtypeInstD (sequence []) ''Quat [elemType] (normalC conName [liftM (\t -> (NotStrict, t)) [t| Vec4 $elemType |]]) [''Eq, ''Show]
+		[ newtypeInstD (sequence []) ''Quat [elemType] (normalC conName [liftM (\t -> (NotStrict, t)) [t| Vec4 $elemType |]]) []
 		, funD 'quat [clause [varP v] (normalB [| $(conE conName) $(varE v) |]) []]
 		, funD 'unquat [clause [conP conName [varP v]] (normalB $ varE v) []]
 		]
@@ -584,12 +607,12 @@ do
 	let elemType = varT tvE
 	a <- newName "a"
 	v <- newName "v"
-	v1 <- newName "v1"
-	v2 <- newName "v2"
-	args1 <- mapM (newName . (: "1")) vecComponents
-	args2 <- mapM (newName . (: "2")) vecComponents
-	let [x1, y1, z1, w1] = map varE args1
-	let [x2, y2, z2, w2] = map varE args2
+	av <- newName "av"
+	bv <- newName "bv"
+	as <- forM vecComponents $ \c -> newName ['a', c]
+	bs <- forM vecComponents $ \c -> newName ['b', c]
+	let [ax, ay, az, aw] = map varE as
+	let [bx, by, bz, bw] = map varE bs
 
 	-- Vec instance
 	vecInstance <- instanceD (sequence [ [t| Quaternionized $elemType |] ]) [t| Vec (Quat $elemType) |] =<< addInlines
@@ -613,16 +636,16 @@ do
 	-- Num instance
 	numInstance <- do
 		instanceD (sequence [ [t| Quaternionized $elemType |] ]) [t| Num (Quat $elemType) |] =<< addInlines
-			[ funD '(+) [clause [conP 'Quat [varP v1], conP 'Quat [varP v2]] (normalB [| Quat ($(varE v1) + $(varE v2)) |]) []]
-			, funD '(-) [clause [conP 'Quat [varP v1], conP 'Quat [varP v2]] (normalB [| Quat ($(varE v1) - $(varE v2)) |]) []]
+			[ funD '(+) [clause [conP 'Quat [varP av], conP 'Quat [varP bv]] (normalB [| Quat ($(varE av) + $(varE bv)) |]) []]
+			, funD '(-) [clause [conP 'Quat [varP av], conP 'Quat [varP bv]] (normalB [| Quat ($(varE av) - $(varE bv)) |]) []]
 			, funD '(*) [clause
-				[ conP 'Quat [conP 'Vec4 $ map varP args1]
-				, conP 'Quat [conP 'Vec4 $ map varP args2]
+				[ conP 'Quat [conP 'Vec4 $ map varP as]
+				, conP 'Quat [conP 'Vec4 $ map varP bs]
 				] (normalB [| Quat (Vec4
-					($w1 * $x2 + $x1 * $w2 + $y1 * $z2 - $z1 * $y2)
-					($w1 * $y2 - $x1 * $z2 + $y1 * $w2 + $z1 * $x2)
-					($w1 * $z2 - $x1 * $y2 - $y1 * $x2 + $z1 * $w2)
-					($w1 * $w2 - $x1 * $x2 - $y1 * $y2 - $z1 * $z2)
+					($aw * $bx + $ax * $bw + $ay * $bz - $az * $by)
+					($aw * $by - $ax * $bz + $ay * $bw + $az * $bx)
+					($aw * $bz - $ax * $by - $ay * $bx + $az * $bw)
+					($aw * $bw - $ax * $bx - $ay * $by - $az * $bz)
 					)|]) []]
 			, funD 'negate [clause [conP 'Quat [varP v]] (normalB [| Quat (negate $(varE v)) |]) []]
 			, funD 'abs [clause [conP 'Quat [varP v]] (normalB [| Quat (abs $(varE v)) |]) []]
@@ -632,7 +655,33 @@ do
 
 	-- Conjugate instance
 	conjugateInstance <- instanceD (sequence [ [t| Quaternionized $elemType |] ]) [t| Conjugate (Quat $elemType) |] =<< addInlines
-		[ funD 'conjugate [clause [conP 'Quat [conP 'Vec4 $ map varP args1]] (normalB [| Quat (Vec4 (- $x1) (- $y1) (- $z1) $w1) |]) []]
+		[ funD 'conjugate [clause [conP 'Quat [conP 'Vec4 $ map varP as]] (normalB [| Quat (Vec4 (- $ax) (- $ay) (- $az) $aw) |]) []]
 		]
 
-	return [vecInstance, normInstance, normalizeInstance, numInstance, conjugateInstance]
+	-- Eq instance
+	eqInstance <- instanceD (sequence [ [t| Quaternionized $elemType |], [t| Eq $elemType |] ]) [t| Eq (Quat $elemType) |] =<< addInlines
+		[ funD '(==) [clause [conP 'Quat [varP av], conP 'Quat [varP bv]] (normalB [| $(varE av) == $(varE bv) |]) []]
+		]
+
+	-- Ord instance
+	ordInstance <- instanceD (sequence [ [t| Quaternionized $elemType |], [t| Ord $elemType |] ]) [t| Ord (Quat $elemType) |] =<< addInlines
+		[ funD 'compare [clause [conP 'Quat [varP av], conP 'Quat [varP bv]] (normalB [| compare $(varE av) $(varE bv) |]) []]
+		]
+
+	-- Show instance
+	{- Example:
+	showsPrec p (Quat v) q = if p >= 10 then '(' : s (')' : q) else s q where
+		s h = "Quat " ++ showsPrec 10 v h
+	-}
+	showInstance <- do
+		p <- newName "p"
+		q <- newName "q"
+		s <- newName "s"
+		h <- newName "h"
+		instanceD (sequence [ [t| Quaternionized $elemType |], [t| Show $elemType |] ]) [t| Show (Quat $elemType) |] =<< addInlines
+			[ funD 'showsPrec [clause [varP p, conP 'Quat [varP av], varP q] (normalB [| if $(varE p) >= 10 then '(' : $(varE s) (')' : $(varE q)) else $(varE s) $(varE q) |])
+				[ funD s [clause [varP h] (normalB [| "Quat " ++ showsPrec 10 $(varE av) $(varE h) |]) []]
+				]]
+			]
+
+	return [vecInstance, normInstance, normalizeInstance, numInstance, conjugateInstance, eqInstance, ordInstance, showInstance]

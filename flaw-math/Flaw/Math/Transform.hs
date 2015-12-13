@@ -54,7 +54,7 @@ quaternionAxisRotation (Vec3 x y z) angle = r where
 	r = Quat $ Vec4 (x * sa) (y * sa) (z * sa) ca
 
 -- | 3D transformation represented by normalized quaternion and offset.
-data QuatOffset a = QuatOffset (Quat a) (Vec3 a)
+data QuatOffset a = QuatOffset (Quat a) (Vec3 a) deriving (Eq, Ord, Show)
 
 instance Transform QuatOffset where
 	{-# INLINE identityTransform #-}
@@ -89,7 +89,7 @@ instance Transform QuatOffset where
 	transformAxisRotation axis angle = QuatOffset (quaternionAxisRotation axis angle) (Vec3 0 0 0)
 
 -- | Dual quaternion representing transforms in 3D space.
-data DualQuaternion a = DualQuaternion (Quat a) (Quat a)
+data DualQuaternion a = DualQuaternion (Quat a) (Quat a) deriving (Eq, Ord, Show)
 
 instance Quaternionized a => Num (DualQuaternion a) where
 	{-# INLINE (+) #-}
