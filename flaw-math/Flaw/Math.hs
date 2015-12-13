@@ -436,8 +436,9 @@ do
 		let conName = mkName $ "Mat" ++ dimStr -- using pattern synonym
 
 		-- some params
-		aParams <- mapM newName [['a', intToDigit i, intToDigit j] | i <- [1..dimN], j <- [1..dimM]]
-		bParams <- mapM newName [['b', intToDigit i, intToDigit j] | i <- [1..dimN], j <- [1..dimM]]
+		as <- mapM newName [['a', intToDigit i, intToDigit j] | i <- [1..dimN], j <- [1..dimM]]
+		bs <- mapM newName [['b', intToDigit i, intToDigit j] | i <- [1..dimN], j <- [1..dimM]]
+		p <- newName "p"
 
 		-- Mat instance
 		matInstance <- instanceD (sequence [ [t| Vectorized $elemType |] ]) [t| Mat ($(conT dataName) $elemType) |] =<< addInlines
@@ -449,17 +450,17 @@ do
 		numInstance <- do
 			let binaryOp opName = funD opName
 				[ clause
-					[ conP conName $ map varP aParams
-					, conP conName $ map varP bParams
+					[ conP conName $ map varP as
+					, conP conName $ map varP bs
 					]
-					(normalB $ foldl appE (conE conName) $ map (\(a, b) -> infixApp (varE a) (varE opName) (varE b)) $ zip aParams bParams)
+					(normalB $ foldl appE (conE conName) $ map (\(a, b) -> infixApp (varE a) (varE opName) (varE b)) $ zip as bs)
 					[]
 				]
 			let unaryOp opName = funD opName
 				[ clause
-					[ conP conName $ map varP aParams
+					[ conP conName $ map varP as
 					]
-					(normalB $ foldl appE (conE conName) $ map (\a -> [| $(varE opName) $(varE a) |]) aParams)
+					(normalB $ foldl appE (conE conName) $ map (\a -> [| $(varE opName) $(varE a) |]) as)
 					[]
 				]
 			let fromIntegerDecl = do
@@ -481,8 +482,7 @@ do
 
 		-- Storable instance (column-major)
 		storableInstance <- do
-			p <- newName "p"
-			let params = zip [(i, j) | i <- [0..(dimN - 1)], j <- [0..(dimM - 1)]] aParams
+			let params = zip [(i, j) | i <- [0..(dimN - 1)], j <- [0..(dimM - 1)]] as
 			instanceD (sequence [ [t| Vectorized $elemType |], [t| Storable $elemType |] ]) [t| Storable ($(conT dataName) $elemType) |] =<< addInlines
 				[ funD 'sizeOf [clause [wildP] (normalB [| $(litE $ integerL $ fromIntegral (dimN * dimM)) * sizeOf (undefined :: $elemType) |]) []]
 				, funD 'alignment [clause [wildP] (normalB [| alignment (undefined :: $elemType) |]) []]
@@ -492,7 +492,35 @@ do
 					(normalB $ doE [noBindS [| pokeElemOff (castPtr $(varE p)) $(litE $ integerL $ fromIntegral (j * dimN + i)) $(varE a) |] | ((i, j), a) <- params]) []]
 				]
 
-		return [matInstance, numInstance, storableInstance]
+		-- Eq instance
+		eqInstance <- instanceD (sequence [ [t| Vectorized $elemType |], [t| Eq $elemType |] ]) [t| Eq ($(conT dataName) $elemType) |] =<< addInlines
+			[ funD '(==) [clause [conP conName $ map varP as, conP conName $ map varP bs] (normalB $ foldl1 (\a b -> [| $a && $b |]) $ map (\(a, b) -> [| $(varE a) == $(varE b) |]) $ zip as bs) []]
+			]
+
+		-- Ord instance
+		ordInstance <- instanceD (sequence [ [t| Vectorized $elemType |], [t| Ord $elemType |] ]) [t| Ord ($(conT dataName) $elemType) |] =<< addInlines
+			[ funD 'compare [clause [conP conName $ map varP as, conP conName $ map varP bs] (normalB $ foldr ($) [| EQ |] $ map (\(a, b) c ->
+				[| case compare $(varE a) $(varE b) of
+					EQ -> $c
+					r -> r
+					|]) $ zip as bs) []]
+			]
+
+		-- Show instance
+		showInstance <- do
+			q <- newName "q"
+			s <- newName "s"
+			f <- newName "f"
+			h <- newName "h"
+			t <- newName "t"
+			instanceD (sequence [ [t| Vectorized $elemType |], [t| Show $elemType |] ]) [t| Show ($(conT dataName) $elemType) |] =<< addInlines
+				[ funD 'showsPrec [clause [varP p, conP conName $ map varP as, varP q] (normalB [| if $(varE p) >= 10 then '(' : $(varE s) (')' : $(varE q)) else $(varE s) $(varE q) |])
+					[ funD s [clause [varP h] (normalB [| $(litE $ stringL $ "Mat" ++ dimStr) ++ $(foldr appE (varE h) $ map (appE (varE f) . varE) as) |]) []]
+					, funD f [clause [varP t, varP h] (normalB [| ' ' : (showsPrec 10 $(varE t) $(varE h)) |]) []]
+					]]
+				]
+
+		return [matInstance, numInstance, storableInstance, eqInstance, ordInstance, showInstance]
 
 	-- Generate multiplications.
 	mulInstances <- do
