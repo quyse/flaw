@@ -1,0 +1,7 @@
+before_script:
+- git submodule init
+- git submodule update
+
+linux:
+  script:
+  - stack --no-terminal --install-ghc test flaw-app flaw-asset flaw-base flaw-build flaw-canvas flaw-ffi flaw-font flaw-game flaw-gl flaw-glsl flaw-graphics flaw-input flaw-math flaw-oil flaw-oil-client flaw-oil-server flaw-physics flaw-sdl flaw-sl flaw-sqlite flaw-ui flaw-ui-default-style flaw-window
