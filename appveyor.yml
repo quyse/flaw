@@ -7,6 +7,8 @@ clone_folder: "c:\\ws"
 install:
 - curl -ostack.zip -L https://www.stackage.org/stack/windows-x86_64
 - 7z x stack.zip stack.exe
+- git submodule init
+- git submodule update
 
 build: off
 
