@@ -52,8 +52,8 @@ main = run =<< O.execParser parser where
 							<> O.help "Remote repo URL or path to local server repo file"
 							)
 						<*> O.switch
-							(  O.long "once"
-							<> O.help "Perform sync just once and exit"
+							(  O.long "follow"
+							<> O.help "Perform sync indefinitely"
 							)
 					) (O.fullDesc <> O.progDesc "Sync with remote repo")
 				)
@@ -146,10 +146,11 @@ optionByteStringFromBytes format bytes = case format of
 	OptionByteFormatUtf8 -> case T.decodeUtf8' bytes of
 		Right text -> return $ T.unpack text
 		Left err -> throwIO err
+
 data OptionCommand
 	= OptionSyncCommand
 		{ optionSyncCommandRemoteRepo :: String
-		, optionSyncCommandOnce :: Bool
+		, optionSyncCommandFollow :: Bool
 		}
 	| OptionReadCommand
 		{ optionReadCommandKeyFormat :: OptionByteFormat
@@ -175,7 +176,7 @@ run Options
 	forM_ commands $ \command -> case command of
 		OptionSyncCommand
 			{ optionSyncCommandRemoteRepo = remoteRepoUrl
-			, optionSyncCommandOnce = syncOnce
+			, optionSyncCommandFollow = syncFollow
 			} -> do
 			httpManager <- H.newManager H.defaultManagerSettings
 			remoteRepo <- book bk $ initHttpRemoteRepo httpManager clientRepo $ T.pack remoteRepoUrl
@@ -185,7 +186,7 @@ run Options
 				when (not quiet) $ putStrLn $ show notification
 				case notification of
 					RemoteRepoError _ -> exitFailure
-					_ -> when (not syncOnce) step
+					_ -> when syncFollow step
 			step
 		OptionReadCommand
 			{ optionReadCommandKeyFormat = keyFormat
