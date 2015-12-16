@@ -8,5 +8,7 @@ install:
 - curl -ostack.zip -L https://www.stackage.org/stack/windows-x86_64
 - 7z x stack.zip stack.exe
 
+build: off
+
 test_script:
-- stack --no-terminal test flaw-app flaw-asset flaw-base flaw-build flaw-canvas flaw-dx11 flaw-ffi flaw-font flaw-game flaw-graphics flaw-input flaw-math flaw-oil flaw-oil-client flaw-oil-editor flaw-oil-server flaw-physics flaw-sl flaw-sqlite flaw-ui flaw-ui-default-style flaw-window
+- stack --no-terminal --install-ghc test flaw-app flaw-asset flaw-base flaw-build flaw-canvas flaw-dx11 flaw-ffi flaw-font flaw-game flaw-graphics flaw-input flaw-math flaw-oil flaw-oil-client flaw-oil-editor flaw-oil-server flaw-physics flaw-sl flaw-sqlite flaw-ui flaw-ui-default-style flaw-window
