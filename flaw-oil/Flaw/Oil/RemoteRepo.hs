@@ -27,6 +27,7 @@ import qualified Network.HTTP.Types as H
 
 import Flaw.Book
 import Flaw.Exception
+import Flaw.Flow
 import Flaw.Oil.ClientRepo
 import Flaw.Oil.Repo
 
@@ -62,7 +63,7 @@ data HttpRemoteRepo = HttpRemoteRepo
 	, httpRemoteRepoRevisionVar :: !(TVar Revision)
 	, httpRemoteRepoChangesChan :: !(TChan (B.ByteString, B.ByteString))
 	, httpRemoteRepoNotificationsChan :: !(TChan RemoteRepoNotification)
-	, httpRemoteRepoOperationsQueue :: !(TQueue (IO ()))
+	, httpRemoteRepoFlow :: !Flow
 	}
 
 instance RemoteRepo HttpRemoteRepo where
@@ -77,15 +78,12 @@ instance RemoteRepo HttpRemoteRepo where
 		} = dupTChan notificationsChan
 	remoteRepoChange HttpRemoteRepo
 		{ httpRemoteRepoClientRepo = repo
-		, httpRemoteRepoOperationsQueue = operationsQueue
-		} key value = writeTQueue operationsQueue $ clientRepoChange repo key value
+		, httpRemoteRepoFlow = flow
+		} key value = asyncRunInFlow flow $ clientRepoChange repo key value
 	remoteRepoRead HttpRemoteRepo
 		{ httpRemoteRepoClientRepo = repo
-		, httpRemoteRepoOperationsQueue = operationsQueue
-		} key = do
-		resultVar <- newEmptyMVar
-		atomically $ writeTQueue operationsQueue $ putMVar resultVar =<< clientRepoGetValue repo key
-		takeMVar resultVar
+		, httpRemoteRepoFlow = flow
+		} key = runInFlow flow $ clientRepoGetValue repo key
 
 -- | Initialize remote repo with HTTP connection to server.
 initHttpRemoteRepo :: H.Manager -> ClientRepo -> T.Text -> IO (HttpRemoteRepo, IO ())
@@ -97,23 +95,9 @@ initHttpRemoteRepo httpManager repo url = withSpecialBook $ \bk -> do
 	changesChan <- newBroadcastTChanIO
 	notificationsChan <- newBroadcastTChanIO
 
-	-- operation thread
+	-- operation flow
 	-- only this thread does anything with repo
-	operationsQueue <- newTQueueIO
-	let runOperations = join $ atomically $ readTQueue operationsQueue
-	let operation io = do
-		resultVar <- newEmptyMVar
-		atomically $ writeTQueue operationsQueue $ do
-			putMVar resultVar =<< io
-			runOperations
-		takeMVar resultVar
-	book bk $ do
-		stoppedVar <- newEmptyMVar
-		void $ forkFinally runOperations $ \_ -> putMVar stoppedVar ()
-		let stop = do
-			atomically $ writeTQueue operationsQueue $ return ()
-			takeMVar stoppedVar
-		return ((), stop)
+	flow <- book bk newFlow
 
 	-- helper function to pause before another try
 	let throttle timeBefore = do
@@ -156,7 +140,7 @@ initHttpRemoteRepo httpManager repo url = withSpecialBook $ \bk -> do
 			-- perform cleanup in case of any failure
 			(flip onException) (cleanupClientRepo repo) $ do
 				-- perform push on client repo
-				(push, pushState) <- operation $ pushClientRepo repo manifest
+				(push, pushState) <- runInFlow flow $ pushClientRepo repo manifest
 				-- prepare request
 				let request = templateRequest
 					{ H.method = H.methodPost
@@ -169,7 +153,7 @@ initHttpRemoteRepo httpManager repo url = withSpecialBook $ \bk -> do
 				pull <- case S.decodeLazy body of
 					Right p -> return p
 					Left err -> throwIO $ DescribeFirstException ("failed to decode pull", err)
-				operation $ do
+				runInFlow flow $ do
 					-- perform pull
 					ClientRepoPullInfo
 						{ clientRepoPullRevision = revision
@@ -187,19 +171,12 @@ initHttpRemoteRepo httpManager repo url = withSpecialBook $ \bk -> do
 			sync
 		sync
 
-	book bk $ do
-		stoppedVar <- newEmptyMVar
-		let work = catch networking $ \e -> atomically $ writeTChan notificationsChan $ RemoteRepoError $ show (e :: SomeException)
-		threadId <- forkFinally work $ \_ -> putMVar stoppedVar ()
-		let stop = do
-			killThread threadId
-			takeMVar stoppedVar
-		return ((), stop)
+	book bk $ forkFlow networking
 
 	return HttpRemoteRepo
 		{ httpRemoteRepoClientRepo = repo
 		, httpRemoteRepoRevisionVar = revisionVar
 		, httpRemoteRepoChangesChan = changesChan
 		, httpRemoteRepoNotificationsChan = notificationsChan
-		, httpRemoteRepoOperationsQueue = operationsQueue
+		, httpRemoteRepoFlow = flow
 		}
