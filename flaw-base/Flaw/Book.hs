@@ -19,14 +19,17 @@ import Data.IORef
 
 newtype Book = Book (IORef [IO ()])
 
+{-# INLINE newBook #-}
 newBook :: IO Book
 newBook = liftM Book $ newIORef []
 
+{-# INLINE freeBook #-}
 freeBook :: Book -> IO ()
 freeBook (Book ref) = do
 	sequence_ =<< readIORef ref
 	writeIORef ref []
 
+{-# INLINE book #-}
 book :: Book -> IO (a, IO ()) -> IO a
 book (Book ref) q = do
 	(a, r) <- q
@@ -34,6 +37,7 @@ book (Book ref) q = do
 	writeIORef ref $ r : rs
 	return a
 
+{-# INLINE withBook #-}
 withBook :: (Book -> IO a) -> IO a
 withBook f = do
 	bk <- newBook
@@ -41,6 +45,7 @@ withBook f = do
 
 -- | Helper method for dealing with possible exceptions during construction of objects.
 -- User function uses separate book for construction, and if exception is thrown, book got freed.
+{-# INLINE withSpecialBook #-}
 withSpecialBook :: (Book -> IO a) -> IO (a, IO ())
 withSpecialBook f = do
 	bk <- newBook

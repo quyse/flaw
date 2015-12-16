@@ -20,30 +20,40 @@ import Control.Monad.Trans.Class
 newtype StackT m a = StackT (forall b. (a -> m b) -> m b)
 
 instance Functor (StackT m) where
+	{-# INLINE fmap #-}
 	fmap f (StackT h) = StackT $ \q -> h $ \r -> q $ f r
 
 instance Applicative (StackT m) where
+	{-# INLINE pure #-}
 	pure a = StackT $ \q -> q a
+	{-# INLINE (<*>) #-}
 	(StackT f) <*> (StackT h) = StackT $ \q -> h $ \r -> f $ \z -> q $ z r
 
 instance Monad (StackT m) where
+	{-# INLINE return #-}
 	return a = StackT $ \q -> q a
+	{-# INLINE (>>=) #-}
 	(StackT h) >>= f = StackT $ \q -> h $ \r -> let StackT z = f r in z q
 
 instance MonadTrans StackT where
+	{-# INLINE lift #-}
 	lift a = StackT $ \q -> a >>= q
 
 instance MonadIO m => MonadIO (StackT m) where
+	{-# INLINE liftIO #-}
 	liftIO = lift . liftIO
 
+{-# INLINE after #-}
 after :: Monad m => m () -> StackT m ()
 after f = StackT $ \q -> do
 	r <- q ()
 	f
 	return r
 
+{-# INLINE runStackT #-}
 runStackT :: Monad m => StackT m a -> m a
 runStackT (StackT f) = f return
 
+{-# INLINE scope #-}
 scope :: Monad m => StackT m a -> StackT m a
 scope (StackT f) = StackT $ \q -> q =<< f return
