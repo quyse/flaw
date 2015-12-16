@@ -41,6 +41,8 @@ class RemoteRepo r where
 	-- | Perform async change.
 	-- It won't be sent to changes chan.
 	remoteRepoChange :: r -> B.ByteString -> B.ByteString -> STM ()
+	-- | Read value synchronously.
+	remoteRepoRead :: r -> B.ByteString -> IO B.ByteString
 
 -- | Notifications remote repo may send.
 data RemoteRepoNotification
@@ -77,6 +79,13 @@ instance RemoteRepo HttpRemoteRepo where
 		{ httpRemoteRepoClientRepo = repo
 		, httpRemoteRepoOperationsQueue = operationsQueue
 		} key value = writeTQueue operationsQueue $ clientRepoChange repo key value
+	remoteRepoRead HttpRemoteRepo
+		{ httpRemoteRepoClientRepo = repo
+		, httpRemoteRepoOperationsQueue = operationsQueue
+		} key = do
+		resultVar <- newEmptyMVar
+		atomically $ writeTQueue operationsQueue $ putMVar resultVar =<< clientRepoGetValue repo key
+		takeMVar resultVar
 
 -- | Initialize remote repo with HTTP connection to server.
 initHttpRemoteRepo :: H.Manager -> ClientRepo -> T.Text -> IO (HttpRemoteRepo, IO ())
