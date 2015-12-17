@@ -8,7 +8,6 @@ module Main
 	( main
 	) where
 
-import Control.Concurrent.STM
 import Control.Exception
 import Control.Monad
 import qualified Data.ByteString as B
@@ -54,6 +53,10 @@ main = run =<< O.execParser parser where
 						<*> O.switch
 							(  O.long "follow"
 							<> O.help "Perform sync indefinitely"
+							)
+						<*> O.switch
+							(  O.long "display-updates"
+							<> O.help "Display updates pulled from server"
 							)
 					) (O.fullDesc <> O.progDesc "Sync with remote repo")
 				)
@@ -151,6 +154,7 @@ data OptionCommand
 	= OptionSyncCommand
 		{ optionSyncCommandRemoteRepo :: String
 		, optionSyncCommandFollow :: Bool
+		, optionSyncCommandDisplayUpdates :: Bool
 		}
 	| OptionReadCommand
 		{ optionReadCommandKeyFormat :: OptionByteFormat
@@ -177,16 +181,25 @@ run Options
 		OptionSyncCommand
 			{ optionSyncCommandRemoteRepo = remoteRepoUrl
 			, optionSyncCommandFollow = syncFollow
+			, optionSyncCommandDisplayUpdates = displayUpdates
 			} -> do
+
 			httpManager <- H.newManager H.defaultManagerSettings
-			remoteRepo <- book bk $ initHttpRemoteRepo httpManager clientRepo $ T.pack remoteRepoUrl
-			notificationsChan <- atomically $ remoteRepoNotificationsChan remoteRepo
+
+			(remoteRepo, manifest) <- initHttpRemoteRepo httpManager (T.pack remoteRepoUrl)
+
 			let step = do
-				notification <- atomically $ readTChan notificationsChan
-				when (not quiet) $ putStrLn $ show notification
-				case notification of
-					RemoteRepoError _ -> exitFailure
-					_ -> when syncFollow step
+				-- perform sync
+				ClientRepoPullInfo
+					{ clientRepoPullLag = lag
+					, clientRepoPullChanges = changes
+					} <- syncClientRepo clientRepo manifest $ syncHttpRemoteRepo remoteRepo
+
+				-- display changes if requested
+				when displayUpdates $ forM_ changes $ putStrLn . show
+
+				-- determine if we need to proceed further
+				when (lag > 0 || syncFollow) step
 			step
 		OptionReadCommand
 			{ optionReadCommandKeyFormat = keyFormat

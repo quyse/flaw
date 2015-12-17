@@ -10,7 +10,6 @@ module Main
 	( main
 	) where
 
-import Control.Concurrent
 import Control.Monad
 import qualified Data.ByteString.Lazy as BL
 import Data.Monoid
@@ -24,6 +23,7 @@ import qualified Network.Wai.Handler.Warp as Warp
 import qualified Options.Applicative as O
 
 import Flaw.Book
+import Flaw.Flow
 import Flaw.Oil.Repo
 import Flaw.Oil.ServerRepo
 
@@ -70,23 +70,7 @@ run Options
 	repo <- book bk $ openServerRepo $ T.pack repoFileName
 
 	-- start repo processing thread, book a shutdown handler
-	operationVar <- newEmptyMVar
-	let runOperations = join $ takeMVar operationVar
-	book bk $ do
-		stoppedVar <- newEmptyMVar
-		void $ forkFinally runOperations $ \_ -> putMVar stoppedVar ()
-		let stop = do
-			putMVar operationVar $ return ()
-			takeMVar stoppedVar
-		return ((), stop)
-
-	-- function to perform serialized operation
-	let operation io = do
-		resultVar <- newEmptyMVar
-		putMVar operationVar $ do
-			putMVar resultVar =<< io
-			runOperations
-		takeMVar resultVar
+	flow <- book bk newFlow
 
 	-- start web server
 	Warp.run port $ W.gzip W.def $ W.logStdout $ \request respond -> do
@@ -109,7 +93,7 @@ run Options
 						Right push -> do
 							-- perform sync
 							let userId = 1 -- TODO: implement user auth
-							pull <- operation $ syncServerRepo repo manifest push userId
+							pull <- runInFlow flow $ syncServerRepo repo manifest push userId
 							-- respond with pull
 							respond $ W.responseLBS H.status200
 								[(H.hContentType, "application/x-flawoil-sync")] $
