@@ -7,6 +7,7 @@ License: MIT
 module Flaw.Oil.ServerRepo
 	( ServerRepo()
 	, openServerRepo
+	, serverRepoMaxRevision
 	, syncServerRepo
 	) where
 

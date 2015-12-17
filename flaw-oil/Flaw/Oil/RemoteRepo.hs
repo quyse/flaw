@@ -8,6 +8,7 @@ module Flaw.Oil.RemoteRepo
 	( HttpRemoteRepo()
 	, initHttpRemoteRepo
 	, syncHttpRemoteRepo
+	, watchHttpRemoteRepo
 	) where
 
 import Control.Concurrent
@@ -68,6 +69,24 @@ syncHttpRemoteRepo HttpRemoteRepo
 	case S.decodeLazy body of
 		Right p -> return p
 		Left err -> throwIO $ DescribeFirstException ("failed to parse sync response", err)
+
+watchHttpRemoteRepo :: HttpRemoteRepo -> Revision -> IO Revision
+watchHttpRemoteRepo HttpRemoteRepo
+	{ httpRemoteRepoHttpManager = httpManager
+	, httpRemoteRepoTemplateRequest = templateRequest
+	} clientRevision = do
+	-- prepare request
+	let request = templateRequest
+		{ H.method = H.methodPost
+		, H.queryString = T.encodeUtf8 $ T.pack "watch"
+		, H.requestBody = H.RequestBodyLBS $ S.encodeLazy clientRevision
+		}
+	-- send request
+	body <- H.withResponse request httpManager $ liftM BL.fromChunks . H.brConsume . H.responseBody
+	-- decode body
+	case S.decodeLazy body of
+		Right serverRevision -> return serverRevision
+		Left err -> throwIO $ DescribeFirstException ("failed to parse watch response", err)
 
 -- helper function to do something http-related multiple times
 tryFewTimes :: IO a -> IO a

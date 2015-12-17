@@ -178,17 +178,16 @@ run Options
 	} = withBook $ \bk -> do
 	clientRepo <- book bk $ openClientRepo $ T.pack localRepoFileName
 	forM_ commands $ \command -> case command of
+
 		OptionSyncCommand
 			{ optionSyncCommandRemoteRepo = remoteRepoUrl
 			, optionSyncCommandFollow = syncFollow
 			, optionSyncCommandDisplayUpdates = displayUpdates
 			} -> do
-
 			httpManager <- H.newManager H.defaultManagerSettings
-
 			(remoteRepo, manifest) <- initHttpRemoteRepo httpManager (T.pack remoteRepoUrl)
 
-			let step = do
+			let syncStep = do
 				-- perform sync
 				ClientRepoPullInfo
 					{ clientRepoPullLag = lag
@@ -198,9 +197,21 @@ run Options
 				-- display changes if requested
 				when displayUpdates $ forM_ changes $ putStrLn . show
 
-				-- determine if we need to proceed further
-				when (lag > 0 || syncFollow) step
-			step
+				-- determine if we need to sync more
+				when (lag > 0) syncStep
+
+			let watchStep = do
+				-- get client revision
+				clientRevision <- clientRepoRevision clientRepo
+				-- watch for changes
+				serverRevision <- watchHttpRemoteRepo remoteRepo clientRevision
+				-- if server revision is greater, perform sync
+				when (clientRevision < serverRevision) syncStep
+				watchStep
+
+			if syncFollow then watchStep
+			else syncStep
+
 		OptionReadCommand
 			{ optionReadCommandKeyFormat = keyFormat
 			, optionReadCommandValueFormat = valueFormat
@@ -208,6 +219,7 @@ run Options
 			} -> do
 			value <- clientRepoGetValue clientRepo $ optionByteStringToBytes keyFormat keyStr
 			putStrLn =<< optionByteStringFromBytes valueFormat value
+
 		OptionWriteCommand
 			{ optionWriteCommandKeyFormat = keyFormat
 			, optionWriteCommandValueFormat = valueFormat
@@ -215,8 +227,10 @@ run Options
 			, optionWriteCommandValue = valueStr
 			} -> do
 			clientRepoChange clientRepo (optionByteStringToBytes keyFormat keyStr) (optionByteStringToBytes valueFormat valueStr)
+
 		OptionCheckCommand -> do
 			(ok, desc) <- repoDbCheckIntegrity $ repoDb clientRepo
 			when (not quiet) $ putStr $ T.unpack desc
 			if ok then exitSuccess else exitFailure
+
 		OptionOptimizeCommand -> repoDbVacuum $ repoDb clientRepo

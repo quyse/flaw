@@ -19,5 +19,5 @@ source-repository head
 
 executable oild
   main-is:             oild.hs
-  build-depends:       base, bytestring, cereal, flaw-base, flaw-oil, http-types, optparse-applicative, text, wai, wai-extra, warp
+  build-depends:       base, bytestring, cereal, flaw-base, flaw-oil, http-types, optparse-applicative, stm, text, wai, wai-extra, warp
   default-language:    Haskell2010
