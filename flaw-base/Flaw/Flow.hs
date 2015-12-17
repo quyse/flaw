@@ -10,6 +10,7 @@ module Flaw.Flow
 	, newFlow
 	, asyncRunInFlow
 	, runInFlow
+	, exitFlow
 	) where
 
 import Control.Concurrent
@@ -41,16 +42,24 @@ newFlow = do
 
 {-# INLINE asyncRunInFlow #-}
 asyncRunInFlow :: Flow -> IO () -> STM ()
-asyncRunInFlow (Flow queue) operation = writeTQueue queue operation
+asyncRunInFlow (Flow queue) operation = writeTQueue queue $ do
+	operation
+	runOperations queue
 
 {-# INLINE runInFlow #-}
 runInFlow :: Flow -> IO a -> IO a
-runInFlow (Flow queue) operation = do
+runInFlow flow operation = do
 	resultVar <- newEmptyMVar
-	atomically $ writeTQueue queue $ do
-		putMVar resultVar =<< operation
-		runOperations queue
+	atomically $ asyncRunInFlow flow $ putMVar resultVar =<< operation
 	takeMVar resultVar
+
+-- | Graceful shutdown of flow.
+{-# INLINE exitFlow #-}
+exitFlow :: Flow -> IO ()
+exitFlow (Flow queue) = do
+	dummyVar <- newEmptyMVar
+	atomically $ writeTQueue queue $ putMVar dummyVar ()
+	takeMVar dummyVar
 
 runOperations :: TQueue (IO ()) -> IO ()
 runOperations queue = join $ atomically $ readTQueue queue
