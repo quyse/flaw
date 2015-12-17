@@ -17,6 +17,7 @@ module Flaw.Oil.ClientRepo
 	, ClientRepoPullInfo(..)
 	, pullClientRepo
 	, cleanupClientRepo
+	, syncClientRepo
 	) where
 
 import Control.Exception
@@ -377,8 +378,8 @@ pushClientRepo repo@ClientRepo
 		})
 
 data ClientRepoPullInfo = ClientRepoPullInfo
-	{ clientRepoPullRevision :: !Revision
-	, clientRepoPullLag :: !Int64
+	{ clientRepoPullRevision :: {-# UNPACK #-} !Revision
+	, clientRepoPullLag :: {-# UNPACK #-} !Int64
 	, clientRepoPullChanges :: [(B.ByteString, B.ByteString)]
 	}
 
@@ -465,6 +466,14 @@ cleanupClientRepo ClientRepo
 		sqliteFinalStep query
 	-- commit
 	commit
+
+-- | Helper function to perform sync.
+syncClientRepo :: ClientRepo -> Manifest -> (Push -> IO Pull) -> IO ClientRepoPullInfo
+syncClientRepo repo manifest sync = (flip onException) (cleanupClientRepo repo) $ do
+	-- perform push on client repo
+	(push, pushState) <- pushClientRepo repo manifest
+	pull <- sync push
+	pullClientRepo repo pull pushState
 
 instance Repo ClientRepo where
 	repoDb = clientRepoDb
