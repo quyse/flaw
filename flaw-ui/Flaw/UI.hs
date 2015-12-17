@@ -18,6 +18,8 @@ module Flaw.UI
 	, InputState(..)
 	, SomeElement(..)
 	, HasText(..)
+	, AlignX(..), AlignY(..)
+	, HasAlignment(..)
 	, HasPassword(..)
 	, HasClickHandler(..)
 	, HasChecked(..)
@@ -115,6 +117,12 @@ class HasText a where
 
 class HasText a => HasPassword a where
 	setPasswordMode :: a -> Bool -> STM ()
+
+data AlignX = AlignLeft | AlignCenter | AlignRight
+data AlignY = AlignTop | AlignMiddle | AlignBottom
+
+class HasAlignment a where
+	setAlignment :: a -> AlignX -> AlignY -> STM ()
 
 class HasClickHandler a where
 	setClickHandler :: a -> STM () -> STM ()

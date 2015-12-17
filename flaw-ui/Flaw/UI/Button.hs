@@ -7,12 +7,14 @@ License: MIT
 module Flaw.UI.Button
 	( Button(..)
 	, newButton
+	, newLabeledButton
 	, setButtonDefault
 	, setButtonCancel
 	) where
 
 import Control.Concurrent.STM
 import Control.Monad
+import qualified Data.Text as T
 
 import Flaw.Graphics
 import Flaw.Graphics.Canvas
@@ -21,10 +23,11 @@ import Flaw.Input.Mouse
 import Flaw.Math
 import Flaw.UI
 import Flaw.UI.Drawer
+import Flaw.UI.Label
 
 data Button = Button
 	{ buttonVisual :: !SomeVisual
-	, buttonSizeVar :: !(TVar Size)
+	, buttonSizeVar :: {-# UNPACK #-} !(TVar Size)
 	, buttonFocusedVar :: !(TVar Bool)
 	, buttonMousedVar :: !(TVar Bool)
 	, buttonPressedVar :: !(TVar Bool)
@@ -52,6 +55,13 @@ newButton visual = do
 		, buttonDefaultVar = defaultVar
 		, buttonCancelVar = cancelVar
 		}
+
+newLabeledButton :: T.Text -> STM Button
+newLabeledButton text = do
+	label <- newLabel
+	setText label text
+	setAlignment label AlignCenter AlignMiddle
+	newButton label
 
 setButtonDefault :: Button -> STM ()
 setButtonDefault Button
