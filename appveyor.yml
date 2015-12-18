@@ -3,7 +3,7 @@ environment:
   GRUMPY_ARTIFACT_REPO_PATH: c:\\grc
   GRUMPY_ARTIFACT_REPO_USERNAME: grumpy-bot
   GRUMPY_ARTIFACT_REPO_PASSWORD:
-    secure: MYklsVk1EdMaAm8y4CumwTskwKYQtgtGe6hC6VxvEpw=
+    secure: 7jkS24UUIXiYbU5ZLF9yTzJFJoxKWj59cv9GGnak+Us=
   STACK_ROOT: "c:\\sr"
 
 clone_folder: "c:\\ws"
