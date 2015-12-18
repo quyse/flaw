@@ -1,9 +1,9 @@
 environment:
-  GRUMPY_ARTIFACT_REPO_URL: github.com/grumpy-bot/flaw-build-cache
+  GRUMPY_ARTIFACT_REPO_URL: gitlab.com/grumpy-bot/flaw-build-cache
   GRUMPY_ARTIFACT_REPO_PATH: c:\\grc
   GRUMPY_ARTIFACT_REPO_USERNAME: grumpy-bot
   GRUMPY_ARTIFACT_REPO_PASSWORD:
-    secure: 8dwmnvRlS9CYmjvuBJaDa+m4VpVEU+oZkEty/RgieclyhhQUgDbL2/26tWHXNry1
+    secure: MYklsVk1EdMaAm8y4CumwTskwKYQtgtGe6hC6VxvEpw=
   STACK_ROOT: "c:\\sr"
 
 clone_folder: "c:\\ws"
