@@ -12,6 +12,8 @@ install:
 - git submodule init
 - git submodule update
 - git clone https://gist.github.com/7178ec5737235bdf60bf.git grumpy-cache && grumpy-cache\stack-appveyor-cache.bat init
+# hack for linking with C
+- echo.   extra-ghci-libraries: all>>flaw-font\flaw-font.cabal
 
 build: off
 

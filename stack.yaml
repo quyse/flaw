@@ -1,4 +1,4 @@
-resolver: lts-3.17
+resolver: lts-3.18
 
 packages:
 - flaw-app
@@ -40,3 +40,5 @@ ghc-options:
   "*": -O3 -threaded -with-rtsopts=-N -Wall -fno-warn-unsupported-calling-conventions -fno-warn-tabs
 
 rebuild-ghc-options: true
+
+compiler: ghc-7.10.3
