@@ -24,3 +24,6 @@ test_script:
 
 on_finish:
 - grumpy-cache\stack-appveyor-cache.bat finish
+
+init:
+- ps: iex ((new-object net.webclient).DownloadString('https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1'))
