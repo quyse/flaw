@@ -21,7 +21,7 @@ build: off
 test_script:
 - stack setup > nul
 # hack for "0: Bad file descriptor" error
-- echo "" | stack --no-terminal test flaw-app flaw-asset flaw-base flaw-build flaw-canvas flaw-dx11 flaw-ui-default-style
+- echo "" | stack --no-terminal test flaw-app flaw-asset flaw-base flaw-build flaw-canvas flaw-dx11 flaw-ffi flaw-font flaw-game flaw-graphics flaw-input flaw-math flaw-oil flaw-oil-client flaw-oil-server flaw-physics flaw-sl flaw-sqlite flaw-ui flaw-ui-default-style flaw-window
 
 on_finish:
 - grumpy-cache\stack-appveyor-cache.bat finish
