@@ -1,0 +1,27 @@
+environment:
+  GRUMPY_ARTIFACT_REPO_URL: gitlab.com/grumpy-bot/flaw-build-cache.git
+  GRUMPY_ARTIFACT_REPO_PATH: c:\\grc
+  GRUMPY_ARTIFACT_REPO_USERNAME: grumpy-bot
+  GRUMPY_ARTIFACT_REPO_PASSWORD:
+    secure: Ljr7z02ozJQLNTIoHkkfbWVoF2iAuYfZ1cbm7Gzz2h0=
+  GRUMPY_ARTIFACT_REPO_USER_EMAIL: grumpybot@yandex.ru
+  STACK_ROOT: "c:\\sr"
+
+clone_folder: "c:\\ws"
+
+install:
+- git submodule init
+- git submodule update
+- git clone https://gist.github.com/7178ec5737235bdf60bf.git grumpy-cache && grumpy-cache\stack-appveyor-cache.bat init
+# hack for linking with C
+- ps: "Add-Content flaw-font\\flaw-font.cabal \"  extra-ghci-libraries: all\""
+
+build: off
+
+test_script:
+- stack setup > nul
+# hack for "0: Bad file descriptor" error
+- echo "" | stack --no-terminal test flaw-app flaw-asset flaw-base flaw-build flaw-canvas flaw-dx11 flaw-ffi flaw-font flaw-game flaw-graphics flaw-input flaw-math flaw-oil flaw-oil-client flaw-oil-server flaw-physics flaw-sl flaw-sqlite flaw-ui flaw-ui-default-style flaw-window
+
+on_finish:
+- grumpy-cache\stack-appveyor-cache.bat finish
