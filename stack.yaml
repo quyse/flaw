@@ -9,6 +9,7 @@ packages:
 - flaw-dx11
 - flaw-ffi
 - flaw-font
+- flaw-font-fthb
 - flaw-game
 - flaw-gl
 - flaw-glsl

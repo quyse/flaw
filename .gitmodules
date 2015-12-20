@@ -1,9 +1,9 @@
-[submodule "flaw-font/src/freetype"]
-	path = flaw-font/src/freetype
+[submodule "flaw-font-fthb/src/freetype"]
+	path = flaw-font-fthb/src/freetype
 	url = https://gitlab.com/quyse/freetype2.git
-[submodule "flaw-font/src/harfbuzz"]
-	path = flaw-font/src/harfbuzz
+[submodule "flaw-font-fthb/src/harfbuzz"]
+	path = flaw-font-fthb/src/harfbuzz
 	url = git://github.com/behdad/harfbuzz.git
-[submodule "flaw-font/src/ucdn"]
-	path = flaw-font/src/ucdn
+[submodule "flaw-font-fthb/src/ucdn"]
+	path = flaw-font-fthb/src/ucdn
 	url = https://github.com/grigorig/ucdn.git

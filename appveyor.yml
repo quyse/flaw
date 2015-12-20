@@ -14,14 +14,14 @@ install:
 - git submodule update
 - git clone https://gist.github.com/7178ec5737235bdf60bf.git grumpy-cache && grumpy-cache\stack-appveyor-cache.bat init
 # hack for linking with C
-- ps: "Add-Content flaw-font\\flaw-font.cabal \"  extra-ghci-libraries: all\""
+- ps: "Add-Content flaw-font-fthb\\flaw-font-fthb.cabal \"  extra-ghci-libraries: all\""
 
 build: off
 
 test_script:
 - stack setup > nul
 # hack for "0: Bad file descriptor" error
-- echo "" | stack --no-terminal test flaw-app flaw-asset flaw-base flaw-build flaw-canvas flaw-dx11 flaw-ffi flaw-font flaw-game flaw-graphics flaw-input flaw-math flaw-oil flaw-oil-client flaw-oil-server flaw-physics flaw-sl flaw-sqlite flaw-ui flaw-ui-default-style flaw-window
+- echo "" | stack --no-terminal test flaw-app flaw-asset flaw-base flaw-build flaw-canvas flaw-dx11 flaw-ffi flaw-font flaw-font-fthb flaw-game flaw-graphics flaw-input flaw-math flaw-oil flaw-oil-client flaw-oil-server flaw-physics flaw-sl flaw-sqlite flaw-ui flaw-ui-default-style flaw-window
 
 on_finish:
 - grumpy-cache\stack-appveyor-cache.bat finish
