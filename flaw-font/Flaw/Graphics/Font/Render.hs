@@ -237,7 +237,7 @@ createRenderableFont device Glyphs
 	return (RenderableFont
 		{ renderableFontTexture = textureId
 		, renderableFontGlyphs = glyphs
-		, renderableFontMaxGlyphBox = maxGlyphBox
+		, renderableFontMaxGlyphBox = maxGlyphBox * invScale
 		}, destroy)
 
 data GlyphToRender = GlyphToRender
