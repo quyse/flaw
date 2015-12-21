@@ -165,16 +165,16 @@ renderIcon RenderableIcon
 		, quadToRenderTexcoord = texcoord
 		}
 
-data RenderableQuad = RenderableQuad
-	{ renderableQuadTexcoord :: !Float4 -- ^ Left-top and right-bottom UV.
+newtype RenderableQuad = RenderableQuad
+	{ renderableQuadTexcoord :: Float4 -- ^ Left-top and right-bottom UV.
 	}
 
-renderQuad :: RenderableQuad -> Float2 -> Float2 -> RenderQuadsM c ()
+renderQuad :: RenderableQuad -> Float4 -> RenderQuadsM c ()
 renderQuad RenderableQuad
 	{ renderableQuadTexcoord = texcoord
-	} (Vec2 left top) (Vec2 right bottom) = do
+	} bounds = do
 	addQuad <- ask
 	lift $ addQuad QuadToRender
-		{ quadToRenderPosition = Vec4 left top right bottom
+		{ quadToRenderPosition = bounds
 		, quadToRenderTexcoord = texcoord
 		}

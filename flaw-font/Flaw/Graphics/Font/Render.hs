@@ -361,6 +361,7 @@ renderTexts shaper textsWithColors script (Vec2 px py) cursorX cursorY = do
 	forM_ (zip runsPositionsAndIndices $ map snd textsWithColors) $ \(positionsAndIndices, color) -> renderTextRun positionsAndIndices (Vec2 x y) color
 
 -- | Perform right fold on bounds of glyphs.
+{-# INLINE foldrTextBounds #-}
 foldrTextBounds :: RenderableFont d -> (Float4 -> a -> a) -> a -> V.Vector (Float2, Int) -> a
 foldrTextBounds RenderableFont
 	{ renderableFontGlyphs = renderableGlyphs

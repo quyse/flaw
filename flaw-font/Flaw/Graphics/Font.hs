@@ -29,14 +29,14 @@ data Glyphs = Glyphs
 data GlyphInfo = GlyphInfo
 	{
 	-- Size of glyph on texture.
-	  glyphWidth :: !Int
-	, glyphHeight :: !Int
+	  glyphWidth :: {-# UNPACK #-} !Int
+	, glyphHeight :: {-# UNPACK #-} !Int
 	-- Coordinates of left-top corner on texture.
-	, glyphLeftTopX :: !Int
-	, glyphLeftTopY :: !Int
+	, glyphLeftTopX :: {-# UNPACK #-} !Int
+	, glyphLeftTopY :: {-# UNPACK #-} !Int
 	-- Offset from pen point to left-top corner.
-	, glyphOffsetX :: !Int
-	, glyphOffsetY :: !Int
+	, glyphOffsetX :: {-# UNPACK #-} !Int
+	, glyphOffsetY :: {-# UNPACK #-} !Int
 	}
 
 class FontShaper a where

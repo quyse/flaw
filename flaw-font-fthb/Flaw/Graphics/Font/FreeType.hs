@@ -140,7 +140,7 @@ createFreeTypeGlyphs FreeTypeFont
 						let maxj = min (j + 1) bitmapWidth
 						pixelSum <- liftM sum $ forM [mini..(maxi - 1)] $ \ii -> do
 							liftM sum $ forM [minj..(maxj - 1)] $ \jj -> do
-								liftM fromIntegral $ VSM.read pixels $ ii * bitmapWidth + jj :: IO Int
+								liftM fromIntegral $ VSM.read pixels $ ii * bitmapWidth + jj
 						VSM.write blurredPixels (i * width + j) $ fromIntegral $ pixelSum `div` fullScale;
 				return blurredPixels
 			else return pixels
