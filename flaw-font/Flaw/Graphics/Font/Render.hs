@@ -296,22 +296,44 @@ renderGlyphs GlyphRenderer
 	let viewportOffset = Vec4 (-1) 1 (-1) 1
 
 	let addGlyph GlyphToRender
-		{ glyphToRenderPosition = position
+		{ glyphToRenderPosition = Vec2 x y
 		, glyphToRenderIndex = index
 		, glyphToRenderColor = color
 		} = do
 		do
 			bufferIndex <- liftIO $ readIORef bufferIndexRef
 			when (bufferIndex >= capacity) flush
-		liftIO $ do
-			let RenderableGlyph
-				{ renderableGlyphUV = uv
-				, renderableGlyphOffset = offset
-				} = glyphs V.! index
+		let RenderableGlyph
+			{ renderableGlyphUV = Vec4 tleft tbottom tright ttop
+			, renderableGlyphOffset = Vec4 left bottom right top
+			} = glyphs V.! index
+		when (left < right && top < bottom) $ liftIO $ do
 			bufferIndex <- readIORef bufferIndexRef
-			VSM.write buffer bufferIndex $ (xyxy__ position + offset) * viewportScale + viewportOffset
-			VSM.write buffer (bufferIndex + capacity) uv
+			-- round glyph bounds to pixel boundaries
+			let roundedLeft = fromIntegral (floor (left + x) :: Int)
+			let left' = roundedLeft - x
+			let roundedTop = fromIntegral (floor (top + y) :: Int)
+			let top' = roundedTop - y
+			let roundedRight = fromIntegral (ceiling (right + x) :: Int)
+			let right' = roundedRight - x
+			let roundedBottom = fromIntegral (ceiling (bottom + y) :: Int)
+			let bottom' = roundedBottom - y
+			-- recalculate texture coordinates for rounded positions
+			let invWidth = 1 / (right - left)
+			let invHeight = 1 / (bottom - top)
+			let kx = (tright - tleft) * invWidth
+			let bx = (tleft * right - tright * left) * invWidth
+			let ky = (tbottom - ttop) * invHeight
+			let by = (ttop * bottom - tbottom * top) * invHeight
+			let tleft' = kx * left' + bx
+			let ttop' = ky * top' + by
+			let tright' = kx * right' + bx
+			let tbottom' = ky * bottom' + by
+			-- write values into instanced buffer
+			VSM.write buffer bufferIndex $ (Vec4 roundedLeft roundedBottom roundedRight roundedTop) * viewportScale + viewportOffset
+			VSM.write buffer (bufferIndex + capacity) $ Vec4 tleft' tbottom' tright' ttop'
 			VSM.write buffer (bufferIndex + capacity * 2) color
+			-- advance index
 			writeIORef bufferIndexRef $ bufferIndex + 1
 
 	result <- runReaderT m RenderGlyphsState
