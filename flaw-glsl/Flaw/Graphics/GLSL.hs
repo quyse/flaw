@@ -79,10 +79,16 @@ data GlslSampler = GlslSampler
 	} deriving Show
 
 -- | Fragment target outputted by shader.
-data GlslFragmentTarget = GlslFragmentTarget
+data GlslFragmentTarget
+	= GlslFragmentTarget
 	{ glslFragmentTargetName :: !T.Text
 	, glslFragmentTargetIndex :: !Int
-	} deriving Show
+	}
+	| GlslDualFragmentTarget
+	{ glslFragmentTargetName0 :: !T.Text
+	, glslFragmentTargetName1 :: !T.Text
+	}
+	deriving Show
 
 data GlslStage
 	= GlslVertexStage
@@ -196,6 +202,10 @@ glslGenerateProgram GlslConfig
 				{ glslFragmentTargetName = TL.toStrict $ toLazyText $ targetColorName slot
 				, glslFragmentTargetIndex = slot
 				}]
+			DualColorTarget _ _ -> [GlslDualFragmentTarget
+				{ glslFragmentTargetName0 = TL.toStrict $ toLazyText $ targetColorName 0
+				, glslFragmentTargetName1 = TL.toStrict $ toLazyText $ targetColorName 1
+				}]
 			DepthTarget _ -> []
 
 		-- source
@@ -302,6 +312,7 @@ glslGenerateProgram GlslConfig
 		targetDeclSource target = case target of
 			PositionTarget _ -> mempty
 			ColorTarget slot _ -> "out " <> valueTypeSource (VectorValueType Dimension4 ScalarFloat) <> " " <> targetColorName slot <> ";\n"
+			DualColorTarget a b -> targetDeclSource (ColorTarget 0 a) <> targetDeclSource (ColorTarget 1 b)
 			DepthTarget _ -> mempty
 
 		-- code source
@@ -331,6 +342,7 @@ glslGenerateProgram GlslConfig
 		targetSource target = case target of
 			PositionTarget node -> "\t" <> targetPositionName <> " = " <> nodeSource node <> ";\n"
 			ColorTarget slot node -> "\t" <> targetColorName slot <> " = " <> nodeSource node <> ";\n"
+			DualColorTarget nodeA nodeB -> targetSource (ColorTarget 0 nodeA) <> targetSource (ColorTarget 1 nodeB)
 			DepthTarget node -> "\t" <> targetDepthName <> " = " <> nodeSource node <> ";\n"
 
 		-- helper functions

@@ -117,7 +117,7 @@ hlslGenerateProgram state = program where
 		-- outputs source
 		outputsSource = "struct Output\n{\n" <> (foldr mappend mempty $ map varSource outputs) <> "};\n"
 		-- important: targets should be after interpolants, to have them in the same registers in accepting stage
-		outputs = map varInterpolant outInterpolants ++ map varTarget targets
+		outputs = map varInterpolant outInterpolants ++ concat (map varsTarget targets)
 		-- out-interpolants are temps defined at this stage, but used by some other stage
 		outInterpolants = filter (\temp -> tempStage temp == stage && tempUsedByOtherStage (tempIndex temp)) temps
 		otherShaderInfos = concat $ map (\(otherStage, otherShaderInfo) -> if otherStage == stage then [] else [otherShaderInfo]) shaders
@@ -183,6 +183,7 @@ hlslGenerateProgram state = program where
 		targetSource target = case target of
 			PositionTarget node -> "\toutput.vTP = " <> nodeSource node <> ";\n"
 			ColorTarget i node -> "\toutput." <> targetColorName i <> " = " <> nodeSource node <> ";\n"
+			DualColorTarget nodeA nodeB -> targetSource (ColorTarget 0 nodeA) <> targetSource (ColorTarget 1 nodeB)
 			DepthTarget node -> "\toutput." <> targetDepthName <> " = " <> nodeSource node <> ";\n"
 
 		-- entry point name and HLSL profile
@@ -215,22 +216,23 @@ hlslGenerateProgram state = program where
 			}
 
 		-- convert target to var
-		varTarget target = case target of
-			PositionTarget _ -> HlslVar
+		varsTarget target = case target of
+			PositionTarget _ -> [HlslVar
 				{ hlslVarName = "vTP"
 				, hlslVarSemantic = "SV_Position"
 				, hlslVarType = valueType (undefined :: Float4)
-				}
-			ColorTarget i _ -> HlslVar
+				}]
+			ColorTarget i _ -> [HlslVar
 				{ hlslVarName = targetColorName i
 				, hlslVarSemantic = "SV_Target" <> fromString (show i)
 				, hlslVarType = valueType (undefined :: Float4)
-				}
-			DepthTarget _ -> HlslVar
+				}]
+			DualColorTarget a b -> varsTarget (ColorTarget 0 a) ++ varsTarget (ColorTarget 1 b)
+			DepthTarget _ -> [HlslVar
 				{ hlslVarName = targetDepthName
 				, hlslVarSemantic = "SV_Depth"
 				, hlslVarType = valueType (undefined :: Float)
-				}
+				}]
 
 		-- calculate var source
 		varSource HlslVar

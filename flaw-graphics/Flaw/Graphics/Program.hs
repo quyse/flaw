@@ -35,6 +35,7 @@ module Flaw.Graphics.Program
 	, temp
 	, rasterize
 	, colorTarget
+	, dualColorTarget
 	, depthTarget
 	, (!)
 	, min_, max_
@@ -288,6 +289,18 @@ colorTarget i colorNode = withState $ \state@State
 	if stage /= PixelStage then fail $ "colorTarget can be used only in pixel program"
 	else return ()
 	let target = ColorTarget i colorNode
+	return (state
+		{ stateTargets = target : targets
+		}, ())
+
+dualColorTarget :: Node Float4 -> Node Float4 -> Program ()
+dualColorTarget colorNode1 colorNode2 = withState $ \state@State
+	{ stateStage = stage
+	, stateTargets = targets
+	} -> do
+	if stage /= PixelStage then fail $ "dualColorTarget can be used only in pixel program"
+	else return ()
+	let target = DualColorTarget colorNode1 colorNode2
 	return (state
 		{ stateTargets = target : targets
 		}, ())

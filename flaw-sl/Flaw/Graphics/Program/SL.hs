@@ -77,6 +77,7 @@ targetNodeInfo :: Target -> NodeInfo
 targetNodeInfo target = case target of
 	PositionTarget node -> nodeInfo node
 	ColorTarget _ node -> nodeInfo node
+	DualColorTarget a b -> mergeNodeInfo (nodeInfo a) (nodeInfo b)
 	DepthTarget node -> nodeInfo node
 
 mergeNodeInfo :: NodeInfo -> NodeInfo -> NodeInfo
@@ -127,6 +128,7 @@ targetStage :: Target -> Stage
 targetStage target = case target of
 	PositionTarget _ -> VertexStage
 	ColorTarget _ _ -> PixelStage
+	DualColorTarget _ _ -> PixelStage
 	DepthTarget _ -> PixelStage
 
 -- | Generate shader programs in SL.
