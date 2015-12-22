@@ -243,6 +243,7 @@ instance Device GlContext where
 		glPixelStorei gl_UNPACK_ALIGNMENT 1
 		glCheckErrors 0 "set unpack alignment"
 
+		-- pixel size, use only for uncompressed formats
 		let pixelSize = fromIntegral $ pixelSizeByteSize $ textureFormatPixelSize format
 
 		-- get texture type
@@ -292,13 +293,13 @@ instance Device GlContext where
 
 			-- set unpack image height if needed
 			if textureType == Texture3D || textureType == Texture2DArray then do
-				glPixelStorei gl_UNPACK_IMAGE_HEIGHT $ mipSlicePitch `div` pixelSize
+				glPixelStorei gl_UNPACK_IMAGE_HEIGHT $ if compressed then 0 else mipSlicePitch `div` pixelSize
 				glCheckErrors 0 "set unpack image height"
 			else return ()
 
 			-- set unpack row length if needed
 			if textureType == Texture3D || textureType == Texture2DArray || textureType == Texture2D || textureType == Texture1DArray then do
-				glPixelStorei gl_UNPACK_ROW_LENGTH $ mipLinePitch `div` pixelSize
+				glPixelStorei gl_UNPACK_ROW_LENGTH $ if compressed then 0 else mipLinePitch `div` pixelSize
 				glCheckErrors 0 "set unpack row length"
 			else return ()
 
@@ -309,11 +310,11 @@ instance Device GlContext where
 			if useTextureStorage then
 				if compressed then
 					case textureType of
-						Texture3D      -> glCompressedTexSubImage3D glTarget mip 0 0 0 mipWidth mipHeight mipDepth glFormat mipSize mipData
-						Texture2DArray -> glCompressedTexSubImage3D glTarget mip 0 0 0 mipWidth mipHeight count    glFormat mipSize mipData
-						Texture2D      -> glCompressedTexSubImage2D glTarget mip 0 0   mipWidth mipHeight          glFormat mipSize mipData
-						Texture1DArray -> glCompressedTexSubImage2D glTarget mip 0 0   mipWidth count              glFormat mipSize mipData
-						Texture1D      -> glCompressedTexSubImage1D glTarget mip 0     mipWidth                    glFormat mipSize mipData
+						Texture3D      -> glCompressedTexSubImage3D glTarget mip 0 0 0 mipWidth mipHeight mipDepth glInternalFormat mipSize mipData
+						Texture2DArray -> glCompressedTexSubImage3D glTarget mip 0 0 0 mipWidth mipHeight count    glInternalFormat mipSize mipData
+						Texture2D      -> glCompressedTexSubImage2D glTarget mip 0 0   mipWidth mipHeight          glInternalFormat mipSize mipData
+						Texture1DArray -> glCompressedTexSubImage2D glTarget mip 0 0   mipWidth count              glInternalFormat mipSize mipData
+						Texture1D      -> glCompressedTexSubImage1D glTarget mip 0     mipWidth                    glInternalFormat mipSize mipData
 				else
 					case textureType of
 						Texture3D      -> glTexSubImage3D glTarget mip 0 0 0 mipWidth mipHeight mipDepth glFormat glType mipData
