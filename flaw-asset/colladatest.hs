@@ -50,4 +50,4 @@ main = do
 
 	timeAfter <- getCurrentTime
 
-	putStrLn $ "colladatest: import time (μs): " ++ show ((floor $ diffUTCTime timeAfter timeBefore) :: Int)
+	putStrLn $ "colladatest: import time: " ++ show ((fromRational $ toRational $ diffUTCTime timeAfter timeBefore) * 0.000001 :: Float)
