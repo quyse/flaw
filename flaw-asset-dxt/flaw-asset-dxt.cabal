@@ -1,0 +1,40 @@
+name:                flaw-asset-dxt
+version:             0.1.0.0
+-- synopsis:            
+-- description:         
+license:             MIT
+license-file:        ../LICENSE
+author:              Alexander Bich
+maintainer:          quyse0@gmail.com
+-- copyright:           
+category:            Game
+build-type:          Simple
+-- extra-source-files:  
+cabal-version:       >=1.10
+
+source-repository head
+  type: git
+  location: https://github.com/quyse/flaw.git
+  subdir: flaw-asset-dxt
+
+library
+  exposed-modules:
+    Flaw.Asset.Texture.Dxt
+  -- other-extensions:    
+  build-depends:       base, bytestring, flaw-base, flaw-graphics
+  -- hs-source-dirs:      
+  default-language:    Haskell2010
+  c-sources:
+    -- libsquish
+    src/alpha.cpp
+    -- src/clusterfit.cpp
+    -- src/colourblock.cpp
+    -- src/colourfit.cpp
+    -- src/colourset.cpp
+    -- src/maths.cpp
+    -- src/rangefit.cpp
+    -- src/singlecolourfit.cpp
+    -- src/squish.cpp
+    -- helpers
+    src/flaw-squish.cpp
+  cc-options: -DSQUISH_USE_SSE=2 -O3 -fno-exceptions

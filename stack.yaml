@@ -3,6 +3,7 @@ resolver: lts-3.18
 packages:
 - flaw-app
 - flaw-asset
+- flaw-asset-dxt
 - flaw-base
 - flaw-build
 - flaw-canvas
