@@ -58,9 +58,8 @@ newButton visual = do
 
 newLabeledButton :: T.Text -> STM Button
 newLabeledButton text = do
-	label <- newLabel
+	label <- newLabel LabelStyleButton
 	setText label text
-	setAlignment label AlignCenter AlignMiddle
 	newButton label
 
 setButtonDefault :: Button -> STM ()

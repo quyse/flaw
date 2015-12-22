@@ -27,17 +27,19 @@ type Rect = Vec4 Metric
 data Metrics = Metrics
 	{
 	-- | Normal gap between elements.
-	  metricsGap :: !Metric
+	  metricsGap :: {-# UNPACK #-} !Metric
 	-- | Big gap between elements.
-	, metricsBigGap :: !Metric
+	, metricsBigGap :: {-# UNPACK #-} !Metric
 	-- | Frame client rect.
-	, metricsFrameClient :: !Rect
+	, metricsFrameClient :: {-# UNPACK #-} !Rect
 	-- | Frame top border height.
-	, metricsFrameTopBorder :: !Metric
+	, metricsFrameTopBorder :: {-# UNPACK #-} !Metric
 	-- | Size of button.
-	, metricsButtonSize :: !Size
+	, metricsButtonSize :: {-# UNPACK #-} !Size
 	-- | Height of edit box.
-	, metricsEditBoxHeight :: !Metric
+	, metricsEditBoxHeight :: {-# UNPACK #-} !Metric
 	-- | Height of label.
-	, metricsLabelHeight :: !Metric
+	, metricsLabelHeight :: {-# UNPACK #-} !Metric
+	-- | Height of title.
+	, metricsTitleHeight :: {-# UNPACK #-} !Metric
 	}

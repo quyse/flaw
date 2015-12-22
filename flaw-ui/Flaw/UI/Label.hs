@@ -6,7 +6,10 @@ License: MIT
 
 module Flaw.UI.Label
 	( Label(..)
+	, LabelStyle(..)
 	, newLabel
+	, newTextLabel
+	, newTitleLabel
 	) where
 
 import Control.Concurrent.STM
@@ -21,50 +24,61 @@ import Flaw.UI.Drawer
 data Label = Label
 	{ labelTextVar :: !(TVar T.Text)
 	, labelTextScriptVar :: !(TVar FontScript)
-	, labelAlignmentVar :: !(TVar (AlignX, AlignY))
+	, labelStyle :: !LabelStyle
 	}
 
-newLabel :: STM Label
-newLabel = do
+data LabelStyle
+	= LabelStyleText
+	| LabelStyleButton
+	| LabelStyleTitle
+
+newLabel :: LabelStyle -> STM Label
+newLabel style = do
 	textVar <- newTVar T.empty
 	textScriptVar <- newTVar fontScriptUnknown
-	alignmentVar <- newTVar (AlignLeft, AlignMiddle)
 	return Label
 		{ labelTextVar = textVar
 		, labelTextScriptVar = textScriptVar
-		, labelAlignmentVar = alignmentVar
+		, labelStyle = style
 		}
+
+newTextLabel :: STM Label
+newTextLabel = newLabel LabelStyleText
+
+newTitleLabel :: STM Label
+newTitleLabel = newLabel LabelStyleTitle
 
 instance Visual Label where
 	renderVisual Label
 		{ labelTextVar = textVar
 		, labelTextScriptVar = textScriptVar
-		, labelAlignmentVar = alignmentVar
+		, labelStyle = style
 		} Drawer
 		{ drawerGlyphRenderer = glyphRenderer
-		, drawerStyles = DrawerStyles
-			{ drawerLabelFont = DrawerFont
-				{ drawerFontRenderableFont = renderableFont
-				, drawerFontShaper = SomeFontShaper fontShaper
-				}
-			}
+		, drawerStyles = styles
 		} (Vec2 px py) (Vec2 sx sy) Style
-		{ styleTextColor = textColor
+		{ styleTextColor = color
 		} = do
 		text <- readTVar textVar
 		textScript <- readTVar textScriptVar
-		(alignmentX, alignmentY) <- readTVar alignmentVar
+		(DrawerFont
+			{ drawerFontRenderableFont = renderableFont
+			, drawerFontShaper = SomeFontShaper fontShaper
+			}, alignmentX, alignmentY) <- return $ case style of
+			LabelStyleText -> (drawerLabelFont styles, AlignLeft, AlignMiddle)
+			LabelStyleButton -> (drawerLabelFont styles, AlignCenter, AlignMiddle)
+			LabelStyleTitle -> (drawerTitleFont styles, AlignLeft, AlignMiddle)
+		let (x, cursorX) = case alignmentX of
+			AlignLeft -> (fromIntegral px, RenderTextCursorLeft)
+			AlignCenter -> (fromIntegral px + fromIntegral sx * 0.5, RenderTextCursorCenter)
+			AlignRight -> (fromIntegral px + fromIntegral sx, RenderTextCursorRight)
+		let (y, cursorY) = case alignmentY of
+			AlignTop -> (fromIntegral py, RenderTextCursorTop)
+			AlignMiddle -> (fromIntegral py + fromIntegral sy * 0.5, RenderTextCursorMiddle)
+			AlignBottom -> (fromIntegral py + fromIntegral sy, RenderTextCursorBottom)
 		return $ do
 			renderGlyphs glyphRenderer renderableFont $ do
-				let (x, cursorX) = case alignmentX of
-					AlignLeft -> (px, RenderTextCursorLeft)
-					AlignCenter -> (px + sx `div` 2, RenderTextCursorCenter)
-					AlignRight -> (px + sx, RenderTextCursorRight)
-				let (y, cursorY) = case alignmentY of
-					AlignTop -> (py, RenderTextCursorTop)
-					AlignMiddle -> (py + sy `div` 2, RenderTextCursorMiddle)
-					AlignBottom -> (py + sy, RenderTextCursorBottom)
-				renderTexts fontShaper [(text, textColor)] textScript (Vec2 (fromIntegral x) (fromIntegral y)) cursorX cursorY
+				renderTexts fontShaper [(text, color)] textScript (Vec2 x y) cursorX cursorY
 
 instance HasText Label where
 	setText Label
@@ -73,8 +87,3 @@ instance HasText Label where
 	setTextScript Label
 		{ labelTextScriptVar = textScriptVar
 		} textScript = writeTVar textScriptVar textScript
-
-instance HasAlignment Label where
-	setAlignment Label
-		{ labelAlignmentVar = alignmentVar
-		} alignmentX alignmentY = writeTVar alignmentVar (alignmentX, alignmentY)

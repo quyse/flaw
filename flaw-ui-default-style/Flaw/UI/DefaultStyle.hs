@@ -37,6 +37,7 @@ defaultStyleMetrics = Metrics
 	, metricsButtonSize = Vec2 80 24
 	, metricsEditBoxHeight = 24
 	, metricsLabelHeight = 20
+	, metricsTitleHeight = 25
 	}
 
 initDefaultStyleDrawer :: Device d => d -> IO (Drawer d, IO ())
@@ -48,20 +49,25 @@ initDefaultStyleDrawer device = withSpecialBook $ \bk -> do
 	-- create free type library
 	freeTypeLibrary <- book bk initFreeType
 
-	-- currently we use just one font
+	-- embedded font
+	fontData <- $(embedIOExp =<< liftM BL.toStrict (loadFile "src/DejaVuSans.ttf"))
+	let loadFont size xscale yscale = do
+		font <- book bk $ loadFreeTypeFont freeTypeLibrary size fontData
+		fontShaper <- book bk $ createHarfbuzzShaper font
+		renderableFont <- book bk $ createRenderableFont device =<< makeScaledGlyphs (createFreeTypeGlyphs font) xscale yscale GlyphUnionConfig
+			{ glyphUnionConfigWidth = 4096
+			, glyphUnionConfigBorder = 1 + max xscale yscale
+			, glyphUnionConfigHeightIsPowerOfTwo = False
+			}
+		return DrawerFont
+			{ drawerFontRenderableFont = renderableFont
+			, drawerFontShaper = SomeFontShaper fontShaper
+			}
 
-	-- load embedded font
-	font <- book bk (loadFreeTypeFont freeTypeLibrary 12 =<< $(embedIOExp =<< liftM BL.toStrict (loadFile "src/DejaVuSans.ttf")))
-
-	-- create font shaper
-	fontShaper <- book bk $ createHarfbuzzShaper font
-
-	-- create renderable font
-	renderableFont <- book bk $ createRenderableFont device =<< makeScaledGlyphs (createFreeTypeGlyphs font) 2 0 GlyphUnionConfig
-		{ glyphUnionConfigWidth = 4096
-		, glyphUnionConfigBorder = 1
-		, glyphUnionConfigHeightIsPowerOfTwo = True
-		}
+	-- label font
+	labelFont <- loadFont 12 2 1
+	-- title font
+	titleFont <- loadFont 16 2 1
 
 	-- create canvas
 	canvas <- book bk $ initCanvas device
@@ -78,18 +84,9 @@ initDefaultStyleDrawer device = withSpecialBook $ \bk -> do
 	-- styles
 	let styles = DrawerStyles
 		{ drawerMetrics = defaultStyleMetrics
-		, drawerLabelFont = DrawerFont
-			{ drawerFontRenderableFont = renderableFont
-			, drawerFontShaper = SomeFontShaper fontShaper
-			}
-		, drawerEditFont = DrawerFont
-			{ drawerFontRenderableFont = renderableFont
-			, drawerFontShaper = SomeFontShaper fontShaper
-			}
-		, drawerTitleFont = DrawerFont
-			{ drawerFontRenderableFont = renderableFont
-			, drawerFontShaper = SomeFontShaper fontShaper
-			}
+		, drawerLabelFont = labelFont
+		, drawerEditFont = labelFont
+		, drawerTitleFont = titleFont
 		, drawerFlatStyleVariant = StyleVariant
 			{ styleVariantNormalStyle = Style
 				{ styleTextColor = color "ffffffff"

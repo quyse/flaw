@@ -47,6 +47,7 @@ import Flaw.Window
 -- | Visual is a paintable thing with layout.
 class Visual a where
 	-- | Render visual.
+	-- Style is set by parent element, so visual may react on mouse or pressed state.
 	renderVisual :: Context c d => a -> Drawer d -> Position -> Size -> Style -> STM (Render c ())
 
 -- | Any visual.

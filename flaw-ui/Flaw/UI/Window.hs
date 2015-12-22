@@ -10,9 +10,11 @@ License: MIT
 module Flaw.UI.Window
 	( Window(..)
 	, newWindow
+	, queueWindowAction
 	, setWindowCloseHandler
 	, processWindow
 	, renderWindow
+	, getWindowSize
 	) where
 
 import Control.Concurrent.STM
@@ -84,6 +86,12 @@ newWindow nativeWindow inputManager element = do
 		, windowActionsQueue = actionsQueue
 		, windowMouseCursorVar = mouseCursorVar
 		}
+
+-- | Enqueue an IO action, which will be run in a window loop.
+queueWindowAction :: Window -> IO () -> STM ()
+queueWindowAction Window
+	{ windowActionsQueue = actionsQueue
+	} action = writeTQueue actionsQueue action
 
 -- | Set window close handler.
 setWindowCloseHandler :: Window -> STM () -> STM ()
@@ -174,3 +182,9 @@ renderWindow Window
 	{ windowElement = SomeElement element
 	} drawer = do
 	renderElement element drawer $ Vec2 0 0
+
+-- | Get window size.
+getWindowSize :: Window -> STM Size
+getWindowSize Window
+	{ windowSizeVar = sizeVar
+	} = readTVar sizeVar
