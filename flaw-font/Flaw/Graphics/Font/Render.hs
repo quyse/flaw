@@ -118,7 +118,6 @@ initGlyphRenderer device subpixelMode = do
 			case subpixelMode of
 				GlyphSubpixelModeNone -> colorTarget 0 $ cvec31 (xyz__ color) (w_ color * sample (sampler2Df 0) texcoord)
 				_ -> do
-					colorTarget 0 $ cvec31 (xyz__ color) (constf 1)
 					let (dxr, dxg, dxb, dyr, dyg, dyb) = case subpixelMode of
 						GlyphSubpixelModeNone -> undefined -- GHC warning defence, meh :(
 						GlyphSubpixelModeHorizontalRGB -> (-1, 0, 1, 0, 0, 0)
@@ -134,7 +133,7 @@ initGlyphRenderer device subpixelMode = do
 					let b = w_ color * (sample (sampler2Df 0) $ texcoord
 						+ (ddx texcoord) * (vecFromScalar $ constf $ dxb / 3)
 						+ (ddy texcoord) * (vecFromScalar $ constf $ dyb / 3))
-					colorTarget 1 $ cvec1111 r g b (constf 1)
+					dualColorTarget (cvec31 (xyz__ color) (constf 1)) (cvec1111 r g b (constf 1))
 
 	buffer <- VSM.new $ capacity * 3
 

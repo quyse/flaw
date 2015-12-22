@@ -660,12 +660,20 @@ instance Device GlContext where
 			glCheckErrors 0 "bind attribute location"
 
 		-- bind fragment targets
-		forM_ fragmentTargets $ \GlslFragmentTarget
-			{ glslFragmentTargetName = targetName
-			, glslFragmentTargetIndex = targetIndex
-			} -> do
-			B.useAsCString (T.encodeUtf8 targetName) $ glBindFragDataLocation programName (fromIntegral targetIndex)
-			glCheckErrors 0 "bind frag data location"
+		forM_ fragmentTargets $ \fragmentTarget -> case fragmentTarget of
+			GlslFragmentTarget
+				{ glslFragmentTargetName = targetName
+				, glslFragmentTargetIndex = targetIndex
+				} -> do
+				B.useAsCString (T.encodeUtf8 targetName) $ glBindFragDataLocation programName (fromIntegral targetIndex)
+				glCheckErrors 0 "bind frag data location"
+			GlslDualFragmentTarget
+				{ glslFragmentTargetName0 = targetName0
+				, glslFragmentTargetName1 = targetName1
+				} -> do
+				B.useAsCString (T.encodeUtf8 targetName0) $ glBindFragDataLocationIndexed programName 0 0
+				B.useAsCString (T.encodeUtf8 targetName1) $ glBindFragDataLocationIndexed programName 0 1
+				glCheckErrors 0 "bind frag data location indexed"
 
 		-- link program
 		glLinkProgram programName

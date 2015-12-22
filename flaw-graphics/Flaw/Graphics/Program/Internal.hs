@@ -286,6 +286,7 @@ data SamplerDimension
 data Target
 	= PositionTarget (Node Float4)
 	| ColorTarget !Int (Node Float4)
+	| DualColorTarget (Node Float4) (Node Float4)
 	| DepthTarget (Node Float)
 	deriving Show
 
