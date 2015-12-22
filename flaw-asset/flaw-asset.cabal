@@ -33,3 +33,14 @@ library
     exposed-modules:
       Flaw.Asset.Texture
     build-depends: JuicyPixels
+
+test-suite collada-test
+  type:                exitcode-stdio-1.0
+  main-is:             colladatest.hs
+  other-modules:
+    Flaw.Asset.Collada
+    Flaw.Asset.Geometry
+    Flaw.Asset.Util
+    Flaw.Asset.Vertex
+  build-depends:       base, bytestring, containers, flaw-base, flaw-build, flaw-ffi, flaw-graphics, flaw-math, mtl, primitive, vector, vector-algorithms, text, time, xml
+  default-language:    Haskell2010

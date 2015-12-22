@@ -27,8 +27,8 @@ import Flaw.Graphics
 data Geometry = Geometry
 	{ geometryVerticesBytes :: !B.ByteString
 	, geometryIndicesBytes :: !B.ByteString
-	, geometryIndicesCount :: !Int
-	, geometryVertexStride :: !Int
+	, geometryIndicesCount :: {-# UNPACK #-} !Int
+	, geometryVertexStride :: {-# UNPACK #-} !Int
 	, geometryIsIndices32Bit :: !Bool
 	}
 
