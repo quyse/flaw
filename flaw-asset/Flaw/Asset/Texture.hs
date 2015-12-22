@@ -4,7 +4,7 @@ Description: Texture support.
 License: MIT
 -}
 
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleContexts, TemplateHaskell #-}
 
 module Flaw.Asset.Texture
 	( loadTexture
@@ -85,3 +85,11 @@ loadTexture bytes = do
 	case decodeImage bytes of
 		Right dynamicImage -> loadDynamicImage dynamicImage
 		Left err -> fail err
+
+genEmbed ''PixelSize
+genEmbed ''ColorSpace
+genEmbed ''PixelValueType
+genEmbed ''PixelComponents
+genEmbed ''TextureCompression
+genEmbed ''TextureFormat
+genEmbed ''TextureInfo

@@ -25,18 +25,9 @@ import Flaw.Graphics.WebGL
 import Control.Monad.IO.Class
 import qualified Data.ByteString.Lazy as BL
 
+import Flaw.Asset.Texture
 import Flaw.Graphics
 import Flaw.Graphics.Sampler
-import Flaw.Graphics.Texture
-import Flaw.Asset.Texture
-
-genEmbed ''PixelSize
-genEmbed ''ColorSpace
-genEmbed ''PixelValueType
-genEmbed ''PixelComponents
-genEmbed ''TextureCompression
-genEmbed ''TextureFormat
-genEmbed ''TextureInfo
 
 #endif
 
