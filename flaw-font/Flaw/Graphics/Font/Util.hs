@@ -12,14 +12,18 @@ module Flaw.Graphics.Font.Util
 
 import Codec.Picture
 import Control.Monad
+import qualified Data.ByteString as B
 import qualified Data.Vector as V
 import qualified Data.Vector.Mutable as VM
 import qualified Data.Vector.Storable as VS
 import qualified Data.Vector.Storable.Mutable as VSM
 import Data.List
 import Foreign.Marshal.Array
+import Foreign.Ptr
+import Foreign.Storable
 
 import Flaw.Graphics.Font
+import Flaw.Graphics.Texture
 
 data GlyphUnionConfig = GlyphUnionConfig
 	{ glyphUnionConfigWidth :: !Int
@@ -39,9 +43,27 @@ uniteGlyphs glyphImagesAndInfos unionConfig = do
 makeScaledGlyphs :: (Int -> Int -> IO (V.Vector (Image Pixel8, GlyphInfo))) -> Int -> Int -> GlyphUnionConfig -> IO Glyphs
 makeScaledGlyphs createGlyphsAndInfos halfScaleX halfScaleY unionConfig = do
 	glyphsAndInfos <- createGlyphsAndInfos halfScaleX halfScaleY
-	(image, infos) <- uniteGlyphs glyphsAndInfos unionConfig
+	(Image
+		{ imageWidth = width
+		, imageHeight = height
+		, imageData = pixels
+		}, infos) <- uniteGlyphs glyphsAndInfos unionConfig
+	textureData <- VS.unsafeWith pixels $ \pixelsPtr -> B.packCStringLen (castPtr pixelsPtr, VS.length pixels * sizeOf (VS.head pixels))
 	return Glyphs
-		{ glyphsImage = image
+		{ glyphsTextureInfo = TextureInfo
+			{ textureWidth = width
+			, textureHeight = height
+			, textureDepth = 0
+			, textureMips = 1
+			, textureFormat = UncompressedTextureFormat
+				{ textureFormatComponents = PixelR
+				, textureFormatValueType = PixelUint
+				, textureFormatPixelSize = Pixel8bit
+				, textureFormatColorSpace = LinearColorSpace
+				}
+			, textureCount = 0
+			}
+		, glyphsTextureData = textureData
 		, glyphsInfos = infos
 		, glyphsScaleX = 1 + halfScaleX * 2
 		, glyphsScaleY = 1 + halfScaleY * 2

@@ -21,13 +21,11 @@ module Flaw.Graphics.Font.Render
 	, foldrTextBounds
 	) where
 
-import Codec.Picture
 import Control.Monad.Reader
 import qualified Data.ByteString.Unsafe as B
 import Data.IORef
 import qualified Data.Text as T
 import qualified Data.Vector as V
-import qualified Data.Vector.Storable as VS
 import qualified Data.Vector.Storable.Mutable as VSM
 import Foreign.ForeignPtr
 import Foreign.ForeignPtr.Unsafe
@@ -163,17 +161,17 @@ data RenderableFont d = RenderableFont
 
 createRenderableFont :: Device d => d -> Glyphs -> IO (RenderableFont d, IO ())
 createRenderableFont device Glyphs
-	{ glyphsImage = Image
-		{ imageWidth = width
-		, imageHeight = height
-		, imageData = pixels
+	{ glyphsTextureInfo = textureInfo@TextureInfo
+		{ textureWidth = width
+		, textureHeight = height
 		}
+	, glyphsTextureData = textureData
 	, glyphsInfos = infos
 	, glyphsScaleX = scaleX
 	, glyphsScaleY = scaleY
 	} = do
 	-- create texture
-	let samplerStateInfo = defaultSamplerStateInfo
+	(textureId, destroy) <- createStaticTexture device textureInfo defaultSamplerStateInfo
 		{ samplerMinFilter = SamplerLinearFilter
 		, samplerMipFilter = SamplerPointFilter
 		, samplerMagFilter = SamplerLinearFilter
@@ -181,22 +179,7 @@ createRenderableFont device Glyphs
 		, samplerWrapV = SamplerWrapClamp
 		, samplerWrapW = SamplerWrapClamp
 		, samplerMaxLod = 0
-		}
-	(textureId, destroy) <- VS.unsafeWith pixels $ \pixelsPtr -> do
-		pixelsBytes <- B.unsafePackCStringLen (castPtr pixelsPtr, VS.length pixels)
-		createStaticTexture device TextureInfo
-			{ textureWidth = width
-			, textureHeight = height
-			, textureDepth = 0
-			, textureMips = 1
-			, textureFormat = UncompressedTextureFormat
-				{ textureFormatComponents = PixelR
-				, textureFormatValueType = PixelUint
-				, textureFormatPixelSize = Pixel8bit
-				, textureFormatColorSpace = LinearColorSpace
-				}
-			, textureCount = 0
-			} samplerStateInfo pixelsBytes
+		} textureData
 
 	-- create glyphs
 	let invSize = xyxy__ $ Vec2 (1 / fromIntegral width) (1 / fromIntegral height)

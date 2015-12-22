@@ -12,15 +12,17 @@ module Flaw.Graphics.Font
 	, fontScriptUnknown
 	) where
 
-import Codec.Picture
+import qualified Data.ByteString as B
 import qualified Data.Text as T
 import qualified Data.Vector as V
 import Data.Word
 
+import Flaw.Graphics.Texture
 import Flaw.Math
 
 data Glyphs = Glyphs
-	{ glyphsImage :: !(Image Pixel8)
+	{ glyphsTextureInfo :: !TextureInfo
+	, glyphsTextureData :: !B.ByteString
 	, glyphsInfos :: !(V.Vector GlyphInfo)
 	, glyphsScaleX :: !Int
 	, glyphsScaleY :: !Int
