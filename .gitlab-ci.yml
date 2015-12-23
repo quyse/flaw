@@ -5,3 +5,12 @@ before_script:
 linux:
   script:
   - stack --no-terminal --install-ghc test flaw-app flaw-asset flaw-asset-dxt flaw-base flaw-build flaw-canvas flaw-ffi flaw-font flaw-font-fthb flaw-game flaw-gl flaw-glsl flaw-graphics flaw-input flaw-math flaw-oil flaw-oil-client flaw-oil-server flaw-physics flaw-sdl flaw-sl flaw-sqlite flaw-ui flaw-ui-default-style flaw-window
+  tags:
+  - linux
+
+windows:
+  script:
+  - "powershell \"Add-Content flaw-font-fthb\\flaw-font-fthb.cabal \\\"  extra-ghci-libraries: all\\\"\""
+  - stack --no-terminal --install-ghc test flaw-app flaw-asset flaw-asset-dxt flaw-base flaw-build flaw-canvas flaw-dx11 flaw-ffi flaw-font flaw-font-fthb flaw-game flaw-graphics flaw-input flaw-math flaw-oil flaw-oil-client flaw-oil-server flaw-physics flaw-sl flaw-sqlite flaw-ui flaw-ui-default-style flaw-window
+  tags:
+  - windows
