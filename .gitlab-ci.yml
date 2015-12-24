@@ -14,3 +14,9 @@ windows:
   - stack --no-terminal --install-ghc test flaw-app flaw-asset flaw-asset-dxt flaw-base flaw-build flaw-canvas flaw-dx11 flaw-ffi flaw-font flaw-font-fthb flaw-game flaw-graphics flaw-input flaw-math flaw-oil flaw-oil-client flaw-oil-server flaw-physics flaw-sl flaw-sqlite flaw-ui flaw-ui-default-style flaw-window
   tags:
   - windows
+
+web:
+  script:
+  - stack --compiler ghcjs-0.2.0.20151029_ghc-7.10.2 test flaw-app flaw-asset flaw-base flaw-build flaw-canvas flaw-ffi flaw-glsl flaw-graphics flaw-input flaw-math flaw-physics flaw-sl flaw-webgl flaw-window
+  tags:
+  - ghcjs

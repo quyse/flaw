@@ -32,6 +32,14 @@ packages:
     git: https://github.com/quyse/sdl2
     commit: 8a5b603288a2242a7c342a2238fe3ef7ccbbee4f
   extra-dep: true
+- location:
+    git: https://github.com/ghcjs/ghcjs-base
+    commit: 23b1311a98c7981c7b98ac7d37a6fa9456c893d5
+  extra-dep: true
+- location:
+    git: https://github.com/ghcjs/ghcjs-dom
+    commit: bbd0e70f7dae6d8d9b89b7307f2d0acf613836a7
+  extra-dep: true
 
 extra-deps:
 - OpenGLRaw-2.6.0.0

@@ -22,7 +22,9 @@ import Data.Array.IO as A
 import Data.Bits
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Unsafe as B
+import Data.JSString.Text
 import Data.IORef
+import Data.String
 import qualified Data.Text as T
 import Foreign.ForeignPtr
 import Foreign.Marshal.Utils
@@ -55,42 +57,42 @@ instance System WebGLSystem where
 
 -- | Device.
 data WebGLDevice = WebGLDevice
-	{ webglDeviceContext :: JSVal
+	{ webglDeviceContext :: !JS_WebGLContext
 	-- | Counter for ids for various resources.
-	, webglDeviceCreateId :: IORef Int
+	, webglDeviceCreateId :: !(IORef Int)
 	}
 
 data WebGLUniform = WebGLUniform
-	{ webglUniformLocation :: JSVal
-	, webglUniformInfo :: Uniform
+	{ webglUniformLocation :: !JS_WebGLUniformLocation
+	, webglUniformInfo :: !Uniform
 	}
 
 instance Device WebGLDevice where
 	type DeferredContext WebGLDevice = JSVal
 	data TextureId WebGLDevice = WebGLTextureId
-		{ webglTextureId :: Int
-		, webglTextureTexture :: JSVal
+		{ webglTextureId :: !Int
+		, webglTextureTexture :: !JS_WebGLTexture
 		}
 	data SamplerStateId WebGLDevice = WebGLSamplerStateId deriving Eq
 	newtype RenderTargetId WebGLDevice = WebGLRenderTargetId JSVal
 	newtype DepthStencilTargetId WebGLDevice = WebGLDepthStencilTargetId JSVal
 	newtype FrameBufferId WebGLDevice = WebGLFrameBufferId JSVal
 	data VertexBufferId WebGLDevice = WebGLVertexBufferId
-		{ webglVertexBufferId :: Int
-		, webglVertexBufferBuffer :: JSVal
-		, webglVertexBufferStride :: Int
+		{ webglVertexBufferId :: !Int
+		, webglVertexBufferBuffer :: !JS_WebGLBuffer
+		, webglVertexBufferStride :: !Int
 		}
 	data IndexBufferId WebGLDevice = WebGLIndexBufferId
 		{ webglIndexBufferId :: !Int
-		, webglIndexBufferBuffer :: JSVal
+		, webglIndexBufferBuffer :: !JS_WebGLBuffer
 		, webglIndexBufferMode :: !GLenum
 		, webglIndexBufferFormat :: !GLenum
 		}
 	data ProgramId WebGLDevice = WebGLProgramId
 		{ webglProgramId :: !Int
-		, webglProgramProgram :: JSVal
-		, webglProgramAttributes :: [Attribute]
-		, webglProgramUniforms :: [WebGLUniform]
+		, webglProgramProgram :: !JS_WebGLProgram
+		, webglProgramAttributes :: ![Attribute]
+		, webglProgramUniforms :: ![WebGLUniform]
 		}
 	data UniformBufferId WebGLDevice = WebGLUniformBufferId
 		{ webglUniformBufferId :: !Int
@@ -99,13 +101,13 @@ instance Device WebGLDevice where
 
 	nullTexture = WebGLTextureId
 		{ webglTextureId = 0
-		, webglTextureTexture = nullRef
+		, webglTextureTexture = JS_WebGLTexture nullRef
 		}
 	nullSamplerState = WebGLSamplerStateId
 	nullDepthStencilTarget = WebGLDepthStencilTargetId nullRef
 	nullIndexBuffer = WebGLIndexBufferId
 		{ webglIndexBufferId = 0
-		, webglIndexBufferBuffer = nullRef
+		, webglIndexBufferBuffer = JS_WebGLBuffer nullRef
 		, webglIndexBufferMode = webgl_TRIANGLES
 		, webglIndexBufferFormat = webgl_UNSIGNED_SHORT
 		}
@@ -166,14 +168,14 @@ instance Device WebGLDevice where
 
 		let createShader source shaderType = describeException "failed to create WebGL shader" $ do
 			jsShader <- js_createShader jsContext shaderType
-			js_shaderSource jsContext jsShader $ pToJSVal source
+			js_shaderSource jsContext jsShader $ textToJSString source
 			js_compileShader jsContext jsShader
 			jsStatus <- js_getShaderParameter jsContext jsShader webgl_COMPILE_STATUS
 			if pFromJSVal jsStatus then return jsShader
 			else do
 				jsLog <- js_getShaderInfoLog jsContext jsShader
 				putStrLn $ T.unpack source
-				throwIO $ DescribeFirstException ("failed to compile shader", (pFromJSVal jsLog) :: T.Text)
+				throwIO $ DescribeFirstException ("failed to compile shader", textFromJSString jsLog)
 
 		-- generate GLSL
 		GlslProgram
@@ -198,7 +200,7 @@ instance Device WebGLDevice where
 		-- bind attributes
 		forM_ (zip attributes [0..]) $ \(GlslAttribute
 			{ glslAttributeName = name
-			}, i) -> js_bindAttribLocation jsContext jsProgram i $ pToJSVal name
+			}, i) -> js_bindAttribLocation jsContext jsProgram i $ textToJSString name
 
 		-- TODO: bind targets
 
@@ -215,7 +217,7 @@ instance Device WebGLDevice where
 		forM_ (zip samplers [0..]) $ \(GlslSampler
 			{ glslSamplerName = name
 			}, i) -> do
-			jsLocation <- js_getUniformLocation jsContext jsProgram $ pToJSVal name
+			jsLocation <- js_getUniformLocation jsContext jsProgram $ textToJSString name
 			js_uniform1i jsContext jsLocation i
 
 		-- form uniforms
@@ -223,7 +225,7 @@ instance Device WebGLDevice where
 			{ glslUniformName = name
 			, glslUniformInfo = info
 			} -> do
-			jsLocation <- js_getUniformLocation jsContext jsProgram $ pToJSVal name
+			jsLocation <- js_getUniformLocation jsContext jsProgram $ textToJSString name
 			return WebGLUniform
 				{ webglUniformLocation = jsLocation
 				, webglUniformInfo = info
@@ -246,14 +248,14 @@ instance Device WebGLDevice where
 			}, undefined)
 
 data WebGLContext = WebGLContext
-	{ webglContextContext :: JSVal
-	, webglContextActualState :: WebGLContextState
-	, webglContextDesiredState :: WebGLContextState
+	{ webglContextContext :: !JS_WebGLContext
+	, webglContextActualState :: !WebGLContextState
+	, webglContextDesiredState :: !WebGLContextState
 	}
 
 data WebGLContextState = WebGLContextState
 	{ webglContextStateFrameBuffer :: !(IORef (FrameBufferId WebGLDevice))
-	, webglContextStateViewport :: !(IORef (Int, Int))
+	, webglContextStateViewport :: !(IORef Int4)
 	, webglContextStateVertexBuffers :: !(IOArray Int (VertexBufferId WebGLDevice))
 	, webglContextStateIndexBuffer :: !(IORef (IndexBufferId WebGLDevice))
 	, webglContextStateUniformBuffers :: !(IOArray Int (UniformBufferId WebGLDevice))
@@ -265,18 +267,18 @@ data WebGLContextState = WebGLContextState
 nullVertexBuffer :: VertexBufferId WebGLDevice
 nullVertexBuffer = WebGLVertexBufferId
 	{ webglVertexBufferId = 0
-	, webglVertexBufferBuffer = nullRef
+	, webglVertexBufferBuffer = JS_WebGLBuffer nullRef
 	, webglVertexBufferStride = 0
 	}
 
 webglCreateContextState :: IO WebGLContextState
 webglCreateContextState = do
 	frameBuffer <- newIORef $ WebGLFrameBufferId nullRef
-	viewport <- newIORef (0, 0)
+	viewport <- newIORef $ Int4 0 0 0 0
 	vertexBuffers <- A.newArray (0, 7) nullVertexBuffer
 	indexBuffer <- newIORef $ WebGLIndexBufferId
 		{ webglIndexBufferId = 0
-		, webglIndexBufferBuffer = nullRef
+		, webglIndexBufferBuffer = JS_WebGLBuffer nullRef
 		, webglIndexBufferMode = webgl_TRIANGLES
 		, webglIndexBufferFormat = webgl_UNSIGNED_SHORT
 		}
@@ -286,11 +288,11 @@ webglCreateContextState = do
 		}
 	samplers <- A.newArray (0, 7) (WebGLTextureId
 		{ webglTextureId = 0
-		, webglTextureTexture = nullRef
+		, webglTextureTexture = JS_WebGLTexture nullRef
 		}, WebGLSamplerStateId)
 	program <- newIORef $ WebGLProgramId
 		{ webglProgramId = 0
-		, webglProgramProgram = nullRef
+		, webglProgramProgram = JS_WebGLProgram nullRef
 		, webglProgramAttributes = []
 		, webglProgramUniforms = []
 		}
@@ -318,12 +320,12 @@ webglSetDefaultContextState WebGLContextState
 	, webglContextStateAttributes = attributesRef
 	} = do
 	writeIORef frameBufferRef $ WebGLFrameBufferId nullRef
-	writeIORef viewportRef (0, 0)
+	writeIORef viewportRef $ Int4 0 0 0 0
 	vertexBuffersBounds <- getBounds vertexBuffersArray
 	forM_ (range vertexBuffersBounds) $ \i -> writeArray vertexBuffersArray i nullVertexBuffer
 	writeIORef indexBufferRef $ WebGLIndexBufferId
 		{ webglIndexBufferId = 0
-		, webglIndexBufferBuffer = nullRef
+		, webglIndexBufferBuffer = JS_WebGLBuffer nullRef
 		, webglIndexBufferMode = webgl_TRIANGLES
 		, webglIndexBufferFormat = webgl_UNSIGNED_SHORT
 		}
@@ -335,11 +337,11 @@ webglSetDefaultContextState WebGLContextState
 	samplersBounds <- getBounds samplersArray
 	forM_ (range samplersBounds) $ \i -> writeArray samplersArray i (WebGLTextureId
 		{ webglTextureId = 0
-		, webglTextureTexture = nullRef
+		, webglTextureTexture = JS_WebGLTexture nullRef
 		} , WebGLSamplerStateId)
 	writeIORef programRef $ WebGLProgramId
 		{ webglProgramId = 0
-		, webglProgramProgram = nullRef
+		, webglProgramProgram = JS_WebGLProgram nullRef
 		, webglProgramAttributes = []
 		, webglProgramUniforms = []
 		}
@@ -388,15 +390,15 @@ instance Context WebGLContext WebGLDevice where
 		} instancesCount indicesCount = do
 		webglUpdateContext context
 		WebGLIndexBufferId
-			{ webglIndexBufferBuffer = jsBuffer
+			{ webglIndexBufferBuffer = JS_WebGLBuffer jsBufferVal
 			, webglIndexBufferMode = mode
 			, webglIndexBufferFormat = format
 			} <- readIORef indexBufferRef
 		if instancesCount > 1 then
-			if isNull jsBuffer then js_drawArraysInstanced jsContext mode 0 indicesCount instancesCount
+			if isNull jsBufferVal then js_drawArraysInstanced jsContext mode 0 indicesCount instancesCount
 			else js_drawElementsInstanced jsContext mode indicesCount format 0 instancesCount
 		else
-			if isNull jsBuffer then js_drawArrays jsContext mode 0 indicesCount
+			if isNull jsBufferVal then js_drawArrays jsContext mode 0 indicesCount
 			else js_drawElements jsContext mode indicesCount format 0
 
 	contextPlay = undefined
@@ -422,9 +424,9 @@ instance Context WebGLContext WebGLDevice where
 		{ webglContextDesiredState = WebGLContextState
 			{ webglContextStateViewport = viewportRef
 			}
-		} width height scope = do
+		} viewport scope = do
 		oldViewport <- readIORef viewportRef
-		writeIORef viewportRef (width, height)
+		writeIORef viewportRef viewport
 		r <- scope
 		writeIORef viewportRef oldViewport
 		return r
@@ -505,7 +507,7 @@ instance Context WebGLContext WebGLDevice where
 		return r
 
 data WebGLPresenter = WebGLPresenter
-	{ webglPresenterCanvas :: DOM.Element
+	{ webglPresenterCanvas :: !DOM.Element
 	}
 
 instance Presenter WebGLPresenter WebGLSystem WebGLContext WebGLDevice where
@@ -530,7 +532,7 @@ instance Presenter WebGLPresenter WebGLSystem WebGLContext WebGLDevice where
 			width <- DOM.getClientWidth canvas
 			height <- DOM.getClientHeight canvas
 			-- set viewport
-			writeIORef viewportRef (floor width, floor height)
+			writeIORef viewportRef $ Int4 0 0 (floor width) (floor height)
 
 			-- perform render
 			putMVar syncVar =<< f
@@ -555,11 +557,10 @@ foreign import javascript unsafe "( \
 	\ )($1);" js_requestAnimationFrame :: Callback (IO ()) -> IO ()
 
 webglInit :: DOM.Element -> Bool -> IO ((WebGLDevice, WebGLContext, WebGLPresenter), IO ())
-webglInit canvas needDepth = do
+webglInit jsCanvas needDepth = do
 	-- get context
-	jsCanvas <- toJSVal canvas
-	jsContext <- js_getWebGLContext jsCanvas needDepth
-	if isNull jsContext then throwIO $ DescribeFirstException "cannot get WebGL context"
+	jsContext@(JS_WebGLContext jsContextVal) <- js_getWebGLContext jsCanvas needDepth
+	if isNull jsContextVal then throwIO $ DescribeFirstException "cannot get WebGL context"
 	else return ()
 	-- create device
 	createIdRef <- newIORef 1
@@ -613,11 +614,11 @@ webglInit canvas needDepth = do
 		, "OES_vertex_array_object"
 		, "WEBGL_draw_buffers"
 		]
-	forM_ extensions $ js_getExtension jsContext . pToJSVal . T.pack
+	forM_ extensions $ js_getExtension jsContext . fromString
 
 	-- create presenter
 	let presenter = WebGLPresenter
-		{ webglPresenterCanvas = canvas
+		{ webglPresenterCanvas = jsCanvas
 		}
 
 	-- return
@@ -687,8 +688,8 @@ webglUpdateContext WebGLContext
 	-- TODO: supporting only default framebuffer for now
 
 	-- viewport
-	refSetup actualViewportRef desiredViewportRef $ \(viewportWidth, viewportHeight) -> do
-		js_viewport jsContext 0 0 viewportWidth viewportHeight
+	refSetup actualViewportRef desiredViewportRef $ \(Int4 viewportLeft viewportTop viewportRight viewportBottom) -> do
+		js_viewport jsContext viewportLeft viewportTop (viewportRight - viewportLeft) (viewportBottom - viewportTop)
 
 	-- program
 	refSetup actualProgramRef desiredProgramRef $ \desiredProgram -> do
@@ -797,7 +798,7 @@ loadWebGLTexture2DFromURL :: WebGLDevice -> T.Text -> IO (TextureId WebGLDevice,
 loadWebGLTexture2DFromURL device@WebGLDevice
 	{ webglDeviceContext = jsContext
 	} url = describeException "failed to load WebGL texture from URL" $ do
-	image <- js_loadImage $ pToJSVal url
+	image <- js_loadImage $ textToJSString url
 	jsTexture <- js_createTexture jsContext
 	js_bindTexture jsContext webgl_TEXTURE_2D jsTexture
 	js_texImage2D jsContext webgl_TEXTURE_2D 0 webgl_RGBA webgl_RGBA webgl_UNSIGNED_BYTE image
