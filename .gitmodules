@@ -7,3 +7,6 @@
 [submodule "flaw-font-fthb/src/ucdn"]
 	path = flaw-font-fthb/src/ucdn
 	url = https://github.com/grigorig/ucdn.git
+[submodule "flaw-bullet/src/bullet"]
+	path = flaw-bullet/src/bullet
+	url = https://github.com/bulletphysics/bullet3.git

@@ -6,6 +6,7 @@ packages:
 - flaw-asset-dxt
 - flaw-base
 - flaw-build
+- flaw-bullet
 - flaw-canvas
 - flaw-dx11
 - flaw-ffi

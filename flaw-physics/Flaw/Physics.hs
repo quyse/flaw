@@ -35,8 +35,8 @@ class World w where
 		-> IO (Body w, IO ())
 	getBodyTransform :: w -> Body w -> IO (Float3, FloatQ)
 	-- | Advance simulation.
-	stepWorld
+	simulate
 		:: w
-		-- | Time of step.
-		-> Float
+		-> Float -- | Time of one step.
+		-> Int -- | Number of steps.
 		-> IO ()
