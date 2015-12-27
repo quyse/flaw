@@ -2,6 +2,40 @@ before_script:
 - git submodule init
 - git submodule update
 
+variables:
+  PACKAGES_WINDOWS: >-
+    flaw-app
+    flaw-asset
+    flaw-asset-dxt
+    flaw-base
+    flaw-build
+    flaw-bullet
+    flaw-canvas
+    flaw-dx11
+    flaw-ffi
+    flaw-font
+    flaw-font-fthb
+    flaw-game
+    flaw-graphics
+    flaw-input
+    flaw-math
+    flaw-oil
+    flaw-oil-client
+    flaw-oil-server
+    flaw-physics
+    flaw-sl
+    flaw-sqlite
+    flaw-ui
+    flaw-ui-default-style
+    flaw-window
+  INTEGERSIMPLE_FLAGS_WINDOWS: >-
+    --ghc-variant integersimple
+    --flag text:integer-simple
+    --flag hashable:-integer-gmp
+    --flag cryptonite:-integer-gmp
+    --flag scientific:integer-simple
+  FIX_TH_WINDOWS: "powershell \"Add-Content flaw-font-fthb\\flaw-font-fthb.cabal \\\"  extra-ghci-libraries: all\\\"\""
+
 linux:
   script:
   - stack --no-terminal --install-ghc test flaw-app flaw-asset flaw-asset-dxt flaw-base flaw-build flaw-bullet flaw-canvas flaw-ffi flaw-font flaw-font-fthb flaw-game flaw-gl flaw-glsl flaw-graphics flaw-input flaw-math flaw-oil flaw-oil-client flaw-oil-server flaw-physics flaw-sdl flaw-sl flaw-sqlite flaw-ui flaw-ui-default-style flaw-window
@@ -9,10 +43,18 @@ linux:
   - haskellstack
   - linux
 
-windows:
+windows_gmp:
   script:
-  - "powershell \"Add-Content flaw-font-fthb\\flaw-font-fthb.cabal \\\"  extra-ghci-libraries: all\\\"\""
-  - stack --no-terminal --install-ghc test flaw-app flaw-asset flaw-asset-dxt flaw-base flaw-build flaw-bullet flaw-canvas flaw-dx11 flaw-ffi flaw-font flaw-font-fthb flaw-game flaw-graphics flaw-input flaw-math flaw-oil flaw-oil-client flaw-oil-server flaw-physics flaw-sl flaw-sqlite flaw-ui flaw-ui-default-style flaw-window
+  - "%FIX_TH_WINDOWS%"
+  - "stack --no-terminal test %PACKAGES_WINDOWS%"
+  tags:
+  - haskellstack
+  - windows
+
+windows_integersimple:
+  script:
+  - "%FIX_TH_WINDOWS%"
+  - "stack --no-terminal test %INTEGERSIMPLE_FLAGS_WINDOWS% %PACKAGES_WINDOWS%"
   tags:
   - haskellstack
   - windows
