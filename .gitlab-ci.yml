@@ -3,6 +3,33 @@ before_script:
 - git submodule update
 
 variables:
+  PACKAGES_LINUX: >-
+    flaw-app
+    flaw-asset
+    flaw-asset-dxt
+    flaw-base
+    flaw-build
+    flaw-bullet
+    flaw-canvas
+    flaw-ffi
+    flaw-font
+    flaw-font-fthb
+    flaw-game
+    flaw-gl
+    flaw-glsl
+    flaw-graphics
+    flaw-input
+    flaw-math
+    flaw-oil
+    flaw-oil-client
+    flaw-oil-server
+    flaw-physics
+    flaw-sdl
+    flaw-sl
+    flaw-sqlite
+    flaw-ui
+    flaw-ui-default-style
+    flaw-window
   PACKAGES_WINDOWS: >-
     flaw-app
     flaw-asset
@@ -28,6 +55,21 @@ variables:
     flaw-ui
     flaw-ui-default-style
     flaw-window
+  PACKAGES_WEB: >-
+    flaw-app
+    flaw-asset
+    flaw-base
+    flaw-build
+    flaw-canvas
+    flaw-ffi
+    flaw-glsl
+    flaw-graphics
+    flaw-input
+    flaw-math
+    flaw-physics
+    flaw-sl
+    flaw-webgl
+    flaw-window
   INTEGERSIMPLE_FLAGS_WINDOWS: >-
     --ghc-variant integersimple
     --flag text:integer-simple
@@ -38,7 +80,7 @@ variables:
 
 linux:
   script:
-  - stack --no-terminal --install-ghc test flaw-app flaw-asset flaw-asset-dxt flaw-base flaw-build flaw-bullet flaw-canvas flaw-ffi flaw-font flaw-font-fthb flaw-game flaw-gl flaw-glsl flaw-graphics flaw-input flaw-math flaw-oil flaw-oil-client flaw-oil-server flaw-physics flaw-sdl flaw-sl flaw-sqlite flaw-ui flaw-ui-default-style flaw-window
+  - "stack --no-terminal test $PACKAGES_LINUX"
   tags:
   - haskellstack
   - linux
@@ -61,7 +103,7 @@ windows_integersimple:
 
 web:
   script:
-  - stack --compiler ghcjs-0.2.0.20151029_ghc-7.10.2 test flaw-app flaw-asset flaw-base flaw-build flaw-canvas flaw-ffi flaw-glsl flaw-graphics flaw-input flaw-math flaw-physics flaw-sl flaw-webgl flaw-window
+  - "stack --no-terminal --compiler ghcjs-0.2.0.20151029_ghc-7.10.2 test $PACKAGES_WEB"
   tags:
   - haskellstack
   - ghcjs
