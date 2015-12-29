@@ -32,6 +32,8 @@ class Window w where
 
 	-- | Set mouse cursor.
 	setWindowMouseCursor :: w -> MouseCursor -> IO ()
+	-- | Set mouse lock mode.
+	setWindowMouseLock :: w -> Bool -> IO ()
 
 data WindowEvent
 	-- | User is trying to close window.
