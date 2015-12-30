@@ -243,6 +243,7 @@ createSdlWindow ws@SdlWindowSystem
 	checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_RED_SIZE 8
 	checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_GREEN_SIZE 8
 	checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_BLUE_SIZE 8
+	checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_ALPHA_SIZE 8
 	checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_DEPTH_SIZE (if needDepth then 16 else 0)
 	checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_STENCIL_SIZE (if needDepth then 8 else 0)
 	-- create SDL window
