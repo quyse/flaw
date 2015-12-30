@@ -129,16 +129,18 @@ initApp title width height needDepth debug = do
 
 -- | Run app loop.
 -- To exit loop, call `exitApp`.
-runApp :: a -> (Float -> a -> IO a) -> IO ()
-runApp firstState step = mdo
-	let f lastTime state = do
+{-# INLINE runApp #-}
+runApp :: (Float -> IO ()) -> IO ()
+runApp step = mdo
+	let f lastTime = do
 		currentTime <- getCurrentTime
 		let frameTime = fromRational $ toRational $ diffUTCTime currentTime lastTime
-		newState <- step frameTime state
-		f currentTime newState
+		step frameTime
+		f currentTime
 	veryFirstTime <- getCurrentTime
-	catch (f veryFirstTime firstState) $ \ExitAppException -> return ()
+	catch (f veryFirstTime) $ \ExitAppException -> return ()
 
+{-# INLINE exitApp #-}
 exitApp :: IO ()
 exitApp = throwIO ExitAppException
 
