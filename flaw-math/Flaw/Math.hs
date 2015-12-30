@@ -4,7 +4,7 @@ Description: Math.
 License: MIT
 -}
 
-{-# LANGUAGE MultiParamTypeClasses, PatternSynonyms, ScopedTypeVariables, TemplateHaskell, TypeFamilies, ViewPatterns #-}
+{-# LANGUAGE DeriveGeneric, MultiParamTypeClasses, PatternSynonyms, ScopedTypeVariables, TemplateHaskell, TypeFamilies, ViewPatterns #-}
 
 module Flaw.Math
 	( maxVecDimension
@@ -49,6 +49,7 @@ import Control.Monad
 import Data.Char
 import Foreign.Ptr
 import Foreign.Storable
+import GHC.Generics(Generic)
 import Language.Haskell.TH
 
 import Flaw.Math.Internal
@@ -183,7 +184,7 @@ liftM concat $ forM mathTypeNamesWithPrefix $ \(mathTypeName, mathTypePrefix) ->
 			let conName = mkName $ mathTypePrefix ++ dimStr
 			components <- forM (take dim vecComponents) $ newName . return
 			return
-				[ dataInstD (sequence []) dataName [elemType] [normalC conName (replicate dim $ return (Unpacked, ConT mathTypeName))] []
+				[ dataInstD (sequence []) dataName [elemType] [normalC conName (replicate dim $ return (Unpacked, ConT mathTypeName))] [''Generic]
 				, funD (mkName $ "vec" ++ dimStr) [clause (map varP components) (normalB $ foldl appE (conE conName) $ map varE components) []]
 				, funD (mkName $ "unvec" ++ dimStr) [clause [conP conName $ map varP components] (normalB $ tupE $ map varE components) []]
 				]
@@ -195,7 +196,7 @@ liftM concat $ forM mathTypeNamesWithPrefix $ \(mathTypeName, mathTypePrefix) ->
 			let conName = mkName $ mathTypePrefix ++ dimStr
 			components <- forM [(i, j) | i <- [1..dimN], j <- [1..dimM]] $ \(i, j) -> newName ['m', intToDigit i, intToDigit j]
 			return
-				[ dataInstD (sequence []) dataName [elemType] [normalC conName (replicate (dimN * dimM) $ return (Unpacked, ConT mathTypeName))] []
+				[ dataInstD (sequence []) dataName [elemType] [normalC conName (replicate (dimN * dimM) $ return (Unpacked, ConT mathTypeName))] [''Generic]
 				, funD (mkName $ "mat" ++ dimStr) [clause (map varP components) (normalB $ foldl appE (conE conName) $ map varE components) []]
 				, funD (mkName $ "unmat" ++ dimStr) [clause [conP conName $ map varP components] (normalB $ tupE $ map varE components) []]
 				]
@@ -621,7 +622,7 @@ liftM concat $ forM mathQuaternionTypeNamesWithPrefix $ \(mathTypeName, mathType
 
 	-- Quaternionized instance
 	quaternionizedInstance <- instanceD (sequence []) [t| Quaternionized $elemType |] =<< addInlines
-		[ newtypeInstD (sequence []) ''Quat [elemType] (normalC conName [liftM (\t -> (NotStrict, t)) [t| Vec4 $elemType |]]) []
+		[ newtypeInstD (sequence []) ''Quat [elemType] (normalC conName [liftM (\t -> (NotStrict, t)) [t| Vec4 $elemType |]]) [''Generic]
 		, funD 'quat [clause [varP v] (normalB [| $(conE conName) $(varE v) |]) []]
 		, funD 'unquat [clause [conP conName [varP v]] (normalB $ varE v) []]
 		]
