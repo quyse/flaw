@@ -34,9 +34,11 @@ import Foreign.Marshal.Alloc
 import Foreign.Marshal.Utils
 import Foreign.Ptr
 import Foreign.Storable
+import Graphics.Rendering.OpenGL.Raw.ARB.DebugOutput
 import Graphics.Rendering.OpenGL.Raw.ARB.TextureStorage
 import Graphics.Rendering.OpenGL.Raw.ARB.UniformBufferObject
-import Graphics.Rendering.OpenGL.Raw.Core43
+import Graphics.Rendering.OpenGL.Raw.ARB.VertexAttribBinding
+import Graphics.Rendering.OpenGL.Raw.Core33
 import Graphics.Rendering.OpenGL.Raw.EXT.TextureCompressionS3TC
 import Graphics.Rendering.OpenGL.Raw.EXT.TextureSRGB
 import qualified SDL.Raw.Types as SDL
@@ -1136,6 +1138,7 @@ data GlCaps = GlCaps
 	, glCapsArbFramebufferObject :: !Bool
 	, glCapsArbTextureStorage :: !Bool
 	, glCapsArbInstancedArrays :: !Bool
+	, glCapsArbDebugOutput :: !Bool
 	} deriving Show
 
 createGlContext :: DeviceId GlSystem -> SdlWindow -> Bool -> IO (GlContext, IO ())
@@ -1155,6 +1158,7 @@ createGlContext _deviceId window@SdlWindow
 	capArbFramebufferObject <- isGlExtensionSupported "GL_ARB_framebuffer_object"
 	capArbTextureStorage <- isGlExtensionSupported "GL_ARB_texture_storage"
 	capArbInstancedArrays <- isGlExtensionSupported "GL_ARB_instanced_arrays"
+	capArbDebugOutput <- isGlExtensionSupported "GL_ARB_debug_output"
 
 	-- create context
 	actualContextState <- glCreateContextState
@@ -1169,6 +1173,7 @@ createGlContext _deviceId window@SdlWindow
 			, glCapsArbFramebufferObject = capArbFramebufferObject
 			, glCapsArbTextureStorage = capArbTextureStorage
 			, glCapsArbInstancedArrays = capArbInstancedArrays
+			, glCapsArbDebugOutput = capArbDebugOutput
 			}
 		, glContextWindow = window
 		, glContextActualState = actualContextState
@@ -1195,9 +1200,7 @@ createGlContext _deviceId window@SdlWindow
 	glCheckErrors 1 "init state"
 
 	-- if debug mode requested, setup debug output
-	if debug then do
-		-- enable debug output
-		glEnable gl_DEBUG_OUTPUT
+	if debug && capArbDebugOutput then do
 		-- set debug message callback
 		callbackPtr <- wrapGlDebugMessageCallback $ \messageSource messageType messageId messageSeverity messageLength messagePtr _userParam -> do
 			-- unfortunately we cannot pattern match against gl_* constants here (as they are not patterns)
@@ -1234,11 +1237,11 @@ createGlContext _deviceId window@SdlWindow
 				"\n  severity:  " ++ messageSeverityStr ++
 				"\n  message:   " ++ T.unpack message ++
 				"\n*** EOM ***"
-		glDebugMessageCallback callbackPtr nullPtr
+		glDebugMessageCallbackARB callbackPtr nullPtr
 		-- enable asynchronous calls to callback
-		glDisable gl_DEBUG_OUTPUT_SYNCHRONOUS
+		glDisable gl_DEBUG_OUTPUT_SYNCHRONOUS_ARB
 		-- enable all debug messages
-		glDebugMessageControl gl_DONT_CARE gl_DONT_CARE gl_DONT_CARE 0 nullPtr 1
+		glDebugMessageControlARB gl_DONT_CARE gl_DONT_CARE gl_DONT_CARE 0 nullPtr 1
 		glCheckErrors 1 "setup debug output"
 	else return ()
 
