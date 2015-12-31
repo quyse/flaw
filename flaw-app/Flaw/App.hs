@@ -40,6 +40,7 @@ type AppInputManager = WebInputManager
 
 #if defined(mingw32_HOST_OS)
 
+import Flaw.BinaryCache
 import Flaw.Graphics
 import Flaw.Graphics.DirectX11
 import Flaw.Graphics.DXGI
@@ -71,7 +72,9 @@ type AppInputManager = SdlInputManager
 
 
 initApp
-	:: T.Text -- ^ Window title.
+	:: BinaryCache c
+	=> c -- ^ Binary cache.
+	-> T.Text -- ^ Window title.
 	-> Int -- ^ Window width.
 	-> Int -- ^ Window height.
 	-> Bool -- ^ Create depth buffer.
@@ -80,7 +83,7 @@ initApp
 		( (AppWindow, AppGraphicsDevice, AppGraphicsContext, AppGraphicsPresenter, AppInputManager)
 		, IO ()
 		)
-initApp title width height needDepth debug = do
+initApp binaryCache title width height needDepth debug = do
 
 	bk <- newBook
 
@@ -105,7 +108,7 @@ initApp title width height needDepth debug = do
 
 	graphicsSystem <- book bk $ dxgiCreateSystem
 	graphicsDevices <- book bk $ getInstalledDevices graphicsSystem
-	(graphicsDevice, graphicsContext) <- book bk $ dx11CreateDevice (fst $ head graphicsDevices) debug
+	(graphicsDevice, graphicsContext) <- book bk $ dx11CreateDevice (fst $ head graphicsDevices) binaryCache debug
 	presenter <- book bk $ dx11CreatePresenter graphicsDevice window Nothing needDepth
 
 #else

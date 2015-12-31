@@ -4,8 +4,11 @@ Description: Class of binary cache.
 License: MIT
 -}
 
+{-# LANGUAGE GADTs #-}
+
 module Flaw.BinaryCache
 	( BinaryCache(..)
+	, SomeBinaryCache(..)
 	, BinaryCacheHashMap(..)
 	, newBinaryCacheHashMap
 	) where
@@ -18,6 +21,9 @@ import Data.IORef
 class BinaryCache c where
 	getCachedBinary :: c -> B.ByteString -> IO B.ByteString
 	setCachedBinary :: c -> B.ByteString -> B.ByteString -> IO ()
+
+data SomeBinaryCache where
+	SomeBinaryCache :: BinaryCache c => c -> SomeBinaryCache
 
 newtype BinaryCacheHashMap = BinaryCacheHashMap (IORef (HM.HashMap B.ByteString B.ByteString))
 

@@ -65,6 +65,8 @@ data Dx11Device = Dx11Device
 	, dx11DeviceImmediateContext :: !ID3D11DeviceContext
 	-- | D3DCompile function.
 	, dx11DeviceD3DCompile :: !D3DCompileProc
+	-- | Shader cache.
+	, dx11DeviceShaderCache :: !SomeBinaryCache
 	-- | Debug mode.
 	, dx11DeviceDebug :: !Bool
 	}
@@ -623,8 +625,9 @@ instance Device Dx11Device where
 	createProgram Dx11Device
 		{ dx11DeviceInterface = deviceInterface
 		, dx11DeviceD3DCompile = d3dCompile
+		, dx11DeviceShaderCache = SomeBinaryCache shaderCache
 		, dx11DeviceDebug = debug
-		} binaryCache program = describeException "failed to create DirectX11 program" $ do
+		} program = describeException "failed to create DirectX11 program" $ do
 
 		-- function to create input layout
 		let createInputLayout attributes vertexShaderByteCode = allocateCOMObject $ B.unsafeUseAsCStringLen vertexShaderByteCode $ \(byteCodePtr, byteCodeSize) -> let
@@ -712,7 +715,7 @@ instance Device Dx11Device where
 			-- get cache key
 			let cacheKey = S.encode (source, entryPoint, profile, flags)
 			-- try to use cache
-			cachedShaderData <- getCachedBinary binaryCache cacheKey
+			cachedShaderData <- getCachedBinary shaderCache cacheKey
 			if B.null cachedShaderData then do
 				-- shader is not in cache, compile it
 				(hr, shaderData, errorsData) <- B.unsafeUseAsCStringLen (T.encodeUtf8 source) $ \(sourcePtr, sourceLen) -> do
@@ -750,7 +753,7 @@ instance Device Dx11Device where
 				if hresultFailed hr then throwIO $ DescribeFirstException ("failed to compile shader", errorsData)
 				else do
 					-- put shader into cache
-					setCachedBinary binaryCache cacheKey shaderData
+					setCachedBinary shaderCache cacheKey shaderData
 					return shaderData
 			else return cachedShaderData
 
@@ -809,8 +812,8 @@ instance Device Dx11Device where
 		return (Dx11UniformBufferId bufferInterface, releaseBufferInterface)
 
 -- | Create DirectX11 device.
-dx11CreateDevice :: DeviceId DXGISystem -> Bool -> IO ((Dx11Device, Dx11Context), IO ())
-dx11CreateDevice (DXGIDeviceId system adapter) debug = describeException "failed to create DirectX11 graphics device" $ withSpecialBook $ \bk -> do
+dx11CreateDevice :: BinaryCache c => DeviceId DXGISystem -> c -> Bool -> IO ((Dx11Device, Dx11Context), IO ())
+dx11CreateDevice (DXGIDeviceId system adapter) shaderCache debug = describeException "failed to create DirectX11 graphics device" $ withSpecialBook $ \bk -> do
 
 	-- create device and context interfaces
 	(deviceInterface, contextInterface) <- book bk $ alloca $ \devicePtr -> alloca $ \deviceContextPtr -> do
@@ -838,6 +841,7 @@ dx11CreateDevice (DXGIDeviceId system adapter) debug = describeException "failed
 		, dx11DeviceInterface = deviceInterface
 		, dx11DeviceImmediateContext = contextInterface
 		, dx11DeviceD3DCompile = d3dCompileProc
+		, dx11DeviceShaderCache = SomeBinaryCache shaderCache
 		, dx11DeviceDebug = debug
 		}
 

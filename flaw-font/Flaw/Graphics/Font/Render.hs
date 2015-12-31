@@ -33,7 +33,6 @@ import Foreign.Marshal.Array
 import Foreign.Ptr
 import Foreign.Storable
 
-import Flaw.BinaryCache
 import Flaw.Book
 import Flaw.Graphics
 import Flaw.Graphics.Blend
@@ -62,8 +61,8 @@ data GlyphSubpixelMode
 	| GlyphSubpixelModeVerticalRGB
 	| GlyphSubpixelModeVerticalBGR
 
-initGlyphRenderer :: (Device d, BinaryCache c) => d -> c -> GlyphSubpixelMode -> IO (GlyphRenderer d, IO ())
-initGlyphRenderer device binaryCache subpixelMode = do
+initGlyphRenderer :: Device d => d -> GlyphSubpixelMode -> IO (GlyphRenderer d, IO ())
+initGlyphRenderer device subpixelMode = do
 	bk <- newBook
 
 	let vbStride = sizeOf (undefined :: Float4)
@@ -102,7 +101,7 @@ initGlyphRenderer device binaryCache subpixelMode = do
 	uPositions <- uniformArray capacity ubs :: IO (Node [Float4])
 	uTexcoords <- uniformArray capacity ubs :: IO (Node [Float4])
 	uColors <- uniformArray capacity ubs :: IO (Node [Float4])
-	program <- book bk $ createProgram device binaryCache $ do
+	program <- book bk $ createProgram device $ do
 		aCorner <- attribute 0 0 0 (AttributeVec4 AttributeFloat32)
 		position <- temp $ uPositions ! instanceId
 		texcoordCoefs <- temp $ uTexcoords ! instanceId

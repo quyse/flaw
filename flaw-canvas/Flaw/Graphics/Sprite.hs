@@ -23,7 +23,6 @@ import Foreign.ForeignPtr.Unsafe
 import Foreign.Ptr
 import Foreign.Storable
 
-import Flaw.BinaryCache
 import Flaw.Book
 import Flaw.Graphics
 import Flaw.Graphics.Blend
@@ -40,8 +39,8 @@ data QuadRenderer d = QuadRenderer
 	, quadRendererBuffer :: !(VSM.IOVector Float4)
 	}
 
-initQuadRenderer :: (Device d, BinaryCache c) => d -> c -> IO (QuadRenderer d, IO ())
-initQuadRenderer device binaryCache = do
+initQuadRenderer :: Device d => d -> IO (QuadRenderer d, IO ())
+initQuadRenderer device = do
 	bk <- newBook
 
 	let capacity = 256;
@@ -65,7 +64,7 @@ initQuadRenderer device binaryCache = do
 		, blendColorOperation = BlendOperationAdd
 		}
 
-	program <- book bk $ createProgram device binaryCache $ do
+	program <- book bk $ createProgram device $ do
 		aVertex <- attribute 0 0 0 (AttributeVec4 AttributeFloat32)
 		texcoord <- temp $ zw__ aVertex
 		rasterize (cvec211 (xy__ aVertex) (constf 0) (constf 1)) $ do

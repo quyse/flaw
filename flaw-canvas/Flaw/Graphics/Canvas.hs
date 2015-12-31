@@ -12,7 +12,6 @@ module Flaw.Graphics.Canvas
 	, drawBorderedRectangle
 	) where
 
-import Flaw.BinaryCache
 import Flaw.Book
 import Flaw.Graphics
 import Flaw.Graphics.Blend
@@ -33,8 +32,8 @@ data Canvas d = Canvas
 	, canvasRenderBorderedRectangle :: forall c. Context c d => Float4 -> Float4 -> Float4 -> Float4 -> Render c ()
 	}
 
-initCanvas :: (Device d, BinaryCache c) => d -> c -> IO (Canvas d, IO ())
-initCanvas device binaryCache = do
+initCanvas :: Device d => d -> IO (Canvas d, IO ())
+initCanvas device = do
 	bk <- newBook
 
 	-- create blend state for usual blending
@@ -78,7 +77,7 @@ initCanvas device binaryCache = do
 	-- uniform with border color
 	uBorderColor <- uniform ubs :: IO (Node Float4)
 	us <- book bk $ createUniformStorage device ubs
-	program <- book bk $ createProgram device binaryCache $ do
+	program <- book bk $ createProgram device $ do
 		aX <- attribute 0 0 0 (AttributeVec4 AttributeFloat32)
 		aY <- attribute 0 16 0 (AttributeVec4 AttributeFloat32)
 		aC <- attribute 0 32 0 (AttributeVec2 AttributeFloat32)

@@ -16,7 +16,6 @@ import Control.Monad
 import qualified Data.ByteString.Lazy as BL
 import Data.Char
 
-import Flaw.BinaryCache
 import Flaw.Book
 import Flaw.Build
 import Flaw.Graphics
@@ -41,11 +40,11 @@ defaultStyleMetrics = Metrics
 	, metricsTitleHeight = 25
 	}
 
-initDefaultStyleDrawer :: (Device d, BinaryCache c) => d -> c -> IO (Drawer d, IO ())
-initDefaultStyleDrawer device binaryCache = withSpecialBook $ \bk -> do
+initDefaultStyleDrawer :: Device d => d -> IO (Drawer d, IO ())
+initDefaultStyleDrawer device = withSpecialBook $ \bk -> do
 
 	-- create glyph renderer
-	glyphRenderer <- book bk $ initGlyphRenderer device binaryCache GlyphSubpixelModeHorizontalRGB
+	glyphRenderer <- book bk $ initGlyphRenderer device GlyphSubpixelModeHorizontalRGB
 
 	-- create free type library
 	freeTypeLibrary <- book bk initFreeType
@@ -71,7 +70,7 @@ initDefaultStyleDrawer device binaryCache = withSpecialBook $ \bk -> do
 	titleFont <- loadFont 16 2 1
 
 	-- create canvas
-	canvas <- book bk $ initCanvas device binaryCache
+	canvas <- book bk $ initCanvas device
 
 	-- color in SRGB space
 	let color q = case q of
