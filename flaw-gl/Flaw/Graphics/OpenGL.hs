@@ -24,10 +24,12 @@ import Data.Coerce
 import Data.Foldable
 import Data.List
 import Data.IORef
+import qualified Data.Serialize as S
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Data.Vector as V
 import qualified Data.Vector.Mutable as VM
+import Data.Word
 import Foreign.C.String
 import Foreign.C.Types
 import Foreign.Marshal.Alloc
@@ -35,6 +37,7 @@ import Foreign.Marshal.Utils
 import Foreign.Ptr
 import Foreign.Storable
 import Graphics.Rendering.OpenGL.Raw.ARB.DebugOutput
+import Graphics.Rendering.OpenGL.Raw.ARB.GetProgramBinary
 import Graphics.Rendering.OpenGL.Raw.ARB.TextureStorage
 import Graphics.Rendering.OpenGL.Raw.ARB.UniformBufferObject
 import Graphics.Rendering.OpenGL.Raw.ARB.VertexAttribBinding
@@ -44,6 +47,7 @@ import Graphics.Rendering.OpenGL.Raw.EXT.TextureSRGB
 import qualified SDL.Raw.Types as SDL
 import qualified SDL.Raw.Video as SDL
 
+import Flaw.BinaryCache
 import Flaw.Book
 import Flaw.Exception
 import Flaw.Graphics
@@ -576,11 +580,12 @@ instance Device GlContext where
 		{ glContextCaps = GlCaps
 			{ glCapsArbUniformBufferObject = useUniformBufferObject
 			, glCapsArbVertexAttribBinding = capArbVertexAttribBinding
+			, glCapsArbGetProgramBinary = capArbGetProgramBinary
 			}
 		, glContextActualState = GlContextState
 			{ glContextStateProgram = actualProgramRef
 			}
-		} program = glInvoke context $ describeException "failed to create OpenGL program" $ do
+		} binaryCache program = glInvoke context $ describeException "failed to create OpenGL program" $ do
 
 		-- reset current program in order to correctly rebind it later for drawing
 		writeIORef actualProgramRef glNullProgram
@@ -595,7 +600,7 @@ instance Device GlContext where
 			, glslConfigUniformBlocks = useUniformBufferObject
 			, glslConfigInOutSyntax = True
 			}
-		GlslProgram
+		glslProgram@GlslProgram
 			{ glslProgramAttributes = attributes
 			, glslProgramUniformBlocks = uniformBlocks
 			, glslProgramUniforms = uniforms
@@ -609,98 +614,134 @@ instance Device GlContext where
 			p <- glCreateProgram
 			return (p, glDeleteProgram p)
 
-		-- create and attach shaders
-		forM_ shaders $ \(shaderStage, shaderSource) -> describeException ("failed to create OpenGL shader", shaderStage) $ do
+		-- if binary programs are supported, try to use binary cache
+		let cacheKey = S.encode glslProgram
+		binaryLoaded <- if capArbGetProgramBinary then do
+			encodedBinaryProgram <- getCachedBinary binaryCache cacheKey
+			case S.decode encodedBinaryProgram of
+				Right binaryProgram -> do
+					let (bytes, format) = binaryProgram :: BinaryProgram
+					-- load binary program
+					B.unsafeUseAsCStringLen bytes $ \(bytesPtr, bytesLen) -> glProgramBinary programName (fromIntegral format) bytesPtr (fromIntegral bytesLen)
+					glCheckErrors 1 "load binary program"
+					-- check link status
+					status <- alloca $ \statusPtr -> do
+						glGetProgramiv programName gl_LINK_STATUS statusPtr
+						glCheckErrors 0 "get program link status"
+						peek statusPtr
+					return $ status == 1
+				Left _err -> return False
+		else return False
 
-			-- create shader
-			shaderName <- glCreateShader $ case shaderStage of
-				GlslVertexStage -> gl_VERTEX_SHADER
-				GlslFragmentStage -> gl_FRAGMENT_SHADER
-			glCheckErrors 0 "create shader"
-			_ <- book bk $ return (shaderName, glDeleteShader shaderName)
+		-- if binary program is not loaded, compile and link from source
+		when (not binaryLoaded) $ do
+			-- create and attach shaders
+			forM_ shaders $ \(shaderStage, shaderSource) -> describeException ("failed to create OpenGL shader", shaderStage) $ do
 
-			-- set shader source
-			B.unsafeUseAsCStringLen (T.encodeUtf8 shaderSource) $ \(sourcePtr, sourceLen) -> do
-				with sourcePtr $ \sourcePtrPtr -> do
-					with (fromIntegral sourceLen) $ \sourceLenPtr -> do
-						glShaderSource shaderName 1 sourcePtrPtr sourceLenPtr
-			glCheckErrors 0 "set shader source"
+				-- create shader
+				shaderName <- glCreateShader $ case shaderStage of
+					GlslVertexStage -> gl_VERTEX_SHADER
+					GlslFragmentStage -> gl_FRAGMENT_SHADER
+				glCheckErrors 0 "create shader"
+				_ <- book bk $ return (shaderName, glDeleteShader shaderName)
 
-			-- compile shader
-			glCompileShader shaderName
-			glCheckErrors 0 "compile shader"
-			-- check compilation status
+				-- set shader source
+				B.unsafeUseAsCStringLen (T.encodeUtf8 shaderSource) $ \(sourcePtr, sourceLen) -> do
+					with sourcePtr $ \sourcePtrPtr -> do
+						with (fromIntegral sourceLen) $ \sourceLenPtr -> do
+							glShaderSource shaderName 1 sourcePtrPtr sourceLenPtr
+				glCheckErrors 0 "set shader source"
+
+				-- compile shader
+				glCompileShader shaderName
+				glCheckErrors 0 "compile shader"
+				-- check compilation status
+				status <- alloca $ \statusPtr -> do
+					glGetShaderiv shaderName gl_COMPILE_STATUS statusPtr
+					glCheckErrors 0 "get shader compile status"
+					peek statusPtr
+				if status == 1 then do
+					-- compilation succeeded, attach shader to program
+					glAttachShader programName shaderName
+					glCheckErrors 0 "attach shader"
+				else do
+					-- in case of error, get compilation log
+					logLength <- alloca $ \logLengthPtr -> do
+						poke logLengthPtr 0
+						glGetShaderiv shaderName gl_INFO_LOG_LENGTH logLengthPtr
+						glCheckErrors 0 "get shader log length"
+						peek logLengthPtr
+					logBytes <- allocaBytes (fromIntegral logLength) $ \logPtr -> do
+						realLogLength <- alloca $ \logLengthPtr -> do
+							glGetShaderInfoLog shaderName logLength logLengthPtr logPtr
+							glCheckErrors 0 "get shader log"
+							peek logLengthPtr
+						B.packCStringLen (logPtr, fromIntegral realLogLength)
+					glClearErrors
+					putStrLn $ T.unpack shaderSource -- TEST
+					throwIO $ DescribeFirstException ("failed to compile shader", T.decodeUtf8 logBytes)
+
+			-- bind attributes
+			forM_ (zip attributes [0..]) $ \(GlslAttribute
+				{ glslAttributeName = attributeName
+				}, i) -> do
+				B.useAsCString (T.encodeUtf8 attributeName) $ glBindAttribLocation programName i
+				glCheckErrors 0 "bind attribute location"
+
+			-- bind fragment targets
+			forM_ fragmentTargets $ \fragmentTarget -> case fragmentTarget of
+				GlslFragmentTarget
+					{ glslFragmentTargetName = targetName
+					, glslFragmentTargetIndex = targetIndex
+					} -> do
+					B.useAsCString (T.encodeUtf8 targetName) $ glBindFragDataLocation programName (fromIntegral targetIndex)
+					glCheckErrors 0 "bind frag data location"
+				GlslDualFragmentTarget
+					{ glslFragmentTargetName0 = targetName0
+					, glslFragmentTargetName1 = targetName1
+					} -> do
+					B.useAsCString (T.encodeUtf8 targetName0) $ glBindFragDataLocationIndexed programName 0 0
+					B.useAsCString (T.encodeUtf8 targetName1) $ glBindFragDataLocationIndexed programName 0 1
+					glCheckErrors 0 "bind frag data location indexed"
+
+			-- link program
+			glLinkProgram programName
+			glCheckErrors 0 "link program"
+			-- check link status
 			status <- alloca $ \statusPtr -> do
-				glGetShaderiv shaderName gl_COMPILE_STATUS statusPtr
-				glCheckErrors 0 "get shader compile status"
+				glGetProgramiv programName gl_LINK_STATUS statusPtr
+				glCheckErrors 0 "get program link status"
 				peek statusPtr
 			if status == 1 then do
-				-- compilation succeeded, attach shader to program
-				glAttachShader programName shaderName
-				glCheckErrors 0 "attach shader"
+				-- save binary program into cache
+				when capArbGetProgramBinary $ do
+					len <- alloca $ \lenPtr -> do
+						glGetProgramiv programName gl_PROGRAM_BINARY_LENGTH lenPtr
+						glCheckErrors 0 "get binary program length"
+						liftM fromIntegral $ peek lenPtr
+					when (len > 0) $ do
+						bytesPtr <- mallocBytes len
+						binaryProgram <- alloca $ \formatPtr -> do
+							glGetProgramBinary programName (fromIntegral len) nullPtr formatPtr bytesPtr
+							bytes <- B.unsafePackMallocCStringLen (bytesPtr, len)
+							glCheckErrors 0 "get program binary"
+							format <- peek formatPtr
+							return (bytes, fromIntegral format)
+						setCachedBinary binaryCache cacheKey $ S.encode (binaryProgram :: BinaryProgram)
 			else do
-				-- in case of error, get compilation log
+				-- in case of error, get linking log
 				logLength <- alloca $ \logLengthPtr -> do
-					poke logLengthPtr 0
-					glGetShaderiv shaderName gl_INFO_LOG_LENGTH logLengthPtr
-					glCheckErrors 0 "get shader log length"
+					glGetProgramiv programName gl_INFO_LOG_LENGTH logLengthPtr
+					glCheckErrors 0 "get program log length"
 					peek logLengthPtr
 				logBytes <- allocaBytes (fromIntegral logLength) $ \logPtr -> do
 					realLogLength <- alloca $ \logLengthPtr -> do
-						glGetShaderInfoLog shaderName logLength logLengthPtr logPtr
-						glCheckErrors 0 "get shader log"
+						glGetProgramInfoLog programName logLength logLengthPtr logPtr
+						glCheckErrors 0 "get program log"
 						peek logLengthPtr
 					B.packCStringLen (logPtr, fromIntegral realLogLength)
 				glClearErrors
-				putStrLn $ T.unpack shaderSource -- TEST
-				throwIO $ DescribeFirstException ("failed to compile shader", T.decodeUtf8 logBytes)
-
-		-- bind attributes
-		forM_ (zip attributes [0..]) $ \(GlslAttribute
-			{ glslAttributeName = attributeName
-			}, i) -> do
-			B.useAsCString (T.encodeUtf8 attributeName) $ glBindAttribLocation programName i
-			glCheckErrors 0 "bind attribute location"
-
-		-- bind fragment targets
-		forM_ fragmentTargets $ \fragmentTarget -> case fragmentTarget of
-			GlslFragmentTarget
-				{ glslFragmentTargetName = targetName
-				, glslFragmentTargetIndex = targetIndex
-				} -> do
-				B.useAsCString (T.encodeUtf8 targetName) $ glBindFragDataLocation programName (fromIntegral targetIndex)
-				glCheckErrors 0 "bind frag data location"
-			GlslDualFragmentTarget
-				{ glslFragmentTargetName0 = targetName0
-				, glslFragmentTargetName1 = targetName1
-				} -> do
-				B.useAsCString (T.encodeUtf8 targetName0) $ glBindFragDataLocationIndexed programName 0 0
-				B.useAsCString (T.encodeUtf8 targetName1) $ glBindFragDataLocationIndexed programName 0 1
-				glCheckErrors 0 "bind frag data location indexed"
-
-		-- link program
-		glLinkProgram programName
-		glCheckErrors 0 "link program"
-		-- check link status
-		status <- alloca $ \statusPtr -> do
-			glGetProgramiv programName gl_LINK_STATUS statusPtr
-			glCheckErrors 0 "get program link status"
-			peek statusPtr
-		if status == 1 then return ()
-		else do
-			-- in case of error, get linking log
-			logLength <- alloca $ \logLengthPtr -> do
-				glGetProgramiv programName gl_INFO_LOG_LENGTH logLengthPtr
-				glCheckErrors 0 "get program log length"
-				peek logLengthPtr
-			logBytes <- allocaBytes (fromIntegral logLength) $ \logPtr -> do
-				realLogLength <- alloca $ \logLengthPtr -> do
-					glGetProgramInfoLog programName logLength logLengthPtr logPtr
-					glCheckErrors 0 "get program log"
-					peek logLengthPtr
-				B.packCStringLen (logPtr, fromIntegral realLogLength)
-			glClearErrors
-			throwIO $ DescribeFirstException ("failed to link program", T.decodeUtf8 logBytes)
+				throwIO $ DescribeFirstException ("failed to link program", T.decodeUtf8 logBytes)
 
 		-- set as current
 		glUseProgram programName
@@ -1139,6 +1180,7 @@ data GlCaps = GlCaps
 	, glCapsArbTextureStorage :: !Bool
 	, glCapsArbInstancedArrays :: !Bool
 	, glCapsArbDebugOutput :: !Bool
+	, glCapsArbGetProgramBinary :: !Bool
 	} deriving Show
 
 createGlContext :: DeviceId GlSystem -> SdlWindow -> Bool -> IO (GlContext, IO ())
@@ -1159,6 +1201,7 @@ createGlContext _deviceId window@SdlWindow
 	capArbTextureStorage <- isGlExtensionSupported "GL_ARB_texture_storage"
 	capArbInstancedArrays <- isGlExtensionSupported "GL_ARB_instanced_arrays"
 	capArbDebugOutput <- isGlExtensionSupported "GL_ARB_debug_output"
+	capArbGetProgramBinary <- isGlExtensionSupported "GL_ARB_get_program_binary"
 
 	-- create context
 	actualContextState <- glCreateContextState
@@ -1174,6 +1217,7 @@ createGlContext _deviceId window@SdlWindow
 			, glCapsArbTextureStorage = capArbTextureStorage
 			, glCapsArbInstancedArrays = capArbInstancedArrays
 			, glCapsArbDebugOutput = capArbDebugOutput
+			, glCapsArbGetProgramBinary = capArbGetProgramBinary
 			}
 		, glContextWindow = window
 		, glContextActualState = actualContextState
@@ -1883,3 +1927,6 @@ glClearErrors = do
 -- Increase this number to do less checks.
 glErrorLevel :: Int
 glErrorLevel = 0
+
+-- | Declaration for easier type annotation.
+type BinaryProgram = (B.ByteString, Word64)

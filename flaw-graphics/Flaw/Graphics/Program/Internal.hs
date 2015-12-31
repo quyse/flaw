@@ -4,7 +4,7 @@ Description: Internals for shader program support.
 License: MIT
 -}
 
-{-# LANGUAGE GADTs, FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, RankNTypes, ScopedTypeVariables, StandaloneDeriving, TemplateHaskell, TypeFamilies, UndecidableInstances #-}
+{-# LANGUAGE DeriveGeneric, GADTs, FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, RankNTypes, ScopedTypeVariables, StandaloneDeriving, TemplateHaskell, TypeFamilies, UndecidableInstances #-}
 
 module Flaw.Graphics.Program.Internal
 	( ScalarType(..)
@@ -40,6 +40,8 @@ import Data.Char
 import Data.Int
 import Data.Word
 import Data.IORef
+import qualified Data.Serialize as S
+import GHC.Generics(Generic)
 import Language.Haskell.TH
 
 import Flaw.Math
@@ -52,7 +54,8 @@ data ScalarType
 	| ScalarInt
 	| ScalarUint
 	| ScalarBool
-	deriving (Eq, Ord, Show)
+	deriving (Eq, Ord, Show, Generic)
+instance S.Serialize ScalarType
 
 -- | Supported dimensions in programs.
 data Dimension
@@ -60,14 +63,16 @@ data Dimension
 	| Dimension2
 	| Dimension3
 	| Dimension4
-	deriving (Eq, Ord, Show)
+	deriving (Eq, Ord, Show, Generic)
+instance S.Serialize Dimension
 
 -- | Supported types in programs.
 data ValueType
 	= ScalarValueType !ScalarType
 	| VectorValueType !Dimension !ScalarType
 	| MatrixValueType !Dimension !Dimension !ScalarType
-	deriving (Eq, Ord, Show)
+	deriving (Eq, Ord, Show, Generic)
+instance S.Serialize ValueType
 
 -- | Number of scalars in type.
 valueTypeScalarsCount :: ValueType -> Int
@@ -184,13 +189,15 @@ data AttributeType
 	| ATMat4x2 !AttributeType
 	| ATMat4x3 !AttributeType
 	| ATMat4x4 !AttributeType
-	deriving (Eq, Ord, Show)
+	deriving (Eq, Ord, Show, Generic)
+instance S.Serialize AttributeType
 
 -- | Normalization mode.
 data Normalization
 	= NonNormalized
 	| Normalized
-	deriving (Eq, Ord, Show)
+	deriving (Eq, Ord, Show, Generic)
+instance S.Serialize Normalization
 
 instance OfAttributeType Float where
 	data AttributeFormat Float
@@ -260,28 +267,32 @@ data Attribute = Attribute
 	, attributeDivisor :: !Int
 	, attributeType :: !AttributeType
 	, attributeValueType :: !ValueType
-	} deriving (Eq, Ord, Show)
+	} deriving (Eq, Ord, Show, Generic)
+instance S.Serialize Attribute
 
 data Uniform = Uniform
 	{ uniformSlot :: !Int
 	, uniformOffset :: !Int
 	, uniformSize :: !Int
 	, uniformType :: !ValueType
-	} deriving (Eq, Ord, Show)
+	} deriving (Eq, Ord, Show, Generic)
+instance S.Serialize Uniform
 
 data Sampler = Sampler
 	{ samplerSlot :: !Int
 	, samplerDimension :: !SamplerDimension
 	, samplerSampleType :: !ValueType
 	, samplerCoordsType :: !ValueType
-	} deriving (Eq, Ord, Show)
+	} deriving (Eq, Ord, Show, Generic)
+instance S.Serialize Sampler
 
 data SamplerDimension
 	= Sampler1D
 	| Sampler2D
 	| Sampler3D
 	| SamplerCube
-	deriving (Eq, Ord, Show)
+	deriving (Eq, Ord, Show, Generic)
+instance S.Serialize SamplerDimension
 
 data Target
 	= PositionTarget (Node Float4)

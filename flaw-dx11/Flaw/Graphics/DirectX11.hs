@@ -622,7 +622,7 @@ instance Device Dx11Device where
 		{ dx11DeviceInterface = deviceInterface
 		, dx11DeviceD3DCompile = d3dCompile
 		, dx11DeviceDebug = debug
-		} program = describeException "failed to create DirectX11 program" $ do
+		} _binaryCache program = describeException "failed to create DirectX11 program" $ do
 
 		-- function to create input layout
 		let createInputLayout attributes vertexShaderByteCode = allocateCOMObject $ B.unsafeUseAsCStringLen vertexShaderByteCode $ \(byteCodePtr, byteCodeSize) -> let

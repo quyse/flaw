@@ -4,7 +4,7 @@ Description: GLSL generator for WebGL graphics.
 License: MIT
 -}
 
-{-# LANGUAGE GADTs, OverloadedStrings, TypeFamilies #-}
+{-# LANGUAGE DeriveGeneric, GADTs, OverloadedStrings, TypeFamilies #-}
 
 module Flaw.Graphics.GLSL
 	( GlslConfig(..)
@@ -21,9 +21,12 @@ module Flaw.Graphics.GLSL
 
 import Data.List
 import Data.Monoid
+import qualified Data.Serialize as S
+import Data.Serialize.Text()
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import Data.Text.Lazy.Builder
+import GHC.Generics(Generic)
 
 import Flaw.Graphics.Program.Internal
 import qualified Flaw.Graphics.Program.SL as SL
@@ -56,7 +59,8 @@ glslWebGLConfig = GlslConfig
 data GlslAttribute = GlslAttribute
 	{ glslAttributeName :: !T.Text
 	, glslAttributeInfo :: Attribute
-	} deriving Show
+	} deriving (Show, Generic)
+instance S.Serialize GlslAttribute
 
 -- | Information for binding uniform block to slot.
 -- It might be multiple uniform blocks bound to a single slot
@@ -64,19 +68,22 @@ data GlslAttribute = GlslAttribute
 data GlslUniformBlock = GlslUniformBlock
 	{ glslUniformBlockName :: !T.Text
 	, glslUniformBlockSlot :: !Int
-	} deriving Show
+	} deriving (Show, Generic)
+instance S.Serialize GlslUniformBlock
 
 -- | Uniform used by shader.
 data GlslUniform = GlslUniform
 	{ glslUniformName :: !T.Text
 	, glslUniformInfo :: Uniform
-	} deriving Show
+	} deriving (Show, Generic)
+instance S.Serialize GlslUniform
 
 -- | Sampler used by shader.
 data GlslSampler = GlslSampler
 	{ glslSamplerName :: !T.Text
 	, glslSamplerInfo :: Sampler
-	} deriving Show
+	} deriving (Show, Generic)
+instance S.Serialize GlslSampler
 
 -- | Fragment target outputted by shader.
 data GlslFragmentTarget
@@ -88,12 +95,14 @@ data GlslFragmentTarget
 	{ glslFragmentTargetName0 :: !T.Text
 	, glslFragmentTargetName1 :: !T.Text
 	}
-	deriving Show
+	deriving (Show, Generic)
+instance S.Serialize GlslFragmentTarget
 
 data GlslStage
 	= GlslVertexStage
 	| GlslFragmentStage
-	deriving Show
+	deriving (Show, Generic)
+instance S.Serialize GlslStage
 
 -- | GLSL program.
 data GlslProgram = GlslProgram
@@ -103,7 +112,8 @@ data GlslProgram = GlslProgram
 	, glslProgramSamplers :: [GlslSampler]
 	, glslProgramFragmentTargets :: [GlslFragmentTarget]
 	, glslProgramShaders :: [(GlslStage, T.Text)]
-	} deriving Show
+	} deriving (Show, Generic)
+instance S.Serialize GlslProgram
 
 -- | Generate shader programs in GLSL.
 glslGenerateProgram :: GlslConfig -> State -> GlslProgram

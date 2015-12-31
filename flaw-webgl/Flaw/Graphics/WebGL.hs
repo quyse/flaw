@@ -164,7 +164,7 @@ instance Device WebGLDevice where
 
 	createProgram device@WebGLDevice
 		{ webglDeviceContext = jsContext
-		} program = describeException "failed to create WebGL program" $ do
+		} _binaryCache program = describeException "failed to create WebGL program" $ do
 
 		let createShader source shaderType = describeException "failed to create WebGL shader" $ do
 			jsShader <- js_createShader jsContext shaderType

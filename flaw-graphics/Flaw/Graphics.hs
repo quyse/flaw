@@ -49,6 +49,7 @@ import Control.Monad.Trans.Reader
 import qualified Data.ByteString as B
 import qualified Data.Text as T
 
+import Flaw.BinaryCache
 import Flaw.Graphics.Blend
 import Flaw.Graphics.Program.Internal
 import Flaw.Graphics.Sampler
@@ -149,7 +150,9 @@ class Device d where
 	createStaticIndexBuffer :: d -> B.ByteString -> Bool -> IO (IndexBufferId d, IO ())
 	-- | Create program.
 	createProgram
-		:: d -- ^ Device.
+		:: BinaryCache c
+		=> d -- ^ Device.
+		-> c -- ^ Binary program cache.
 		-> Program () -- ^ Program contents.
 		-> IO (ProgramId d, IO ())
 	-- | Create uniform buffer.
