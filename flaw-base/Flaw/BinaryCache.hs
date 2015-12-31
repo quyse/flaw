@@ -9,6 +9,7 @@ License: MIT
 module Flaw.BinaryCache
 	( BinaryCache(..)
 	, SomeBinaryCache(..)
+	, NullBinaryCache(..)
 	, BinaryCacheHashMap(..)
 	, newBinaryCacheHashMap
 	) where
@@ -24,6 +25,12 @@ class BinaryCache c where
 
 data SomeBinaryCache where
 	SomeBinaryCache :: BinaryCache c => c -> SomeBinaryCache
+
+data NullBinaryCache = NullBinaryCache
+
+instance BinaryCache NullBinaryCache where
+	getCachedBinary _ _ = return B.empty
+	setCachedBinary _ _ _ = return ()
 
 newtype BinaryCacheHashMap = BinaryCacheHashMap (IORef (HM.HashMap B.ByteString B.ByteString))
 
