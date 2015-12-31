@@ -9,23 +9,23 @@ FLAW is a highly experimental game engine written in Haskell. In very early stag
 
 * Platform support: Windows, Linux, web (via GHCJS)
 * Abstracted graphics API: DirectX 11, OpenGL, WebGL
-* Cross-API Haskell inline shaders (similar to Inanity's C++ inline shaders) translated to HLSL and GLSL
-* TH-generated math library
+* Abstracted inline shaders in Haskell, with HLSL and GLSL backends
+* TH-generated math library, with efficient unboxed fixed-length vectors/matrices
 * TH-based game build, type-safe game assets
-* Low-level user input (Raw Input on Windows, SDL on Linux)
-* Simple windowing
-* FreeType and Harfbuzz integration, antialiased text rendering
+* Low-level user input library (via Raw Input on Windows, SDL on Linux, browser DOM APIs on Web)
+* Simple windowing API
+* Fast text rendering with subpixel anti-aliasing
 * Collada import (rigid and skinned geometries, animations)
 
-## Planned
+## In progress
 
-* GUI framework.
+* High-level GUI framework made from scratch (i.e. neither using native GUIs nor frameworks like Qt)
 
 ## Dreams
 
 * TH-generated bindings for scripting languages
 * Type-safe multiplayer framework
-* Asset Editor based on ideas of [Inanity Oil](https://github.com/quyse/oil)
+* Real-time collaborative asset editor
 
 ## Demo
 
