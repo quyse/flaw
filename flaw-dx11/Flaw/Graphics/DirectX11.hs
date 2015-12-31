@@ -18,12 +18,13 @@ import Control.Exception
 import Control.Monad
 import Data.Bits
 import qualified Data.ByteString as B
-import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString.Unsafe as B
 import qualified Data.HashMap.Strict as HM
 import Data.IORef
 import Data.List
 import Data.Maybe
+import qualified Data.Serialize as S
+import Data.Serialize.Text()
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Data.Vector as V
@@ -34,6 +35,7 @@ import Foreign.Marshal.Utils
 import Foreign.Ptr
 import Foreign.Storable
 
+import Flaw.BinaryCache
 import Flaw.Book
 import Flaw.Exception
 import Flaw.FFI
@@ -622,7 +624,7 @@ instance Device Dx11Device where
 		{ dx11DeviceInterface = deviceInterface
 		, dx11DeviceD3DCompile = d3dCompile
 		, dx11DeviceDebug = debug
-		} _binaryCache program = describeException "failed to create DirectX11 program" $ do
+		} binaryCache program = describeException "failed to create DirectX11 program" $ do
 
 		-- function to create input layout
 		let createInputLayout attributes vertexShaderByteCode = allocateCOMObject $ B.unsafeUseAsCStringLen vertexShaderByteCode $ \(byteCodePtr, byteCodeSize) -> let
@@ -702,44 +704,55 @@ instance Device Dx11Device where
 			, hlslShaderEntryPoint = entryPoint
 			, hlslShaderProfile = profile
 			} = describeException ("failed to compile shader", source, entryPoint, profile) $ do
+			-- calculate flags
 			let optimize = not debug
 			let flags = fromIntegral $ (fromEnum D3DCOMPILE_ENABLE_STRICTNESS) .|. (fromEnum D3DCOMPILE_PACK_MATRIX_COLUMN_MAJOR)
 				.|. (if debug then fromEnum D3DCOMPILE_DEBUG else 0)
 				.|. (if optimize then fromEnum D3DCOMPILE_OPTIMIZATION_LEVEL3 else (fromEnum D3DCOMPILE_OPTIMIZATION_LEVEL0) .|. (fromEnum D3DCOMPILE_SKIP_OPTIMIZATION))
-			(hr, shaderData, errorsData) <- B.unsafeUseAsCStringLen (T.encodeUtf8 source) $ \(sourcePtr, sourceLen) -> do
-				B.useAsCString (T.encodeUtf8 entryPoint) $ \entryPointPtr -> do
-					B.useAsCString (T.encodeUtf8 profile) $ \profilePtr -> do
-						alloca $ \shaderBlobPtrPtr -> do
-							alloca $ \errorsBlobPtrPtr -> do
-								hr <- d3dCompile
-									(castPtr sourcePtr) -- pSrcData
-									(fromIntegral sourceLen) -- SrcDataSize
-									nullPtr -- pSourceName
-									nullPtr -- pDefines
-									nullPtr -- pInclude
-									entryPointPtr -- pEntrypoint
-									profilePtr -- pTarget
-									flags -- Flags1
-									0 -- Flags2
-									shaderBlobPtrPtr -- ppCode
-									errorsBlobPtrPtr -- ppErrorMsgs
-								-- retrieve blobs
-								let getBlobData blobPtrPtr = do
-									blobPtr <- peek blobPtrPtr
-									if blobPtr == nullPtr then return B.empty
-									else do
-										blobInterface <- peekCOMObject blobPtr
-										dataPtr <- m_ID3DBlob_GetBufferPointer blobInterface
-										dataSize <- liftM fromIntegral $ m_ID3DBlob_GetBufferSize blobInterface
-										dataCopyPtr <- mallocBytes dataSize
-										copyArray dataCopyPtr (castPtr dataPtr) dataSize
-										_ <- m_IUnknown_Release blobInterface
-										B.unsafePackMallocCStringLen (dataCopyPtr, dataSize)
-								shaderData <- getBlobData shaderBlobPtrPtr
-								errorsData <- getBlobData errorsBlobPtrPtr
-								return (hr, shaderData, errorsData)
-			if hresultFailed hr then fail $ "failed to compile shader: " ++ BC.unpack errorsData
-			else return shaderData
+			-- get cache key
+			let cacheKey = S.encode (source, entryPoint, profile, flags)
+			-- try to use cache
+			cachedShaderData <- getCachedBinary binaryCache cacheKey
+			if B.null cachedShaderData then do
+				-- shader is not in cache, compile it
+				(hr, shaderData, errorsData) <- B.unsafeUseAsCStringLen (T.encodeUtf8 source) $ \(sourcePtr, sourceLen) -> do
+					B.useAsCString (T.encodeUtf8 entryPoint) $ \entryPointPtr -> do
+						B.useAsCString (T.encodeUtf8 profile) $ \profilePtr -> do
+							alloca $ \shaderBlobPtrPtr -> do
+								alloca $ \errorsBlobPtrPtr -> do
+									hr <- d3dCompile
+										(castPtr sourcePtr) -- pSrcData
+										(fromIntegral sourceLen) -- SrcDataSize
+										nullPtr -- pSourceName
+										nullPtr -- pDefines
+										nullPtr -- pInclude
+										entryPointPtr -- pEntrypoint
+										profilePtr -- pTarget
+										flags -- Flags1
+										0 -- Flags2
+										shaderBlobPtrPtr -- ppCode
+										errorsBlobPtrPtr -- ppErrorMsgs
+									-- retrieve blobs
+									let getBlobData blobPtrPtr = do
+										blobPtr <- peek blobPtrPtr
+										if blobPtr == nullPtr then return B.empty
+										else do
+											blobInterface <- peekCOMObject blobPtr
+											dataPtr <- m_ID3DBlob_GetBufferPointer blobInterface
+											dataSize <- liftM fromIntegral $ m_ID3DBlob_GetBufferSize blobInterface
+											dataCopyPtr <- mallocBytes dataSize
+											copyArray dataCopyPtr (castPtr dataPtr) dataSize
+											_ <- m_IUnknown_Release blobInterface
+											B.unsafePackMallocCStringLen (dataCopyPtr, dataSize)
+									shaderData <- getBlobData shaderBlobPtrPtr
+									errorsData <- getBlobData errorsBlobPtrPtr
+									return (hr, shaderData, errorsData)
+				if hresultFailed hr then throwIO $ DescribeFirstException ("failed to compile shader", errorsData)
+				else do
+					-- put shader into cache
+					setCachedBinary binaryCache cacheKey shaderData
+					return shaderData
+			else return cachedShaderData
 
 		-- function to create vertex shader
 		let createVertexShader bytecode = allocateCOMObject $ do
