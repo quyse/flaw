@@ -113,6 +113,8 @@ data GlContext = GlContext
 	, glContextDesiredState :: GlContextState
 	-- | Number of manually bound attributes.
 	, glContextBoundAttributesCount :: !(IORef Int)
+	-- | Binary program cache.
+	, glContextProgramCache :: !SomeBinaryCache
 	}
 
 data GlContextState = GlContextState
@@ -585,7 +587,8 @@ instance Device GlContext where
 		, glContextActualState = GlContextState
 			{ glContextStateProgram = actualProgramRef
 			}
-		} binaryCache program = glInvoke context $ describeException "failed to create OpenGL program" $ do
+		, glContextProgramCache = SomeBinaryCache programCache
+		} program = glInvoke context $ describeException "failed to create OpenGL program" $ do
 
 		-- reset current program in order to correctly rebind it later for drawing
 		writeIORef actualProgramRef glNullProgram
@@ -617,7 +620,7 @@ instance Device GlContext where
 		-- if binary programs are supported, try to use binary cache
 		let cacheKey = S.encode glslProgram
 		binaryLoaded <- if capArbGetProgramBinary then do
-			encodedBinaryProgram <- getCachedBinary binaryCache cacheKey
+			encodedBinaryProgram <- getCachedBinary programCache cacheKey
 			case S.decode encodedBinaryProgram of
 				Right binaryProgram -> do
 					let (bytes, format) = binaryProgram :: BinaryProgram
@@ -727,7 +730,7 @@ instance Device GlContext where
 							glCheckErrors 0 "get program binary"
 							format <- peek formatPtr
 							return (bytes, fromIntegral format)
-						setCachedBinary binaryCache cacheKey $ S.encode (binaryProgram :: BinaryProgram)
+						setCachedBinary programCache cacheKey $ S.encode (binaryProgram :: BinaryProgram)
 			else do
 				-- in case of error, get linking log
 				logLength <- alloca $ \logLengthPtr -> do
@@ -1183,11 +1186,11 @@ data GlCaps = GlCaps
 	, glCapsArbGetProgramBinary :: !Bool
 	} deriving Show
 
-createGlContext :: DeviceId GlSystem -> SdlWindow -> Bool -> IO (GlContext, IO ())
+createGlContext :: BinaryCache c => DeviceId GlSystem -> SdlWindow -> c -> Bool -> IO (GlContext, IO ())
 createGlContext _deviceId window@SdlWindow
 	{ swSystem = ws
 	, swHandle = windowHandle
-	} debug = describeException "failed to create OpenGL device" $ invokeSdlWindowSystem ws $ do
+	} programCache debug = describeException "failed to create OpenGL device" $ invokeSdlWindowSystem ws $ do
 	-- create context
 	glContext <- checkSdlResult $ SDL.glCreateContext windowHandle
 	-- make it current
@@ -1223,6 +1226,7 @@ createGlContext _deviceId window@SdlWindow
 		, glContextActualState = actualContextState
 		, glContextDesiredState = desiredContextState
 		, glContextBoundAttributesCount = boundAttributesCount
+		, glContextProgramCache = SomeBinaryCache programCache
 		}
 
 	-- set swap interval

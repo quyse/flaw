@@ -22,6 +22,7 @@ import qualified Data.Text as T
 import Data.Time
 import Data.Typeable
 
+import Flaw.BinaryCache
 import Flaw.Book
 
 #if defined(ghcjs_HOST_OS)
@@ -120,7 +121,7 @@ initApp binaryCache title width height needDepth debug = do
 
 	graphicsSystem <- book bk createGlSystem
 	graphicsDevices <- book bk $ getInstalledDevices graphicsSystem
-	graphicsContext <- book bk $ createGlContext (fst $ head graphicsDevices) window debug
+	graphicsContext <- book bk $ createGlContext (fst $ head graphicsDevices) window binaryCache debug
 	let graphicsDevice = graphicsContext
 	let presenter = graphicsContext
 
