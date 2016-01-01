@@ -1,4 +1,4 @@
-resolver: lts-3.18
+resolver: lts-3.20
 
 packages:
 - flaw-app
@@ -30,10 +30,6 @@ packages:
 - flaw-webgl
 - flaw-window
 - location:
-    git: https://github.com/quyse/sdl2
-    commit: 8a5b603288a2242a7c342a2238fe3ef7ccbbee4f
-  extra-dep: true
-- location:
     git: https://github.com/ghcjs/ghcjs-base
     commit: 23b1311a98c7981c7b98ac7d37a6fa9456c893d5
   extra-dep: true
@@ -46,7 +42,7 @@ extra-deps:
 - OpenGLRaw-2.6.0.0
 - vector-0.11.0.0
 - cereal-text-0.1.0.1
-#- sdl2-2.1.0 # temporarily removed in order to use unreleased sdl2 version
+- sdl2-2.1.1
 
 ghc-options:
   "*": -O3 -threaded -with-rtsopts=-N -Wall -fno-warn-unsupported-calling-conventions -fno-warn-tabs
