@@ -15,6 +15,7 @@ module Flaw.Flow
 
 import Control.Concurrent
 import Control.Concurrent.STM
+import Control.Exception
 import Control.Monad
 
 -- | Fork a thread.
@@ -50,8 +51,11 @@ asyncRunInFlow (Flow queue) operation = writeTQueue queue $ do
 runInFlow :: Flow -> IO a -> IO a
 runInFlow flow operation = do
 	resultVar <- newEmptyMVar
-	atomically $ asyncRunInFlow flow $ putMVar resultVar =<< operation
-	takeMVar resultVar
+	atomically $ asyncRunInFlow flow $ putMVar resultVar =<< handle (return . Left) (liftM Right operation)
+	r <- takeMVar resultVar
+	case r of
+		Right a -> return a
+		Left e -> throwIO (e :: SomeException)
 
 -- | Graceful shutdown of flow.
 {-# INLINE exitFlow #-}
