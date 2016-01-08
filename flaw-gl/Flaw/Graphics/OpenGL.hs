@@ -20,7 +20,6 @@ import Control.Monad
 import Data.Bits
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Unsafe as B
-import Data.Coerce
 import Data.Foldable
 import Data.List
 import Data.IORef
@@ -31,7 +30,6 @@ import qualified Data.Vector as V
 import qualified Data.Vector.Mutable as VM
 import Data.Word
 import Foreign.C.String
-import Foreign.C.Types
 import Foreign.Marshal.Alloc
 import Foreign.Marshal.Utils
 import Foreign.Ptr
@@ -392,10 +390,10 @@ instance Device GlContext where
 		glCheckErrors 0 "wrap W"
 
 		-- min LOD
-		glSamplerParameterf samplerName GL_TEXTURE_MIN_LOD $ coerce minLod
+		glSamplerParameterf samplerName GL_TEXTURE_MIN_LOD minLod
 		glCheckErrors 0 "min LOD"
 		-- max LOD
-		glSamplerParameterf samplerName GL_TEXTURE_MAX_LOD $ coerce maxLod
+		glSamplerParameterf samplerName GL_TEXTURE_MAX_LOD maxLod
 		glCheckErrors 0 "max LOD"
 
 		-- border color
@@ -942,7 +940,7 @@ instance Context GlContext GlContext where
 	contextClearDepth context depth = do
 		glUpdateFrameBufferViewportScissor context
 		glEnableDepthWriteForClearing context
-		with (coerce depth) $ glClearBufferfv GL_DEPTH 0
+		with depth $ glClearBufferfv GL_DEPTH 0
 		glCheckErrors 1 "clear depth"
 
 	contextClearStencil context stencil = do
@@ -953,7 +951,7 @@ instance Context GlContext GlContext where
 	contextClearDepthStencil context depth stencil = do
 		glUpdateFrameBufferViewportScissor context
 		glEnableDepthWriteForClearing context
-		glClearBufferfi GL_DEPTH_STENCIL 0 (coerce depth) (fromIntegral stencil)
+		glClearBufferfi GL_DEPTH_STENCIL 0 depth (fromIntegral stencil)
 		glCheckErrors 1 "clear depth stencil"
 
 	contextUploadUniformBuffer _context uniformBuffer bytes = case uniformBuffer of
@@ -1864,10 +1862,10 @@ glSetupTextureSampling target samplerStateInfo@SamplerStateInfo
 	glCheckErrors 0 "wrap W"
 
 	-- min LOD
-	glTexParameterf target GL_TEXTURE_MIN_LOD $ coerce minLod
+	glTexParameterf target GL_TEXTURE_MIN_LOD minLod
 	glCheckErrors 0 "min LOD"
 	-- max LOD
-	glTexParameterf target GL_TEXTURE_MAX_LOD $ coerce maxLod
+	glTexParameterf target GL_TEXTURE_MAX_LOD maxLod
 	glCheckErrors 0 "max LOD"
 
 	-- border color
