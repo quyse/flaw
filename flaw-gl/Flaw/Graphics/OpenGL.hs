@@ -85,7 +85,7 @@ instance System GlSystem where
 					, SDL.displayModeRefreshRate = refreshRate
 					} <- peek modePtr
 				return (GlDisplayModeId mode, DisplayModeInfo
-					{ displayModeName = T.pack $ "SDL " ++ (show width) ++ "x" ++ (show height) ++ ", " ++ (show refreshRate) ++ " Hz"
+					{ displayModeName = T.pack $ "SDL " ++ show width ++ "x" ++ show height ++ ", " ++ show refreshRate ++ " Hz"
 					, displayModeWidth = fromIntegral width
 					, displayModeHeight = fromIntegral height
 					, displayModeRefreshRate = fromIntegral refreshRate
@@ -95,7 +95,7 @@ instance System GlSystem where
 				, displayModes = modes
 				})
 
-		return ((flip map) drivers $ \(i, name) -> (GlDeviceId $ fromIntegral i, DeviceInfo
+		return (flip map drivers $ \(i, name) -> (GlDeviceId $ fromIntegral i, DeviceInfo
 			{ deviceName = name
 			, deviceDisplays = displays
 			}), return ())
@@ -231,8 +231,7 @@ instance Device GlContext where
 			count = fromIntegral $ textureCount textureInfo
 
 		-- arrays of 3D textures not supported
-		if depth > 0 && count > 0 then throwIO $ DescribeFirstException "array of 3D textures is not supported"
-		else return ()
+		when (depth > 0 && count > 0) $ throwIO $ DescribeFirstException "array of 3D textures is not supported"
 
 		let TextureMetrics
 			{ textureMipsMetrics = mipsMetrics
@@ -253,12 +252,11 @@ instance Device GlContext where
 		let pixelSize = fromIntegral $ pixelSizeByteSize $ textureFormatPixelSize format
 
 		-- get texture type
-		let textureType = if depth > 0 then Texture3D
-			else if height > 0 then
-				if count > 0 then Texture2DArray
-				else Texture2D
-			else if count > 0 then Texture1DArray
-			else Texture1D
+		let textureType
+			| depth > 0 = Texture3D
+			| height > 0 = if count > 0 then Texture2DArray else Texture2D
+			| count > 0 = Texture1DArray
+			| otherwise = Texture1D
 
 		-- get target
 		let glTarget = case textureType of
@@ -273,7 +271,7 @@ instance Device GlContext where
 		glCheckErrors 0 "bind texture"
 
 		-- allocate texture storage, if we use it
-		if useTextureStorage then do
+		when useTextureStorage $ do
 			case textureType of
 				Texture3D      -> glTexStorage3D glTarget mips glInternalFormat width height depth
 				Texture2DArray -> glTexStorage3D glTarget mips glInternalFormat width height count
@@ -281,7 +279,6 @@ instance Device GlContext where
 				Texture1DArray -> glTexStorage2D glTarget mips glInternalFormat width count
 				Texture1D      -> glTexStorage1D glTarget mips glInternalFormat width
 			glCheckErrors 0 "tex storage"
-		else return ()
 
 		-- gl[Compressed]TexImage* requires GLint, but glInternal format is GLenum (GLuint)
 		let glInternalFormatS = fromIntegral glInternalFormat
@@ -298,16 +295,14 @@ instance Device GlContext where
 				mipSize = fromIntegral $ textureMipSize mipMetrics
 
 			-- set unpack image height if needed
-			if textureType == Texture3D || textureType == Texture2DArray then do
+			when (textureType == Texture3D || textureType == Texture2DArray) $ do
 				glPixelStorei GL_UNPACK_IMAGE_HEIGHT $ if compressed then 0 else mipSlicePitch `div` pixelSize
 				glCheckErrors 0 "set unpack image height"
-			else return ()
 
 			-- set unpack row length if needed
-			if textureType == Texture3D || textureType == Texture2DArray || textureType == Texture2D || textureType == Texture1DArray then do
+			when (textureType == Texture3D || textureType == Texture2DArray || textureType == Texture2D || textureType == Texture1DArray) $ do
 				glPixelStorei GL_UNPACK_ROW_LENGTH $ if compressed then 0 else mipLinePitch `div` pixelSize
 				glCheckErrors 0 "set unpack row length"
-			else return ()
 
 			-- get mip data
 			let mipData = textureData `plusPtr` mipOffset
@@ -345,8 +340,7 @@ instance Device GlContext where
 						Texture1D      -> glTexImage1D glTarget mip glInternalFormatS mipWidth                    0 glFormat glType mipData
 			glCheckErrors 0 "tex image"
 
-		if useTextureStorage then return ()
-		else do
+		unless useTextureStorage $ do
 			glTexParameteri glTarget GL_TEXTURE_BASE_LEVEL 0
 			glTexParameteri glTarget GL_TEXTURE_MAX_LEVEL $ mips - 1
 			glCheckErrors 0 "texture parameters"
@@ -420,8 +414,7 @@ instance Device GlContext where
 
 		let (compressed, glInternalFormat, glFormat, glType) = glFormatFromTextureFormat format
 
-		if compressed then throwIO $ DescribeFirstException "render target cannot use compressed format"
-		else return ()
+		when compressed $ throwIO $ DescribeFirstException "render target cannot use compressed format"
 
 		if useTextureStorage then
 			glTexStorage2D GL_TEXTURE_2D 1 glInternalFormat (fromIntegral width) (fromIntegral height)
@@ -472,11 +465,11 @@ instance Device GlContext where
 		{ glContextActualState = GlContextState
 			{ glContextStateFrameBuffer = actualFrameBufferRef
 			}
-		} renderTargets (GlDepthStencilTargetId
+		} renderTargets GlDepthStencilTargetId
 		{ glDepthStencilTargetName = depthStencilName
 		, glDepthStencilWidth = depthStencilWidth
 		, glDepthStencilHeight = depthStencilHeight
-		}) = glInvoke context $ describeException "failed to create OpenGL framebuffer" $ do
+		} = glInvoke context $ describeException "failed to create OpenGL framebuffer" $ do
 		-- allocate framebuffer name
 		framebufferName <- alloca $ \namePtr -> do
 			glGenFramebuffers 1 namePtr
@@ -635,7 +628,7 @@ instance Device GlContext where
 		else return False
 
 		-- if binary program is not loaded, compile and link from source
-		when (not binaryLoaded) $ do
+		unless binaryLoaded $ do
 			-- create and attach shaders
 			forM_ shaders $ \(shaderStage, shaderSource) -> describeException ("failed to create OpenGL shader", shaderStage) $ do
 
@@ -782,7 +775,7 @@ instance Device GlContext where
 			let compareBySlot a b = compare (getSlot a) (getSlot b)
 			let uniformsBySlot = groupBy eqBySlot $ sortBy compareBySlot uniforms
 			-- get maximum slot
-			let slotsCount = if null uniformsBySlot then 0 else 1 + (maximum $ map (getSlot . head) uniformsBySlot)
+			let slotsCount = if null uniformsBySlot then 0 else 1 + maximum (map (getSlot . head) uniformsBySlot)
 			-- create slots
 			slots <- VM.replicate slotsCount V.empty
 			forM_ uniformsBySlot $ \us@(u : _) -> do
@@ -868,7 +861,7 @@ instance Device GlContext where
 			let compareBySlot a b = compare (getSlot $ fst a) (getSlot $ fst b)
 			let attributesBySlot = groupBy eqBySlot $ sortBy compareBySlot $ zip attributes [0..]
 			-- get maximum slot
-			let slotsCount = if null attributesBySlot then 0 else 1 + (maximum $ map (getSlot . fst . head) attributesBySlot)
+			let slotsCount = if null attributesBySlot then 0 else 1 + maximum (map (getSlot . fst . head) attributesBySlot)
 			-- create attribute slots
 			let attributeSlots = V.create $ do
 				slots <- VM.replicate slotsCount GlAttributeSlot
@@ -1231,10 +1224,9 @@ createGlContext _deviceId window@SdlWindow
 	do
 		-- try "late swap tearing"
 		r <- SDL.glSetSwapInterval (-1)
-		if r /= 0 then do
+		when (r /= 0) $ do
 			-- didn't work, try usual vsync
 			checkSdlError (== 0) $ SDL.glSetSwapInterval 1
-		else return ()
 
 	-- set front face mode
 	glFrontFace GL_CW
@@ -1246,7 +1238,7 @@ createGlContext _deviceId window@SdlWindow
 	glCheckErrors 1 "init state"
 
 	-- if debug mode requested, setup debug output
-	if debug && capArbDebugOutput then do
+	when (debug && capArbDebugOutput) $ do
 		-- set debug message callback
 		callbackPtr <- wrapGlDebugMessageCallback $ \messageSource messageType messageId messageSeverity messageLength messagePtr _userParam -> do
 			-- unfortunately we cannot pattern match against gl_* constants here (as they are not patterns)
@@ -1289,7 +1281,6 @@ createGlContext _deviceId window@SdlWindow
 		-- enable all debug messages
 		glDebugMessageControlARB GL_DONT_CARE GL_DONT_CARE GL_DONT_CARE 0 nullPtr 1
 		glCheckErrors 1 "setup debug output"
-	else return ()
 
 	return (context, glInvoke context $ SDL.glDeleteContext glContext)
 
@@ -1477,13 +1468,12 @@ glUpdateContext context@GlContext
 		glCheckErrors 0 "bind program"
 
 		-- if vertex array is supported
-		if vertexArrayName > 0 then do
+		when (vertexArrayName > 0) $ do
 			-- bind vertex array
 			glBindVertexArray vertexArrayName
 			glCheckErrors 0 "bind vertex array"
 			-- reset current index buffer binding in order to refresh (as element array buffer is part of VAO state)
 			writeIORef actualIndexBufferRef $ GlIndexBufferId (-1) 0
-		else return ()
 
 	-- uniform buffers
 	uniformBindings <- liftM glProgramUniforms $ readIORef desiredProgramRef
@@ -1533,10 +1523,9 @@ glUpdateContext context@GlContext
 		case desiredUniformBuffer of
 			GlUniformBufferId bufferName _bufferSize -> case actualUniformBuffer of
 				GlUniformBufferId prevBufferName _prevBufferSize -> do
-					if bufferName /= prevBufferName then do
+					when (bufferName /= prevBufferName) $ do
 						bindBuffer bufferName
 						updateActual
-					else return ()
 				GlUniformMemoryBufferId _ -> do
 					bindBuffer bufferName
 					updateActual
@@ -1552,10 +1541,9 @@ glUpdateContext context@GlContext
 				GlUniformMemoryBufferId prevBytesRef -> do
 					bytes <- readIORef bytesRef
 					prevBytes <- readIORef prevBytesRef
-					if bytes /= prevBytes then do
+					when (bytes /= prevBytes) $ do
 						bindMemoryBuffer bytes
 						updateActual
-					else return ()
 				GlNullUniformBufferId -> do
 					bytes <- readIORef bytesRef
 					bindMemoryBuffer bytes
@@ -1604,10 +1592,9 @@ glUpdateContext context@GlContext
 						glVertexAttribPointer i size t isNormalized stride (intPtrToPtr offset)
 					glCheckErrors 0 "vertex attrib pointer"
 
-					if capArbInstancedArrays then do
+					when capArbInstancedArrays $ do
 						glVertexAttribDivisor i divisor
 						glCheckErrors 0 "vertex attrib divisor"
-					else return ()
 
 	-- disable unused attributes
 	newBoundAttributesCount <- liftM glProgramAttributesCount $ readIORef desiredProgramRef
@@ -1629,12 +1616,11 @@ glUpdateContext context@GlContext
 		actualDepthWrite <- readIORef actualDepthWriteRef
 		desiredDepthWrite <- readIORef desiredDepthWriteRef
 		-- enable or disable depth test
-		if actualDepthTestFunc /= desiredDepthTestFunc || actualDepthWrite /= desiredDepthWrite then do
+		when (actualDepthTestFunc /= desiredDepthTestFunc || actualDepthWrite /= desiredDepthWrite) $ do
 			(if desiredDepthTestFunc /= DepthTestFuncAlways || desiredDepthWrite then glEnable else glDisable) GL_DEPTH_TEST
 			glCheckErrors 0 "enable/disable depth test"
-		else return ()
 		-- depth test func
-		if actualDepthTestFunc /= desiredDepthTestFunc then do
+		when (actualDepthTestFunc /= desiredDepthTestFunc) $ do
 			let func = case desiredDepthTestFunc of
 				DepthTestFuncNever -> GL_NEVER
 				DepthTestFuncLess -> GL_LESS
@@ -1647,13 +1633,11 @@ glUpdateContext context@GlContext
 			glDepthFunc func
 			glCheckErrors 0 "set depth test func"
 			writeIORef actualDepthTestFuncRef desiredDepthTestFunc
-		else return ()
 		-- depth write
-		if actualDepthWrite /= desiredDepthWrite then do
+		when (actualDepthWrite /= desiredDepthWrite) $ do
 			glDepthMask (if desiredDepthWrite then 1 else 0)
 			glCheckErrors 0 "set depth write"
 			writeIORef actualDepthWriteRef desiredDepthWrite
-		else return ()
 
 	-- blend state
 	refSetup_ actualBlendStateRef desiredBlendStateRef $ \blendStateId -> case blendStateId of
@@ -1891,26 +1875,24 @@ vectorSetupCond forceSetup actualVector desiredVector setup = do
 	forM_ [0..(len - 1)] $ \i -> do
 		actual <- VM.unsafeRead actualVector i
 		desired <- VM.unsafeRead desiredVector i
-		if forceSetup || actual /= desired then do
+		when (forceSetup || actual /= desired) $ do
 			setup i desired
 			VM.unsafeWrite actualVector i desired
-		else return ()
 
 vectorSetup :: Eq a => VM.IOVector a -> VM.IOVector a -> (Int -> a -> IO ()) -> IO ()
 vectorSetup = vectorSetupCond False
 
 instance Eq (IndexBufferId GlDevice) where
-	(GlIndexBufferId indexBufferName1 _indicesType1) == (GlIndexBufferId indexBufferName2 _indicesType2) = indexBufferName1 == indexBufferName2
+	GlIndexBufferId indexBufferName1 _indicesType1 == GlIndexBufferId indexBufferName2 _indicesType2 = indexBufferName1 == indexBufferName2
 
 instance Eq (ProgramId GlDevice) where
-	(GlProgramId { glProgramName = name1 }) == (GlProgramId { glProgramName = name2 }) = name1 == name2
+	GlProgramId { glProgramName = name1 } == GlProgramId { glProgramName = name2 } = name1 == name2
 
 -- | Check for OpenGL errors, throw an exception if there's some.
 glCheckErrors :: Int -> String -> IO ()
-glCheckErrors level msg = if level < glErrorLevel then return () else do
+glCheckErrors level msg = unless (level < glErrorLevel) $ do
 	firstError <- glGetError
-	if firstError == GL_NO_ERROR then return ()
-	else do
+	unless (firstError == GL_NO_ERROR) $ do
 		let f restErrors = do
 			nextError <- glGetError
 			if nextError == GL_NO_ERROR then return restErrors
@@ -1922,8 +1904,7 @@ glCheckErrors level msg = if level < glErrorLevel then return () else do
 glClearErrors :: IO ()
 glClearErrors = do
 	e <- glGetError
-	if e == GL_NO_ERROR then return ()
-	else glClearErrors
+	unless (e == GL_NO_ERROR) glClearErrors
 
 -- | Minimal level of error checking.
 -- Increase this number to do less checks.
