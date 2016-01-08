@@ -20,7 +20,6 @@ import Control.Monad
 import Data.Bits
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Unsafe as B
-import Data.Coerce
 import Data.Foldable
 import Data.List
 import Data.IORef
@@ -31,19 +30,18 @@ import qualified Data.Vector as V
 import qualified Data.Vector.Mutable as VM
 import Data.Word
 import Foreign.C.String
-import Foreign.C.Types
 import Foreign.Marshal.Alloc
 import Foreign.Marshal.Utils
 import Foreign.Ptr
 import Foreign.Storable
-import Graphics.Rendering.OpenGL.Raw.ARB.DebugOutput
-import Graphics.Rendering.OpenGL.Raw.ARB.GetProgramBinary
-import Graphics.Rendering.OpenGL.Raw.ARB.TextureStorage
-import Graphics.Rendering.OpenGL.Raw.ARB.UniformBufferObject
-import Graphics.Rendering.OpenGL.Raw.ARB.VertexAttribBinding
-import Graphics.Rendering.OpenGL.Raw.Core33
-import Graphics.Rendering.OpenGL.Raw.EXT.TextureCompressionS3TC
-import Graphics.Rendering.OpenGL.Raw.EXT.TextureSRGB
+import Graphics.GL.ARB.DebugOutput
+import Graphics.GL.ARB.GetProgramBinary
+import Graphics.GL.ARB.TextureStorage
+import Graphics.GL.ARB.UniformBufferObject
+import Graphics.GL.ARB.VertexAttribBinding
+import Graphics.GL.Core33
+import Graphics.GL.EXT.TextureCompressionS3TC
+import Graphics.GL.EXT.TextureSRGB
 import qualified SDL.Raw.Types as SDL
 import qualified SDL.Raw.Video as SDL
 
@@ -87,7 +85,7 @@ instance System GlSystem where
 					, SDL.displayModeRefreshRate = refreshRate
 					} <- peek modePtr
 				return (GlDisplayModeId mode, DisplayModeInfo
-					{ displayModeName = T.pack $ "SDL " ++ (show width) ++ "x" ++ (show height) ++ ", " ++ (show refreshRate) ++ " Hz"
+					{ displayModeName = T.pack $ "SDL " ++ show width ++ "x" ++ show height ++ ", " ++ show refreshRate ++ " Hz"
 					, displayModeWidth = fromIntegral width
 					, displayModeHeight = fromIntegral height
 					, displayModeRefreshRate = fromIntegral refreshRate
@@ -97,7 +95,7 @@ instance System GlSystem where
 				, displayModes = modes
 				})
 
-		return ((flip map) drivers $ \(i, name) -> (GlDeviceId $ fromIntegral i, DeviceInfo
+		return (flip map drivers $ \(i, name) -> (GlDeviceId $ fromIntegral i, DeviceInfo
 			{ deviceName = name
 			, deviceDisplays = displays
 			}), return ())
@@ -212,7 +210,7 @@ instance Device GlContext where
 		, glDepthStencilWidth = 0
 		, glDepthStencilHeight = 0
 		}
-	nullIndexBuffer = GlIndexBufferId 0 gl_UNSIGNED_SHORT
+	nullIndexBuffer = GlIndexBufferId 0 GL_UNSIGNED_SHORT
 	nullUniformBuffer = GlNullUniformBufferId
 
 	createDeferredContext = undefined
@@ -233,8 +231,7 @@ instance Device GlContext where
 			count = fromIntegral $ textureCount textureInfo
 
 		-- arrays of 3D textures not supported
-		if depth > 0 && count > 0 then throwIO $ DescribeFirstException "array of 3D textures is not supported"
-		else return ()
+		when (depth > 0 && count > 0) $ throwIO $ DescribeFirstException "array of 3D textures is not supported"
 
 		let TextureMetrics
 			{ textureMipsMetrics = mipsMetrics
@@ -248,34 +245,33 @@ instance Device GlContext where
 
 		let (compressed, glInternalFormat, glFormat, glType) = glFormatFromTextureFormat format
 
-		glPixelStorei gl_UNPACK_ALIGNMENT 1
+		glPixelStorei GL_UNPACK_ALIGNMENT 1
 		glCheckErrors 0 "set unpack alignment"
 
 		-- pixel size, use only for uncompressed formats
 		let pixelSize = fromIntegral $ pixelSizeByteSize $ textureFormatPixelSize format
 
 		-- get texture type
-		let textureType = if depth > 0 then Texture3D
-			else if height > 0 then
-				if count > 0 then Texture2DArray
-				else Texture2D
-			else if count > 0 then Texture1DArray
-			else Texture1D
+		let textureType
+			| depth > 0 = Texture3D
+			| height > 0 = if count > 0 then Texture2DArray else Texture2D
+			| count > 0 = Texture1DArray
+			| otherwise = Texture1D
 
 		-- get target
 		let glTarget = case textureType of
-			Texture3D      -> gl_TEXTURE_3D
-			Texture2DArray -> gl_TEXTURE_2D_ARRAY
-			Texture2D      -> gl_TEXTURE_2D
-			Texture1DArray -> gl_TEXTURE_1D_ARRAY
-			Texture1D      -> gl_TEXTURE_1D
+			Texture3D      -> GL_TEXTURE_3D
+			Texture2DArray -> GL_TEXTURE_2D_ARRAY
+			Texture2D      -> GL_TEXTURE_2D
+			Texture1DArray -> GL_TEXTURE_1D_ARRAY
+			Texture1D      -> GL_TEXTURE_1D
 
 		-- bind texture
 		glBindTexture glTarget textureName
 		glCheckErrors 0 "bind texture"
 
 		-- allocate texture storage, if we use it
-		if useTextureStorage then do
+		when useTextureStorage $ do
 			case textureType of
 				Texture3D      -> glTexStorage3D glTarget mips glInternalFormat width height depth
 				Texture2DArray -> glTexStorage3D glTarget mips glInternalFormat width height count
@@ -283,7 +279,6 @@ instance Device GlContext where
 				Texture1DArray -> glTexStorage2D glTarget mips glInternalFormat width count
 				Texture1D      -> glTexStorage1D glTarget mips glInternalFormat width
 			glCheckErrors 0 "tex storage"
-		else return ()
 
 		-- gl[Compressed]TexImage* requires GLint, but glInternal format is GLenum (GLuint)
 		let glInternalFormatS = fromIntegral glInternalFormat
@@ -300,16 +295,14 @@ instance Device GlContext where
 				mipSize = fromIntegral $ textureMipSize mipMetrics
 
 			-- set unpack image height if needed
-			if textureType == Texture3D || textureType == Texture2DArray then do
-				glPixelStorei gl_UNPACK_IMAGE_HEIGHT $ if compressed then 0 else mipSlicePitch `div` pixelSize
+			when (textureType == Texture3D || textureType == Texture2DArray) $ do
+				glPixelStorei GL_UNPACK_IMAGE_HEIGHT $ if compressed then 0 else mipSlicePitch `div` pixelSize
 				glCheckErrors 0 "set unpack image height"
-			else return ()
 
 			-- set unpack row length if needed
-			if textureType == Texture3D || textureType == Texture2DArray || textureType == Texture2D || textureType == Texture1DArray then do
-				glPixelStorei gl_UNPACK_ROW_LENGTH $ if compressed then 0 else mipLinePitch `div` pixelSize
+			when (textureType == Texture3D || textureType == Texture2DArray || textureType == Texture2D || textureType == Texture1DArray) $ do
+				glPixelStorei GL_UNPACK_ROW_LENGTH $ if compressed then 0 else mipLinePitch `div` pixelSize
 				glCheckErrors 0 "set unpack row length"
-			else return ()
 
 			-- get mip data
 			let mipData = textureData `plusPtr` mipOffset
@@ -347,10 +340,9 @@ instance Device GlContext where
 						Texture1D      -> glTexImage1D glTarget mip glInternalFormatS mipWidth                    0 glFormat glType mipData
 			glCheckErrors 0 "tex image"
 
-		if useTextureStorage then return ()
-		else do
-			glTexParameteri glTarget gl_TEXTURE_BASE_LEVEL 0
-			glTexParameteri glTarget gl_TEXTURE_MAX_LEVEL $ mips - 1
+		unless useTextureStorage $ do
+			glTexParameteri glTarget GL_TEXTURE_BASE_LEVEL 0
+			glTexParameteri glTarget GL_TEXTURE_MAX_LEVEL $ mips - 1
 			glCheckErrors 0 "texture parameters"
 
 		-- setup sampling
@@ -375,31 +367,31 @@ instance Device GlContext where
 		-- setup sampler
 
 		-- min filter
-		glSamplerParameteri samplerName gl_TEXTURE_MIN_FILTER $ fromIntegral $ glSamplerMinFilter samplerStateInfo
+		glSamplerParameteri samplerName GL_TEXTURE_MIN_FILTER $ fromIntegral $ glSamplerMinFilter samplerStateInfo
 		glCheckErrors 0 "min filter"
 		-- mag filter
-		glSamplerParameteri samplerName gl_TEXTURE_MAG_FILTER $ fromIntegral $ glSamplerMagFilter samplerStateInfo
+		glSamplerParameteri samplerName GL_TEXTURE_MAG_FILTER $ fromIntegral $ glSamplerMagFilter samplerStateInfo
 		glCheckErrors 0 "mag filter"
 
 		-- wrap U
-		glSamplerParameteri samplerName gl_TEXTURE_WRAP_S $ fromIntegral $ glSamplerWrap wrapU
+		glSamplerParameteri samplerName GL_TEXTURE_WRAP_S $ fromIntegral $ glSamplerWrap wrapU
 		glCheckErrors 0 "wrap U"
 		-- wrap V
-		glSamplerParameteri samplerName gl_TEXTURE_WRAP_T $ fromIntegral $ glSamplerWrap wrapV
+		glSamplerParameteri samplerName GL_TEXTURE_WRAP_T $ fromIntegral $ glSamplerWrap wrapV
 		glCheckErrors 0 "wrap V"
 		-- wrap W
-		glSamplerParameteri samplerName gl_TEXTURE_WRAP_R $ fromIntegral $ glSamplerWrap wrapW
+		glSamplerParameteri samplerName GL_TEXTURE_WRAP_R $ fromIntegral $ glSamplerWrap wrapW
 		glCheckErrors 0 "wrap W"
 
 		-- min LOD
-		glSamplerParameterf samplerName gl_TEXTURE_MIN_LOD $ coerce minLod
+		glSamplerParameterf samplerName GL_TEXTURE_MIN_LOD minLod
 		glCheckErrors 0 "min LOD"
 		-- max LOD
-		glSamplerParameterf samplerName gl_TEXTURE_MAX_LOD $ coerce maxLod
+		glSamplerParameterf samplerName GL_TEXTURE_MAX_LOD maxLod
 		glCheckErrors 0 "max LOD"
 
 		-- border color
-		with borderColor $ glSamplerParameterfv samplerName gl_TEXTURE_BORDER_COLOR . castPtr
+		with borderColor $ glSamplerParameterfv samplerName GL_TEXTURE_BORDER_COLOR . castPtr
 		glCheckErrors 0 "border color"
 
 		return (GlSamplerStateId samplerName, glInvoke context $ with samplerName $ glDeleteSamplers 1)
@@ -417,22 +409,21 @@ instance Device GlContext where
 			glCheckErrors 0 "gen texture"
 			peek namePtr
 
-		glBindTexture gl_TEXTURE_2D textureName
+		glBindTexture GL_TEXTURE_2D textureName
 		glCheckErrors 0 "bind texture"
 
 		let (compressed, glInternalFormat, glFormat, glType) = glFormatFromTextureFormat format
 
-		if compressed then throwIO $ DescribeFirstException "render target cannot use compressed format"
-		else return ()
+		when compressed $ throwIO $ DescribeFirstException "render target cannot use compressed format"
 
 		if useTextureStorage then
-			glTexStorage2D gl_TEXTURE_2D 1 glInternalFormat (fromIntegral width) (fromIntegral height)
+			glTexStorage2D GL_TEXTURE_2D 1 glInternalFormat (fromIntegral width) (fromIntegral height)
 		else
-			glTexImage2D gl_TEXTURE_2D 0 (fromIntegral glInternalFormat) (fromIntegral width) (fromIntegral height) 0 glFormat glType nullPtr
+			glTexImage2D GL_TEXTURE_2D 0 (fromIntegral glInternalFormat) (fromIntegral width) (fromIntegral height) 0 glFormat glType nullPtr
 		glCheckErrors 0 "texture storage"
 
 		-- setup sampling
-		glSetupTextureSampling gl_TEXTURE_2D samplerStateInfo
+		glSetupTextureSampling GL_TEXTURE_2D samplerStateInfo
 
 		return ((GlRenderTargetId
 			{ glRenderTargetName = textureName
@@ -446,16 +437,16 @@ instance Device GlContext where
 			glGenTextures 1 namePtr
 			peek namePtr
 
-		glBindTexture gl_TEXTURE_2D textureName
+		glBindTexture GL_TEXTURE_2D textureName
 		glCheckErrors 0 "bind texture"
-		glTexImage2D gl_TEXTURE_2D 0 (fromIntegral gl_DEPTH_STENCIL) (fromIntegral width) (fromIntegral height) 0 gl_DEPTH_STENCIL gl_UNSIGNED_INT_24_8 nullPtr
+		glTexImage2D GL_TEXTURE_2D 0 (fromIntegral GL_DEPTH_STENCIL) (fromIntegral width) (fromIntegral height) 0 GL_DEPTH_STENCIL GL_UNSIGNED_INT_24_8 nullPtr
 		glCheckErrors 0 "tex image"
 
-		glTexParameteri gl_TEXTURE_2D gl_TEXTURE_MIN_FILTER $ fromIntegral gl_NEAREST
-		glTexParameteri gl_TEXTURE_2D gl_TEXTURE_MAG_FILTER $ fromIntegral gl_NEAREST
-		glTexParameteri gl_TEXTURE_2D gl_TEXTURE_WRAP_S $ fromIntegral gl_CLAMP_TO_EDGE
-		glTexParameteri gl_TEXTURE_2D gl_TEXTURE_WRAP_T $ fromIntegral gl_CLAMP_TO_EDGE
-		glTexParameteri gl_TEXTURE_2D gl_TEXTURE_WRAP_R $ fromIntegral gl_CLAMP_TO_EDGE
+		glTexParameteri GL_TEXTURE_2D GL_TEXTURE_MIN_FILTER $ fromIntegral GL_NEAREST
+		glTexParameteri GL_TEXTURE_2D GL_TEXTURE_MAG_FILTER $ fromIntegral GL_NEAREST
+		glTexParameteri GL_TEXTURE_2D GL_TEXTURE_WRAP_S $ fromIntegral GL_CLAMP_TO_EDGE
+		glTexParameteri GL_TEXTURE_2D GL_TEXTURE_WRAP_T $ fromIntegral GL_CLAMP_TO_EDGE
+		glTexParameteri GL_TEXTURE_2D GL_TEXTURE_WRAP_R $ fromIntegral GL_CLAMP_TO_EDGE
 		glCheckErrors 0 "texture parameters"
 
 		return (GlDepthStencilTargetId
@@ -474,11 +465,11 @@ instance Device GlContext where
 		{ glContextActualState = GlContextState
 			{ glContextStateFrameBuffer = actualFrameBufferRef
 			}
-		} renderTargets (GlDepthStencilTargetId
+		} renderTargets GlDepthStencilTargetId
 		{ glDepthStencilTargetName = depthStencilName
 		, glDepthStencilWidth = depthStencilWidth
 		, glDepthStencilHeight = depthStencilHeight
-		}) = glInvoke context $ describeException "failed to create OpenGL framebuffer" $ do
+		} = glInvoke context $ describeException "failed to create OpenGL framebuffer" $ do
 		-- allocate framebuffer name
 		framebufferName <- alloca $ \namePtr -> do
 			glGenFramebuffers 1 namePtr
@@ -486,18 +477,18 @@ instance Device GlContext where
 			peek namePtr
 
 		-- bind framebuffer
-		glBindFramebuffer gl_FRAMEBUFFER framebufferName
+		glBindFramebuffer GL_FRAMEBUFFER framebufferName
 		glCheckErrors 0 "bind framebuffer"
 
 		-- bind render targets
 		forM_ (zip [0..] renderTargets) $ \(i, GlRenderTargetId
 			{ glRenderTargetName = renderTargetName
 			}) -> do
-			glFramebufferTexture2D gl_FRAMEBUFFER (gl_COLOR_ATTACHMENT0 + i) gl_TEXTURE_2D renderTargetName 0
+			glFramebufferTexture2D GL_FRAMEBUFFER (GL_COLOR_ATTACHMENT0 + i) GL_TEXTURE_2D renderTargetName 0
 			glCheckErrors 0 "bind framebuffer color buffer"
 
 		-- bind depth-stencil target
-		glFramebufferTexture2D gl_FRAMEBUFFER gl_DEPTH_STENCIL_ATTACHMENT gl_TEXTURE_2D depthStencilName 0
+		glFramebufferTexture2D GL_FRAMEBUFFER GL_DEPTH_STENCIL_ATTACHMENT GL_TEXTURE_2D depthStencilName 0
 		glCheckErrors 0 "bind framebuffer depth-stencil buffer"
 
 		-- get width and height of framebuffer (and check that they're equal)
@@ -529,10 +520,10 @@ instance Device GlContext where
 			glCheckErrors 0 "gen buffer"
 			peek namePtr
 
-		glBindBuffer gl_ARRAY_BUFFER bufferName
+		glBindBuffer GL_ARRAY_BUFFER bufferName
 		glCheckErrors 0 "bind buffer"
 		B.unsafeUseAsCStringLen bytes $ \(bytesPtr, bytesLen) -> do
-			glBufferData gl_ARRAY_BUFFER (fromIntegral bytesLen) bytesPtr gl_STATIC_DRAW
+			glBufferData GL_ARRAY_BUFFER (fromIntegral bytesLen) bytesPtr GL_STATIC_DRAW
 		glCheckErrors 0 "buffer data"
 
 		return (GlVertexBufferId bufferName (fromIntegral stride), glInvoke context $ with bufferName $ glDeleteBuffers 1)
@@ -544,9 +535,9 @@ instance Device GlContext where
 			glCheckErrors 0 "gen buffer"
 			peek namePtr
 
-		glBindBuffer gl_ARRAY_BUFFER bufferName
+		glBindBuffer GL_ARRAY_BUFFER bufferName
 		glCheckErrors 0 "bind buffer"
-		glBufferData gl_ARRAY_BUFFER (fromIntegral size) nullPtr gl_DYNAMIC_DRAW
+		glBufferData GL_ARRAY_BUFFER (fromIntegral size) nullPtr GL_DYNAMIC_DRAW
 		glCheckErrors 0 "buffer data"
 
 		return (GlVertexBufferId bufferName (fromIntegral stride), glInvoke context $ with bufferName $ glDeleteBuffers 1)
@@ -562,19 +553,19 @@ instance Device GlContext where
 			glCheckErrors 0 "gen buffer"
 			peek namePtr
 
-		glBindBuffer gl_ELEMENT_ARRAY_BUFFER bufferName
+		glBindBuffer GL_ELEMENT_ARRAY_BUFFER bufferName
 		glCheckErrors 0 "bind buffer"
 		B.unsafeUseAsCStringLen bytes $ \(bytesPtr, bytesLen) -> do
-			glBufferData gl_ELEMENT_ARRAY_BUFFER (fromIntegral bytesLen) bytesPtr gl_STATIC_DRAW
+			glBufferData GL_ELEMENT_ARRAY_BUFFER (fromIntegral bytesLen) bytesPtr GL_STATIC_DRAW
 		glCheckErrors 0 "buffer data"
 
-		let indexBufferId = GlIndexBufferId bufferName (if is32Bit then gl_UNSIGNED_INT else gl_UNSIGNED_SHORT)
+		let indexBufferId = GlIndexBufferId bufferName (if is32Bit then GL_UNSIGNED_INT else GL_UNSIGNED_SHORT)
 
 		-- element array buffer is a part of VAO; unbind it in order to re-bind with actual VAO during drawing
-		glBindBuffer gl_ELEMENT_ARRAY_BUFFER 0
+		glBindBuffer GL_ELEMENT_ARRAY_BUFFER 0
 		glCheckErrors 0 "unbind buffer"
 
-		writeIORef actualIndexBufferRef $ GlIndexBufferId 0 gl_UNSIGNED_SHORT
+		writeIORef actualIndexBufferRef $ GlIndexBufferId 0 GL_UNSIGNED_SHORT
 
 		return (indexBufferId, glInvoke context $ with bufferName $ glDeleteBuffers 1)
 
@@ -629,7 +620,7 @@ instance Device GlContext where
 					glCheckErrors 1 "load binary program"
 					-- check link status
 					status <- alloca $ \statusPtr -> do
-						glGetProgramiv programName gl_LINK_STATUS statusPtr
+						glGetProgramiv programName GL_LINK_STATUS statusPtr
 						glCheckErrors 0 "get program link status"
 						peek statusPtr
 					return $ status == 1
@@ -637,14 +628,14 @@ instance Device GlContext where
 		else return False
 
 		-- if binary program is not loaded, compile and link from source
-		when (not binaryLoaded) $ do
+		unless binaryLoaded $ do
 			-- create and attach shaders
 			forM_ shaders $ \(shaderStage, shaderSource) -> describeException ("failed to create OpenGL shader", shaderStage) $ do
 
 				-- create shader
 				shaderName <- glCreateShader $ case shaderStage of
-					GlslVertexStage -> gl_VERTEX_SHADER
-					GlslFragmentStage -> gl_FRAGMENT_SHADER
+					GlslVertexStage -> GL_VERTEX_SHADER
+					GlslFragmentStage -> GL_FRAGMENT_SHADER
 				glCheckErrors 0 "create shader"
 				_ <- book bk $ return (shaderName, glDeleteShader shaderName)
 
@@ -660,7 +651,7 @@ instance Device GlContext where
 				glCheckErrors 0 "compile shader"
 				-- check compilation status
 				status <- alloca $ \statusPtr -> do
-					glGetShaderiv shaderName gl_COMPILE_STATUS statusPtr
+					glGetShaderiv shaderName GL_COMPILE_STATUS statusPtr
 					glCheckErrors 0 "get shader compile status"
 					peek statusPtr
 				if status == 1 then do
@@ -671,7 +662,7 @@ instance Device GlContext where
 					-- in case of error, get compilation log
 					logLength <- alloca $ \logLengthPtr -> do
 						poke logLengthPtr 0
-						glGetShaderiv shaderName gl_INFO_LOG_LENGTH logLengthPtr
+						glGetShaderiv shaderName GL_INFO_LOG_LENGTH logLengthPtr
 						glCheckErrors 0 "get shader log length"
 						peek logLengthPtr
 					logBytes <- allocaBytes (fromIntegral logLength) $ \logPtr -> do
@@ -712,14 +703,14 @@ instance Device GlContext where
 			glCheckErrors 0 "link program"
 			-- check link status
 			status <- alloca $ \statusPtr -> do
-				glGetProgramiv programName gl_LINK_STATUS statusPtr
+				glGetProgramiv programName GL_LINK_STATUS statusPtr
 				glCheckErrors 0 "get program link status"
 				peek statusPtr
 			if status == 1 then do
 				-- save binary program into cache
 				when capArbGetProgramBinary $ do
 					len <- alloca $ \lenPtr -> do
-						glGetProgramiv programName gl_PROGRAM_BINARY_LENGTH lenPtr
+						glGetProgramiv programName GL_PROGRAM_BINARY_LENGTH lenPtr
 						glCheckErrors 0 "get binary program length"
 						liftM fromIntegral $ peek lenPtr
 					when (len > 0) $ do
@@ -734,7 +725,7 @@ instance Device GlContext where
 			else do
 				-- in case of error, get linking log
 				logLength <- alloca $ \logLengthPtr -> do
-					glGetProgramiv programName gl_INFO_LOG_LENGTH logLengthPtr
+					glGetProgramiv programName GL_INFO_LOG_LENGTH logLengthPtr
 					glCheckErrors 0 "get program log length"
 					peek logLengthPtr
 				logBytes <- allocaBytes (fromIntegral logLength) $ \logPtr -> do
@@ -784,7 +775,7 @@ instance Device GlContext where
 			let compareBySlot a b = compare (getSlot a) (getSlot b)
 			let uniformsBySlot = groupBy eqBySlot $ sortBy compareBySlot uniforms
 			-- get maximum slot
-			let slotsCount = if null uniformsBySlot then 0 else 1 + (maximum $ map (getSlot . head) uniformsBySlot)
+			let slotsCount = if null uniformsBySlot then 0 else 1 + maximum (map (getSlot . head) uniformsBySlot)
 			-- create slots
 			slots <- VM.replicate slotsCount V.empty
 			forM_ uniformsBySlot $ \us@(u : _) -> do
@@ -870,7 +861,7 @@ instance Device GlContext where
 			let compareBySlot a b = compare (getSlot $ fst a) (getSlot $ fst b)
 			let attributesBySlot = groupBy eqBySlot $ sortBy compareBySlot $ zip attributes [0..]
 			-- get maximum slot
-			let slotsCount = if null attributesBySlot then 0 else 1 + (maximum $ map (getSlot . fst . head) attributesBySlot)
+			let slotsCount = if null attributesBySlot then 0 else 1 + maximum (map (getSlot . fst . head) attributesBySlot)
 			-- create attribute slots
 			let attributeSlots = V.create $ do
 				slots <- VM.replicate slotsCount GlAttributeSlot
@@ -923,9 +914,9 @@ instance Device GlContext where
 				glCheckErrors 0 "gen buffer"
 				peek namePtr
 
-			glBindBuffer gl_UNIFORM_BUFFER bufferName
+			glBindBuffer GL_UNIFORM_BUFFER bufferName
 			glCheckErrors 0 "bind buffer"
-			glBufferData gl_UNIFORM_BUFFER (fromIntegral size) nullPtr gl_DYNAMIC_DRAW
+			glBufferData GL_UNIFORM_BUFFER (fromIntegral size) nullPtr GL_DYNAMIC_DRAW
 			glCheckErrors 0 "buffer data"
 			
 			return (GlUniformBufferId bufferName size, glInvoke context $ with bufferName $ glDeleteBuffers 1)
@@ -936,31 +927,31 @@ instance Device GlContext where
 instance Context GlContext GlContext where
 	contextClearColor context targetIndex color = do
 		glUpdateFrameBufferViewportScissor context
-		with color $ glClearBufferfv gl_COLOR (fromIntegral targetIndex) . castPtr
+		with color $ glClearBufferfv GL_COLOR (fromIntegral targetIndex) . castPtr
 		glCheckErrors 1 "clear color"
 
 	contextClearDepth context depth = do
 		glUpdateFrameBufferViewportScissor context
 		glEnableDepthWriteForClearing context
-		with (coerce depth) $ glClearBufferfv gl_DEPTH 0
+		with depth $ glClearBufferfv GL_DEPTH 0
 		glCheckErrors 1 "clear depth"
 
 	contextClearStencil context stencil = do
 		glUpdateFrameBufferViewportScissor context
-		with (fromIntegral stencil) $ glClearBufferiv gl_STENCIL 0
+		with (fromIntegral stencil) $ glClearBufferiv GL_STENCIL 0
 		glCheckErrors 1 "clear stencil"
 
 	contextClearDepthStencil context depth stencil = do
 		glUpdateFrameBufferViewportScissor context
 		glEnableDepthWriteForClearing context
-		glClearBufferfi gl_DEPTH_STENCIL 0 (coerce depth) (fromIntegral stencil)
+		glClearBufferfi GL_DEPTH_STENCIL 0 depth (fromIntegral stencil)
 		glCheckErrors 1 "clear depth stencil"
 
 	contextUploadUniformBuffer _context uniformBuffer bytes = case uniformBuffer of
 		GlUniformBufferId bufferName _bufferSize -> do
-			glBindBuffer gl_UNIFORM_BUFFER bufferName
+			glBindBuffer GL_UNIFORM_BUFFER bufferName
 			B.unsafeUseAsCStringLen bytes $ \(bytesPtr, bytesLen) -> do
-				glBufferData gl_UNIFORM_BUFFER (fromIntegral bytesLen) bytesPtr gl_DYNAMIC_DRAW
+				glBufferData GL_UNIFORM_BUFFER (fromIntegral bytesLen) bytesPtr GL_DYNAMIC_DRAW
 			glCheckErrors 1 "upload uniform buffer"
 		GlUniformMemoryBufferId bufferRef -> do
 			-- remember buffer data
@@ -968,9 +959,9 @@ instance Context GlContext GlContext where
 		GlNullUniformBufferId -> throwIO $ DescribeFirstException "uploading to null uniform buffer"
 
 	contextUploadVertexBuffer _context (GlVertexBufferId bufferName _stride) bytes = do
-		glBindBuffer gl_ARRAY_BUFFER bufferName
+		glBindBuffer GL_ARRAY_BUFFER bufferName
 		B.unsafeUseAsCStringLen bytes $ \(bytesPtr, bytesLen) -> do
-			glBufferData gl_ARRAY_BUFFER (fromIntegral bytesLen) bytesPtr gl_DYNAMIC_DRAW
+			glBufferData GL_ARRAY_BUFFER (fromIntegral bytesLen) bytesPtr GL_DYNAMIC_DRAW
 		glCheckErrors 1 "upload vertex buffer"
 
 	contextDraw context@GlContext
@@ -982,14 +973,14 @@ instance Context GlContext GlContext where
 		GlIndexBufferId indexBufferName indicesType <- readIORef indexBufferRef
 		if indexBufferName > 0 then do
 			if instancesCount > 1 then
-				glDrawElementsInstanced gl_TRIANGLES (fromIntegral indicesCount) indicesType nullPtr (fromIntegral instancesCount)
+				glDrawElementsInstanced GL_TRIANGLES (fromIntegral indicesCount) indicesType nullPtr (fromIntegral instancesCount)
 			else
-				glDrawElements gl_TRIANGLES (fromIntegral indicesCount) indicesType nullPtr
+				glDrawElements GL_TRIANGLES (fromIntegral indicesCount) indicesType nullPtr
 		else do
 			if instancesCount > 1 then
-				glDrawArraysInstanced gl_TRIANGLES 0 (fromIntegral indicesCount) (fromIntegral instancesCount)
+				glDrawArraysInstanced GL_TRIANGLES 0 (fromIntegral indicesCount) (fromIntegral instancesCount)
 			else
-				glDrawArrays gl_TRIANGLES 0 (fromIntegral indicesCount)
+				glDrawArrays GL_TRIANGLES 0 (fromIntegral indicesCount)
 		glCheckErrors 1 "draw"
 
 	-- TODO
@@ -1233,22 +1224,21 @@ createGlContext _deviceId window@SdlWindow
 	do
 		-- try "late swap tearing"
 		r <- SDL.glSetSwapInterval (-1)
-		if r /= 0 then do
+		when (r /= 0) $ do
 			-- didn't work, try usual vsync
 			checkSdlError (== 0) $ SDL.glSetSwapInterval 1
-		else return ()
 
 	-- set front face mode
-	glFrontFace gl_CW
+	glFrontFace GL_CW
 	-- set cull mode
-	glEnable gl_CULL_FACE
-	glCullFace gl_BACK
+	glEnable GL_CULL_FACE
+	glCullFace GL_BACK
 	-- enable SRGB framebuffer
-	glEnable gl_FRAMEBUFFER_SRGB
+	glEnable GL_FRAMEBUFFER_SRGB
 	glCheckErrors 1 "init state"
 
 	-- if debug mode requested, setup debug output
-	if debug && capArbDebugOutput then do
+	when (debug && capArbDebugOutput) $ do
 		-- set debug message callback
 		callbackPtr <- wrapGlDebugMessageCallback $ \messageSource messageType messageId messageSeverity messageLength messagePtr _userParam -> do
 			-- unfortunately we cannot pattern match against gl_* constants here (as they are not patterns)
@@ -1287,11 +1277,10 @@ createGlContext _deviceId window@SdlWindow
 				"\n*** EOM ***"
 		glDebugMessageCallbackARB callbackPtr nullPtr
 		-- enable asynchronous calls to callback
-		glDisable gl_DEBUG_OUTPUT_SYNCHRONOUS_ARB
+		glDisable GL_DEBUG_OUTPUT_SYNCHRONOUS_ARB
 		-- enable all debug messages
-		glDebugMessageControlARB gl_DONT_CARE gl_DONT_CARE gl_DONT_CARE 0 nullPtr 1
+		glDebugMessageControlARB GL_DONT_CARE GL_DONT_CARE GL_DONT_CARE 0 nullPtr 1
 		glCheckErrors 1 "setup debug output"
-	else return ()
 
 	return (context, glInvoke context $ SDL.glDeleteContext glContext)
 
@@ -1317,7 +1306,7 @@ glCreateContextState = do
 	viewport <- newIORef $ Vec4 0 0 0 0
 	scissor <- newIORef Nothing
 	vertexBuffers <- VM.replicate 8 $ GlVertexBufferId 0 0
-	indexBuffer <- newIORef $ GlIndexBufferId 0 gl_UNSIGNED_SHORT
+	indexBuffer <- newIORef $ GlIndexBufferId 0 GL_UNSIGNED_SHORT
 	uniformBuffers <- VM.replicate 8 GlNullUniformBufferId
 	samplers <- VM.replicate 8 (GlTextureId 0, GlSamplerStateId 0)
 	program <- newIORef glNullProgram
@@ -1360,7 +1349,7 @@ glSetDefaultContextState GlContextState
 	writeIORef viewportRef $ Vec4 0 0 0 0
 	writeIORef scissorRef Nothing
 	VM.set vertexBuffersVector $ GlVertexBufferId 0 0
-	writeIORef indexBufferRef $ GlIndexBufferId 0 gl_UNSIGNED_SHORT
+	writeIORef indexBufferRef $ GlIndexBufferId 0 GL_UNSIGNED_SHORT
 	VM.set uniformBuffersVector GlNullUniformBufferId
 	VM.set samplersVector (GlTextureId 0, GlSamplerStateId 0)
 	writeIORef programRef glNullProgram
@@ -1388,38 +1377,38 @@ glFormatFromTextureFormat format = case format of
 		, textureFormatPixelSize = pixelSize
 		, textureFormatColorSpace = colorSpace
 		} -> case (components, vt, pixelSize, colorSpace) of
-		(PixelR, PixelUint, Pixel8bit, LinearColorSpace) -> (False, gl_R8, gl_RED, gl_UNSIGNED_BYTE)
-		(PixelR, PixelUint, Pixel16bit, LinearColorSpace) -> (False, gl_R16, gl_RED, gl_UNSIGNED_SHORT)
-		(PixelR, PixelFloat, Pixel16bit, LinearColorSpace) -> (False, gl_R16F, gl_RED, gl_FLOAT)
-		(PixelR, PixelFloat, Pixel32bit, LinearColorSpace) -> (False, gl_R32F, gl_RED, gl_FLOAT)
-		(PixelRG, PixelUint, Pixel16bit, LinearColorSpace) -> (False, gl_RG8, gl_RG, gl_UNSIGNED_BYTE)
-		(PixelRG, PixelUint, Pixel32bit, LinearColorSpace) -> (False, gl_RG16, gl_RG, gl_UNSIGNED_SHORT)
-		(PixelRG, PixelFloat, Pixel32bit, LinearColorSpace) -> (False, gl_RG16F, gl_RG, gl_FLOAT)
-		(PixelRG, PixelFloat, Pixel64bit, LinearColorSpace) -> (False, gl_RG32F, gl_RG, gl_FLOAT)
-		(PixelRGB, PixelFloat, Pixel32bit, LinearColorSpace) -> (False, gl_R11F_G11F_B10F, gl_RGB, gl_FLOAT)
-		(PixelRGB, PixelFloat, Pixel96bit, LinearColorSpace) -> (False, gl_RGB32F, gl_RGB, gl_FLOAT)
-		(PixelRGBA, PixelUint, Pixel32bit, LinearColorSpace) -> (False, gl_RGBA8, gl_RGBA, gl_UNSIGNED_BYTE)
-		(PixelRGBA, PixelUint, Pixel32bit, StandardColorSpace) -> (False, gl_SRGB8_ALPHA8, gl_RGBA, gl_UNSIGNED_BYTE)
-		(PixelRGBA, PixelUint, Pixel64bit, LinearColorSpace) -> (False, gl_RGBA16, gl_RGBA, gl_UNSIGNED_SHORT)
-		(PixelRGBA, PixelFloat, Pixel64bit, LinearColorSpace) -> (False, gl_RGBA16F, gl_RGBA, gl_FLOAT)
-		(PixelRGBA, PixelFloat, Pixel128bit, LinearColorSpace) -> (False, gl_RGBA32F, gl_RGBA, gl_FLOAT)
+		(PixelR, PixelUint, Pixel8bit, LinearColorSpace) -> (False, GL_R8, GL_RED, GL_UNSIGNED_BYTE)
+		(PixelR, PixelUint, Pixel16bit, LinearColorSpace) -> (False, GL_R16, GL_RED, GL_UNSIGNED_SHORT)
+		(PixelR, PixelFloat, Pixel16bit, LinearColorSpace) -> (False, GL_R16F, GL_RED, GL_FLOAT)
+		(PixelR, PixelFloat, Pixel32bit, LinearColorSpace) -> (False, GL_R32F, GL_RED, GL_FLOAT)
+		(PixelRG, PixelUint, Pixel16bit, LinearColorSpace) -> (False, GL_RG8, GL_RG, GL_UNSIGNED_BYTE)
+		(PixelRG, PixelUint, Pixel32bit, LinearColorSpace) -> (False, GL_RG16, GL_RG, GL_UNSIGNED_SHORT)
+		(PixelRG, PixelFloat, Pixel32bit, LinearColorSpace) -> (False, GL_RG16F, GL_RG, GL_FLOAT)
+		(PixelRG, PixelFloat, Pixel64bit, LinearColorSpace) -> (False, GL_RG32F, GL_RG, GL_FLOAT)
+		(PixelRGB, PixelFloat, Pixel32bit, LinearColorSpace) -> (False, GL_R11F_G11F_B10F, GL_RGB, GL_FLOAT)
+		(PixelRGB, PixelFloat, Pixel96bit, LinearColorSpace) -> (False, GL_RGB32F, GL_RGB, GL_FLOAT)
+		(PixelRGBA, PixelUint, Pixel32bit, LinearColorSpace) -> (False, GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE)
+		(PixelRGBA, PixelUint, Pixel32bit, StandardColorSpace) -> (False, GL_SRGB8_ALPHA8, GL_RGBA, GL_UNSIGNED_BYTE)
+		(PixelRGBA, PixelUint, Pixel64bit, LinearColorSpace) -> (False, GL_RGBA16, GL_RGBA, GL_UNSIGNED_SHORT)
+		(PixelRGBA, PixelFloat, Pixel64bit, LinearColorSpace) -> (False, GL_RGBA16F, GL_RGBA, GL_FLOAT)
+		(PixelRGBA, PixelFloat, Pixel128bit, LinearColorSpace) -> (False, GL_RGBA32F, GL_RGBA, GL_FLOAT)
 		_ -> error $ show ("uncompressed texture format unsupported by OpenGL", format)
 	CompressedTextureFormat
 		{ textureFormatCompression = compression
 		, textureFormatColorSpace = colorSpace
 		} -> case (compression, colorSpace) of
-		(TextureCompressionBC1, LinearColorSpace) -> (True, gl_COMPRESSED_RGB_S3TC_DXT1_EXT, gl_COMPRESSED_RGB, gl_UNSIGNED_BYTE)
-		(TextureCompressionBC1, StandardColorSpace) -> (True, gl_COMPRESSED_SRGB_S3TC_DXT1_EXT, gl_COMPRESSED_RGB, gl_UNSIGNED_BYTE)
-		(TextureCompressionBC1Alpha, LinearColorSpace) -> (True, gl_COMPRESSED_RGBA_S3TC_DXT1_EXT, gl_COMPRESSED_RGBA, gl_UNSIGNED_BYTE)
-		(TextureCompressionBC1Alpha, StandardColorSpace) -> (True, gl_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT, gl_COMPRESSED_RGBA, gl_UNSIGNED_BYTE)
-		(TextureCompressionBC2, LinearColorSpace) -> (True, gl_COMPRESSED_RGBA_S3TC_DXT3_EXT, gl_COMPRESSED_RGBA, gl_UNSIGNED_BYTE)
-		(TextureCompressionBC2, StandardColorSpace) -> (True, gl_COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT, gl_COMPRESSED_RGBA, gl_UNSIGNED_BYTE)
-		(TextureCompressionBC3, LinearColorSpace) -> (True, gl_COMPRESSED_RGBA_S3TC_DXT5_EXT, gl_COMPRESSED_RGBA, gl_UNSIGNED_BYTE)
-		(TextureCompressionBC3, StandardColorSpace) -> (True, gl_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT, gl_COMPRESSED_RGBA, gl_UNSIGNED_BYTE)
-		(TextureCompressionBC4, LinearColorSpace) -> (True, gl_COMPRESSED_RED_RGTC1, gl_COMPRESSED_RED, gl_UNSIGNED_BYTE)
-		(TextureCompressionBC4Signed, LinearColorSpace) -> (True, gl_COMPRESSED_SIGNED_RED_RGTC1, gl_COMPRESSED_RED, gl_UNSIGNED_BYTE)
-		(TextureCompressionBC5, LinearColorSpace) -> (True, gl_COMPRESSED_RG_RGTC2, gl_COMPRESSED_RG, gl_UNSIGNED_BYTE)
-		(TextureCompressionBC5Signed, LinearColorSpace) -> (True, gl_COMPRESSED_SIGNED_RG_RGTC2, gl_COMPRESSED_RG, gl_UNSIGNED_BYTE)
+		(TextureCompressionBC1, LinearColorSpace) -> (True, GL_COMPRESSED_RGB_S3TC_DXT1_EXT, GL_COMPRESSED_RGB, GL_UNSIGNED_BYTE)
+		(TextureCompressionBC1, StandardColorSpace) -> (True, GL_COMPRESSED_SRGB_S3TC_DXT1_EXT, GL_COMPRESSED_RGB, GL_UNSIGNED_BYTE)
+		(TextureCompressionBC1Alpha, LinearColorSpace) -> (True, GL_COMPRESSED_RGBA_S3TC_DXT1_EXT, GL_COMPRESSED_RGBA, GL_UNSIGNED_BYTE)
+		(TextureCompressionBC1Alpha, StandardColorSpace) -> (True, GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT, GL_COMPRESSED_RGBA, GL_UNSIGNED_BYTE)
+		(TextureCompressionBC2, LinearColorSpace) -> (True, GL_COMPRESSED_RGBA_S3TC_DXT3_EXT, GL_COMPRESSED_RGBA, GL_UNSIGNED_BYTE)
+		(TextureCompressionBC2, StandardColorSpace) -> (True, GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT, GL_COMPRESSED_RGBA, GL_UNSIGNED_BYTE)
+		(TextureCompressionBC3, LinearColorSpace) -> (True, GL_COMPRESSED_RGBA_S3TC_DXT5_EXT, GL_COMPRESSED_RGBA, GL_UNSIGNED_BYTE)
+		(TextureCompressionBC3, StandardColorSpace) -> (True, GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT, GL_COMPRESSED_RGBA, GL_UNSIGNED_BYTE)
+		(TextureCompressionBC4, LinearColorSpace) -> (True, GL_COMPRESSED_RED_RGTC1, GL_COMPRESSED_RED, GL_UNSIGNED_BYTE)
+		(TextureCompressionBC4Signed, LinearColorSpace) -> (True, GL_COMPRESSED_SIGNED_RED_RGTC1, GL_COMPRESSED_RED, GL_UNSIGNED_BYTE)
+		(TextureCompressionBC5, LinearColorSpace) -> (True, GL_COMPRESSED_RG_RGTC2, GL_COMPRESSED_RG, GL_UNSIGNED_BYTE)
+		(TextureCompressionBC5Signed, LinearColorSpace) -> (True, GL_COMPRESSED_SIGNED_RG_RGTC2, GL_COMPRESSED_RG, GL_UNSIGNED_BYTE)
 		_ -> error $ show ("compressed texture format unsupported by OpenGL", format)
 
 -- | Helper enumeration.
@@ -1464,8 +1453,8 @@ glUpdateContext context@GlContext
 
 	-- samplers
 	vectorSetup actualSamplersVector desiredSamplersVector $ \i (GlTextureId textureName, GlSamplerStateId samplerName) -> do
-		glActiveTexture $ gl_TEXTURE0 + fromIntegral i
-		glBindTexture gl_TEXTURE_2D textureName
+		glActiveTexture $ GL_TEXTURE0 + fromIntegral i
+		glBindTexture GL_TEXTURE_2D textureName
 		glBindSampler (fromIntegral i) samplerName
 		glCheckErrors 0 "bind sampler"
 
@@ -1479,13 +1468,12 @@ glUpdateContext context@GlContext
 		glCheckErrors 0 "bind program"
 
 		-- if vertex array is supported
-		if vertexArrayName > 0 then do
+		when (vertexArrayName > 0) $ do
 			-- bind vertex array
 			glBindVertexArray vertexArrayName
 			glCheckErrors 0 "bind vertex array"
 			-- reset current index buffer binding in order to refresh (as element array buffer is part of VAO state)
 			writeIORef actualIndexBufferRef $ GlIndexBufferId (-1) 0
-		else return ()
 
 	-- uniform buffers
 	uniformBindings <- liftM glProgramUniforms $ readIORef desiredProgramRef
@@ -1493,7 +1481,7 @@ glUpdateContext context@GlContext
 		actualUniformBuffer <- VM.read actualUniformBuffersVector i
 		desiredUniformBuffer <- VM.read desiredUniformBuffersVector i
 		let bindBuffer bufferName = do
-			glBindBufferBase gl_UNIFORM_BUFFER (fromIntegral i) bufferName
+			glBindBufferBase GL_UNIFORM_BUFFER (fromIntegral i) bufferName
 			glCheckErrors 0 "bind uniform buffer"
 		let updateActual = VM.write actualUniformBuffersVector i desiredUniformBuffer
 		let bindMemoryBuffer bytes = do
@@ -1535,10 +1523,9 @@ glUpdateContext context@GlContext
 		case desiredUniformBuffer of
 			GlUniformBufferId bufferName _bufferSize -> case actualUniformBuffer of
 				GlUniformBufferId prevBufferName _prevBufferSize -> do
-					if bufferName /= prevBufferName then do
+					when (bufferName /= prevBufferName) $ do
 						bindBuffer bufferName
 						updateActual
-					else return ()
 				GlUniformMemoryBufferId _ -> do
 					bindBuffer bufferName
 					updateActual
@@ -1554,10 +1541,9 @@ glUpdateContext context@GlContext
 				GlUniformMemoryBufferId prevBytesRef -> do
 					bytes <- readIORef bytesRef
 					prevBytes <- readIORef prevBytesRef
-					if bytes /= prevBytes then do
+					when (bytes /= prevBytes) $ do
 						bindMemoryBuffer bytes
 						updateActual
-					else return ()
 				GlNullUniformBufferId -> do
 					bytes <- readIORef bytesRef
 					bindMemoryBuffer bytes
@@ -1579,7 +1565,7 @@ glUpdateContext context@GlContext
 	else do
 		vectorSetupCond programUpdated actualVertexBuffersVector desiredVertexBuffersVector $ \_ (GlVertexBufferId bufferName stride) -> do
 			-- bind buffer
-			glBindBuffer gl_ARRAY_BUFFER bufferName
+			glBindBuffer GL_ARRAY_BUFFER bufferName
 			glCheckErrors 0 "bind array buffer"
 
 			-- bind attributes
@@ -1606,10 +1592,9 @@ glUpdateContext context@GlContext
 						glVertexAttribPointer i size t isNormalized stride (intPtrToPtr offset)
 					glCheckErrors 0 "vertex attrib pointer"
 
-					if capArbInstancedArrays then do
+					when capArbInstancedArrays $ do
 						glVertexAttribDivisor i divisor
 						glCheckErrors 0 "vertex attrib divisor"
-					else return ()
 
 	-- disable unused attributes
 	newBoundAttributesCount <- liftM glProgramAttributesCount $ readIORef desiredProgramRef
@@ -1621,7 +1606,7 @@ glUpdateContext context@GlContext
 
 	-- index buffer
 	refSetup_ actualIndexBufferRef desiredIndexBufferRef $ \(GlIndexBufferId indexBufferName _indicesType) -> do
-		glBindBuffer gl_ELEMENT_ARRAY_BUFFER indexBufferName
+		glBindBuffer GL_ELEMENT_ARRAY_BUFFER indexBufferName
 		glCheckErrors 0 "bind index buffer"
 
 	-- depth test func & depth write
@@ -1631,31 +1616,28 @@ glUpdateContext context@GlContext
 		actualDepthWrite <- readIORef actualDepthWriteRef
 		desiredDepthWrite <- readIORef desiredDepthWriteRef
 		-- enable or disable depth test
-		if actualDepthTestFunc /= desiredDepthTestFunc || actualDepthWrite /= desiredDepthWrite then do
-			(if desiredDepthTestFunc /= DepthTestFuncAlways || desiredDepthWrite then glEnable else glDisable) gl_DEPTH_TEST
+		when (actualDepthTestFunc /= desiredDepthTestFunc || actualDepthWrite /= desiredDepthWrite) $ do
+			(if desiredDepthTestFunc /= DepthTestFuncAlways || desiredDepthWrite then glEnable else glDisable) GL_DEPTH_TEST
 			glCheckErrors 0 "enable/disable depth test"
-		else return ()
 		-- depth test func
-		if actualDepthTestFunc /= desiredDepthTestFunc then do
+		when (actualDepthTestFunc /= desiredDepthTestFunc) $ do
 			let func = case desiredDepthTestFunc of
-				DepthTestFuncNever -> gl_NEVER
-				DepthTestFuncLess -> gl_LESS
-				DepthTestFuncLessOrEqual -> gl_LEQUAL
-				DepthTestFuncEqual -> gl_EQUAL
-				DepthTestFuncNonEqual -> gl_NOTEQUAL
-				DepthTestFuncGreaterOrEqual -> gl_GEQUAL
-				DepthTestFuncGreater -> gl_GREATER
-				DepthTestFuncAlways -> gl_ALWAYS
+				DepthTestFuncNever -> GL_NEVER
+				DepthTestFuncLess -> GL_LESS
+				DepthTestFuncLessOrEqual -> GL_LEQUAL
+				DepthTestFuncEqual -> GL_EQUAL
+				DepthTestFuncNonEqual -> GL_NOTEQUAL
+				DepthTestFuncGreaterOrEqual -> GL_GEQUAL
+				DepthTestFuncGreater -> GL_GREATER
+				DepthTestFuncAlways -> GL_ALWAYS
 			glDepthFunc func
 			glCheckErrors 0 "set depth test func"
 			writeIORef actualDepthTestFuncRef desiredDepthTestFunc
-		else return ()
 		-- depth write
-		if actualDepthWrite /= desiredDepthWrite then do
+		when (actualDepthWrite /= desiredDepthWrite) $ do
 			glDepthMask (if desiredDepthWrite then 1 else 0)
 			glCheckErrors 0 "set depth write"
 			writeIORef actualDepthWriteRef desiredDepthWrite
-		else return ()
 
 	-- blend state
 	refSetup_ actualBlendStateRef desiredBlendStateRef $ \blendStateId -> case blendStateId of
@@ -1668,40 +1650,40 @@ glUpdateContext context@GlContext
 			, blendAlphaOperation = alphaOperation
 			} -> do
 			-- enable blending
-			glEnable gl_BLEND
+			glEnable GL_BLEND
 			glCheckErrors 0 "enable blending"
 
 			-- convert-to-OpenGL functions
 			let convertColor c = case c of
-				ColorSourceZero -> gl_ZERO
-				ColorSourceOne -> gl_ONE
-				ColorSourceSrc -> gl_SRC_COLOR
-				ColorSourceInvSrc -> gl_ONE_MINUS_SRC_COLOR
-				ColorSourceSrcAlpha -> gl_SRC_ALPHA
-				ColorSourceInvSrcAlpha -> gl_ONE_MINUS_SRC_ALPHA
-				ColorSourceDest -> gl_DST_COLOR
-				ColorSourceInvDest -> gl_ONE_MINUS_DST_COLOR
-				ColorSourceDestAlpha -> gl_DST_ALPHA
-				ColorSourceInvDestAlpha -> gl_ONE_MINUS_DST_ALPHA
-				ColorSourceSecondSrc -> gl_SRC1_COLOR
-				ColorSourceInvSecondSrc -> gl_ONE_MINUS_SRC1_COLOR
-				ColorSourceSecondSrcAlpha -> gl_SRC1_ALPHA
-				ColorSourceInvSecondSrcAlpha -> gl_ONE_MINUS_SRC1_ALPHA
+				ColorSourceZero -> GL_ZERO
+				ColorSourceOne -> GL_ONE
+				ColorSourceSrc -> GL_SRC_COLOR
+				ColorSourceInvSrc -> GL_ONE_MINUS_SRC_COLOR
+				ColorSourceSrcAlpha -> GL_SRC_ALPHA
+				ColorSourceInvSrcAlpha -> GL_ONE_MINUS_SRC_ALPHA
+				ColorSourceDest -> GL_DST_COLOR
+				ColorSourceInvDest -> GL_ONE_MINUS_DST_COLOR
+				ColorSourceDestAlpha -> GL_DST_ALPHA
+				ColorSourceInvDestAlpha -> GL_ONE_MINUS_DST_ALPHA
+				ColorSourceSecondSrc -> GL_SRC1_COLOR
+				ColorSourceInvSecondSrc -> GL_ONE_MINUS_SRC1_COLOR
+				ColorSourceSecondSrcAlpha -> GL_SRC1_ALPHA
+				ColorSourceInvSecondSrcAlpha -> GL_ONE_MINUS_SRC1_ALPHA
 			let convertAlpha a = case a of
-				AlphaSourceZero -> gl_ZERO
-				AlphaSourceOne -> gl_ONE
-				AlphaSourceSrc -> gl_SRC_ALPHA
-				AlphaSourceInvSrc -> gl_ONE_MINUS_SRC_ALPHA
-				AlphaSourceDest -> gl_DST_ALPHA
-				AlphaSourceInvDest -> gl_ONE_MINUS_DST_ALPHA
-				AlphaSourceSecondSrc -> gl_SRC1_ALPHA
-				AlphaSourceInvSecondSrc -> gl_ONE_MINUS_SRC1_ALPHA
+				AlphaSourceZero -> GL_ZERO
+				AlphaSourceOne -> GL_ONE
+				AlphaSourceSrc -> GL_SRC_ALPHA
+				AlphaSourceInvSrc -> GL_ONE_MINUS_SRC_ALPHA
+				AlphaSourceDest -> GL_DST_ALPHA
+				AlphaSourceInvDest -> GL_ONE_MINUS_DST_ALPHA
+				AlphaSourceSecondSrc -> GL_SRC1_ALPHA
+				AlphaSourceInvSecondSrc -> GL_ONE_MINUS_SRC1_ALPHA
 			let convertOperation o = case o of
-				BlendOperationAdd -> gl_FUNC_ADD
-				BlendOperationSubtractAB -> gl_FUNC_SUBTRACT
-				BlendOperationSubtractBA -> gl_FUNC_REVERSE_SUBTRACT
-				BlendOperationMin -> gl_MIN
-				BlendOperationMax -> gl_MAX
+				BlendOperationAdd -> GL_FUNC_ADD
+				BlendOperationSubtractAB -> GL_FUNC_SUBTRACT
+				BlendOperationSubtractBA -> GL_FUNC_REVERSE_SUBTRACT
+				BlendOperationMin -> GL_MIN
+				BlendOperationMax -> GL_MAX
 
 			-- set blend funcs
 			glBlendFuncSeparate (convertColor sourceColor) (convertColor destColor) (convertAlpha sourceAlpha) (convertAlpha destAlpha)
@@ -1712,7 +1694,7 @@ glUpdateContext context@GlContext
 
 		GlNullBlendStateId -> do
 			-- disable blending
-			glDisable gl_BLEND
+			glDisable GL_BLEND
 			glCheckErrors 0 "disable blending"
 
 glUpdateFrameBufferViewportScissor :: GlContext -> IO ()
@@ -1743,7 +1725,7 @@ glUpdateFrameBufferViewportScissor GlContext
 
 	-- framebuffer
 	when (actualFrameBufferId /= desiredFrameBufferId) $ do
-		glBindFramebuffer gl_FRAMEBUFFER $ glFrameBufferName desiredFrameBufferId
+		glBindFramebuffer GL_FRAMEBUFFER $ glFrameBufferName desiredFrameBufferId
 		glCheckErrors 0 "bind framebuffer"
 		writeIORef actualFrameBufferRef desiredFrameBufferId
 
@@ -1758,11 +1740,11 @@ glUpdateFrameBufferViewportScissor GlContext
 	when (actualScissor /= desiredScissor || actualViewport /= desiredViewport || actualFrameBufferId /= desiredFrameBufferId) $ do
 		case desiredScissor of
 			Just (Vec4 left top right bottom) -> do
-				glEnable gl_SCISSOR_TEST
+				glEnable GL_SCISSOR_TEST
 				glScissor (fromIntegral $ clipX left) (fromIntegral $ clipY $ frameBufferHeight - bottom) (fromIntegral $ clipX $ right - left) (fromIntegral $ clipY $ bottom - top)
 				glCheckErrors 0 "bind scissor"
 			Nothing -> do
-				glDisable gl_SCISSOR_TEST
+				glDisable GL_SCISSOR_TEST
 				glCheckErrors 0 "disable scissor"
 		writeIORef actualScissorRef desiredScissor
 
@@ -1774,8 +1756,8 @@ glEnableDepthWriteForClearing GlContext
 		}
 	} = do
 	-- enable depth test
-	glEnable gl_DEPTH_TEST
-	glDepthFunc gl_ALWAYS
+	glEnable GL_DEPTH_TEST
+	glDepthFunc GL_ALWAYS
 	writeIORef actualDepthTestFuncRef DepthTestFuncAlways
 	-- enable depth write
 	glDepthMask 1
@@ -1784,14 +1766,14 @@ glEnableDepthWriteForClearing GlContext
 -- | Get size, type, isNormalized and isInteger for OpenGL by attribute type.
 glGetAttributeSTNI :: AttributeType -> (GLint, GLenum, GLboolean, Bool)
 glGetAttributeSTNI at = case at of
-	ATFloat32 -> (1, gl_FLOAT, 0, False)
-	ATFloat16 -> (1, gl_HALF_FLOAT, 0, False)
-	ATInt32 n -> let nn = normalized n in (1, gl_INT, if nn then 1 else 0, not nn)
-	ATInt16 n -> let nn = normalized n in (1, gl_SHORT, if nn then 1 else 0, not nn)
-	ATInt8 n -> let nn = normalized n in (1, gl_BYTE, if nn then 1 else 0, not nn)
-	ATUint32 n -> let nn = normalized n in (1, gl_UNSIGNED_INT, if nn then 1 else 0, not nn)
-	ATUint16 n -> let nn = normalized n in (1, gl_UNSIGNED_SHORT, if nn then 1 else 0, not nn)
-	ATUint8 n -> let nn = normalized n in (1, gl_UNSIGNED_BYTE, if nn then 1 else 0, not nn)
+	ATFloat32 -> (1, GL_FLOAT, 0, False)
+	ATFloat16 -> (1, GL_HALF_FLOAT, 0, False)
+	ATInt32 n -> let nn = normalized n in (1, GL_INT, if nn then 1 else 0, not nn)
+	ATInt16 n -> let nn = normalized n in (1, GL_SHORT, if nn then 1 else 0, not nn)
+	ATInt8 n -> let nn = normalized n in (1, GL_BYTE, if nn then 1 else 0, not nn)
+	ATUint32 n -> let nn = normalized n in (1, GL_UNSIGNED_INT, if nn then 1 else 0, not nn)
+	ATUint16 n -> let nn = normalized n in (1, GL_UNSIGNED_SHORT, if nn then 1 else 0, not nn)
+	ATUint8 n -> let nn = normalized n in (1, GL_UNSIGNED_BYTE, if nn then 1 else 0, not nn)
 	ATVec1 r -> glGetAttributeSTNI r
 	ATVec2 r -> let (_s, t, n, i) = glGetAttributeSTNI r in (2, t, n, i)
 	ATVec3 r -> let (_s, t, n, i) = glGetAttributeSTNI r in (3, t, n, i)
@@ -1811,30 +1793,30 @@ glSamplerMinFilter SamplerStateInfo
 	} = if maxLod > 0 then convertedMinMipFilter else convertedMinFilter where
 	convertedMinMipFilter = case minFilter of
 		SamplerPointFilter -> case mipFilter of
-			SamplerPointFilter -> gl_NEAREST_MIPMAP_NEAREST
-			SamplerLinearFilter -> gl_NEAREST_MIPMAP_LINEAR
+			SamplerPointFilter -> GL_NEAREST_MIPMAP_NEAREST
+			SamplerLinearFilter -> GL_NEAREST_MIPMAP_LINEAR
 		SamplerLinearFilter -> case mipFilter of
-			SamplerPointFilter -> gl_LINEAR_MIPMAP_NEAREST
-			SamplerLinearFilter -> gl_LINEAR_MIPMAP_LINEAR
+			SamplerPointFilter -> GL_LINEAR_MIPMAP_NEAREST
+			SamplerLinearFilter -> GL_LINEAR_MIPMAP_LINEAR
 	convertedMinFilter = case minFilter of
-		SamplerPointFilter -> gl_NEAREST
-		SamplerLinearFilter -> gl_LINEAR
+		SamplerPointFilter -> GL_NEAREST
+		SamplerLinearFilter -> GL_LINEAR
 
 -- | Calculate OpenGL enum value for mag filter.
 glSamplerMagFilter :: SamplerStateInfo -> GLenum
 glSamplerMagFilter SamplerStateInfo
 	{ samplerMagFilter = magFilter
 	} = case magFilter of
-	SamplerPointFilter -> gl_NEAREST
-	SamplerLinearFilter -> gl_LINEAR
+	SamplerPointFilter -> GL_NEAREST
+	SamplerLinearFilter -> GL_LINEAR
 
 -- | Calculate OpenGL enum value for wrapping.
 glSamplerWrap :: SamplerWrap -> GLenum
 glSamplerWrap wrap = case wrap of
-	SamplerWrapRepeat -> gl_REPEAT
-	SamplerWrapRepeatMirror -> gl_MIRRORED_REPEAT
-	SamplerWrapClamp -> gl_CLAMP_TO_EDGE
-	SamplerWrapBorder -> gl_CLAMP_TO_BORDER
+	SamplerWrapRepeat -> GL_REPEAT
+	SamplerWrapRepeatMirror -> GL_MIRRORED_REPEAT
+	SamplerWrapClamp -> GL_CLAMP_TO_EDGE
+	SamplerWrapBorder -> GL_CLAMP_TO_BORDER
 
 -- | Set sampling settings for a texture.
 glSetupTextureSampling :: GLenum -> SamplerStateInfo -> IO ()
@@ -1847,31 +1829,31 @@ glSetupTextureSampling target samplerStateInfo@SamplerStateInfo
 	, samplerBorderColor = borderColor
 	} = do
 	-- min filter
-	glTexParameteri target gl_TEXTURE_MIN_FILTER $ fromIntegral $ glSamplerMinFilter samplerStateInfo
+	glTexParameteri target GL_TEXTURE_MIN_FILTER $ fromIntegral $ glSamplerMinFilter samplerStateInfo
 	glCheckErrors 0 "min filter"
 	-- mag filter
-	glTexParameteri target gl_TEXTURE_MAG_FILTER $ fromIntegral $ glSamplerMagFilter samplerStateInfo
+	glTexParameteri target GL_TEXTURE_MAG_FILTER $ fromIntegral $ glSamplerMagFilter samplerStateInfo
 	glCheckErrors 0 "mag filter"
 
 	-- wrap U
-	glTexParameteri target gl_TEXTURE_WRAP_S $ fromIntegral $ glSamplerWrap wrapU
+	glTexParameteri target GL_TEXTURE_WRAP_S $ fromIntegral $ glSamplerWrap wrapU
 	glCheckErrors 0 "wrap U"
 	-- wrap V
-	glTexParameteri target gl_TEXTURE_WRAP_T $ fromIntegral $ glSamplerWrap wrapV
+	glTexParameteri target GL_TEXTURE_WRAP_T $ fromIntegral $ glSamplerWrap wrapV
 	glCheckErrors 0 "wrap V"
 	-- wrap W
-	glTexParameteri target gl_TEXTURE_WRAP_R $ fromIntegral $ glSamplerWrap wrapW
+	glTexParameteri target GL_TEXTURE_WRAP_R $ fromIntegral $ glSamplerWrap wrapW
 	glCheckErrors 0 "wrap W"
 
 	-- min LOD
-	glTexParameterf target gl_TEXTURE_MIN_LOD $ coerce minLod
+	glTexParameterf target GL_TEXTURE_MIN_LOD minLod
 	glCheckErrors 0 "min LOD"
 	-- max LOD
-	glTexParameterf target gl_TEXTURE_MAX_LOD $ coerce maxLod
+	glTexParameterf target GL_TEXTURE_MAX_LOD maxLod
 	glCheckErrors 0 "max LOD"
 
 	-- border color
-	with borderColor $ glTexParameterfv target gl_TEXTURE_BORDER_COLOR . castPtr
+	with borderColor $ glTexParameterfv target GL_TEXTURE_BORDER_COLOR . castPtr
 	glCheckErrors 0 "border color"
 
 refSetup :: Eq a => IORef a -> IORef a -> (a -> IO ()) -> IO Bool
@@ -1893,29 +1875,27 @@ vectorSetupCond forceSetup actualVector desiredVector setup = do
 	forM_ [0..(len - 1)] $ \i -> do
 		actual <- VM.unsafeRead actualVector i
 		desired <- VM.unsafeRead desiredVector i
-		if forceSetup || actual /= desired then do
+		when (forceSetup || actual /= desired) $ do
 			setup i desired
 			VM.unsafeWrite actualVector i desired
-		else return ()
 
 vectorSetup :: Eq a => VM.IOVector a -> VM.IOVector a -> (Int -> a -> IO ()) -> IO ()
 vectorSetup = vectorSetupCond False
 
 instance Eq (IndexBufferId GlDevice) where
-	(GlIndexBufferId indexBufferName1 _indicesType1) == (GlIndexBufferId indexBufferName2 _indicesType2) = indexBufferName1 == indexBufferName2
+	GlIndexBufferId indexBufferName1 _indicesType1 == GlIndexBufferId indexBufferName2 _indicesType2 = indexBufferName1 == indexBufferName2
 
 instance Eq (ProgramId GlDevice) where
-	(GlProgramId { glProgramName = name1 }) == (GlProgramId { glProgramName = name2 }) = name1 == name2
+	GlProgramId { glProgramName = name1 } == GlProgramId { glProgramName = name2 } = name1 == name2
 
 -- | Check for OpenGL errors, throw an exception if there's some.
 glCheckErrors :: Int -> String -> IO ()
-glCheckErrors level msg = if level < glErrorLevel then return () else do
+glCheckErrors level msg = unless (level < glErrorLevel) $ do
 	firstError <- glGetError
-	if firstError == gl_NO_ERROR then return ()
-	else do
+	unless (firstError == GL_NO_ERROR) $ do
 		let f restErrors = do
 			nextError <- glGetError
-			if nextError == gl_NO_ERROR then return restErrors
+			if nextError == GL_NO_ERROR then return restErrors
 			else f $ nextError : restErrors
 		errors <- f [firstError]
 		throwIO $ DescribeFirstException $ show ("OpenGL error", msg, errors)
@@ -1924,8 +1904,7 @@ glCheckErrors level msg = if level < glErrorLevel then return () else do
 glClearErrors :: IO ()
 glClearErrors = do
 	e <- glGetError
-	if e == gl_NO_ERROR then return ()
-	else glClearErrors
+	unless (e == GL_NO_ERROR) glClearErrors
 
 -- | Minimal level of error checking.
 -- Increase this number to do less checks.
