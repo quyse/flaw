@@ -10,8 +10,6 @@ module Flaw.Script.Lua.Chunk
 	( compileLuaChunk
 	) where
 
-import Debug.Trace
-
 import Control.Monad
 import Data.Bits
 import qualified Data.ByteString as B
@@ -74,11 +72,6 @@ data LuaProto = LuaProto
 	, luaProtoUpvalues :: !(V.Vector (Bool, Int))
 	}
 
-trc :: (Monad m, Show a) => String -> m a -> m a
-trc msg m = do
-	r <- m
-	trace (msg ++ " " ++ show r) $ return r
-
 -- | Compile Lua chunk.
 compileLuaChunk :: B.ByteString -> ExpQ
 compileLuaChunk bytes = do
@@ -89,46 +82,45 @@ compileLuaChunk bytes = do
 		chunkHeader <- S.getByteString (B.length luaChunkHeader)
 		when (chunkHeader /= luaChunkHeader) $ fail "wrong Lua chunk header"
 
-		let getInt = trc "getInt" $ liftM fromIntegral S.getWord32le :: S.Get Int
+		let getInt = liftM fromIntegral S.getWord32le :: S.Get Int
 
 		let getString = do
-			b <- trc "string b" S.getWord8
-			size <- trc "string size" $ if b == 0xff then liftM fromIntegral S.getWordhost else return $ fromIntegral b
+			b <- S.getWord8
+			size <- if b == 0xff then liftM fromIntegral S.getWordhost else return $ fromIntegral b
 			if size == 0 then return B.empty
-			else do
-				trc "string" $ S.getByteString $ size - 1
+			else S.getByteString $ size - 1
 
-		_chunkUpvaluesCount <- trc "chunkUpvaluesCount" S.getWord8
+		_chunkUpvaluesCount <- S.getWord8
 
 		let loadFunction = do
 			source <- getString
 			lineDefined <- getInt
 			lastLineDefined <- getInt
-			numParams <- trc "numParams" $ liftM fromIntegral S.getWord8
-			isVararg <- trc "isVararg" $ liftM ( > 0) S.getWord8
-			maxStackSize <- trc "maxStackSize" $ liftM fromIntegral S.getWord8
+			numParams <- liftM fromIntegral S.getWord8
+			isVararg <- liftM ( > 0) S.getWord8
+			maxStackSize <- liftM fromIntegral S.getWord8
 
 			-- instructions
 			instructionsCount <- getInt
-			instructions <- trc "instructions" $ VU.replicateM instructionsCount S.getWord32le
+			instructions <- VU.replicateM instructionsCount S.getWord32le
 
 			-- constants
 			constantsCount <- getInt
 			constants <- V.replicateM constantsCount $ do
-				t <- trc "constant type" S.getWord8
+				t <- S.getWord8
 				let getStringConstant = do
 					s <- getString
 					return [| LuaString $ fromString $(litE $ stringL $ T.unpack $ T.decodeUtf8 s) |]
 				case t of
 					LUA_TNIL -> return [| LuaNil |]
 					LUA_TBOOLEAN -> do
-						b <- trc "TBOOLEAN" $ liftM ( > 0) S.getWord8
+						b <- liftM ( > 0) S.getWord8
 						return [| LuaBoolean b |]
 					LUA_TNUMFLT -> do
-						n <- trc "TNUMFLT" S.getFloat64le
+						n <- S.getFloat64le
 						return [| LuaReal n |]
 					LUA_TNUMINT -> do
-						n <- trc "TNUMINT" $ liftM fromIntegral S.getWordhost :: S.Get Int
+						n <- liftM fromIntegral S.getWordhost :: S.Get Int
 						return [| LuaInteger n |]
 					LUA_TSHRSTR -> getStringConstant
 					LUA_TLNGSTR -> getStringConstant
@@ -137,8 +129,8 @@ compileLuaChunk bytes = do
 			-- upvalues
 			upvaluesCount <- getInt
 			upvalues <- V.replicateM upvaluesCount $ do
-				instack <- trc "upvalue instack" S.getWord8
-				idx <- trc "upvalue idx" S.getWord8
+				instack <- S.getWord8
+				idx <- S.getWord8
 				return (instack > 0, fromIntegral idx)
 
 			-- subfunctions
