@@ -8,6 +8,8 @@ License: MIT
 
 module Flaw.Script.Lua
 	( LuaValue(..)
+	, LuaState(..)
+	, newLuaState
 	, LuaError(..)
 	) where
 
@@ -33,7 +35,7 @@ data LuaValue where
 	-- | Lua function
 	LuaClosure ::
 		{ luaClosureUnique :: !Unique
-		, luaClosure :: !([LuaValue] -> IO [LuaValue])
+		, luaClosure :: !(LuaState -> [LuaValue] -> IO [LuaValue])
 		} -> LuaValue
 	-- | User data.
 	LuaUserData ::
@@ -78,6 +80,19 @@ instance Hashable LuaValue where
 		LuaTable
 			{ luaTableUnique = u
 			} -> s `hashWithSalt` (9 :: Int) `hashWithSalt` hashUnique u
+
+-- | State of thread of execution.
+data LuaState = LuaState
+	{ luaStateTop :: {-# UNPACK #-} !(IORef Int)
+	}
+
+-- | Create new Lua state.
+newLuaState :: IO LuaState
+newLuaState = do
+	top <- newIORef 0
+	return LuaState
+		{ luaStateTop = top
+		}
 
 data LuaError
 	-- | Operation is called on unsupported value, and value

@@ -269,9 +269,9 @@ luaValueLe a b = case (a, b) of
 			liftM (LuaBoolean . not . luaCoerceToBool) $ tryBinaryMetaMethod "__lt" b a
 
 {-# INLINEABLE luaValueCall #-}
-luaValueCall :: LuaValue -> [LuaValue] -> IO [LuaValue]
-luaValueCall func args = case func of
+luaValueCall :: LuaValue -> LuaState -> [LuaValue] -> IO [LuaValue]
+luaValueCall func state args = case func of
 	LuaClosure
 		{ luaClosure = f
-		} -> f args
+		} -> f state args
 	_ -> fail "call via metatable is not implemented yet"
