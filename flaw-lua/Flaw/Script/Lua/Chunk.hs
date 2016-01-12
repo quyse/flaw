@@ -313,9 +313,12 @@ compileLuaFunction LuaProto
 				let nx = instructions VU.! (i + 1)
 				when ((nx .&. (bit 6 - 1)) /= OP_EXTRAARG) $ fail "OP_LOADKX must be followed by OP_EXTRAARG"
 				let nax = fromIntegral $ (nx `shiftR` 6) .&. (bit 26 - 1)
-				normalFlow [| writeIORef $(r a) $(kst nax) |]
+				[| do
+					writeIORef $(r a) $(kst nax)
+					$nextNextInstruction
+					|]
 			OP_LOADBOOL -> [| do
-				writeIORef $(r a) $(conE $ if b > 0 then 'True else 'False)
+				writeIORef $(r a) $ LuaBoolean $(conE $ if b > 0 then 'True else 'False)
 				$(if c > 0 then nextNextInstruction else nextInstruction)
 				|]
 			OP_LOADNIL -> doE $ (flip map [a .. (a + b)] $ \j -> noBindS [| writeIORef $(r j) LuaNil |]) ++ [noBindS nextInstruction]
@@ -332,7 +335,8 @@ compileLuaFunction LuaProto
 				|]
 			OP_SETTABUP -> [| do
 				LuaTable { luaTable = t } <- readIORef $(u a)
-				HT.insert t $(rk b) =<< readIORef =<< $(rk c)
+				q <- $(rk b)
+				HT.insert t q =<< $(rk c)
 				$nextInstruction
 				|]
 			OP_SETUPVAL -> normalFlow [| writeIORef $(u b) =<< readIORef $(r a) |]
@@ -425,7 +429,7 @@ compileLuaFunction LuaProto
 					return (bindS (varP n) [| readIORef $(r j) |], n)
 				f <- newName "f"
 				doE $ (bindS (varP f) [| readIORef $(r a) |]) : callArgsStmts ++
-					[ noBindS [| luaValueCall $(varE f) $(listE $ map varE callArgsNames) |]
+					[ noBindS [| luaValueCall $(varE f) $(varE stateName) $(listE $ map varE callArgsNames) |]
 					]
 			OP_RETURN -> do
 				let args = [a .. (a + b - 2)]

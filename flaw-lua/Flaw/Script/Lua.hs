@@ -97,7 +97,7 @@ newLuaState = do
 data LuaError
 	-- | Operation is called on unsupported value, and value
 	-- doesn't have metatable, or doesn't have specific metamethod.
-	= LuaBadOperation
+	= LuaBadOperation T.Text
 	deriving Show
 
 instance Exception LuaError
