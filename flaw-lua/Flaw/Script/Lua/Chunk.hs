@@ -15,11 +15,14 @@ import Debug.Trace
 import Control.Monad
 import Data.Bits
 import qualified Data.ByteString as B
+import qualified Data.HashTable.IO as HT
 import Data.IORef
+import Data.Maybe
 import qualified Data.Serialize as S
 import Data.String
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
+import Data.Unique
 import qualified Data.Vector as V
 import qualified Data.Vector.Unboxed as VU
 import Data.Word
@@ -29,6 +32,7 @@ import Language.Haskell.TH
 
 import Flaw.Script.Lua
 import Flaw.Script.Lua.FFI
+import Flaw.Script.Lua.Operations
 
 -- | Chunk header, encapsulating machine-specific properties
 -- such as endianness or size of int.
@@ -227,15 +231,28 @@ compileLuaFunction LuaProto
 		-- instruction word
 		x = instructions VU.! i
 		-- all possible parameters
-		a = fromIntegral $ (x `shiftR` 6) .&. ((1 `shiftL` 8) - 1)
-		b = fromIntegral $ (x `shiftR` 14) .&. ((1 `shiftL` 9) - 1)
-		c = (x `shiftR` 23) .&. ((1 `shiftL` 9) - 1)
-		ax = (x `shiftR` 6) .&. ((1 `shiftL` 26) - 1)
-		bx = fromIntegral $ (x `shiftR` 14) .&. ((1 `shiftL` 18) - 1)
+		a = fromIntegral $ (x `shiftR` 6) .&. (bit 8 - 1)
+		c = fromIntegral $ (x `shiftR` 14) .&. (bit 9 - 1)
+		b = fromIntegral $ (x `shiftR` 23) .&. (bit 9 - 1)
+		ax = (x `shiftR` 6) .&. (bit 26 - 1)
+		bx = fromIntegral $ (x `shiftR` 14) .&. (bit 18 - 1)
+		sbx = bx - (bit 17 - 1)
 		kbx = constants V.! bx
 
 		-- helper functions
-		number = litE . integerL . fromIntegral :: Word32 -> ExpQ
+		kst j = constants V.! j -- :: LuaValue
+		r j = stack V.! j -- :: IORef LuaValue
+		rk j = -- :: IO LuaValue
+			if j `testBit` 8 then [| return $(kst (j `clearBit` 8)) |]
+			else [| readIORef $(r j) |]
+		u j = upvalues V.! j -- :: IORef LuaValue
+		binop op = [| do
+			p <- $(rk b)
+			q <- $(rk c)
+			writeIORef $(r a) =<< $op p q
+			$nextInstruction
+			|]
+		unop op = normalFlow [| writeIORef $(r a) =<< $op =<< readIORef $(r b) |]
 
 		-- next instruction
 		nextInstruction = varE $ instructionsNames V.! (i + 1)
@@ -246,26 +263,188 @@ compileLuaFunction LuaProto
 			[ noBindS e
 			, noBindS nextInstruction
 			]
+		-- conditional operation
+		condbinop op = [| do
+			p <- $(rk b)
+			q <- $(rk c)
+			z <- $op p q
+			$(if a > 0 then
+				[| if luaCoerceToBool z then $nextInstruction else $nextNextInstruction |]
+				else
+				[| if luaCoerceToBool z then $nextNextInstruction else $nextInstruction |])
+			|]
 
 		-- choose by instruction
-		r = case x .&. ((1 `shiftL` 6) - 1) of
-			OP_MOVE -> normalFlow [| writeIORef $(stack V.! a) =<< readIORef $(stack V.! b) |]
-			OP_LOADK -> normalFlow [| writeIORef $(stack V.! a) $kbx |]
+		instructionE = case x .&. (bit 6 - 1) of
+			OP_MOVE -> normalFlow [| writeIORef $(r a) =<< readIORef $(r b) |]
+			OP_LOADK -> normalFlow [| writeIORef $(r a) $kbx |]
 			OP_LOADKX -> do
 				let nx = instructions VU.! (i + 1)
 				when ((nx .&. ((1 `shiftL` 6) - 1)) /= OP_EXTRAARG) $ fail "OP_LOADKX must be followed by OP_EXTRAARG"
 				let nax = fromIntegral $ (nx `shiftR` 6) .&. ((1 `shiftL` 26) - 1)
-				let knax = constants V.! nax
-				normalFlow [| writeIORef $(stack V.! a) $knax |]
+				normalFlow [| writeIORef $(r a) $(kst nax) |]
 			OP_LOADBOOL -> [| do
-				writeIORef $(stack V.! a) $(conE $ if b > 0 then 'True else 'False)
+				writeIORef $(r a) $(conE $ if b > 0 then 'True else 'False)
 				$(if c > 0 then nextNextInstruction else nextInstruction)
 				|]
-			OP_LOADNIL -> normalFlow $ doE $ flip map [a .. (a + b)] $ \j -> noBindS [| writeIORef $(stack V.! j) LuaNil |]
-			OP_GETUPVAL -> normalFlow [| writeIORef $(stack V.! a) =<< readIORef $(upvalues V.! b) |]
-			_ -> [| return () |]
+			OP_LOADNIL -> doE $ (flip map [a .. (a + b)] $ \j -> noBindS [| writeIORef $(r j) LuaNil |]) ++ [noBindS nextInstruction]
+			OP_GETUPVAL -> normalFlow [| writeIORef $(r a) =<< readIORef $(u b) |]
+			OP_GETTABUP -> [| do -- swapped b & c???
+				LuaTable { luaTable = t } <- readIORef $(u b)
+				writeIORef $(r a) =<< liftM (fromMaybe LuaNil) (HT.lookup t =<< $(rk c))
+				$nextInstruction
+				|]
+			OP_GETTABLE -> [| do
+				LuaTable { luaTable = t } <- readIORef $(r b)
+				writeIORef $(r a) =<< liftM (fromMaybe LuaNil) (HT.lookup t =<< $(rk c))
+				$nextInstruction
+				|]
+			OP_SETTABUP -> [| do
+				LuaTable { luaTable = t } <- readIORef $(u a)
+				HT.insert t $(rk b) =<< readIORef =<< $(rk c)
+				$nextInstruction
+				|]
+			OP_SETUPVAL -> normalFlow [| writeIORef $(u b) =<< readIORef $(r a) |]
+			OP_SETTABLE -> [| do
+				LuaTable { luaTable = t } <- readIORef $(r a)
+				q <- $(rk b)
+				HT.insert t q =<< $(rk c)
+				$nextInstruction
+				|]
+			OP_NEWTABLE -> [| do
+				q <- newUnique
+				t <- HT.newSized $(litE $ integerL $ fromIntegral $ max b c)
+				z <- newIORef LuaNil
+				writeIORef $(r a) $ LuaTable
+					{ luaTableUnique = q
+					, luaTable = t
+					, luaTableMetaTable = z
+					}
+				$nextInstruction
+				|]
+			OP_SELF -> [| do
+				writeIORef $(r $ a + 1) =<< readIORef $(r b)
+				LuaTable { luaTable = t } <- readIORef $(r b)
+				writeIORef $(r a) =<< liftM (fromMaybe LuaNil) (HT.lookup t =<< $(rk c))
+				$nextInstruction
+				|]
+			OP_ADD -> binop [| luaValueAdd |]
+			OP_SUB -> binop [| luaValueSub |]
+			OP_MUL -> binop [| luaValueMul |]
+			OP_MOD -> binop [| luaValueMod |]
+			OP_POW -> binop [| luaValuePow |]
+			OP_DIV -> binop [| luaValueDiv |]
+			OP_IDIV -> binop [| luaValueIDiv |]
+			OP_BAND -> binop [| luaValueBAnd |]
+			OP_BOR -> binop [| luaValueBOr |]
+			OP_BXOR -> binop [| luaValueBXor |]
+			OP_SHL -> binop [| luaValueShl |]
+			OP_SHR -> binop [| luaValueShr |]
+			OP_UNM -> unop [| luaValueUnm |]
+			OP_BNOT -> unop [| luaValueBNot |]
+			OP_NOT -> unop [| luaValueNot |]
+			OP_LEN -> unop [| luaValueLen |]
+			OP_CONCAT -> do
+				let
+					f [] = return ([], [| LuaString T.empty |])
+					f [j] = do
+						p <- newName $ "p" ++ show j
+						return ([bindS (varP p) [| readIORef $(r j) |] ], varE p)
+					f (j:js) = do
+						p <- newName $ "p" ++ show j
+						q <- newName $ "q" ++ show j
+						(restStmts, restE) <- f js
+						return
+							(   (bindS (varP p) [| readIORef $(r j) |])
+								: (bindS (varP q) [| luaValueConcat $(varE p) $restE |])
+								: restStmts
+							, varE q
+							)
+				(stmts, e) <- f [b..c]
+				doE $ stmts ++ [noBindS [| writeIORef $(r a) $e |], noBindS nextInstruction]
+			OP_JMP -> varE $ instructionsNames V.! (i + sbx + 1)
+			OP_EQ -> condbinop [| luaValueEq |]
+			OP_LT -> condbinop [| luaValueLt |]
+			OP_LE -> condbinop [| luaValueLe |]
+			OP_TEST -> [| do
+				p <- readIORef $(r a)
+				$(if c > 0 then
+					[| if luaCoerceToBool p then $nextInstruction else $nextNextInstruction |]
+					else
+					[| if luaCoerceToBool p then $nextNextInstruction else $nextInstruction |])
+				|]
+			OP_TESTSET -> [| do
+				p <- readIORef $(r b)
+				$(if c > 0 then
+					[| if luaCoerceToBool p then do
+						writeIORef $(r a) p
+						$nextInstruction
+						else $nextNextInstruction
+					|]
+					else
+					[| if luaCoerceToBool p then $nextNextInstruction else do
+						writeIORef $(r a) p
+						$nextInstruction
+					|])
+				|]
+			OP_CALL -> do
+				let args = [(a + 1) .. (a + b - 1)]
+				(callArgsStmts, callArgsNames) <- liftM unzip $ forM args $ \j -> do
+					n <- newName $ "a" ++ show j
+					return (bindS (varP n) [| readIORef $(r j) |], n)
+				f <- newName "f"
+				let
+					adjustRets (j:js) = do
+						q <- newName $ "q" ++ show j
+						z <- newName $ "z" ++ show j
+						(restStmts, restP) <- adjustRets js
+						return
+							( [ noBindS $ caseE (varE q)
+									[ match [p| $(varP z) : $restP |] (normalB $ doE $
+										(noBindS [| writeIORef $(r j) $(varE z) |]) : restStmts) []
+									, match [p| [] |] (normalB [| return () |]) []
+									]
+								]
+							, varP q
+							)
+					adjustRets [] = return ([], wildP)
+				(retsStmts, retPat) <- adjustRets [a .. (a + c - 2)]
+				doE $ (bindS (varP f) [| readIORef $(r a) |]) : callArgsStmts ++
+					[ bindS retPat [| luaValueCall $(varE f) $(listE $ map varE callArgsNames) |]
+					] ++ retsStmts ++ [noBindS nextInstruction]
+			OP_TAILCALL -> do
+				let args = [(a + 1) .. (a + b - 1)]
+				(callArgsStmts, callArgsNames) <- liftM unzip $ forM args $ \j -> do
+					n <- newName $ "a" ++ show j
+					return (bindS (varP n) [| readIORef $(r j) |], n)
+				f <- newName "f"
+				doE $ (bindS (varP f) [| readIORef $(r a) |]) : callArgsStmts ++
+					[ noBindS [| luaValueCall $(varE f) $(listE $ map varE callArgsNames) |]
+					]
+			OP_RETURN -> do
+				let args = [a .. (a + b - 2)]
+				(retArgsStmts, retArgsNames) <- liftM unzip $ forM args $ \j -> do
+					n <- newName $ "a" ++ show j
+					return (bindS (varP n) [| readIORef $(r j) |], n)
+				doE $ retArgsStmts ++ [noBindS [| return $(listE $ map varE retArgsNames) :: IO [LuaValue] |] ]
+			--OP_FORLOOP
+			--OP_FORPREP
+			--OP_TFORCALL
+			--OP_TFORLOOP
+			--OP_SETLIST
+			OP_CLOSURE -> [| do
+				q <- newUnique
+				writeIORef $(r a) $ LuaClosure
+					{ luaClosureUnique = q
+					, luaClosure = $(varE $ functionsNames V.! bx)
+					}
+				$nextInstruction
+				|]
+			--OP_VARARG
+			--OP_EXTRAARG
+			_ -> fail "unknown Lua opcode"
 
-		in valD (varP $ instructionsNames V.! i) (normalB r) []
+		in valD (varP $ instructionsNames V.! i) (normalB instructionE) []
 
 	lamE [argsPat] $ doE $ upvaluesStmt : stackStmts ++ argsStmts
 		++ [functionsStmt] ++ [instructionsStmt] ++ [noBindS $ varE $ instructionsNames V.! 0]

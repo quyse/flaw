@@ -22,6 +22,7 @@ library
     Flaw.Script.Lua
     Flaw.Script.Lua.Chunk
     Flaw.Script.Lua.FFI
+    Flaw.Script.Lua.Operations
   -- other-extensions:    
   build-depends:       base, bytestring, cereal, hashable, hashtables, template-haskell, text, vector
   -- hs-source-dirs:      

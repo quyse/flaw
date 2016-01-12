@@ -8,8 +8,10 @@ License: MIT
 
 module Flaw.Script.Lua
 	( LuaValue(..)
+	, LuaError(..)
 	) where
 
+import Control.Exception
 import Data.Hashable
 import qualified Data.HashTable.IO as HT
 import Data.IORef
@@ -25,7 +27,7 @@ data LuaValue where
 	-- | Integer 'number' value.
 	LuaInteger :: {-# UNPACK #-} !Int -> LuaValue
 	-- | Real 'number' value.
-	LuaReal :: {-# UNPACK #-} !Float -> LuaValue
+	LuaReal :: {-# UNPACK #-} !Double -> LuaValue
 	-- | String value.
 	LuaString :: !T.Text -> LuaValue
 	-- | Lua function
@@ -33,20 +35,30 @@ data LuaValue where
 		{ luaClosureUnique :: !Unique
 		, luaClosure :: !([LuaValue] -> IO [LuaValue])
 		} -> LuaValue
-	-- | Full user data.
-	LuaFullUserData ::
-		{ luaFullUserDataUnique :: !Unique
-		, luaFullUserData :: !a
-		, luaFullUserDataMetaTable :: !(IORef LuaValue)
+	-- | User data.
+	LuaUserData ::
+		{ luaUserDataUnique :: !Unique
+		, luaUserData :: !a
+		, luaUserDataMetaTable :: !(IORef LuaValue)
 		} -> LuaValue
-	-- | Light user data.
-	LuaLightUserData :: Hashable a => !a -> LuaValue
 	LuaThread :: LuaValue
 	LuaTable ::
 		{ luaTableUnique :: !Unique
-		, luaTable :: !(IORef (HT.CuckooHashTable LuaValue LuaValue))
+		, luaTable :: !(HT.CuckooHashTable LuaValue LuaValue)
 		, luaTableMetaTable :: !(IORef LuaValue)
 		} -> LuaValue
+
+instance Eq LuaValue where
+	LuaNil == LuaNil = True
+	LuaBoolean a == LuaBoolean b = a == b
+	LuaInteger a == LuaInteger b = a == b
+	LuaReal a == LuaReal b = a == b
+	LuaString a == LuaString b = a == b
+	LuaClosure { luaClosureUnique = a } == LuaClosure { luaClosureUnique = b } = a == b
+	LuaUserData { luaUserDataUnique = a } == LuaUserData { luaUserDataUnique = b } = a == b
+	LuaThread == LuaThread = True
+	LuaTable { luaTableUnique = a } == LuaTable { luaTableUnique = b } = a == b
+	_ == _ = False
 
 instance Hashable LuaValue where
 	{-# INLINE hashWithSalt #-}
@@ -59,11 +71,18 @@ instance Hashable LuaValue where
 		LuaClosure
 			{ luaClosureUnique = u
 			} -> s `hashWithSalt` (5 :: Int) `hashWithSalt` hashUnique u
-		LuaFullUserData
-			{ luaFullUserDataUnique = u
+		LuaUserData
+			{ luaUserDataUnique = u
 			} -> s `hashWithSalt` (6 :: Int) `hashWithSalt` hashUnique u
-		LuaLightUserData a -> s `hashWithSalt` (7 :: Int) `hashWithSalt` a
 		LuaThread -> s `hashWithSalt` (8 :: Int)
 		LuaTable
 			{ luaTableUnique = u
 			} -> s `hashWithSalt` (9 :: Int) `hashWithSalt` hashUnique u
+
+data LuaError
+	-- | Operation is called on unsupported value, and value
+	-- doesn't have metatable, or doesn't have specific metamethod.
+	= LuaBadOperation
+	deriving Show
+
+instance Exception LuaError
