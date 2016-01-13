@@ -11,6 +11,7 @@ module Flaw.Script.Lua.Operations
 	, luaCoerceToInt
 	, luaCoerceToBool
 	, luaCoerceToString
+	, luaValueShow
 	, luaValueAdd
 	, luaValueSub
 	, luaValueMul
@@ -41,6 +42,8 @@ import qualified Data.HashTable.IO as HT
 import Data.IORef
 import Data.Monoid
 import qualified Data.Text as T
+import qualified Data.Text.Lazy.Builder as TL
+import Data.Unique
 
 import Flaw.Script.Lua
 
@@ -74,6 +77,29 @@ luaCoerceToString v = case v of
 	LuaReal r -> Just $ T.pack $ show r
 	LuaString s -> Just s
 	_ -> Nothing
+
+luaValueShow :: LuaValue -> IO TL.Builder
+luaValueShow a = case a of
+	LuaNil -> return "nil"
+	LuaBoolean b -> return $ if b then "true" else "false"
+	LuaInteger i -> return $ TL.fromString $ show i
+	LuaReal r -> return $ TL.fromString $ show r
+	LuaString t -> return $ TL.fromString $ show $ T.unpack t
+	LuaClosure
+		{ luaClosureUnique = u
+		} -> return $ "<<closure" <> (TL.fromString $ show $ hashUnique u) <> ">>"
+	LuaUserData
+		{ luaUserDataUnique = u
+		} -> return $ "<<userdata" <> (TL.fromString $ show $ hashUnique u) <> ">>"
+	LuaTable
+		{ luaTable = t
+		} -> do
+		l <- HT.toList t
+		s <- forM l $ \(k, v) -> do
+			ks <- luaValueShow k
+			vs <- luaValueShow v
+			return $ "[ " <> ks <> " ] = " <> vs <> "; "
+		return $ "{ " <> foldr (<>) "}" s
 
 getMetaTable :: LuaValue -> IO (Maybe (HT.CuckooHashTable LuaValue LuaValue))
 getMetaTable v = do

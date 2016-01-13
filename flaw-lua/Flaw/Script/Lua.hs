@@ -41,7 +41,6 @@ data LuaValue where
 		, luaUserData :: !a
 		, luaUserDataMetaTable :: !(IORef LuaValue)
 		} -> LuaValue
-	LuaThread :: LuaValue
 	LuaTable ::
 		{ luaTableUnique :: !Unique
 		, luaTable :: !(HT.CuckooHashTable LuaValue LuaValue)
@@ -56,7 +55,6 @@ instance Eq LuaValue where
 	LuaString a == LuaString b = a == b
 	LuaClosure { luaClosureUnique = a } == LuaClosure { luaClosureUnique = b } = a == b
 	LuaUserData { luaUserDataUnique = a } == LuaUserData { luaUserDataUnique = b } = a == b
-	LuaThread == LuaThread = True
 	LuaTable { luaTableUnique = a } == LuaTable { luaTableUnique = b } = a == b
 	_ == _ = False
 
@@ -74,10 +72,9 @@ instance Hashable LuaValue where
 		LuaUserData
 			{ luaUserDataUnique = u
 			} -> s `hashWithSalt` (6 :: Int) `hashWithSalt` hashUnique u
-		LuaThread -> s `hashWithSalt` (8 :: Int)
 		LuaTable
 			{ luaTableUnique = u
-			} -> s `hashWithSalt` (9 :: Int) `hashWithSalt` hashUnique u
+			} -> s `hashWithSalt` (7 :: Int) `hashWithSalt` hashUnique u
 
 data LuaError
 	-- | Operation is called on unsupported value, and value
