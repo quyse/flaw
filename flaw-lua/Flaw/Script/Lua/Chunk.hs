@@ -23,6 +23,7 @@ import qualified Data.Text.Encoding as T
 import Data.Unique
 import qualified Data.Vector as V
 import qualified Data.Vector.Unboxed as VU
+import qualified Data.Vector.Unboxed.Mutable as VUM
 import Data.Word
 import Foreign.C.Types
 import Foreign.Storable
@@ -66,7 +67,7 @@ data LuaProto = LuaProto
 	, luaProtoNumParams :: {-# UNPACK #-} !Int
 	, luaProtoIsVararg :: !Bool
 	, luaProtoMaxStackSize :: {-# UNPACK #-} !Int
-	, luaProtoInstructions :: !(VU.Vector Word32)
+	, luaProtoOpcodes :: !(VU.Vector Word32)
 	, luaProtoConstants :: !(V.Vector ExpQ)
 	, luaProtoFunctions :: !(V.Vector LuaProto)
 	, luaProtoUpvalues :: !(V.Vector (Bool, Int))
@@ -100,9 +101,9 @@ compileLuaChunk bytes = do
 			isVararg <- liftM ( > 0) S.getWord8
 			maxStackSize <- liftM fromIntegral S.getWord8
 
-			-- instructions
-			instructionsCount <- getInt
-			instructions <- VU.replicateM instructionsCount S.getWord32le
+			-- opcodes
+			opcodesCount <- getInt
+			opcodes <- VU.replicateM opcodesCount S.getWord32le
 
 			-- constants
 			constantsCount <- getInt
@@ -156,7 +157,7 @@ compileLuaChunk bytes = do
 				, luaProtoNumParams = numParams
 				, luaProtoIsVararg = isVararg
 				, luaProtoMaxStackSize = maxStackSize
-				, luaProtoInstructions = instructions
+				, luaProtoOpcodes = opcodes
 				, luaProtoConstants = constants
 				, luaProtoUpvalues = upvalues
 				, luaProtoFunctions = functions
@@ -171,13 +172,20 @@ compileLuaChunk bytes = do
 	env <- newName "e"
 	lamE [varP env] $ compileLuaFunction mainProto (V.singleton $ varE env) V.empty
 
+-- | Internal representation of instruction.
+data LuaInst = LuaInst
+	-- | Indices of instructions this instruction refers to.
+	[Int]
+	-- ^ Function accepting list of instructions (corresponding to indices), and returning this instruction.
+	([[StmtQ]] -> Q [StmtQ])
+
 -- | Compile Lua function.
 compileLuaFunction :: LuaProto -> V.Vector ExpQ -> V.Vector ExpQ -> ExpQ
 compileLuaFunction LuaProto
 	{ luaProtoNumParams = numParams
 	, luaProtoIsVararg = isVararg
 	, luaProtoMaxStackSize = maxStackSize
-	, luaProtoInstructions = instructions
+	, luaProtoOpcodes = opcodes
 	, luaProtoConstants = constants
 	, luaProtoUpvalues = protoUpvalues
 	, luaProtoFunctions = functions
@@ -230,10 +238,9 @@ compileLuaFunction LuaProto
 		valD (varP (functionsNames V.! i)) (normalB $ compileLuaFunction (functions V.! i) stack upvalues) []
 
 	-- instructions
-	instructionsNames <- V.generateM (VU.length instructions) $ \i -> newName $ "i" ++ show i
-	let instructionsStmt = letS $ V.toList $ V.generate (VU.length instructions) $ \i -> let
+	let instructions = V.generate (VU.length opcodes) $ \i -> let
 		-- instruction word
-		x = instructions VU.! i
+		x = opcodes VU.! i
 		-- all possible parameters
 		a = fromIntegral $ (x `shiftR` 6) .&. (bit 8 - 1)
 		c = fromIntegral $ (x `shiftR` 14) .&. (bit 9 - 1)
@@ -249,33 +256,28 @@ compileLuaFunction LuaProto
 			if j `testBit` 8 then [| return $(kst (j `clearBit` 8)) |]
 			else [| readIORef $(r j) |]
 		u j = upvalues V.! j -- :: IORef LuaValue
-		binop op = [| do
+		binop op = normalFlow [| do
 			p <- $(rk b)
 			q <- $(rk c)
 			writeIORef $(r a) =<< $op p q
-			$nextInstruction
 			|]
 		unop op = normalFlow [| writeIORef $(r a) =<< $op =<< readIORef $(r b) |]
 
-		-- next instruction
-		nextInstruction = varE $ instructionsNames V.! (i + 1)
-		-- next after next instruction
-		nextNextInstruction = varE $ instructionsNames V.! (i + 2)
+		-- next and next-after-next instruction ids
+		nextInstId = i + 1
+		nextNextInstId = i + 2
 		-- append next instruction
-		normalFlow e = doE
-			[ noBindS e
-			, noBindS nextInstruction
-			]
+		normalFlow e = LuaInst [nextInstId] $ \[nextInstStmts] -> return $ (noBindS e) : nextInstStmts
 		-- conditional operation
-		condbinop op = [| do
+		condbinop op = LuaInst [nextInstId, nextNextInstId] $ \[nextInstStmts, nextNextInstStmts] -> return [noBindS [| do
 			p <- $(rk b)
 			q <- $(rk c)
 			z <- $op p q
 			$(if a > 0 then
-				[| if luaCoerceToBool z then $nextInstruction else $nextNextInstruction |]
+				[| if luaCoerceToBool z then $(doE nextInstStmts) else $(doE nextNextInstStmts) |]
 				else
-				[| if luaCoerceToBool z then $nextNextInstruction else $nextInstruction |])
-			|]
+				[| if luaCoerceToBool z then $(doE nextNextInstStmts) else $(doE nextInstStmts) |])
+			|] ]
 		-- call operation
 		callop args rets = do
 			(callArgsStmts, callArgsNames) <- liftM unzip $ forM args $ \j -> do
@@ -297,53 +299,46 @@ compileLuaFunction LuaProto
 						, varP q
 						)
 				adjustRets [] = return ([], wildP)
-			(retsStmts, retPat) <- adjustRets rets
-			doE $ (bindS (varP f) [| readIORef $(r a) |]) : callArgsStmts ++
-				[ bindS retPat [| luaValueCall $(varE f) $(listE $ map varE callArgsNames) |]
-				] ++ retsStmts ++ [noBindS nextInstruction]
+			let callE = [| luaValueCall $(varE f) $(listE $ map varE callArgsNames) |]
+			retsAndCallStmts <- if null rets then return [noBindS [| void $callE |] ]
+				else do
+					(retsStmts, retPat) <- adjustRets rets
+					return $ (bindS retPat callE) : retsStmts
+			doE $ (bindS (varP f) [| readIORef $(r a) |]) : callArgsStmts ++ retsAndCallStmts
 
 		-- choose by instruction
-		instructionE = case x .&. (bit 6 - 1) of
+		in case x .&. (bit 6 - 1) of
 			OP_MOVE -> normalFlow [| writeIORef $(r a) =<< readIORef $(r b) |]
 			OP_LOADK -> normalFlow [| writeIORef $(r a) $kbx |]
-			OP_LOADKX -> do
-				let nx = instructions VU.! (i + 1)
+			OP_LOADKX -> LuaInst [nextNextInstId] $ \[nextNextInstStmts] -> do
+				let nx = opcodes VU.! (i + 1)
 				when ((nx .&. (bit 6 - 1)) /= OP_EXTRAARG) $ fail "OP_LOADKX must be followed by OP_EXTRAARG"
 				let nax = fromIntegral $ (nx `shiftR` 6) .&. (bit 26 - 1)
-				[| do
-					writeIORef $(r a) $(kst nax)
-					$nextNextInstruction
-					|]
-			OP_LOADBOOL -> [| do
-				writeIORef $(r a) $ LuaBoolean $(conE $ if b > 0 then 'True else 'False)
-				$(if c > 0 then nextNextInstruction else nextInstruction)
-				|]
-			OP_LOADNIL -> doE $ (flip map [a .. (a + b)] $ \j -> noBindS [| writeIORef $(r j) LuaNil |]) ++ [noBindS nextInstruction]
+				return $ (noBindS [| writeIORef $(r a) $(kst nax) |]) : nextNextInstStmts
+			OP_LOADBOOL -> LuaInst [if c > 0 then nextNextInstId else nextInstId] $ \[followingInstStmts] -> return $
+				(noBindS [| writeIORef $(r a) $ LuaBoolean $(conE $ if b > 0 then 'True else 'False) |]) : followingInstStmts
+			OP_LOADNIL -> normalFlow $ doE $ flip map [a .. (a + b)] $ \j -> noBindS [| writeIORef $(r j) LuaNil |]
 			OP_GETUPVAL -> normalFlow [| writeIORef $(r a) =<< readIORef $(u b) |]
-			OP_GETTABUP -> [| do -- swapped b & c???
+			OP_GETTABUP -> normalFlow [| do
 				LuaTable { luaTable = t } <- readIORef $(u b)
 				writeIORef $(r a) =<< liftM (fromMaybe LuaNil) (HT.lookup t =<< $(rk c))
-				$nextInstruction
 				|]
-			OP_GETTABLE -> [| do
+			OP_GETTABLE -> normalFlow [| do
 				LuaTable { luaTable = t } <- readIORef $(r b)
 				writeIORef $(r a) =<< liftM (fromMaybe LuaNil) (HT.lookup t =<< $(rk c))
-				$nextInstruction
 				|]
-			OP_SETTABUP -> [| do
+			OP_SETTABUP -> normalFlow [| do
 				LuaTable { luaTable = t } <- readIORef $(u a)
 				q <- $(rk b)
 				HT.insert t q =<< $(rk c)
-				$nextInstruction
 				|]
 			OP_SETUPVAL -> normalFlow [| writeIORef $(u b) =<< readIORef $(r a) |]
-			OP_SETTABLE -> [| do
+			OP_SETTABLE -> normalFlow [| do
 				LuaTable { luaTable = t } <- readIORef $(r a)
 				q <- $(rk b)
 				HT.insert t q =<< $(rk c)
-				$nextInstruction
 				|]
-			OP_NEWTABLE -> [| do
+			OP_NEWTABLE -> normalFlow [| do
 				q <- newUnique
 				t <- HT.newSized $(litE $ integerL $ fromIntegral $ max b c)
 				z <- newIORef LuaNil
@@ -352,13 +347,11 @@ compileLuaFunction LuaProto
 					, luaTable = t
 					, luaTableMetaTable = z
 					}
-				$nextInstruction
 				|]
-			OP_SELF -> [| do
+			OP_SELF -> normalFlow [| do
 				writeIORef $(r $ a + 1) =<< readIORef $(r b)
 				LuaTable { luaTable = t } <- readIORef $(r b)
 				writeIORef $(r a) =<< liftM (fromMaybe LuaNil) (HT.lookup t =<< $(rk c))
-				$nextInstruction
 				|]
 			OP_ADD -> binop [| luaValueAdd |]
 			OP_SUB -> binop [| luaValueSub |]
@@ -376,7 +369,7 @@ compileLuaFunction LuaProto
 			OP_BNOT -> unop [| luaValueBNot |]
 			OP_NOT -> unop [| luaValueNot |]
 			OP_LEN -> unop [| luaValueLen |]
-			OP_CONCAT -> do
+			OP_CONCAT -> normalFlow $ do
 				let
 					f [] = return ([], [| LuaString T.empty |])
 					f [j] = do
@@ -392,54 +385,54 @@ compileLuaFunction LuaProto
 							, varE q
 							)
 				(stmts, e) <- f [b..c]
-				doE $ stmts ++ [noBindS [| writeIORef $(r a) $e |], noBindS nextInstruction]
-			OP_JMP -> varE $ instructionsNames V.! (i + sbx + 1)
+				doE $ stmts ++ [noBindS [| writeIORef $(r a) $e |]]
+			OP_JMP -> LuaInst [i + sbx + 1] $ \[jmpInstStmts] -> return jmpInstStmts
 			OP_EQ -> condbinop [| luaValueEq |]
 			OP_LT -> condbinop [| luaValueLt |]
 			OP_LE -> condbinop [| luaValueLe |]
-			OP_TEST -> [| do
+			OP_TEST -> LuaInst [nextInstId, nextNextInstId] $ \[nextInstStmts, nextNextInstStmts] -> return [noBindS [| do
 				p <- readIORef $(r a)
 				$(if c > 0 then
-					[| if luaCoerceToBool p then $nextInstruction else $nextNextInstruction |]
+					[| if luaCoerceToBool p then $(doE nextInstStmts) else $(doE nextNextInstStmts) |]
 					else
-					[| if luaCoerceToBool p then $nextNextInstruction else $nextInstruction |])
-				|]
-			OP_TESTSET -> [| do
+					[| if luaCoerceToBool p then $(doE nextNextInstStmts) else $(doE nextInstStmts) |])
+				|] ]
+			OP_TESTSET -> LuaInst [nextInstId, nextNextInstId] $ \[nextInstStmts, nextNextInstStmts] -> return [noBindS [| do
 				p <- readIORef $(r b)
 				$(if c > 0 then
 					[| if luaCoerceToBool p then do
 						writeIORef $(r a) p
-						$nextInstruction
-						else $nextNextInstruction
+						$(doE nextInstStmts)
+						else $(doE nextNextInstStmts)
 					|]
 					else
-					[| if luaCoerceToBool p then $nextNextInstruction else do
+					[| if luaCoerceToBool p then $(doE nextNextInstStmts) else do
 						writeIORef $(r a) p
-						$nextInstruction
+						$(doE nextInstStmts)
 					|])
-				|]
-			OP_CALL -> do
+				|] ]
+			OP_CALL -> normalFlow $ do
 				when (b == 0) $ reportError "flaw-lua OP_CALL: calling with variable number of arguments is not implemented"
 				when (c == 0) $ reportError "flaw-lua OP_CALL: returning variable number of arguments is not implemented"
 				callop [(a + 1) .. (a + b - 1)] [a .. (a + c - 2)]
-			OP_TAILCALL -> do
+			OP_TAILCALL -> LuaInst [] $ \[] -> do
 				when (b == 0) $ reportError "flaw-lua OP_TAILCALL: calling with variable number of arguments is not implemented"
 				let args = [(a + 1) .. (a + b - 1)]
 				(callArgsStmts, callArgsNames) <- liftM unzip $ forM args $ \j -> do
 					n <- newName $ "a" ++ show j
 					return (bindS (varP n) [| readIORef $(r j) |], n)
 				f <- newName "f"
-				doE $ (bindS (varP f) [| readIORef $(r a) |]) : callArgsStmts ++
+				return [noBindS $ doE $ (bindS (varP f) [| readIORef $(r a) |]) : callArgsStmts ++
 					[ noBindS [| luaValueCall $(varE f) $(listE $ map varE callArgsNames) |]
-					]
-			OP_RETURN -> do
+					] ]
+			OP_RETURN -> LuaInst [] $ \[] -> do
 				when (b == 0) $ reportError "flaw-lua OP_RETURN: returning variable number of arguments is not implemented"
 				let args = [a .. (a + b - 2)]
 				(retArgsStmts, retArgsNames) <- liftM unzip $ forM args $ \j -> do
 					n <- newName $ "a" ++ show j
 					return (bindS (varP n) [| readIORef $(r j) |], n)
-				doE $ retArgsStmts ++ [noBindS [| return $(listE $ map varE retArgsNames) :: IO [LuaValue] |] ]
-			OP_FORLOOP -> [| do
+				return [noBindS $ doE $ retArgsStmts ++ [noBindS [| return $(listE $ map varE retArgsNames) :: IO [LuaValue] |] ] ]
+			OP_FORLOOP -> LuaInst [nextInstId, i + sbx + 1] $ \[nextInstStmts, jmpInstStmts] -> return [noBindS [| do
 				step <- readIORef $(r $ a + 2)
 				idx <- readIORef $(r a)
 				newIdx <- luaValueAdd idx step
@@ -447,36 +440,32 @@ compileLuaFunction LuaProto
 				limit <- readIORef $(r $ a + 1)
 				positiveStep <- luaValueLt (LuaInteger 0) step
 				loop <- if luaCoerceToBool positiveStep then luaValueLe newIdx limit else luaValueLe limit newIdx
-				if luaCoerceToBool loop then do
-					writeIORef $(r $ a + 3) newIdx
-					$(varE $ instructionsNames V.! (i + sbx + 1))
-				else $nextInstruction
-				|]
-			OP_FORPREP -> [| do
+				if luaCoerceToBool loop then $(doE $ (noBindS [| writeIORef $(r $ a + 3) newIdx |]) : jmpInstStmts)
+				else $(doE nextInstStmts)
+				|] ]
+			OP_FORPREP -> LuaInst [i + sbx + 1] $ \[followingInstStmts] -> return $ (noBindS [| do
 				step <- readIORef $(r $ a + 2)
 				idx <- readIORef $(r a)
 				writeIORef $(r a) =<< luaValueSub idx step
-				$(varE $ instructionsNames V.! (i + sbx + 1))
-				|]
-			OP_TFORCALL -> callop [a + 1, a + 2] [(a + 3) .. (a + 2 + c)]
-			OP_TFORLOOP -> [| do
+				|]) : followingInstStmts
+			OP_TFORCALL -> normalFlow $ callop [a + 1, a + 2] [(a + 3) .. (a + 2 + c)]
+			OP_TFORLOOP -> LuaInst [nextInstId, i + sbx + 1] $ \[nextInstStmts, followingInstStmts] -> return [noBindS [| do
 				cond <- readIORef $(r $ a + 1)
 				case cond of
-					LuaNil -> $nextInstruction
+					LuaNil -> $(doE nextInstStmts)
 					_ -> do
 						writeIORef $(r a) cond
-						$(varE $ instructionsNames V.! (i + sbx + 1))
-				|]
+						$(doE followingInstStmts)
+				|] ]
 			--OP_SETLIST
-			OP_CLOSURE -> [| do
+			OP_CLOSURE -> normalFlow [| do
 				q <- newUnique
 				writeIORef $(r a) $ LuaClosure
 					{ luaClosureUnique = q
 					, luaClosure = $(varE $ functionsNames V.! bx)
 					}
-				$nextInstruction
 				|]
-			OP_VARARG -> do
+			OP_VARARG -> normalFlow $ do
 				when (b == 0) $ reportError "flaw-lua OP_VARARG: getting variable number of arguments is not implemented"
 				let
 					adjustVararg (j:js) = do
@@ -494,11 +483,36 @@ compileLuaFunction LuaProto
 							)
 					adjustVararg [] = return ([], wildP)
 				(readVarargStmts, varargPat) <- adjustVararg [a .. (a + b - 2)]
-				doE $ (bindS varargPat [| readIORef $(varE varargName) |]) : readVarargStmts ++ [noBindS nextInstruction]
+				doE $ (bindS varargPat [| readIORef $(varE varargName) |]) : readVarargStmts
 			--OP_EXTRAARG -- should not be processed here
-			_ -> fail "unknown Lua opcode"
+			_ -> LuaInst [] $ \[] -> fail "unknown Lua opcode"
 
-		in valD (varP $ instructionsNames V.! i) (normalB instructionE) []
+	-- number of instructions referring to this instruction
+	let instructionsRefCounts = VU.create $ do
+		rc <- VUM.replicate (VU.length opcodes) (0 :: Int)
+		-- force first instruction to have a name
+		VUM.write rc 0 2
+		-- calculate how many instructions refer to every instruction
+		forM_ instructions $ \(LuaInst edges _) -> forM_ edges $ VUM.modify rc (+ 1)
+		return rc
+
+	-- generate names for instructions
+	instructionsNames <- V.generateM (VU.length opcodes) $ \i -> newName $ "i" ++ show i
+	-- emit stmts for instruction
+	let getInstructionStmts (LuaInst followingInstIds f) = do
+		followingInstsStmts <- forM followingInstIds $ \followingInstId -> do
+			-- for instruction with one referrer (this one), emit stmts inline
+			if instructionsRefCounts VU.! followingInstId == 1 then getInstructionStmts $ instructions V.! followingInstId
+			-- otherwise use name
+			else return [noBindS $ varE $ instructionsNames V.! followingInstId]
+		f followingInstsStmts
+	-- emit stmts for all instructions with >1 ref
+	-- instructions with 1 ref will be emitted automatically
+	sharedInstructionsDecs <- liftM (concat . V.toList) $ V.generateM (VU.length opcodes) $ \i ->
+		if instructionsRefCounts VU.! i > 1 then do
+			stmts <- getInstructionStmts $ instructions V.! i
+			return [valD (varP $ instructionsNames V.! i) (normalB $ doE stmts) []]
+		else return []
 
 	lamE [argsPat] $ doE $ upvaluesStmt : stackStmts ++ varargStmts ++ argsStmts
-		++ [functionsStmt] ++ [instructionsStmt] ++ [noBindS $ varE $ instructionsNames V.! 0]
+		++ [functionsStmt, letS sharedInstructionsDecs, noBindS $ varE $ instructionsNames V.! 0]
