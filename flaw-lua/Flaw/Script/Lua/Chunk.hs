@@ -434,7 +434,7 @@ compileLuaFunction LuaProto
 				(retArgsStmts, retArgsNames) <- liftM unzip $ forM args $ \j -> do
 					n <- newName $ "a" ++ show j
 					return (bindS (varP n) [| readIORef $(r j) |], n)
-				return [noBindS $ doE $ retArgsStmts ++ [noBindS [| return $(listE $ map varE retArgsNames) :: IO [LuaValue] |] ] ]
+				return [noBindS $ doE $ retArgsStmts ++ [noBindS [| return $(listE $ map varE retArgsNames) |] ] ]
 			OP_FORLOOP -> LuaInst [nextInstId, i + sbx + 1] $ \[nextInstStmts, jmpInstStmts] -> return [noBindS [| do
 				step <- readIORef $(r $ a + 2)
 				idx <- readIORef $(r a)
