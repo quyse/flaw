@@ -418,8 +418,12 @@ compileLuaFunction LuaProto
 						$nextInstruction
 					|])
 				|]
-			OP_CALL -> callop [(a + 1) .. (a + b - 1)] [a .. (a + c - 2)]
+			OP_CALL -> do
+				when (b == 0) $ reportError "flaw-lua OP_CALL: calling with variable number of arguments is not implemented"
+				when (c == 0) $ reportError "flaw-lua OP_CALL: returning variable number of arguments is not implemented"
+				callop [(a + 1) .. (a + b - 1)] [a .. (a + c - 2)]
 			OP_TAILCALL -> do
+				when (b == 0) $ reportError "flaw-lua OP_TAILCALL: calling with variable number of arguments is not implemented"
 				let args = [(a + 1) .. (a + b - 1)]
 				(callArgsStmts, callArgsNames) <- liftM unzip $ forM args $ \j -> do
 					n <- newName $ "a" ++ show j
@@ -429,6 +433,7 @@ compileLuaFunction LuaProto
 					[ noBindS [| luaValueCall $(varE f) $(listE $ map varE callArgsNames) |]
 					]
 			OP_RETURN -> do
+				when (b == 0) $ reportError "flaw-lua OP_RETURN: returning variable number of arguments is not implemented"
 				let args = [a .. (a + b - 2)]
 				(retArgsStmts, retArgsNames) <- liftM unzip $ forM args $ \j -> do
 					n <- newName $ "a" ++ show j
@@ -472,6 +477,7 @@ compileLuaFunction LuaProto
 				$nextInstruction
 				|]
 			OP_VARARG -> do
+				when (b == 0) $ reportError "flaw-lua OP_VARARG: getting variable number of arguments is not implemented"
 				let
 					adjustVararg (j:js) = do
 						q <- newName $ "q" ++ show j
