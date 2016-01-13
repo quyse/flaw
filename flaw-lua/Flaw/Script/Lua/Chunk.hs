@@ -191,9 +191,6 @@ compileLuaFunction LuaProto
 		in valD (varP (upvaluesNames V.! i)) (normalB upvalueValue) []
 	let upvalues = V.map varE upvaluesNames
 
-	-- state
-	stateName <- newName "g"
-
 	-- stack
 	stackNames <- V.generateM maxStackSize $ \i -> newName $ "s" ++ show i
 	let stackStmts = V.toList $ V.generate maxStackSize $ \i ->
@@ -302,7 +299,7 @@ compileLuaFunction LuaProto
 				adjustRets [] = return ([], wildP)
 			(retsStmts, retPat) <- adjustRets rets
 			doE $ (bindS (varP f) [| readIORef $(r a) |]) : callArgsStmts ++
-				[ bindS retPat [| luaValueCall $(varE f) $(varE stateName) $(listE $ map varE callArgsNames) |]
+				[ bindS retPat [| luaValueCall $(varE f) $(listE $ map varE callArgsNames) |]
 				] ++ retsStmts ++ [noBindS nextInstruction]
 
 		-- choose by instruction
@@ -429,7 +426,7 @@ compileLuaFunction LuaProto
 					return (bindS (varP n) [| readIORef $(r j) |], n)
 				f <- newName "f"
 				doE $ (bindS (varP f) [| readIORef $(r a) |]) : callArgsStmts ++
-					[ noBindS [| luaValueCall $(varE f) $(varE stateName) $(listE $ map varE callArgsNames) |]
+					[ noBindS [| luaValueCall $(varE f) $(listE $ map varE callArgsNames) |]
 					]
 			OP_RETURN -> do
 				let args = [a .. (a + b - 2)]
@@ -497,5 +494,5 @@ compileLuaFunction LuaProto
 
 		in valD (varP $ instructionsNames V.! i) (normalB instructionE) []
 
-	lamE [varP stateName, argsPat] $ doE $ upvaluesStmt : stackStmts ++ varargStmts ++ argsStmts
+	lamE [argsPat] $ doE $ upvaluesStmt : stackStmts ++ varargStmts ++ argsStmts
 		++ [functionsStmt] ++ [instructionsStmt] ++ [noBindS $ varE $ instructionsNames V.! 0]
