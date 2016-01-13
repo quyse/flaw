@@ -305,15 +305,18 @@ compileLuaFunction LuaProto
 					(retsStmts, retPat) <- adjustRets rets
 					return $ (bindS retPat callE) : retsStmts
 			doE $ (bindS (varP f) [| readIORef $(r a) |]) : callArgsStmts ++ retsAndCallStmts
+		-- get ax from extra arg
+		extraArg = do
+			let nx = opcodes VU.! (i + 1)
+			when ((nx .&. (bit 6 - 1)) /= OP_EXTRAARG) $ fail "flaw-lua: opcode must be followed by OP_EXTRAARG"
+			return $ fromIntegral $ (nx `shiftR` 6) .&. (bit 26 - 1)
 
 		-- choose by instruction
 		in case x .&. (bit 6 - 1) of
 			OP_MOVE -> normalFlow [| writeIORef $(r a) =<< readIORef $(r b) |]
 			OP_LOADK -> normalFlow [| writeIORef $(r a) $kbx |]
 			OP_LOADKX -> LuaInst [nextNextInstId] $ \[nextNextInstStmts] -> do
-				let nx = opcodes VU.! (i + 1)
-				when ((nx .&. (bit 6 - 1)) /= OP_EXTRAARG) $ fail "OP_LOADKX must be followed by OP_EXTRAARG"
-				let nax = fromIntegral $ (nx `shiftR` 6) .&. (bit 26 - 1)
+				nax <- extraArg
 				return $ (noBindS [| writeIORef $(r a) $(kst nax) |]) : nextNextInstStmts
 			OP_LOADBOOL -> LuaInst [if c > 0 then nextNextInstId else nextInstId] $ \[followingInstStmts] -> return $
 				(noBindS [| writeIORef $(r a) $ LuaBoolean $(conE $ if b > 0 then 'True else 'False) |]) : followingInstStmts
@@ -457,7 +460,14 @@ compileLuaFunction LuaProto
 						writeIORef $(r a) cond
 						$(doE followingInstStmts)
 				|] ]
-			--OP_SETLIST
+			OP_SETLIST -> normalFlow $ do
+				when (b == 0) $ reportError "flaw-lua OP_SETLIST: calling with variable number of arguments is not implemented"
+				offset <- if c == 0 then extraArg else return c
+				let fpf = 50 -- LFIELDS_PER_FLUSH from lopcodes.h
+				t <- newName "t"
+				let stmts = flip map [1..b] $ \j -> noBindS
+					[| HT.insert $(varE t) (LuaInteger $(litE $ integerL $ fromIntegral $ (offset - 1) * fpf + j)) =<< readIORef $(r $ a + j) |]
+				doE $ (bindS [p| LuaTable { luaTable = $(varP t) } |] [| readIORef $(r a) |]) : stmts
 			OP_CLOSURE -> normalFlow [| do
 				q <- newUnique
 				writeIORef $(r a) $ LuaClosure
