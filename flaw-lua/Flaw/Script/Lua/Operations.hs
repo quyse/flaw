@@ -157,8 +157,8 @@ luaValueMul :: LuaValue -> LuaValue -> IO LuaValue
 luaValueMul = integerOrNumberBinaryOp (*) (*) "__mul"
 
 luaValueMod :: LuaValue -> LuaValue -> IO LuaValue
-luaValueMod = integerOrNumberBinaryOp mod imod "__mod" where
-	imod a b = a - fromIntegral ((floor $ a / b) :: Int) * b
+luaValueMod = integerOrNumberBinaryOp rem irem "__mod" where
+	irem a b = a - fromIntegral ((truncate $ a / b) :: Int) * b
 
 luaValuePow :: LuaValue -> LuaValue -> IO LuaValue
 luaValuePow = numberBinaryOp pow "__pow" where
@@ -168,8 +168,8 @@ luaValueDiv :: LuaValue -> LuaValue -> IO LuaValue
 luaValueDiv = numberBinaryOp (/) "__div"
 
 luaValueIDiv :: LuaValue -> LuaValue -> IO LuaValue
-luaValueIDiv = integerOrNumberBinaryOp div idiv "__idiv" where
-	idiv a b = fromIntegral ((floor $ a / b) :: Int)
+luaValueIDiv = integerOrNumberBinaryOp quot iquot "__idiv" where
+	iquot a b = fromIntegral ((truncate $ a / b) :: Int)
 
 luaValueBAnd :: LuaValue -> LuaValue -> IO LuaValue
 luaValueBAnd = integerBinaryOp (.&.) "__band"
