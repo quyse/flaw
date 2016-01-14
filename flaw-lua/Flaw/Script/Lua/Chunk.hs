@@ -284,26 +284,13 @@ compileLuaFunction LuaProto
 				n <- newName $ "a" ++ show j
 				return (bindS (varP n) [| readIORef $(r j) |], n)
 			f <- newName "f"
-			let
-				adjustRets (j:js) = do
-					q <- newName $ "q" ++ show j
-					z <- newName $ "z" ++ show j
-					(restStmts, restP) <- adjustRets js
-					return
-						( [ noBindS $ caseE (varE q)
-								[ match [p| $(varP z) : $restP |] (normalB $ doE $
-									(noBindS [| writeIORef $(r j) $(varE z) |]) : restStmts) []
-								, match [p| [] |] (normalB [| return () |]) []
-								]
-							]
-						, varP q
-						)
-				adjustRets [] = return ([], wildP)
+			retsNames <- forM rets $ \j -> newName $ "r" ++ show j
+			let retPat = foldr (\p q -> [p| $(varP p) : $q |]) wildP retsNames
+			let retsStmts = flip map (zip rets retsNames) $ \(j, n) -> noBindS [| writeIORef $(r j) $(varE n) |]
 			let callE = [| luaValueCall $(varE f) $(listE $ map varE callArgsNames) |]
-			retsAndCallStmts <- if null rets then return [noBindS [| void $callE |] ]
-				else do
-					(retsStmts, retPat) <- adjustRets rets
-					return $ (bindS retPat callE) : retsStmts
+			let retsAndCallStmts =
+				if null rets then [noBindS [| void $callE |] ]
+				else (bindS retPat [| liftM (++ repeat LuaNil) $callE |]) : retsStmts
 			doE $ (bindS (varP f) [| readIORef $(r a) |]) : callArgsStmts ++ retsAndCallStmts
 		-- get ax from extra arg
 		extraArg = do
