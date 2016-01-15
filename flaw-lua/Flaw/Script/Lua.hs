@@ -75,6 +75,24 @@ instance Hashable LuaValue where
 			{ luaTableUnique = u
 			} -> s `hashWithSalt` (7 :: Int) `hashWithSalt` hashUnique u
 
+instance Show LuaValue where
+	showsPrec p v q = case v of
+		LuaNil -> "LuaNil" ++ q
+		LuaBoolean b -> enclose $ \qq -> "LuaBoolean " ++ showsPrec 10 b qq
+		LuaInteger i -> enclose $ \qq -> "LuaInteger " ++ showsPrec 10 i qq
+		LuaReal r -> enclose $ \qq -> "LuaReal " ++ showsPrec 10 r qq
+		LuaString t -> enclose $ \qq -> "LuaString " ++ showsPrec 10 t qq
+		LuaClosure
+			{ luaClosureUnique = u
+			} -> enclose $ \qq -> "LuaClosure { luaClosureUnique = " ++ showsPrec 0 (hashUnique u) qq
+		LuaUserData
+			{ luaUserDataUnique = u
+			} -> enclose $ \qq -> "LuaUserData { luaUserDataUnique = " ++ showsPrec 0 (hashUnique u) qq
+		LuaTable
+			{ luaTableUnique = u
+			} -> enclose $ \qq -> "LuaTable { luaTableUnique = " ++ showsPrec 0 (hashUnique u) qq
+		where enclose f = if p >= 10 then '(' : f (')' : q) else f q
+
 data LuaError
 	-- | Standard Lua error (e.g. thrown by 'error' stdlib function).
 	= LuaError !LuaValue
