@@ -125,17 +125,29 @@ registerLuaStdLib env@LuaTable
 	func "rawlen" $ \(t:_) -> case t of
 		LuaString s -> return [LuaInteger $ T.length s]
 		LuaTable
-			{ luaTable = tt
+			{ luaTableLength = lenRef
 			} -> do
-			r <- HT.toList tt -- FIXME: slow
-			return [LuaInteger $ length r]
+			r <- readIORef lenRef
+			return [LuaInteger r]
 		_ -> throwIO $ LuaBadOperation "rawlen: table or string expected"
 
 	func "rawset" $ \(t:i:v:_) -> case t of
 		LuaTable
 			{ luaTable = tt
+			, luaTableLength = lenRef
 			} -> do
-			HT.insert tt i v
+			mv <- HT.lookup tt i
+			case mv of
+				Just _ -> case v of
+					LuaNil -> do
+						HT.delete tt i
+						modifyIORef' lenRef (+ (-1))
+					_ -> HT.insert tt i v
+				Nothing -> case v of
+					LuaNil -> return ()
+					_ -> do
+						HT.insert tt i v
+						modifyIORef' lenRef (+ 1)
 			return [t]
 		_ -> throwIO $ LuaBadOperation "rawset: table expected"
 

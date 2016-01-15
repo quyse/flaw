@@ -43,6 +43,7 @@ data LuaValue where
 	LuaTable ::
 		{ luaTableUnique :: !Unique
 		, luaTable :: !(HT.CuckooHashTable LuaValue LuaValue)
+		, luaTableLength :: !(IORef Int)
 		, luaTableMetaTable :: !(IORef LuaValue)
 		} -> LuaValue
 

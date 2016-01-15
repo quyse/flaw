@@ -231,8 +231,8 @@ luaValueLen a = case a of
 	LuaString s -> return $ LuaInteger $ T.length s
 	_ -> tryUnaryMetaMethodOr "__len" a $ case a of
 		LuaTable
-			{ luaTable = table
-			} -> liftM (LuaInteger . length) $ HT.toList table -- FIXME: slow
+			{ luaTableLength = lenRef
+			} -> liftM LuaInteger $ readIORef lenRef
 		_ -> throwIO $ LuaBadOperation "__len"
 
 luaValueConcat :: LuaValue -> LuaValue -> IO LuaValue
@@ -242,7 +242,7 @@ luaValueConcat a b = case (luaCoerceToString a, luaCoerceToString b) of
 
 luaValueEq :: LuaValue -> LuaValue -> IO LuaValue
 luaValueEq a b = if a == b then return $ LuaBoolean True
-	else liftM (LuaBoolean . luaCoerceToBool) $ tryBinaryMetaMethod "__eq" a b
+	else liftM (LuaBoolean . luaCoerceToBool) $ tryBinaryMetaMethodOr "__eq" a b $ return $ LuaBoolean False
 
 luaValueLt :: LuaValue -> LuaValue -> IO LuaValue
 luaValueLt a b = case (a, b) of
@@ -292,11 +292,25 @@ luaValueSet :: LuaValue -> LuaValue -> LuaValue -> IO ()
 luaValueSet t i v = case t of
 	LuaTable
 		{ luaTable = tt
+		, luaTableLength = lenRef
 		, luaTableMetaTable = mtRef
 		} -> do
+
+		let setExisting = case v of
+			LuaNil -> do
+				HT.delete tt i
+				modifyIORef' lenRef (+ (-1))
+			_ -> HT.insert tt i v
+
+		let setNew = case v of
+			LuaNil -> return ()
+			_ -> do
+				HT.insert tt i v
+				modifyIORef' lenRef (+ 1)
+
 		mv <- HT.lookup tt i
 		case mv of
-			Just _ -> HT.insert tt i v
+			Just _ -> setExisting
 			Nothing -> do
 				mt <- readIORef mtRef
 				case mt of
@@ -311,8 +325,8 @@ luaValueSet t i v = case t of
 									} -> void $ c [t, i, v]
 								nt@LuaTable {} -> luaValueSet nt i v
 								_ -> throwIO $ LuaBadOperation "__newindex"
-							Nothing -> HT.insert tt i v
-					_ -> HT.insert tt i v
+							Nothing -> setNew
+					_ -> setNew
 	_ -> throwIO $ LuaBadOperation "__newindex"
 
 luaValueCall :: LuaValue -> [LuaValue] -> IO [LuaValue]
@@ -336,26 +350,19 @@ luaValueCall func args = case func of
 	_ -> throwIO $ LuaBadOperation "__call"
 
 luaNewTable :: IO LuaValue
-luaNewTable = do
-	u <- newUnique
-	t <- HT.new
-	mtRef <- newIORef LuaNil
-	return LuaTable
-		{ luaTableUnique = u
-		, luaTable = t
-		, luaTableMetaTable = mtRef
-		}
-
 luaNewTableSized :: Int -> IO LuaValue
-luaNewTableSized size = do
-	u <- newUnique
-	t <- HT.newSized size
-	mtRef <- newIORef LuaNil
-	return LuaTable
-		{ luaTableUnique = u
-		, luaTable = t
-		, luaTableMetaTable = mtRef
-		}
+(luaNewTable, luaNewTableSized) = let
+	create t = do
+		u <- newUnique
+		lenRef <- newIORef 0
+		mtRef <- newIORef LuaNil
+		return LuaTable
+			{ luaTableUnique = u
+			, luaTable = t
+			, luaTableLength = lenRef
+			, luaTableMetaTable = mtRef
+			}
+	in (create =<< HT.new, \size -> create =<< HT.newSized size)
 
 luaNewClosure :: ([LuaValue] -> IO [LuaValue]) -> IO LuaValue
 luaNewClosure f = do
