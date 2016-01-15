@@ -7,7 +7,18 @@ License: MIT
 {-# LANGUAGE OverloadedStrings, PatternSynonyms #-}
 
 module Flaw.Script.Lua.FFI
-	( pattern LUA_TNIL
+	( luaNewState
+	, luaLoadChunk
+
+	, pattern LUA_OK
+	, pattern LUA_YIELD
+	, pattern LUA_ERRRUN
+	, pattern LUA_ERRSYNTAX
+	, pattern LUA_ERRMEM
+	, pattern LUA_ERRGCMM
+	, pattern LUA_ERRERR
+
+	, pattern LUA_TNIL
 	, pattern LUA_TBOOLEAN
 	, pattern LUA_TLIGHTUSERDATA
 	, pattern LUA_TNUMBER
@@ -75,13 +86,26 @@ module Flaw.Script.Lua.FFI
 	, pattern OP_EXTRAARG
 	) where
 
-{-
+import Control.Exception
+import Control.Monad
+import qualified Data.ByteString as B
+import qualified Data.ByteString.Unsafe as B
+import Data.IORef
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
+import Foreign.C.Types
+import Foreign.Marshal.Alloc
+import Foreign.Ptr
+import Foreign.Storable
+
+import Flaw.Script.Lua
+
 data C_lua_State
 
-newLuaState :: IO (Ptr C_lua_State, IO ())
-newLuaState = do
-	let alloc = wrap_C_lua_Alloc $ \ud ptr osize nsize -> do
-		if nsize > 0 then reallocBytes ptr nsize
+luaNewState :: IO (Ptr C_lua_State, IO ())
+luaNewState = do
+	alloc <- wrap_C_lua_Alloc $ \_ ptr _osize nsize -> do
+		if nsize > 0 then reallocBytes ptr (fromIntegral nsize)
 		else do
 			free ptr
 			return nullPtr
@@ -89,33 +113,64 @@ newLuaState = do
 	return (statePtr, lua_close statePtr)
 
 -- | Load Lua code or bytecode, and return bytecode.
-loadLuaByteCode :: Ptr C_lua_State -> T.Text -> B.ByteString -> IO B.ByteString
-loadLuaByteCode luaStatePtr chunkName bytes = do
-	B.unsafeUseAsCStringLen bytes $ (bytesPtr, bytesLen) -> do
+luaLoadChunk :: Ptr C_lua_State -> T.Text -> B.ByteString -> IO B.ByteString
+luaLoadChunk luaStatePtr chunkName bytes = do
+	B.unsafeUseAsCStringLen bytes $ \(bytesPtr, bytesLen) -> do
 		finishedReadingRef <- newIORef False
-		let reader _ _ sizePtr = do
+		reader <- wrap_C_lua_Reader $ \_ _ sizePtr -> do
 			finishedReading <- readIORef finishedReadingRef
 			if finishedReading then do
 				poke sizePtr 0
 				return nullPtr
 			else do
 				writeIORef finishedReadingRef True
-				poke sizePtr bytesLen
+				poke sizePtr (fromIntegral bytesLen)
 				return bytesPtr
 		B.useAsCString (T.encodeUtf8 chunkName) $ \chunkNamePtr -> do
-			lua_load luaStatePtr (wrap_C_lua_Reader reader) nullPtr chunkNamePtr nullPtr
+			r <- lua_load luaStatePtr reader nullPtr chunkNamePtr nullPtr
+			when (r /= LUA_OK) $ do
+				errBytes <- B.packCString =<< lua_tostring luaStatePtr (-1)
+				lua_pop luaStatePtr 1
+				throwIO $ LuaLoadError $ T.decodeUtf8 errBytes
+		chunksRef <- newIORef []
+		writer <- wrap_C_lua_Writer $ \_ ptr size _ -> do
+			bs <- B.packCStringLen (castPtr ptr, fromIntegral size)
+			modifyIORef' chunksRef (bs :)
+			return 0
+		r <- lua_dump luaStatePtr writer nullPtr 0
+		lua_pop luaStatePtr 1
+		when (r /= LUA_OK) $ throwIO $ LuaLoadError "failed to dump chunk"
+		chunks <- readIORef chunksRef
+		return $ B.concat $ reverse chunks
 
 type C_lua_Alloc = Ptr () -> Ptr () -> CSize -> CSize -> IO (Ptr ())
-type C_lua_Reader = Ptr C_lua_State -> Ptr () -> CSize -> IO (Ptr CChar)
+type C_lua_Reader = Ptr C_lua_State -> Ptr () -> Ptr CSize -> IO (Ptr CChar)
+type C_lua_Writer = Ptr C_lua_State -> Ptr () -> CSize -> Ptr () -> IO CInt
 
 foreign import ccall safe lua_newstate :: FunPtr C_lua_Alloc -> Ptr () -> IO (Ptr C_lua_State)
 foreign import ccall safe lua_close :: Ptr C_lua_State -> IO ()
 foreign import ccall safe lua_load :: Ptr C_lua_State -> FunPtr C_lua_Reader -> Ptr () -> Ptr CChar -> Ptr CChar -> IO CInt
 foreign import ccall safe lua_dump :: Ptr C_lua_State -> FunPtr C_lua_Writer -> Ptr () -> CInt -> IO CInt
 
+foreign import ccall safe lua_settop :: Ptr C_lua_State -> CInt -> IO ()
+lua_pop :: Ptr C_lua_State -> CInt -> IO ()
+lua_pop s n = lua_settop s ((-1) - n)
+
+foreign import ccall safe lua_tolstring :: Ptr C_lua_State -> CInt -> Ptr CSize -> IO (Ptr CChar)
+lua_tostring :: Ptr C_lua_State -> CInt -> IO (Ptr CChar)
+lua_tostring s i = lua_tolstring s i nullPtr
+
 foreign import ccall "wrapper" wrap_C_lua_Alloc :: C_lua_Alloc -> IO (FunPtr C_lua_Alloc)
 foreign import ccall "wrapper" wrap_C_lua_Reader :: C_lua_Reader -> IO (FunPtr C_lua_Reader)
--}
+foreign import ccall "wrapper" wrap_C_lua_Writer :: C_lua_Writer -> IO (FunPtr C_lua_Writer)
+
+pattern LUA_OK = 0
+pattern LUA_YIELD = 1
+pattern LUA_ERRRUN = 2
+pattern LUA_ERRSYNTAX = 3
+pattern LUA_ERRMEM = 4
+pattern LUA_ERRGCMM = 5
+pattern LUA_ERRERR = 6
 
 pattern LUA_TNIL = 0
 pattern LUA_TBOOLEAN = 1

@@ -95,8 +95,10 @@ instance Show LuaValue where
 		where enclose f = if p >= 10 then '(' : f (')' : q) else f q
 
 data LuaError
+	-- | Error while loading Lua chunk.
+	= LuaLoadError !T.Text
 	-- | Standard Lua error (e.g. thrown by 'error' stdlib function).
-	= LuaError !LuaValue
+	| LuaError !LuaValue
 	-- | Operation is called on unsupported value, and value
 	-- doesn't have metatable, or doesn't have specific metamethod.
 	| LuaBadOperation !T.Text

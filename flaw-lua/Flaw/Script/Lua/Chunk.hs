@@ -7,7 +7,7 @@ License: MIT
 {-# LANGUAGE TemplateHaskell #-}
 
 module Flaw.Script.Lua.Chunk
-	( compileLuaChunk
+	( luaCompileChunk
 	) where
 
 import Control.Monad
@@ -71,8 +71,8 @@ data LuaProto = LuaProto
 	}
 
 -- | Compile Lua chunk.
-compileLuaChunk :: B.ByteString -> ExpQ
-compileLuaChunk bytes = do
+luaCompileChunk :: B.ByteString -> ExpQ
+luaCompileChunk bytes = do
 
 	-- parse
 	runIO $ B.writeFile "header.luab" luaChunkHeader
