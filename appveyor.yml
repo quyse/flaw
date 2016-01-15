@@ -37,6 +37,7 @@ test_script:
   flaw-game
   flaw-graphics
   flaw-input
+  flaw-lua
   flaw-math
   flaw-oil
   flaw-oil-client
