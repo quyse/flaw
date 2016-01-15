@@ -39,7 +39,6 @@ data LuaValue where
 	LuaUserData ::
 		{ luaUserDataUnique :: !Unique
 		, luaUserData :: !a
-		, luaUserDataMetaTable :: !(IORef LuaValue)
 		} -> LuaValue
 	LuaTable ::
 		{ luaTableUnique :: !Unique
@@ -77,9 +76,11 @@ instance Hashable LuaValue where
 			} -> s `hashWithSalt` (7 :: Int) `hashWithSalt` hashUnique u
 
 data LuaError
+	-- | Standard Lua error (e.g. thrown by 'error' stdlib function).
+	= LuaError !LuaValue
 	-- | Operation is called on unsupported value, and value
 	-- doesn't have metatable, or doesn't have specific metamethod.
-	= LuaBadOperation T.Text
+	| LuaBadOperation !T.Text
 	deriving Show
 
 instance Exception LuaError

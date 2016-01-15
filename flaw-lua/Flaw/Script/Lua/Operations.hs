@@ -32,7 +32,12 @@ module Flaw.Script.Lua.Operations
 	, luaValueEq
 	, luaValueLt
 	, luaValueLe
+	, luaValueGet
+	, luaValueSet
 	, luaValueCall
+	, luaNewTable
+	, luaNewTableSized
+	, luaNewClosure
 	) where
 
 import Control.Exception
@@ -102,23 +107,17 @@ luaValueShow a = case a of
 		return $ "{ " <> foldr (<>) "}" s
 
 getMetaTable :: LuaValue -> IO (Maybe (HT.CuckooHashTable LuaValue LuaValue))
-getMetaTable v = do
-	let maybeMetaTableRef = case v of
-		LuaUserData
-			{ luaUserDataMetaTable = metaTableRef
-			} -> Just metaTableRef
-		LuaTable
-			{ luaTableMetaTable = metaTableRef
-			} -> Just metaTableRef
-		_ -> Nothing
-	maybeMetaTable <- case maybeMetaTableRef of
-		Just metaTableRef -> liftM Just $ readIORef metaTableRef
-		Nothing -> return Nothing
-	return $ case maybeMetaTable of
-		Just LuaTable
-			{ luaTable = table
-			} -> Just table
-		_ -> Nothing
+getMetaTable v = case v of
+	LuaTable
+		{ luaTableMetaTable = metaTableRef
+		} -> do
+		metaTable <- readIORef metaTableRef
+		return $ case metaTable of
+			LuaTable
+				{ luaTable = table
+				} -> Just table
+			_ -> Nothing
+	_ -> return Nothing
 
 tryUnaryMetaMethod :: T.Text -> LuaValue -> IO LuaValue
 tryUnaryMetaMethod opName a = tryUnaryMetaMethodOr opName a $ throwIO $ LuaBadOperation opName
@@ -262,9 +261,106 @@ luaValueLe a b = case (a, b) of
 		_ -> liftM (LuaBoolean . luaCoerceToBool) $ tryBinaryMetaMethodOr "__le" a b $
 			liftM (LuaBoolean . not . luaCoerceToBool) $ tryBinaryMetaMethod "__lt" b a
 
+luaValueGet :: LuaValue -> LuaValue -> IO LuaValue
+luaValueGet t i = case t of
+	LuaTable
+		{ luaTable = tt
+		, luaTableMetaTable = mtRef
+		} -> do
+		mv <- HT.lookup tt i
+		case mv of
+			Just v -> return v
+			Nothing -> do
+				mt <- readIORef mtRef
+				case mt of
+					LuaTable
+						{ luaTable = mtt
+						} -> do
+						mmm <- HT.lookup mtt $ LuaString "__index"
+						case mmm of
+							Just mm -> case mm of
+								LuaClosure
+									{ luaClosure = c
+									} -> liftM head $ c [t, i]
+								nt@LuaTable {} -> luaValueGet nt i
+								_ -> throwIO $ LuaBadOperation "__index"
+							Nothing -> return LuaNil
+					_ -> return LuaNil
+	_ -> throwIO $ LuaBadOperation "__index"
+
+luaValueSet :: LuaValue -> LuaValue -> LuaValue -> IO ()
+luaValueSet t i v = case t of
+	LuaTable
+		{ luaTable = tt
+		, luaTableMetaTable = mtRef
+		} -> do
+		mv <- HT.lookup tt i
+		case mv of
+			Just _ -> HT.insert tt i v
+			Nothing -> do
+				mt <- readIORef mtRef
+				case mt of
+					LuaTable
+						{ luaTable = mtt
+						} -> do
+						mmm <- HT.lookup mtt $ LuaString "__newindex"
+						case mmm of
+							Just mm -> case mm of
+								LuaClosure
+									{ luaClosure = c
+									} -> void $ c [t, i, v]
+								nt@LuaTable {} -> luaValueSet nt i v
+								_ -> throwIO $ LuaBadOperation "__newindex"
+							Nothing -> HT.insert tt i v
+					_ -> HT.insert tt i v
+	_ -> throwIO $ LuaBadOperation "__newindex"
+
 luaValueCall :: LuaValue -> [LuaValue] -> IO [LuaValue]
 luaValueCall func args = case func of
 	LuaClosure
 		{ luaClosure = f
 		} -> f args
-	_ -> fail "call via metatable is not implemented yet"
+	LuaTable
+		{ luaTableMetaTable = mtRef
+		} -> do
+		mt <- readIORef mtRef
+		case mt of
+			LuaTable
+				{ luaTable = mtt
+				} -> do
+				mmm <- HT.lookup mtt $ LuaString "__call"
+				case mmm of
+					Just mm -> luaValueCall mm $ func : args
+					Nothing -> throwIO $ LuaBadOperation "__call"
+			_ -> throwIO $ LuaBadOperation "__call"
+	_ -> throwIO $ LuaBadOperation "__call"
+
+luaNewTable :: IO LuaValue
+luaNewTable = do
+	u <- newUnique
+	t <- HT.new
+	mtRef <- newIORef LuaNil
+	return LuaTable
+		{ luaTableUnique = u
+		, luaTable = t
+		, luaTableMetaTable = mtRef
+		}
+
+luaNewTableSized :: Int -> IO LuaValue
+luaNewTableSized size = do
+	u <- newUnique
+	t <- HT.newSized size
+	mtRef <- newIORef LuaNil
+	return LuaTable
+		{ luaTableUnique = u
+		, luaTable = t
+		, luaTableMetaTable = mtRef
+		}
+
+luaNewClosure :: ([LuaValue] -> IO [LuaValue]) -> IO LuaValue
+luaNewClosure f = do
+	u <- newUnique
+	return LuaClosure
+		{ luaClosureUnique = u
+		, luaClosure = f
+		}

@@ -13,14 +13,11 @@ module Flaw.Script.Lua.Chunk
 import Control.Monad
 import Data.Bits
 import qualified Data.ByteString as B
-import qualified Data.HashTable.IO as HT
 import Data.IORef
-import Data.Maybe
 import qualified Data.Serialize as S
 import Data.String
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
-import Data.Unique
 import qualified Data.Vector as V
 import qualified Data.Vector.Unboxed as VU
 import qualified Data.Vector.Unboxed.Mutable as VUM
@@ -310,38 +307,29 @@ compileLuaFunction LuaProto
 			OP_LOADNIL -> normalFlow $ doE $ flip map [a .. (a + b)] $ \j -> noBindS [| writeIORef $(r j) LuaNil |]
 			OP_GETUPVAL -> normalFlow [| writeIORef $(r a) =<< readIORef $(u b) |]
 			OP_GETTABUP -> normalFlow [| do
-				LuaTable { luaTable = t } <- readIORef $(u b)
-				writeIORef $(r a) =<< liftM (fromMaybe LuaNil) (HT.lookup t =<< $(rk c))
+				t <- readIORef $(u b)
+				writeIORef $(r a) =<< luaValueGet t =<< $(rk c)
 				|]
 			OP_GETTABLE -> normalFlow [| do
-				LuaTable { luaTable = t } <- readIORef $(r b)
-				writeIORef $(r a) =<< liftM (fromMaybe LuaNil) (HT.lookup t =<< $(rk c))
+				t <- readIORef $(r b)
+				writeIORef $(r a) =<< luaValueGet t =<< $(rk c)
 				|]
 			OP_SETTABUP -> normalFlow [| do
-				LuaTable { luaTable = t } <- readIORef $(u a)
+				t <- readIORef $(u a)
 				q <- $(rk b)
-				HT.insert t q =<< $(rk c)
+				luaValueSet t q =<< $(rk c)
 				|]
 			OP_SETUPVAL -> normalFlow [| writeIORef $(u b) =<< readIORef $(r a) |]
 			OP_SETTABLE -> normalFlow [| do
-				LuaTable { luaTable = t } <- readIORef $(r a)
+				t <- readIORef $(r a)
 				q <- $(rk b)
-				HT.insert t q =<< $(rk c)
+				luaValueSet t q =<< $(rk c)
 				|]
-			OP_NEWTABLE -> normalFlow [| do
-				q <- newUnique
-				t <- HT.newSized $(litE $ integerL $ fromIntegral $ max b c)
-				z <- newIORef LuaNil
-				writeIORef $(r a) $ LuaTable
-					{ luaTableUnique = q
-					, luaTable = t
-					, luaTableMetaTable = z
-					}
-				|]
+			OP_NEWTABLE -> normalFlow [| writeIORef $(r a) =<< luaNewTableSized $(litE $ integerL $ fromIntegral $ max b c) |]
 			OP_SELF -> normalFlow [| do
 				writeIORef $(r $ a + 1) =<< readIORef $(r b)
-				LuaTable { luaTable = t } <- readIORef $(r b)
-				writeIORef $(r a) =<< liftM (fromMaybe LuaNil) (HT.lookup t =<< $(rk c))
+				t <- readIORef $(r b)
+				writeIORef $(r a) =<< luaValueGet t =<< $(rk c)
 				|]
 			OP_ADD -> binop [| luaValueAdd |]
 			OP_SUB -> binop [| luaValueSub |]
@@ -453,15 +441,9 @@ compileLuaFunction LuaProto
 				let fpf = 50 -- LFIELDS_PER_FLUSH from lopcodes.h
 				t <- newName "t"
 				let stmts = flip map [1..b] $ \j -> noBindS
-					[| HT.insert $(varE t) (LuaInteger $(litE $ integerL $ fromIntegral $ (offset - 1) * fpf + j)) =<< readIORef $(r $ a + j) |]
-				doE $ (bindS [p| LuaTable { luaTable = $(varP t) } |] [| readIORef $(r a) |]) : stmts
-			OP_CLOSURE -> normalFlow [| do
-				q <- newUnique
-				writeIORef $(r a) $ LuaClosure
-					{ luaClosureUnique = q
-					, luaClosure = $(varE $ functionsNames V.! bx)
-					}
-				|]
+					[| luaValueSet $(varE t) (LuaInteger $(litE $ integerL $ fromIntegral $ (offset - 1) * fpf + j)) =<< readIORef $(r $ a + j) |]
+				doE $ (bindS (varP t) [| readIORef $(r a) |]) : stmts
+			OP_CLOSURE -> normalFlow [| writeIORef $(r a) =<< luaNewClosure $(varE $ functionsNames V.! bx) |]
 			OP_VARARG -> normalFlow $ do
 				when (b == 0) $ reportError "flaw-lua OP_VARARG: getting variable number of arguments is not implemented"
 				let
