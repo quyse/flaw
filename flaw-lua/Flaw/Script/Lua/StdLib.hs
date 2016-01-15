@@ -12,6 +12,7 @@ module Flaw.Script.Lua.StdLib
 
 import Control.Exception
 import Control.Monad
+import Data.Maybe
 import Data.Monoid
 import qualified Data.HashTable.IO as HT
 import qualified Data.Text as T
@@ -102,7 +103,8 @@ registerLuaStdLib env@LuaTable
 
 	notImplementedFunc "pairs"
 
-	notImplementedFunc "pcall"
+	func "pcall" $ \(f:as) -> catch (liftM (LuaBoolean True : ) $ luaValueCall f as) $ \(SomeException e) ->
+		return [LuaBoolean False, LuaString $ T.pack $ show e]
 
 	func "print" $ \as -> do
 		forM_ as $ \a -> case luaCoerceToString a of
@@ -110,15 +112,38 @@ registerLuaStdLib env@LuaTable
 			Nothing -> putStr "<<???>>"
 		return []
 
-	notImplementedFunc "rawequal"
+	func "rawequal" $ \(a:b:_) -> return [LuaBoolean $ a == b]
 
-	notImplementedFunc "rawget"
+	func "rawget" $ \(t:i:_) -> case t of
+		LuaTable
+			{ luaTable = tt
+			} -> do
+			r <- HT.lookup tt i
+			return [fromMaybe LuaNil r]
+		_ -> return [LuaNil]
 
-	notImplementedFunc "rawlen"
+	func "rawlen" $ \(t:_) -> case t of
+		LuaString s -> return [LuaInteger $ T.length s]
+		LuaTable
+			{ luaTable = tt
+			} -> do
+			r <- HT.toList tt -- FIXME: slow
+			return [LuaInteger $ length r]
+		_ -> throwIO $ LuaBadOperation "rawlen: table or string expected"
 
-	notImplementedFunc "rawset"
+	func "rawset" $ \(t:i:v:_) -> case t of
+		LuaTable
+			{ luaTable = tt
+			} -> do
+			HT.insert tt i v
+			return [t]
+		_ -> throwIO $ LuaBadOperation "rawset: table expected"
 
-	notImplementedFunc "select"
+	func "select" $ \(n:as) -> case n of
+		LuaInteger i -> if i == 0 then throwIO $ LuaBadOperation "select: zero index"
+			else return $ if i > 0 then drop (i - 1) as else drop (length as + i) as
+		LuaString "#" -> return [LuaInteger $ length as]
+		_ -> throwIO $ LuaBadOperation "select: non-zero index or string '#' expected"
 
 	func "setmetatable" $ \(t:mt:_) -> case t of
 		LuaTable
@@ -138,7 +163,11 @@ registerLuaStdLib env@LuaTable
 			return [t]
 		_ -> throwIO $ LuaError $ LuaString "setmetatable: not a table"
 
-	notImplementedFunc "tonumber"
+	func "tonumber" $ \(x:_) -> let
+		r = case luaCoerceToNumber x of
+			Just n -> LuaReal n
+			Nothing -> LuaNil
+		in return [r]
 
 	func "tostring" $ \(x:_) -> let
 		r = case luaCoerceToString x of
