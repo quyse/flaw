@@ -105,7 +105,7 @@ registerLuaStdLib env@LuaTable
 
 	func "loadfile" $ [lua|
 		local fileName = ...
-		return _G._chunks[fileName]
+		return _chunks[fileName]
 		|] envRef
 
 	notImplementedFunc "next"
