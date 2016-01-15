@@ -18,6 +18,7 @@ packages:
 - flaw-graphics
 - flaw-input
 - flaw-lua
+- flaw-lua-refimpl
 - flaw-math
 - flaw-oil
 - flaw-oil-client

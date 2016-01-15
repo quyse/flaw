@@ -1,0 +1,48 @@
+name:                flaw-lua-refimpl
+version:             0.1.0.0
+-- synopsis:            
+-- description:         
+license:             MIT
+license-file:        ../LICENSE
+author:              Alexander Bich
+maintainer:          quyse0@gmail.com
+-- copyright:           
+category:            Game
+build-type:          Simple
+-- extra-source-files:  
+cabal-version:       >=1.10
+
+source-repository head
+  type: git
+  location: https://github.com/quyse/flaw.git
+  subdir: flaw-lua-refimpl
+
+library
+  exposed-modules:
+  other-modules:
+  -- other-extensions:    
+  build-depends:       
+  -- hs-source-dirs:      
+  default-language:    Haskell2010
+  c-sources:
+    src/lua-5.3.2/src/lapi.c
+    src/lua-5.3.2/src/lcode.c
+    src/lua-5.3.2/src/lctype.c
+    src/lua-5.3.2/src/ldebug.c
+    src/lua-5.3.2/src/ldo.c
+    src/lua-5.3.2/src/ldump.c
+    src/lua-5.3.2/src/lfunc.c
+    src/lua-5.3.2/src/lgc.c
+    src/lua-5.3.2/src/llex.c
+    src/lua-5.3.2/src/lmem.c
+    src/lua-5.3.2/src/lobject.c
+    src/lua-5.3.2/src/lopcodes.c
+    src/lua-5.3.2/src/lparser.c
+    src/lua-5.3.2/src/lstate.c
+    src/lua-5.3.2/src/lstring.c
+    src/lua-5.3.2/src/ltable.c
+    src/lua-5.3.2/src/ltm.c
+    src/lua-5.3.2/src/lundump.c
+    src/lua-5.3.2/src/lvm.c
+    src/lua-5.3.2/src/lzio.c
+  cc-options:          -O3
