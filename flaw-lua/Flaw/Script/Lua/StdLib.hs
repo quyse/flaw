@@ -4,7 +4,7 @@ Description: Lua standard library.
 License: MIT
 -}
 
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, QuasiQuotes #-}
 
 module Flaw.Script.Lua.StdLib
 	( registerLuaStdLib
@@ -19,12 +19,15 @@ import qualified Data.Text as T
 import Data.IORef
 
 import Flaw.Script.Lua
+import Flaw.Script.Lua.Build
 import Flaw.Script.Lua.Operations
 
 registerLuaStdLib :: LuaValue -> IO ()
 registerLuaStdLib env@LuaTable
 	{ luaTable = envt
 	} = do
+
+	envRef <- newIORef env
 
 	let func n f = do
 		c <- luaNewClosure f
@@ -60,7 +63,10 @@ registerLuaStdLib env@LuaTable
 				_ -> throwIO $ LuaError $ LuaString "collectgarbage: wrong opt"
 			Nothing -> throwIO $ LuaError $ LuaString "collectgarbage: wrong opt"
 
-	notImplementedFunc "dofile"
+	func "dofile" $ [lua|
+		local fileName = ...
+		return loadfile(fileName)()
+		|] envRef
 
 	func "error" $ \(msg:_) -> throwIO $ LuaError msg
 
@@ -97,7 +103,10 @@ registerLuaStdLib env@LuaTable
 
 	notImplementedFunc "load"
 
-	notImplementedFunc "loadfile"
+	func "loadfile" $ [lua|
+		local fileName = ...
+		return _G._chunks[fileName]
+		|] envRef
 
 	notImplementedFunc "next"
 

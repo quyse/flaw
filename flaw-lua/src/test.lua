@@ -17,11 +17,11 @@ local function test(s, f)
 end
 
 local chunkArg1, chunkArg2 = ...
-test("chunk_args_test", function()
+test("chunk_args", function()
 	assert(chunkArg1 == 123 and chunkArg2 == "hello")
 end)
 
-test("random_test", function()
+test("random", function()
 	local a = 1
 	for i = 1, 100000000 do
 		a = (a * 1103515245 + 12345) & 0x7fffffff
@@ -29,7 +29,7 @@ test("random_test", function()
 	assert(a == 660469505)
 end)
 
-test("table_test", function()
+test("table", function()
 	local t = {}
 	for i = 1, 1000000 do
 		t[i] = i * 2
@@ -103,6 +103,20 @@ test("select", function()
 	assert(a == 3 and b == nil and c == nil)
 	a, b, c = select(-2, 1, 2, 3)
 	assert(a == 2 and b == 3 and c == nil)
+end)
+
+test("dofile", function()
+	local ok = false
+	_G._chunks =
+		{ ["routine.lua"] = function()
+			ok = true
+			end
+		}
+	loadfile("routine.lua")()
+	assert(ok)
+	ok = false
+	dofile("routine.lua")
+	assert(ok)
 end)
 
 if allTestsOk then

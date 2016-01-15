@@ -4,7 +4,7 @@ Description: Tests for Lua implementation in Haskell.
 License: MIT
 -}
 
-{-# LANGUAGE OverloadedStrings, QuasiQuotes, TemplateHaskell #-}
+{-# LANGUAGE OverloadedStrings, TemplateHaskell #-}
 
 module Main
 	( main
