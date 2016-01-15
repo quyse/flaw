@@ -81,7 +81,10 @@ variables:
     --flag hashable:-integer-gmp
     --flag cryptonite:-integer-gmp
     --flag scientific:integer-simple
-  FIX_TH_WINDOWS: "powershell \"Add-Content flaw-font-fthb\\flaw-font-fthb.cabal \\\"  extra-ghci-libraries: all\\\"\""
+  FIX_TH_WINDOWS: >-
+    powershell
+    "Add-Content flaw-font-fthb\flaw-font-fthb.cabal \"  extra-ghci-libraries: all\";
+    Add-Content flaw-lua-refimpl\flaw-lua-refimpl.cabal \"  extra-ghci-libraries: all\""
 
 linux:
   script:
