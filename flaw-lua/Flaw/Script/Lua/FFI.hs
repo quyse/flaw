@@ -132,16 +132,16 @@ luaLoadChunk luaStatePtr chunkName bytes = do
 				errBytes <- B.packCString =<< lua_tostring luaStatePtr (-1)
 				lua_pop luaStatePtr 1
 				throwIO $ LuaLoadError $ T.decodeUtf8 errBytes
-		chunksRef <- newIORef []
-		writer <- wrap_C_lua_Writer $ \_ ptr size _ -> do
-			bs <- B.packCStringLen (castPtr ptr, fromIntegral size)
-			modifyIORef' chunksRef (bs :)
-			return 0
-		r <- lua_dump luaStatePtr writer nullPtr 0
-		lua_pop luaStatePtr 1
-		when (r /= LUA_OK) $ throwIO $ LuaLoadError "failed to dump chunk"
-		chunks <- readIORef chunksRef
-		return $ B.concat $ reverse chunks
+	chunksRef <- newIORef []
+	writer <- wrap_C_lua_Writer $ \_ ptr size _ -> do
+		bs <- B.packCStringLen (castPtr ptr, fromIntegral size)
+		modifyIORef' chunksRef (bs :)
+		return 0
+	r <- lua_dump luaStatePtr writer nullPtr 0
+	lua_pop luaStatePtr 1
+	when (r /= LUA_OK) $ throwIO $ LuaLoadError "failed to dump chunk"
+	chunks <- readIORef chunksRef
+	return $ B.concat $ reverse chunks
 
 type C_lua_Alloc = Ptr () -> Ptr () -> CSize -> CSize -> IO (Ptr ())
 type C_lua_Reader = Ptr C_lua_State -> Ptr () -> Ptr CSize -> IO (Ptr CChar)

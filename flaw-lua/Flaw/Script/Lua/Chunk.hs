@@ -75,7 +75,6 @@ luaCompileChunk :: B.ByteString -> ExpQ
 luaCompileChunk bytes = do
 
 	-- parse
-	runIO $ B.writeFile "header.luab" luaChunkHeader
 	let eitherProto = flip S.runGet bytes $ do
 		chunkHeader <- S.getByteString (B.length luaChunkHeader)
 		when (chunkHeader /= luaChunkHeader) $ fail "wrong Lua chunk header"

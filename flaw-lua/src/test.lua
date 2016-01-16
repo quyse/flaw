@@ -119,8 +119,5 @@ test("dofile", function()
 	assert(ok)
 end)
 
-if allTestsOk then
-	print("ALL TESTS OK")
-else
-	assert(false, "SOME TESTS FAILED")
-end
+assert(allTestsOk, "SOME TESTS FAILED")
+print("ALL TESTS OK")
