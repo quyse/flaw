@@ -21,6 +21,10 @@ FLAW is a highly experimental game engine written in Haskell. In very early stag
 
 * High-level GUI framework made from scratch (i.e. neither using native GUIs nor frameworks like Qt)
 
+## Experiments
+
+* TH-based Lua-to-Haskell compiler.
+
 ## Dreams
 
 * TH-generated bindings for scripting languages

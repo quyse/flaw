@@ -18,11 +18,8 @@ The implementation is very experimental and by no means complete.
 ## Limitations
 
 * No support for `load` standard function. As there's no interpreter, all chunks must be known at compile time. However, to make it easier to run existing Lua code, `loadfile` is implemented via usage of pre-embedded functions from environment: it simply returns `_G._chunks[filename]`. That way you can compile and embed all chunks into Haskell program and put them into `_chunks` table, therefore existing Lua code calling `loadfile` will work without modifications. `dofile` calls `loadfile`, so it works too.
-* No support for dynamic number of results returned from a function or by `return` statement. (For those familiar with Lua internals, no support for `stack top` value). This arises in innocent code like `f(g())` where all results from `g` invocation (whatever their number is) should be provided to `f`. It's just not implemented yet.
 
 ## How it works
-
-Translation is quite straightforward.
 
 * Every Lua function becomes a Haskell function running in normal `IO` monad.
 * Locally defined Lua functions become locally `let`-defined Haskell functions, and Lua closures are real Haskell closures, so no special machinery for keeping closure's upvalues needed.
