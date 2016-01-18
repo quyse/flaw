@@ -172,8 +172,27 @@ luaCompileChunk bytes = do
 data LuaInst = LuaInst
 	-- | Indices of instructions this instruction refers to.
 	[Int]
-	-- ^ Function accepting list of instructions (corresponding to indices), and returning this instruction.
-	([[StmtQ]] -> Q [StmtQ])
+	-- ^ Function accepting list of codes (corresponding to indices),
+	-- and returning code of the instruction.
+	([LuaCode] -> LuaCode)
+
+-- | Internal representation of instruction's code.
+type LuaCode = LuaCodeState -> Q [StmtQ]
+
+data LuaCodeState = LuaCodeState
+	{
+	  -- | Start register of dynamic arguments.
+	  -- -1 if not set.
+	  luaCodeStateTop :: !Int
+	  -- | Expression representing dynamic arguments (of type [LuaValue]).
+	, luaCodeStateTopValuesE :: ExpQ
+	}
+
+nullCodeState :: LuaCodeState
+nullCodeState = LuaCodeState
+	{ luaCodeStateTop = -1
+	, luaCodeStateTopValuesE = undefined
+	}
 
 -- | Compile Lua function.
 compileLuaFunction :: LuaProto -> V.Vector ExpQ -> V.Vector ExpQ -> ExpQ
@@ -263,31 +282,66 @@ compileLuaFunction LuaProto
 		nextInstId = i + 1
 		nextNextInstId = i + 2
 		-- append next instruction
-		normalFlow e = LuaInst [nextInstId] $ \[nextInstStmts] -> return $ (noBindS e) : nextInstStmts
+		normalFlow e = LuaInst [nextInstId] $ \[nextInstCode] codeState -> liftM ((noBindS e) :) $ nextInstCode codeState
 		-- conditional operation
-		condbinop op = LuaInst [nextInstId, nextNextInstId] $ \[nextInstStmts, nextNextInstStmts] -> return [noBindS [| do
-			p <- $(rk b)
-			q <- $(rk c)
-			z <- $op p q
-			$(if a > 0 then
-				[| if luaCoerceToBool z then $(doE nextInstStmts) else $(doE nextNextInstStmts) |]
-				else
-				[| if luaCoerceToBool z then $(doE nextNextInstStmts) else $(doE nextInstStmts) |])
-			|] ]
+		condbinop op = LuaInst [nextInstId, nextNextInstId] $ \[nextInstCode, nextNextInstCode] codeState -> do
+			nextInstStmts <- nextInstCode codeState
+			nextNextInstStmts <- nextNextInstCode codeState
+			return [noBindS [| do
+				p <- $(rk b)
+				q <- $(rk c)
+				z <- $op p q
+				$(if a > 0 then
+					[| if luaCoerceToBool z then $(doE nextInstStmts) else $(doE nextNextInstStmts) |]
+					else
+					[| if luaCoerceToBool z then $(doE nextNextInstStmts) else $(doE nextInstStmts) |])
+				|] ]
+		-- static arg for call-like operations
+		staticArgStmtAndExp j = do
+			n <- newName $ "a" ++ show j
+			return (bindS (varP n) [| readIORef $(r j) |], varE n)
+		-- get args (possibly dynamic)
+		getArgs :: Either Int [Int] -> LuaCodeState -> Q ([StmtQ], ExpQ)
+		getArgs eargs LuaCodeState
+			{ luaCodeStateTop = top
+			, luaCodeStateTopValuesE = topValuesE
+			} = case eargs of
+			Right args -> do
+				when (top >= 0) $ reportError "flaw-lua: dynamic values are lost"
+				(stmts, argsEs) <- liftM unzip $ mapM staticArgStmtAndExp args
+				return (stmts, listE argsEs)
+			Left firstArg -> do
+				when (top < 0) $ reportError "flaw-lua: expected dynamic values for opcode"
+				(stmts, argsEs) <- liftM unzip $ mapM staticArgStmtAndExp [firstArg .. (top - 1)]
+				return (stmts, foldr (\p q -> [| $p : $q |]) topValuesE argsEs)
+		putRets :: Either Int [Int] -> ExpQ -> LuaCode -> LuaCodeState -> Q [StmtQ]
+		putRets erets mainE nextInstCode codeState = case erets of
+			Right rets -> do
+				(retsStmts, retsPats) <- liftM unzip $ forM rets $ \j -> do
+					n <- newName $ "r" ++ show j
+					return (noBindS [| writeIORef $(r j) $(varE n) |], varP n)
+				let retPat = foldr (\p q -> [p| $p : $q |]) wildP retsPats
+				let mainStmt = if null rets then noBindS [| void $mainE |]
+					else bindS retPat [| liftM (++ repeat LuaNil) $mainE |]
+				nextInstStmts <- nextInstCode codeState
+					{ luaCodeStateTop = -1
+					}
+				return $ mainStmt : retsStmts ++ nextInstStmts
+			Left firstRet -> do
+				retsName <- newName "r"
+				let mainStmt = bindS (varP retsName) mainE
+				nextInstStmts <- nextInstCode codeState
+					{ luaCodeStateTop = firstRet
+					, luaCodeStateTopValuesE = varE retsName
+					}
+				return $ mainStmt : nextInstStmts
 		-- call operation
-		callop args rets = do
-			(callArgsStmts, callArgsNames) <- liftM unzip $ forM args $ \j -> do
-				n <- newName $ "a" ++ show j
-				return (bindS (varP n) [| readIORef $(r j) |], n)
+		callop :: Either Int [Int] -> Either Int [Int] -> LuaInst
+		callop eargs erets = LuaInst [nextInstId] $ \[nextInstCode] codeState -> do
+			(getArgsStmts, argsE) <- getArgs eargs codeState
 			f <- newName "f"
-			retsNames <- forM rets $ \j -> newName $ "r" ++ show j
-			let retPat = foldr (\p q -> [p| $(varP p) : $q |]) wildP retsNames
-			let retsStmts = flip map (zip rets retsNames) $ \(j, n) -> noBindS [| writeIORef $(r j) $(varE n) |]
-			let callE = [| luaValueCall $(varE f) $(listE $ map varE callArgsNames) |]
-			let retsAndCallStmts =
-				if null rets then [noBindS [| void $callE |] ]
-				else (bindS retPat [| liftM (++ repeat LuaNil) $callE |]) : retsStmts
-			doE $ (bindS (varP f) [| readIORef $(r a) |]) : callArgsStmts ++ retsAndCallStmts
+			putRetsStmts <- putRets erets [| luaValueCall $(varE f) $argsE |] nextInstCode codeState
+			return $ (bindS (varP f) [| readIORef $(r a) |]) : getArgsStmts ++ putRetsStmts
 		-- get ax from extra arg
 		extraArg = do
 			let nx = opcodes VU.! (i + 1)
@@ -298,11 +352,13 @@ compileLuaFunction LuaProto
 		in case x .&. (bit 6 - 1) of
 			OP_MOVE -> normalFlow [| writeIORef $(r a) =<< readIORef $(r b) |]
 			OP_LOADK -> normalFlow [| writeIORef $(r a) $kbx |]
-			OP_LOADKX -> LuaInst [nextNextInstId] $ \[nextNextInstStmts] -> do
+			OP_LOADKX -> LuaInst [nextNextInstId] $ \[nextNextInstCode] codeState -> do
 				nax <- extraArg
+				nextNextInstStmts <- nextNextInstCode codeState
 				return $ (noBindS [| writeIORef $(r a) $(kst nax) |]) : nextNextInstStmts
-			OP_LOADBOOL -> LuaInst [if c > 0 then nextNextInstId else nextInstId] $ \[followingInstStmts] -> return $
-				(noBindS [| writeIORef $(r a) $ LuaBoolean $(conE $ if b > 0 then 'True else 'False) |]) : followingInstStmts
+			OP_LOADBOOL -> LuaInst [if c > 0 then nextNextInstId else nextInstId] $ \[followingInstCode] codeState -> do
+				followingInstStmts <- followingInstCode codeState
+				return $ (noBindS [| writeIORef $(r a) $ LuaBoolean $(conE $ if b > 0 then 'True else 'False) |]) : followingInstStmts
 			OP_LOADNIL -> normalFlow $ doE $ flip map [a .. (a + b)] $ \j -> noBindS [| writeIORef $(r j) LuaNil |]
 			OP_GETUPVAL -> normalFlow [| writeIORef $(r a) =<< readIORef $(u b) |]
 			OP_GETTABUP -> normalFlow [| do
@@ -363,132 +419,142 @@ compileLuaFunction LuaProto
 							)
 				(stmts, e) <- f [b..c]
 				doE $ stmts ++ [noBindS [| writeIORef $(r a) $e |]]
-			OP_JMP -> LuaInst [i + sbx + 1] $ \[jmpInstStmts] -> return jmpInstStmts
+			OP_JMP -> LuaInst [i + sbx + 1] $ \[jmpInstCode] codeState -> do
+				jmpInstStmts <- jmpInstCode codeState
+				return jmpInstStmts
 			OP_EQ -> condbinop [| luaValueEq |]
 			OP_LT -> condbinop [| luaValueLt |]
 			OP_LE -> condbinop [| luaValueLe |]
-			OP_TEST -> LuaInst [nextInstId, nextNextInstId] $ \[nextInstStmts, nextNextInstStmts] -> return [noBindS [| do
-				p <- readIORef $(r a)
-				$(if c > 0 then
-					[| if luaCoerceToBool p then $(doE nextInstStmts) else $(doE nextNextInstStmts) |]
-					else
-					[| if luaCoerceToBool p then $(doE nextNextInstStmts) else $(doE nextInstStmts) |])
-				|] ]
-			OP_TESTSET -> LuaInst [nextInstId, nextNextInstId] $ \[nextInstStmts, nextNextInstStmts] -> return [noBindS [| do
-				p <- readIORef $(r b)
-				$(if c > 0 then
-					[| if luaCoerceToBool p then do
-						writeIORef $(r a) p
-						$(doE nextInstStmts)
-						else $(doE nextNextInstStmts)
-					|]
-					else
-					[| if luaCoerceToBool p then $(doE nextNextInstStmts) else do
-						writeIORef $(r a) p
-						$(doE nextInstStmts)
-					|])
-				|] ]
-			OP_CALL -> normalFlow $ do
-				when (b == 0) $ reportError "flaw-lua OP_CALL: calling with variable number of arguments is not implemented"
-				when (c == 0) $ reportError "flaw-lua OP_CALL: returning variable number of arguments is not implemented"
-				callop [(a + 1) .. (a + b - 1)] [a .. (a + c - 2)]
-			OP_TAILCALL -> LuaInst [] $ \[] -> do
-				when (b == 0) $ reportError "flaw-lua OP_TAILCALL: calling with variable number of arguments is not implemented"
-				let args = [(a + 1) .. (a + b - 1)]
-				(callArgsStmts, callArgsNames) <- liftM unzip $ forM args $ \j -> do
-					n <- newName $ "a" ++ show j
-					return (bindS (varP n) [| readIORef $(r j) |], n)
+			OP_TEST -> LuaInst [nextInstId, nextNextInstId] $ \[nextInstCode, nextNextInstCode] codeState -> do
+				nextInstStmts <- nextInstCode codeState
+				nextNextInstStmts <- nextNextInstCode codeState
+				return [noBindS [| do
+					p <- readIORef $(r a)
+					$(if c > 0 then
+						[| if luaCoerceToBool p then $(doE nextInstStmts) else $(doE nextNextInstStmts) |]
+						else
+						[| if luaCoerceToBool p then $(doE nextNextInstStmts) else $(doE nextInstStmts) |])
+					|] ]
+			OP_TESTSET -> LuaInst [nextInstId, nextNextInstId] $ \[nextInstCode, nextNextInstCode] codeState -> do
+				nextInstStmts <- nextInstCode codeState
+				nextNextInstStmts <- nextNextInstCode codeState
+				return [noBindS [| do
+					p <- readIORef $(r b)
+					$(if c > 0 then
+						[| if luaCoerceToBool p then $(doE $ (noBindS [| writeIORef $(r a) p |]) : nextInstStmts)
+							else $(doE nextNextInstStmts)
+						|]
+						else
+						[| if luaCoerceToBool p then $(doE nextNextInstStmts)
+							else $(doE $ (noBindS [| writeIORef $(r a) p |]) : nextInstStmts)
+						|])
+					|] ]
+			OP_CALL -> callop
+				(if b == 0 then Left (a + 1) else Right [(a + 1) .. (a + b - 1)])
+				(if c == 0 then Left a else Right [a .. (a + c - 2)])
+			OP_TAILCALL -> LuaInst [] $ \[] codeState -> do
+				(getArgsStmts, argsE) <- getArgs (if b == 0 then Left (a + 1) else Right [(a + 1) .. (a + b - 1)]) codeState
 				f <- newName "f"
-				return [noBindS $ doE $ (bindS (varP f) [| readIORef $(r a) |]) : callArgsStmts ++
-					[ noBindS [| luaValueCall $(varE f) $(listE $ map varE callArgsNames) |]
-					] ]
-			OP_RETURN -> LuaInst [] $ \[] -> do
-				when (b == 0) $ reportError "flaw-lua OP_RETURN: returning variable number of arguments is not implemented"
-				let args = [a .. (a + b - 2)]
-				(retArgsStmts, retArgsNames) <- liftM unzip $ forM args $ \j -> do
-					n <- newName $ "a" ++ show j
-					return (bindS (varP n) [| readIORef $(r j) |], n)
-				return [noBindS $ doE $ retArgsStmts ++ [noBindS [| return $(listE $ map varE retArgsNames) |] ] ]
-			OP_FORLOOP -> LuaInst [nextInstId, i + sbx + 1] $ \[nextInstStmts, jmpInstStmts] -> return [noBindS [| do
-				step <- readIORef $(r $ a + 2)
-				idx <- readIORef $(r a)
-				newIdx <- luaValueAdd idx step
-				writeIORef $(r a) newIdx
-				limit <- readIORef $(r $ a + 1)
-				positiveStep <- luaValueLt (LuaInteger 0) step
-				loop <- if luaCoerceToBool positiveStep then luaValueLe newIdx limit else luaValueLe limit newIdx
-				if luaCoerceToBool loop then $(doE $ (noBindS [| writeIORef $(r $ a + 3) newIdx |]) : jmpInstStmts)
-				else $(doE nextInstStmts)
-				|] ]
-			OP_FORPREP -> LuaInst [i + sbx + 1] $ \[followingInstStmts] -> return $ (noBindS [| do
-				step <- readIORef $(r $ a + 2)
-				idx <- readIORef $(r a)
-				writeIORef $(r a) =<< luaValueSub idx step
-				|]) : followingInstStmts
-			OP_TFORCALL -> normalFlow $ callop [a + 1, a + 2] [(a + 3) .. (a + 2 + c)]
-			OP_TFORLOOP -> LuaInst [nextInstId, i + sbx + 1] $ \[nextInstStmts, followingInstStmts] -> return [noBindS [| do
-				cond <- readIORef $(r $ a + 1)
-				case cond of
-					LuaNil -> $(doE nextInstStmts)
-					_ -> do
-						writeIORef $(r a) cond
-						$(doE followingInstStmts)
-				|] ]
-			OP_SETLIST -> normalFlow $ do
-				when (b == 0) $ reportError "flaw-lua OP_SETLIST: calling with variable number of arguments is not implemented"
+				let callE = [| luaValueCall $(varE f) $argsE |]
+				return $ (bindS (varP f) [| readIORef $(r a) |]) : getArgsStmts ++ [noBindS callE]
+			OP_RETURN -> LuaInst [] $ \[] codeState -> do
+				(getArgsStmts, argsE) <- getArgs (if b == 0 then Left a else Right [a .. (a + b - 2)]) codeState
+				return $ getArgsStmts ++ [noBindS [| return $argsE |] ]
+			OP_FORLOOP -> LuaInst [nextInstId, i + sbx + 1] $ \[nextInstCode, jmpInstCode] _codeState -> do
+				nextInstStmts <- nextInstCode nullCodeState
+				jmpInstStmts <- jmpInstCode nullCodeState
+				return [noBindS [| do
+					step <- readIORef $(r $ a + 2)
+					idx <- readIORef $(r a)
+					newIdx <- luaValueAdd idx step
+					writeIORef $(r a) newIdx
+					limit <- readIORef $(r $ a + 1)
+					positiveStep <- luaValueLt (LuaInteger 0) step
+					loop <- if luaCoerceToBool positiveStep then luaValueLe newIdx limit else luaValueLe limit newIdx
+					if luaCoerceToBool loop then $(doE $ (noBindS [| writeIORef $(r $ a + 3) newIdx |]) : jmpInstStmts)
+					else $(doE nextInstStmts)
+					|] ]
+			OP_FORPREP -> LuaInst [i + sbx + 1] $ \[followingInstCode] codeState -> do
+				followingInstStmts <- followingInstCode codeState
+				return $ (noBindS [| do
+					step <- readIORef $(r $ a + 2)
+					idx <- readIORef $(r a)
+					writeIORef $(r a) =<< luaValueSub idx step
+					|]) : followingInstStmts
+			OP_TFORCALL -> callop
+				(Right [a + 1, a + 2])
+				(Right [(a + 3) .. (a + 2 + c)])
+			OP_TFORLOOP -> LuaInst [nextInstId, i + sbx + 1] $ \[nextInstCode, followingInstCode] _codeState -> do
+				nextInstStmts <- nextInstCode nullCodeState
+				followingInstStmts <- followingInstCode nullCodeState
+				return [noBindS [| do
+					cond <- readIORef $(r $ a + 1)
+					case cond of
+						LuaNil -> $(doE nextInstStmts)
+						_ -> do
+							writeIORef $(r a) cond
+							$(doE followingInstStmts)
+					|] ]
+			OP_SETLIST -> LuaInst [nextInstId] $ \[nextInstCode] codeState -> do
 				offset <- if c == 0 then extraArg else return c
 				let fpf = 50 -- LFIELDS_PER_FLUSH from lopcodes.h
 				t <- newName "t"
-				let stmts = flip map [1..b] $ \j -> noBindS
-					[| luaValueSet $(varE t) (LuaInteger $(litE $ integerL $ fromIntegral $ (offset - 1) * fpf + j)) =<< readIORef $(r $ a + j) |]
-				doE $ (bindS (varP t) [| readIORef $(r a) |]) : stmts
+				(getArgsStmts, argsE) <- getArgs (if b == 0 then Left (a + 1) else Right [(a + 1) .. (a + b)]) codeState
+				nextInstStmts <- nextInstCode codeState
+					{ luaCodeStateTop = -1
+					}
+				return $ getArgsStmts ++
+					[ bindS (varP t) [| readIORef $(r a) |]
+					, noBindS
+						[| forM_ (zip $argsE [1..]) $ \(p, j) -> luaValueSet $(varE t) (LuaInteger $ j + $(litE $ integerL $ fromIntegral $ (offset - 1) * fpf)) p |]
+					] ++ nextInstStmts
 			OP_CLOSURE -> normalFlow [| writeIORef $(r a) =<< luaNewClosure $(varE $ functionsNames V.! bx) |]
-			OP_VARARG -> normalFlow $ do
-				when (b == 0) $ reportError "flaw-lua OP_VARARG: getting variable number of arguments is not implemented"
-				let
-					adjustVararg (j:js) = do
-						q <- newName $ "q" ++ show j
-						z <- newName $ "z" ++ show j
-						(restStmts, restP) <- adjustVararg js
-						return
-							( [ noBindS $ caseE (varE q)
-									[ match [p| $(varP z) : $restP |] (normalB $ doE $
-										(noBindS [| writeIORef $(r j) $(varE z) |]) : restStmts) []
-									, match [p| [] |] (normalB [| return () |]) []
-									]
-								]
-							, varP q
-							)
-					adjustVararg [] = return ([], wildP)
-				(readVarargStmts, varargPat) <- adjustVararg [a .. (a + b - 2)]
-				doE $ (bindS varargPat [| readIORef $(varE varargName) |]) : readVarargStmts
+			OP_VARARG -> LuaInst [nextInstId] $ \[nextInstCode] codeState -> do
+				putRets (if b == 0 then Left a else Right [a .. (a + b - 2)]) [| readIORef $(varE varargName) |] nextInstCode codeState
 			--OP_EXTRAARG -- should not be processed here
-			_ -> LuaInst [] $ \[] -> fail "unknown Lua opcode"
+			_ -> LuaInst [] $ \[] _ -> fail "unknown Lua opcode"
 
 	-- number of instructions referring to this instruction
 	let instructionsRefCounts = VU.create $ do
+		-- mark all instructions reachable from first instruction
+		reachable <- VUM.replicate (VU.length opcodes) False
+		let markReachable i = do
+			alreadyReachable <- VUM.read reachable i
+			unless alreadyReachable $ do
+				VUM.write reachable i True
+				let LuaInst edges _ = instructions V.! i
+				mapM_ markReachable edges
+		markReachable 0
+
 		rc <- VUM.replicate (VU.length opcodes) (0 :: Int)
 		-- force first instruction to have a name
 		VUM.write rc 0 2
 		-- calculate how many instructions refer to every instruction
-		forM_ instructions $ \(LuaInst edges _) -> forM_ edges $ VUM.modify rc (+ 1)
+		flip V.imapM_ instructions $ \i (LuaInst edges _) -> do
+			isRechable <- VUM.read reachable i
+			when isRechable $ forM_ edges $ VUM.modify rc (+ 1)
 		return rc
 
 	-- generate names for instructions
 	instructionsNames <- V.generateM (VU.length opcodes) $ \i -> newName $ "i" ++ show i
 	-- emit stmts for instruction
-	let getInstructionStmts (LuaInst followingInstIds f) = do
-		followingInstsStmts <- forM followingInstIds $ \followingInstId -> do
+	let getInstructionCode (LuaInst followingInstsIds f) = do
+		followingInstsCodes <- forM followingInstsIds $ \followingInstId -> do
 			-- for instruction with one referrer (this one), emit stmts inline
-			if instructionsRefCounts VU.! followingInstId == 1 then getInstructionStmts $ instructions V.! followingInstId
+			if instructionsRefCounts VU.! followingInstId == 1 then getInstructionCode $ instructions V.! followingInstId
 			-- otherwise use name
-			else return [noBindS $ varE $ instructionsNames V.! followingInstId]
-		f followingInstsStmts
+			else return $ \LuaCodeState
+				{ luaCodeStateTop = top
+				} -> do
+				when (top >= 0) $ reportError "flaw-lua: instruction reference cannot send dynamic values"
+				return [noBindS $ varE $ instructionsNames V.! followingInstId]
+		return $ f followingInstsCodes
 	-- emit stmts for all instructions with >1 ref
 	-- instructions with 1 ref will be emitted automatically
 	sharedInstructionsDecs <- liftM (concat . V.toList) $ V.generateM (VU.length opcodes) $ \i ->
 		if instructionsRefCounts VU.! i > 1 then do
-			stmts <- getInstructionStmts $ instructions V.! i
+			code <- getInstructionCode $ instructions V.! i
+			stmts <- code nullCodeState
 			return [valD (varP $ instructionsNames V.! i) (normalB $ doE stmts) []]
 		else return []
 

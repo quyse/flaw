@@ -119,5 +119,21 @@ test("dofile", function()
 	assert(ok)
 end)
 
+test("dynamic_values", function()
+	local function f()
+		return 1, 2, 3
+	end
+	local function p(...)
+		return ...
+	end
+	local function q()
+		return 6, p(5, p(4, f()))
+	end
+	local a1, a2, a3, a4, a5, a6 = q()
+	assert(a1 == 6 and a2 == 5 and a3 == 4 and a4 == 1 and a5 == 2 and a6 == 3)
+	local t = { q() }
+	assert(t[1] == 6 and t[2] == 5 and t[3] == 4 and t[4] == 1 and t[5] == 2 and t[6] == 3)
+end)
+
 assert(allTestsOk, "SOME TESTS FAILED")
 print("ALL TESTS OK")
