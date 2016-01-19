@@ -49,11 +49,11 @@ luaChunkHeader = S.runPut $ do
 	-- size of instruction
 	S.putWord8 $ fromIntegral $ sizeOf (undefined :: Word32)
 	-- size of lua_Integer
-	S.putWord8 $ fromIntegral $ sizeOf (undefined :: Int)
+	S.putWord8 $ fromIntegral $ sizeOf (undefined :: Word64)
 	-- size of lua_Number
 	S.putWord8 $ fromIntegral $ sizeOf (undefined :: Double)
 	-- test lua_Integer
-	S.putWordhost LUAC_INT
+	S.putWord64host LUAC_INT
 	-- test lua_Number
 	S.putFloat64le LUAC_NUM
 
@@ -117,7 +117,7 @@ luaCompileChunk bytes = do
 						n <- S.getFloat64le
 						return [| LuaReal n |]
 					LUA_TNUMINT -> do
-						n <- liftM fromIntegral S.getWordhost :: S.Get Int
+						n <- liftM fromIntegral S.getWord64host :: S.Get Int
 						return [| LuaInteger n |]
 					LUA_TSHRSTR -> getStringConstant
 					LUA_TLNGSTR -> getStringConstant
