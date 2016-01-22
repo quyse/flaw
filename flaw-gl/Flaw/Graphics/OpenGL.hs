@@ -1236,6 +1236,8 @@ createGlContext _deviceId window@SdlWindow
 	-- enable SRGB framebuffer
 	glEnable GL_FRAMEBUFFER_SRGB
 	glCheckErrors 1 "init state"
+	-- enable depth test
+	glEnable GL_DEPTH_TEST
 
 	-- if debug mode requested, setup debug output
 	when (debug && capArbDebugOutput) $ do
