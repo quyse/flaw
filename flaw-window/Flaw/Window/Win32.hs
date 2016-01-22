@@ -4,7 +4,7 @@ Description: Win32 window framework.
 License: MIT
 -}
 
-{-# LANGUAGE GADTs, TypeFamilies #-}
+{-# LANGUAGE GADTs, PatternSynonyms, TypeFamilies #-}
 
 module Flaw.Window.Win32
 	( Win32WindowSystem()
@@ -25,6 +25,7 @@ import Control.Exception
 import Control.Monad
 import Control.Monad.Fix
 import Data.IORef
+import Data.Maybe
 import qualified Data.Text as T
 import qualified Data.Text.Foreign as T
 import Foreign.C.String
@@ -128,14 +129,14 @@ initWin32WindowSystem = do
 
 	return (ws, shutdown)
 
-createWin32Window :: Win32WindowSystem -> T.Text -> Int -> Int -> Int -> Int -> IO (Win32Window, IO ())
-createWin32Window ws title left top width height = internalCreateWin32Window ws title left top width height False
+createWin32Window :: Win32WindowSystem -> T.Text -> Maybe (Int, Int) -> Maybe (Int, Int) -> IO (Win32Window, IO ())
+createWin32Window ws title maybePosition maybeSize = internalCreateWin32Window ws title maybePosition maybeSize False
 
-createLayeredWin32Window :: Win32WindowSystem -> T.Text -> Int -> Int -> Int -> Int -> IO (Win32Window, IO ())
-createLayeredWin32Window ws title left top width height = internalCreateWin32Window ws title left top width height True
+createLayeredWin32Window :: Win32WindowSystem -> T.Text -> Maybe (Int, Int) -> Maybe (Int, Int) -> IO (Win32Window, IO ())
+createLayeredWin32Window ws title maybePosition maybeSize = internalCreateWin32Window ws title maybePosition maybeSize True
 
-internalCreateWin32Window :: Win32WindowSystem -> T.Text -> Int -> Int -> Int -> Int -> Bool -> IO (Win32Window, IO ())
-internalCreateWin32Window ws title left top width height layered = do
+internalCreateWin32Window :: Win32WindowSystem -> T.Text -> Maybe (Int, Int) -> Maybe (Int, Int) -> Bool -> IO (Win32Window, IO ())
+internalCreateWin32Window ws title maybePosition maybeSize layered = do
 	w <- invokeWin32WindowSystem ws $ mfix $ \w -> do
 		-- create callback
 		userCallbacksRef <- newIORef []
@@ -162,6 +163,8 @@ internalCreateWin32Window ws title left top width height layered = do
 					-- free callback
 					freeHaskellFunPtr $ wCallback w
 				_ -> return ()
+		let (left, top) = fromMaybe (CW_USEDEFAULT, CW_USEDEFAULT) maybePosition
+		let (width, height) = fromMaybe (CW_USEDEFAULT, CW_USEDEFAULT) maybeSize
 		-- create window
 		hwnd <- withCWString (T.unpack title) $ \titleCString ->
 			c_createWin32Window (wsHandle ws) titleCString left top width height callback (if layered then 1 else 0)
@@ -255,3 +258,7 @@ foreign import ccall "wrapper" wrapInvokeCallback :: InvokeCallback -> IO (FunPt
 
 type WindowCallback = Word -> WPARAM -> LPARAM -> IO ()
 foreign import ccall "wrapper" wrapWindowCallback :: WindowCallback -> IO (FunPtr WindowCallback)
+
+-- constants
+
+pattern CW_USEDEFAULT = 0x80000000

@@ -19,9 +19,10 @@ import Control.Concurrent.STM
 import Control.Exception
 import Control.Monad
 import qualified Data.ByteString as B
+import qualified Data.HashMap.Strict as HashMap
 import Data.Int
 import Data.IORef
-import qualified Data.HashMap.Strict as HashMap
+import Data.Maybe
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Data.Vector as V
@@ -235,10 +236,10 @@ initSdlWindowSystem debug = withSpecialBook $ \bk -> do
 	-- wait for initialization and return result from thread
 	takeMVar initResultVar
 
-createSdlWindow :: SdlWindowSystem -> T.Text -> Int -> Int -> Int -> Int -> Bool -> IO (SdlWindow, IO ())
+createSdlWindow :: SdlWindowSystem -> T.Text -> Maybe (Int, Int) -> Maybe (Int, Int) -> Bool -> IO (SdlWindow, IO ())
 createSdlWindow ws@SdlWindowSystem
 	{ swsWindows = windowsVar
-	} title x y width height needDepth = invokeSdlWindowSystem ws $ do
+	} title maybePosition maybeSize needDepth = invokeSdlWindowSystem ws $ do
 	-- set up attributes
 	checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_RED_SIZE 8
 	checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_GREEN_SIZE 8
@@ -246,6 +247,9 @@ createSdlWindow ws@SdlWindowSystem
 	checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_ALPHA_SIZE 8
 	checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_DEPTH_SIZE (if needDepth then 16 else 0)
 	checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_STENCIL_SIZE (if needDepth then 8 else 0)
+	-- position and size
+	let (x, y) = fromMaybe (SDL.SDL_WINDOWPOS_UNDEFINED, SDL.SDL_WINDOWPOS_UNDEFINED) maybePosition
+	let (width, height) = fromMaybe (800, 600) maybeSize
 	-- create SDL window
 	windowHandle <- checkSdlResult $ withCString (T.unpack title) $ \titlePtr -> do
 		SDL.createWindow titlePtr

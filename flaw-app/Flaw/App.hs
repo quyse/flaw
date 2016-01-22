@@ -4,12 +4,14 @@ Description: Abstract from platform for app initialization.
 License: MIT
 -}
 
-{-# LANGUAGE CPP, RecursiveDo #-}
+{-# LANGUAGE CPP, GADTs, OverloadedStrings #-}
 
 module Flaw.App
 	( initApp
 	, runApp
 	, exitApp
+	, appConfig
+	, AppConfig(..)
 	, AppWindow
 	, AppGraphicsDevice
 	, AppGraphicsContext
@@ -71,22 +73,39 @@ type AppInputManager = SdlInputManager
 
 #endif
 
+data AppConfig where
+	AppConfig :: BinaryCache c =>
+		{ appConfigTitle :: !T.Text
+		, appConfigWindowPosition :: !(Maybe (Int, Int))
+		, appConfigWindowSize :: !(Maybe (Int, Int))
+		, appConfigNeedDepthBuffer :: !Bool
+		, appConfigBinaryCache :: !c
+		, appConfigDebug :: !Bool
+		} -> AppConfig
 
-initApp
-	:: BinaryCache c
-	=> c -- ^ Binary cache.
-	-> T.Text -- ^ Window title.
-	-> Int -- ^ Window width.
-	-> Int -- ^ Window height.
-	-> Bool -- ^ Create depth buffer.
-	-> Bool -- ^ Enable debug features.
+appConfig :: AppConfig
+appConfig = AppConfig
+	{ appConfigTitle = "flaw app"
+	, appConfigWindowPosition = Nothing
+	, appConfigWindowSize = Nothing
+	, appConfigNeedDepthBuffer = False
+	, appConfigBinaryCache = NullBinaryCache
+	, appConfigDebug = False
+	}
+
+initApp :: AppConfig
 	-> IO
 		( (AppWindow, AppGraphicsDevice, AppGraphicsContext, AppGraphicsPresenter, AppInputManager)
 		, IO ()
 		)
-initApp binaryCache title width height needDepth debug = do
-
-	bk <- newBook
+initApp AppConfig
+	{ appConfigTitle = title
+	, appConfigWindowPosition = maybeWindowPosition
+	, appConfigWindowSize = maybeWindowSize
+	, appConfigNeedDepthBuffer = needDepthBuffer
+	, appConfigBinaryCache = binaryCache
+	, appConfigDebug = debug
+	} = withSpecialBook $ \bk -> do
 
 #if defined(ghcjs_HOST_OS)
 
@@ -96,26 +115,26 @@ initApp binaryCache title width height needDepth debug = do
 
 	inputManager <- initWebInput window
 
-	(graphicsDevice, graphicsContext, presenter) <- book bk $ webglInit domCanvas needDepth
+	(graphicsDevice, graphicsContext, presenter) <- book bk $ webglInit domCanvas needDepthBuffer
 
 #else
 
 #if defined(mingw32_HOST_OS)
 
 	windowSystem <- book bk $ initWin32WindowSystem
-	window <- book bk $ createWin32Window windowSystem title 0 0 width height
+	window <- book bk $ createWin32Window windowSystem title maybeWindowPosition maybeWindowSize
 
 	inputManager <- initWin32Input window
 
 	graphicsSystem <- book bk $ dxgiCreateSystem
 	graphicsDevices <- book bk $ getInstalledDevices graphicsSystem
 	(graphicsDevice, graphicsContext) <- book bk $ dx11CreateDevice (fst $ head graphicsDevices) binaryCache debug
-	presenter <- book bk $ dx11CreatePresenter graphicsDevice window Nothing needDepth
+	presenter <- book bk $ dx11CreatePresenter graphicsDevice window Nothing needDepthBuffer
 
 #else
 
 	windowSystem <- book bk $ initSdlWindowSystem debug
-	window <- book bk $ createSdlWindow windowSystem title 0 0 width height needDepth
+	window <- book bk $ createSdlWindow windowSystem title maybeWindowPosition maybeWindowSize needDepthBuffer
 
 	inputManager <- initSdlInput window
 
@@ -129,13 +148,13 @@ initApp binaryCache title width height needDepth debug = do
 
 #endif
 
-	return ((window, graphicsDevice, graphicsContext, presenter, inputManager), freeBook bk)
+	return (window, graphicsDevice, graphicsContext, presenter, inputManager)
 
 -- | Run app loop.
 -- To exit loop, call `exitApp`.
 {-# INLINE runApp #-}
 runApp :: (Float -> IO ()) -> IO ()
-runApp step = mdo
+runApp step = do
 	let f lastTime = do
 		currentTime <- getCurrentTime
 		let frameTime = fromRational $ toRational $ diffUTCTime currentTime lastTime
