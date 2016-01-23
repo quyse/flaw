@@ -62,7 +62,7 @@ instance ColladaVertex VertexPNTWB where
 		return $ V.generate (cvdCount verticesData) $ \i -> VertexPNTWB
 			{ f_VertexPNTWB_position = positions V.! i
 			, f_VertexPNTWB_normal = normals V.! i
-			, f_VertexPNTWB_texcoord = xy__ $ texcoords V.! i
+			, f_VertexPNTWB_texcoord = let Vec3 tx ty _tz = texcoords V.! i in Vec2 tx (1 - ty)
 			, f_VertexPNTWB_bones = bones V.! i
 			, f_VertexPNTWB_weights = weights V.! i
 			}
