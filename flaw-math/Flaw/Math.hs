@@ -103,7 +103,7 @@ liftM return $ do
 		let packFuncDec = sigD (mkName $ "mat" ++ dimStr) $ foldr (\a b -> [t| $a -> $b |]) (appT (conT dataName) (varT tvA)) $ replicate (dimN * dimM) $ varT tvA
 		let unpackFuncDec = sigD (mkName $ "unmat" ++ dimStr) [t| $(conT dataName) $(varT tvA) -> $(foldl appT (tupleT (dimN * dimM)) $ replicate (dimN * dimM) $ varT tvA) |]
 		return [dataDec, packFuncDec, unpackFuncDec]
-	classD (sequence []) (mkName "Vectorized") [PlainTV tvA] [] $ vecDecs ++ matDecs
+	classD (sequence [ [t| Ord $(varT tvA) |], [t| Show $(varT tvA) |] ]) (mkName "Vectorized") [PlainTV tvA] [] $ vecDecs ++ matDecs
 
 -- Pattern synonyms for vectors and matrices.
 -- TH doesn't support pattern synonyms yet (https://ghc.haskell.org/trac/ghc/ticket/8761), so doing it manually :(
