@@ -94,7 +94,7 @@ instance Transform QuatOffset where
 		m11 m12 m13 m14
 		m21 m22 m23 m24
 		m31 m32 m33 m34
-		_41 _42 _43 _44) = QuatOffset (Quat (Vec4 x y z w)) (Vec3 m14 m24 m34) where
+		_41 _42 _43 _44) = QuatOffset (normalize $ Quat (Vec4 x y z w)) (Vec3 m14 m24 m34) where
 		k = sqrt (1 + m11 + m22 + m33)
 		kk = 0.5 / k
 		x = (m32 - m23) * kk
@@ -166,7 +166,7 @@ instance Transform DualQuat where
 		y = (m13 - m31) * kk
 		z = (m21 - m12) * kk
 		w = k * 0.5
-		q = Quat $ Vec4 x y z w
+		q = normalize $ Quat $ Vec4 x y z w
 	{-# INLINE transformTranslation #-}
 	transformTranslation (Vec3 x y z) = DualQuat (Quat (Vec4 0 0 0 1)) (Quat (Vec4 (x * 0.5) (y * 0.5) (z * 0.5) 0))
 	{-# INLINE transformAxisRotation #-}
