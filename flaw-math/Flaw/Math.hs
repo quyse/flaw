@@ -675,7 +675,7 @@ do
 				] (normalB [| Quat (Vec4
 					($aw * $bx + $ax * $bw + $ay * $bz - $az * $by)
 					($aw * $by - $ax * $bz + $ay * $bw + $az * $bx)
-					($aw * $bz - $ax * $by - $ay * $bx + $az * $bw)
+					($aw * $bz + $ax * $by - $ay * $bx + $az * $bw)
 					($aw * $bw - $ax * $bx - $ay * $by - $az * $bz)
 					)|]) []]
 			, funD 'negate [clause [conP 'Quat [varP v]] (normalB [| Quat (negate $(varE v)) |]) []]
