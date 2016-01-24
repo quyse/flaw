@@ -6,8 +6,11 @@ License: MIT
 
 module Flaw.Math.Transform
 	( Transform(..)
+	, quatAxisRotation
 	, QuatOffset(..)
-	, DualQuaternion(..)
+	, FloatQO, DoubleQO
+	, DualQuat(..)
+	, FloatDQ, DoubleDQ
 	) where
 
 import Flaw.Math
@@ -43,11 +46,13 @@ instance Transform Mat4x4 where
 		0 1 0 y
 		0 0 1 z
 		0 0 0 1
-	transformAxisRotation axis angle = transformToMatrix $ QuatOffset (quaternionAxisRotation axis angle) (Vec3 0 0 0)
+	transformAxisRotation axis angle = transformToMatrix $ QuatOffset (quatAxisRotation axis angle) (Vec3 0 0 0)
 
-{-# INLINE quaternionAxisRotation #-}
-quaternionAxisRotation :: Quaternionized a => Vec3 a -> a -> Quat a
-quaternionAxisRotation (Vec3 x y z) angle = r where
+-- | Quaternion representing rotation around specified axis.
+-- Axis should be normalized.
+{-# INLINE quatAxisRotation #-}
+quatAxisRotation :: Quaternionized a => Vec3 a -> a -> Quat a
+quatAxisRotation (Vec3 x y z) angle = r where
 	ha = angle * 0.5
 	sa = sin ha
 	ca = cos ha
@@ -55,6 +60,9 @@ quaternionAxisRotation (Vec3 x y z) angle = r where
 
 -- | 3D transformation represented by normalized quaternion and offset.
 data QuatOffset a = QuatOffset (Quat a) (Vec3 a) deriving (Eq, Ord, Show)
+
+type FloatQO = QuatOffset Float
+type DoubleQO = QuatOffset Double
 
 instance Transform QuatOffset where
 	{-# INLINE identityTransform #-}
@@ -82,53 +90,84 @@ instance Transform QuatOffset where
 			(xz2 - wy2) (yz2 + wx2) (ww - xx - yy + zz) pz
 			0 0 0 1
 	{-# INLINE transformFromMatrix #-}
-	transformFromMatrix = undefined
+	transformFromMatrix (Mat4x4
+		m11 m12 m13 m14
+		m21 m22 m23 m24
+		m31 m32 m33 m34
+		_41 _42 _43 _44) = QuatOffset (Quat (Vec4 x y z w)) (Vec3 m14 m24 m34) where
+		k = sqrt (1 + m11 + m22 + m33)
+		kk = 0.5 / k
+		x = (m32 - m23) * kk
+		y = (m13 - m31) * kk
+		z = (m21 - m12) * kk
+		w = k * 0.5
 	{-# INLINE transformTranslation #-}
 	transformTranslation p = QuatOffset (Quat (Vec4 0 0 0 1)) p
 	{-# INLINE transformAxisRotation #-}
-	transformAxisRotation axis angle = QuatOffset (quaternionAxisRotation axis angle) (Vec3 0 0 0)
+	transformAxisRotation axis angle = QuatOffset (quatAxisRotation axis angle) (Vec3 0 0 0)
 
 -- | Dual quaternion representing transforms in 3D space.
-data DualQuaternion a = DualQuaternion (Quat a) (Quat a) deriving (Eq, Ord, Show)
+data DualQuat a = DualQuat !(Quat a) !(Quat a) deriving (Eq, Ord, Show)
 
-instance Quaternionized a => Num (DualQuaternion a) where
+type FloatDQ = DualQuat Float
+type DoubleDQ = DualQuat Double
+
+instance Quaternionized a => Num (DualQuat a) where
 	{-# INLINE (+) #-}
-	(DualQuaternion q1 p1) + (DualQuaternion q2 p2) = DualQuaternion (q1 + q2) (p1 + p2)
+	(DualQuat q1 p1) + (DualQuat q2 p2) = DualQuat (q1 + q2) (p1 + p2)
 	{-# INLINE (-) #-}
-	(DualQuaternion q1 p1) - (DualQuaternion q2 p2) = DualQuaternion (q1 - q2) (p1 - p2)
+	(DualQuat q1 p1) - (DualQuat q2 p2) = DualQuat (q1 - q2) (p1 - p2)
 	{-# INLINE (*) #-}
-	(DualQuaternion q1 p1) * (DualQuaternion q2 p2) = DualQuaternion (q1 * q2) (q1 * p2 + p1 * q2)
+	(DualQuat q1 p1) * (DualQuat q2 p2) = DualQuat (q1 * q2) (q1 * p2 + p1 * q2)
 	{-# INLINE negate #-}
-	negate (DualQuaternion q p) = DualQuaternion (negate q) (negate p)
+	negate (DualQuat q p) = DualQuat (negate q) (negate p)
 	{-# INLINE abs #-}
-	abs (DualQuaternion q p) = DualQuaternion (abs q) (abs p)
+	abs (DualQuat q p) = DualQuat (abs q) (abs p)
 	{-# INLINE signum #-}
-	signum = undefined
+	signum = error "signum for DualQuat is not implemented"
 	{-# INLINE fromInteger #-}
-	fromInteger = undefined
+	fromInteger = error "fromInteger for DualQuat is not implemented"
 
-instance Quaternionized a => Conjugate (DualQuaternion a) where
+instance Quaternionized a => Conjugate (DualQuat a) where
 	{-# INLINE conjugate #-}
-	conjugate (DualQuaternion q p) = DualQuaternion (conjugate q) (conjugate p)
+	conjugate (DualQuat q p) = DualQuat (conjugate q) (conjugate p)
 
 {-# INLINE dualConjugate #-}
-dualConjugate :: Quaternionized a => DualQuaternion a -> DualQuaternion a
-dualConjugate (DualQuaternion q p) = DualQuaternion q (-p)
+dualConjugate :: Quaternionized a => DualQuat a -> DualQuat a
+dualConjugate (DualQuat q p) = DualQuat q (negate p)
 
-instance Transform DualQuaternion where
+-- | Equivalent of (dualConjugate . conjugate)
+{-# INLINE dualConjugateConjugate #-}
+dualConjugateConjugate :: Quaternionized a => DualQuat a -> DualQuat a
+dualConjugateConjugate (DualQuat (Quat (Vec4 qx qy qz qw)) (Quat (Vec4 px py pz pw))) =
+	DualQuat (Quat (Vec4 (-qx) (-qy) (-qz) qw)) (Quat (Vec4 px py pz (-pw)))
+
+instance Transform DualQuat where
 	{-# INLINE identityTransform #-}
-	identityTransform = DualQuaternion (Quat (Vec4 0 0 0 1)) (Quat (Vec4 0 0 0 0))
+	identityTransform = DualQuat (Quat (Vec4 0 0 0 1)) (Quat (Vec4 0 0 0 0))
 	{-# INLINE applyTransform #-}
 	applyTransform q (Vec3 x y z) = Vec3 rx ry rz where
-		DualQuaternion _rq (Quat (Vec4 rx ry rz _rw)) = q * a * (dualConjugate $ conjugate q)
-		a = DualQuaternion (Quat (Vec4 0 0 0 1)) (Quat (Vec4 x y z 0))
+		DualQuat _rq (Quat (Vec4 rx ry rz _rw)) = q * a * dualConjugateConjugate q
+		a = DualQuat (Quat (Vec4 0 0 0 1)) (Quat (Vec4 x y z 0))
 	{-# INLINE combineTransform #-}
-	combineTransform q2 q1 = q2 * q1
+	combineTransform = (*)
 	{-# INLINE transformToMatrix #-}
-	transformToMatrix = undefined
+	transformToMatrix (DualQuat q p) = transformToMatrix $ QuatOffset q (Vec3 (x * 2) (y * 2) (z * 2)) where
+		Quat (Vec4 x y z _w) = p * conjugate q
 	{-# INLINE transformFromMatrix #-}
-	transformFromMatrix = undefined
+	transformFromMatrix (Mat4x4
+		m11 m12 m13 m14
+		m21 m22 m23 m24
+		m31 m32 m33 m34
+		_41 _42 _43 _44) = DualQuat q (Quat (Vec4 (m14 * 0.5) (m24 * 0.5) (m34 * 0.5) 0) * q) where
+		k = sqrt (1 + m11 + m22 + m33)
+		kk = 0.5 / k
+		x = (m32 - m23) * kk
+		y = (m13 - m31) * kk
+		z = (m21 - m12) * kk
+		w = k * 0.5
+		q = Quat $ Vec4 x y z w
 	{-# INLINE transformTranslation #-}
-	transformTranslation (Vec3 x y z) = DualQuaternion (Quat (Vec4 0 0 0 1)) (Quat (Vec4 (x * 0.5) (y * 0.5) (z * 0.5) 0))
+	transformTranslation (Vec3 x y z) = DualQuat (Quat (Vec4 0 0 0 1)) (Quat (Vec4 (x * 0.5) (y * 0.5) (z * 0.5) 0))
 	{-# INLINE transformAxisRotation #-}
-	transformAxisRotation axis angle = DualQuaternion (quaternionAxisRotation axis angle) (Quat (Vec4 0 0 0 0))
+	transformAxisRotation axis angle = DualQuat (quatAxisRotation axis angle) (Quat (Vec4 0 0 0 0))
