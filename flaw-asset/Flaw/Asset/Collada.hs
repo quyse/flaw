@@ -11,10 +11,12 @@ module Flaw.Asset.Collada
 	, ColladaM()
 	, ColladaCache(..)
 	, ColladaSettings(..)
+	, getElementAttr
 	, getSingleChildWithTag
 	, runCollada
 	, initColladaCache
 	, getElementById
+	, resolveElement
 	, getAllElementsByTag
 	, ColladaVerticesData(..)
 	, parseTriangles
