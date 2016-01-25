@@ -62,14 +62,28 @@ data PixelSize
 	deriving Show
 
 -- | Texture compression.
+-- Sizes in descriptions are given for 4x4 pixel blocks (obviously).
 data TextureCompression
+	-- | RGB (64 bit, two 5:6:5 values and 4x4 2-bit lookup table).
+	-- Another name: DXT1
 	= TextureCompressionBC1
+	-- | RGB (64 bit, two 5:6:5 values and 4x4 2-bit lookup table,
+	-- with one of the colors in table replaced by transparent color).
+	-- Another name: DXT1
 	| TextureCompressionBC1Alpha
+	-- | RGB (64 bit, same as in BC1) plus alpha (64 bit, i.e. 4 uncompressed bit per pixel)
+	-- Another names: DXT2 - when color is premultiplied by alpha, DXT3 otherwise.
 	| TextureCompressionBC2
+	-- | RGB (64 bit, same as in BC1) plus alpha (64 bit, two 8-bit values plus 4x4 3-bit lookup table).
+	-- Another names: DXT4 - when color is premultiplied by alpha, DXT5 otherwise.
 	| TextureCompressionBC3
+	-- | R (64 bit, two 8-bit values plus 4x4 3-bit lookup table).
 	| TextureCompressionBC4
+	-- | R signed (64 bit, two 8-bit values plus 4x4 3-bit lookup table).
 	| TextureCompressionBC4Signed
+	-- | RG (128 bit, simply two BC4 blocks)
 	| TextureCompressionBC5
+	-- | RG signed (128 bit, simply two BC4 blocks)
 	| TextureCompressionBC5Signed
 	deriving Show
 
