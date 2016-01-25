@@ -14,6 +14,7 @@ module Flaw.Graphics.Program
 	, cnst
 	, constf, const2f, const3f, const4f
 	, cvec11, cvec111, cvec12, cvec21, cvec1111, cvec112, cvec121, cvec211, cvec13, cvec31
+	, cast
 	, attribute
 	, UniformBufferSlot
 	, UniformStorage
@@ -89,6 +90,10 @@ liftM concat $ forM
 		[ sigD funName funType
 		, funD funName [clause (map varP ps) (normalB [| withUndefined $ \ $(varP u) -> $construction |]) []]
 		]
+
+-- | Cast value to other type.
+cast :: (OfValueType a, OfValueType b) => Node a -> Node b
+cast a = withUndefined $ \u -> CastNode (nodeValueType a) (valueType u) a
 
 attribute :: OfAttributeType a => Int -> Int -> Int -> AttributeFormat a -> Program (Node a)
 attribute slot offset divisor format = withUndefinedM $ \u -> withState $ \state@State
