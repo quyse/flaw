@@ -22,6 +22,7 @@ import qualified Data.ByteString as B
 import qualified Data.ByteString.Unsafe as B
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.Text as T
+import qualified Data.Vector as V
 import qualified Data.Vector.Generic as VG
 import qualified Data.Vector.Storable as VS
 import Foreign.Marshal.Array
@@ -66,6 +67,9 @@ instance Embed B.ByteString where
 
 instance Embed BL.ByteString where
 	embedExp bytes = [| unsafePerformIO $(embedIOExp bytes) |]
+
+instance Embed a => Embed (V.Vector a) where
+	embedExp v = [| V.fromList $(embedExp $ V.toList v) |]
 
 instance Embed a => Embed [a] where
 	embedExp a = listE $ map embedExp a
