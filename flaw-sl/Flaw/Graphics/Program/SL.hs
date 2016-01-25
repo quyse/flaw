@@ -59,6 +59,7 @@ nodeInfo node = case node of
 	AcoshNode _ a -> nodeInfo a
 	MulNode _ _ _ a b -> mergeNodeInfo (nodeInfo a) (nodeInfo b)
 	DotNode _ _ a b -> mergeNodeInfo (nodeInfo a) (nodeInfo b)
+	CrossNode _ a b -> mergeNodeInfo (nodeInfo a) (nodeInfo b)
 	NormNode _ _ a -> nodeInfo a
 	Norm2Node _ _ a -> nodeInfo a
 	NormalizeNode _ a -> nodeInfo a

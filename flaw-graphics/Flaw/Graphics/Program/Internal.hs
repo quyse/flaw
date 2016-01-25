@@ -351,6 +351,7 @@ data Node a where
 	AcoshNode :: (OfValueType a, Floating a) => ValueType -> Node a -> Node a
 	MulNode :: (OfValueType a, OfValueType b, Mul a b, OfValueType (MulResult a b)) => ValueType -> ValueType -> ValueType -> Node a -> Node b -> Node (MulResult a b)
 	DotNode :: (OfVectorType v, OfScalarType (VecElement v), Dot v) => ValueType -> ValueType -> Node v -> Node v -> Node (VecElement v)
+	CrossNode :: (OfVectorType v, Cross v) => ValueType -> Node v -> Node v -> Node v
 	NormNode :: (OfVectorType v, OfScalarType (VecElement v), Norm v) => ValueType -> ValueType -> Node v -> Node (VecElement v)
 	Norm2Node :: (OfVectorType v, OfScalarType (VecElement v), Norm v) => ValueType -> ValueType -> Node v -> Node (VecElement v)
 	NormalizeNode :: (OfVectorType v, Normalize v) => ValueType -> Node v -> Node v
@@ -424,6 +425,9 @@ instance (OfValueType a, OfValueType b, OfValueType (MulResult a b), Mul a b) =>
 
 instance (OfVectorType v, Dot v) => Dot (Node v) where
 	dot = DotNode (valueType (undefined :: v)) (valueType (undefined :: VecElement v))
+
+instance (OfVectorType v, Cross v) => Cross (Node v) where
+	cross = CrossNode (valueType (undefined :: v))
 
 instance (OfVectorType v, Norm v) => Norm (Node v) where
 	norm = NormNode (valueType (undefined :: v)) (valueType (undefined :: VecElement v))

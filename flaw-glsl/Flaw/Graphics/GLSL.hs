@@ -506,6 +506,7 @@ glslGenerateProgram GlslConfig
 			AcoshNode _ a -> func1Source "acosh" a
 			MulNode _ _ _ a b -> binaryOpSource '*' a b
 			DotNode _ _ a b -> func2Source "dot" a b
+			CrossNode _ a b -> func2Source "cross" a b
 			NormNode _ _ a -> func1Source "length" a
 			Norm2Node _ _ a -> func1Source "length2" a
 			NormalizeNode _ a -> func1Source "normalize" a
