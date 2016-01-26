@@ -32,7 +32,7 @@ module Flaw.Graphics.Program
 	, sampler2Df, sampler2D2f, sampler2D3f, sampler2D4f
 	, sampler3Df, sampler3D2f, sampler3D3f, sampler3D4f
 	, samplerCubef, samplerCube2f, samplerCube3f, samplerCube4f
-	, sample
+	, sample, sampleOffset, sampleLod, sampleLodOffset, sampleBias, sampleBiasOffset, sampleGrad, sampleGradOffset
 	, temp
 	, rasterize
 	, colorTarget
@@ -47,6 +47,7 @@ module Flaw.Graphics.Program
 import Control.Monad.Reader
 import qualified Data.ByteString.Unsafe as B
 import Data.Char
+import Data.Int
 import Data.IORef
 import Data.Word
 import Foreign.ForeignPtr
@@ -235,8 +236,69 @@ sampler slot dimension = withUndefined2 f where
 	withUndefined2 :: (s -> c -> SamplerNode s c) -> SamplerNode s c
 	withUndefined2 q = q undefined undefined
 
-sample :: (OfValueType s, OfValueType c) => SamplerNode s c -> Node c -> Node s
-sample = SampleNode
+sample :: (OfValueType s, OfVectorType (v c), OfVectorType (v Int32)) => SamplerNode s (v c) -> Node (v c) -> Node s
+sample s c = SampleNode
+	{ sampleNodeSamplerNode = s
+	, sampleNodeCoordsNode = c
+	, sampleNodeOffsetNode = Nothing
+	, sampleNodeLod = SampleNodeAutoLod
+	}
+
+sampleOffset :: (OfValueType s, OfVectorType (v c), OfVectorType (v Int32)) => SamplerNode s (v c) -> Node (v c) -> Node (v Int32) -> Node s
+sampleOffset s c o = SampleNode
+	{ sampleNodeSamplerNode = s
+	, sampleNodeCoordsNode = c
+	, sampleNodeOffsetNode = Just o
+	, sampleNodeLod = SampleNodeAutoLod
+	}
+
+sampleLod :: (OfValueType s, OfVectorType (v c), OfVectorType (v Int32)) => SamplerNode s (v c) -> Node (v c) -> Node c -> Node s
+sampleLod s c l = SampleNode
+	{ sampleNodeSamplerNode = s
+	, sampleNodeCoordsNode = c
+	, sampleNodeOffsetNode = Nothing
+	, sampleNodeLod = SampleNodeLod l
+	}
+
+sampleLodOffset :: (OfValueType s, OfVectorType (v c), OfVectorType (v Int32)) => SamplerNode s (v c) -> Node (v c) -> Node c -> Node (v Int32) -> Node s
+sampleLodOffset s c l o = SampleNode
+	{ sampleNodeSamplerNode = s
+	, sampleNodeCoordsNode = c
+	, sampleNodeOffsetNode = Just o
+	, sampleNodeLod = SampleNodeLod l
+	}
+
+sampleBias :: (OfValueType s, OfVectorType (v c), OfVectorType (v Int32)) => SamplerNode s (v c) -> Node (v c) -> Node c -> Node s
+sampleBias s c b = SampleNode
+	{ sampleNodeSamplerNode = s
+	, sampleNodeCoordsNode = c
+	, sampleNodeOffsetNode = Nothing
+	, sampleNodeLod = SampleNodeBiasLod b
+	}
+
+sampleBiasOffset :: (OfValueType s, OfVectorType (v c), OfVectorType (v Int32)) => SamplerNode s (v c) -> Node (v c) -> Node c -> Node (v Int32) -> Node s
+sampleBiasOffset s c b o = SampleNode
+	{ sampleNodeSamplerNode = s
+	, sampleNodeCoordsNode = c
+	, sampleNodeOffsetNode = Just o
+	, sampleNodeLod = SampleNodeBiasLod b
+	}
+
+sampleGrad :: (OfValueType s, OfVectorType (v c), OfVectorType (v Int32)) => SamplerNode s (v c) -> Node (v c) -> Node (v c) -> Node (v c) -> Node s
+sampleGrad s c gx gy = SampleNode
+	{ sampleNodeSamplerNode = s
+	, sampleNodeCoordsNode = c
+	, sampleNodeOffsetNode = Nothing
+	, sampleNodeLod = SampleNodeGradLod gx gy
+	}
+
+sampleGradOffset :: (OfValueType s, OfVectorType (v c), OfVectorType (v Int32)) => SamplerNode s (v c) -> Node (v c) -> Node (v c) -> Node (v c) -> Node (v Int32) -> Node s
+sampleGradOffset s c gx gy o = SampleNode
+	{ sampleNodeSamplerNode = s
+	, sampleNodeCoordsNode = c
+	, sampleNodeOffsetNode = Just o
+	, sampleNodeLod = SampleNodeGradLod gx gy
+	}
 
 withState :: (State -> IO (State, a)) -> Program a
 withState f = do

@@ -359,9 +359,23 @@ hlslGenerateProgram state = program where
 			InstanceIdNode -> "sI"
 			ComponentNode _ _ c a -> "(" <> nodeSource a <> ")." <> singleton c
 			SwizzleNode _ _ s a ->  "(" <> nodeSource a <> ")." <> fromString s
-			SampleNode (SamplerNode Sampler
-				{ samplerSlot = slot
-				}) c -> "t" <> fromString (show slot) <> ".Sample(s" <> fromString (show slot) <> ", " <> nodeSource c <> ")"
+			SampleNode
+				{ sampleNodeSamplerNode = SamplerNode Sampler
+					{ samplerSlot = slot
+					}
+				, sampleNodeCoordsNode = c
+				, sampleNodeOffsetNode = mo
+				, sampleNodeLod = ll
+				} -> let
+				sc = "(s" <> fromString (show slot) <> ", " <> nodeSource c
+				f = case ll of
+					SampleNodeAutoLod -> "Sample" <> sc
+					SampleNodeLod l -> "SampleLevel" <> sc <> ", " <> nodeSource l
+					SampleNodeBiasLod b -> "SampleBias" <> sc <> ", " <> nodeSource b
+					SampleNodeGradLod gx gy -> "SampleGrad" <> sc <> ", " <> nodeSource gx <> ", " <> nodeSource gy
+				in "t" <> fromString (show slot) <> "." <> f <> case mo of
+					Just o -> ", " <> nodeSource o <> ")"
+					Nothing -> ")"
 			CastNode _ t a -> "(" <> valueTypeSource t <> ")(" <> nodeSource a <> ")"
 			Combine2VecNode _ _ t a b -> func2Source (valueTypeSource t) a b
 			Combine3VecNode _ _ _ t a b c -> func3Source (valueTypeSource t) a b c

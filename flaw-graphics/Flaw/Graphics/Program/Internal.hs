@@ -28,6 +28,7 @@ module Flaw.Graphics.Program.Internal
 	, Temp(..)
 	, Node(..)
 	, SamplerNode(..)
+	, SampleNodeLod(..)
 	, nodeValueType
 	, nodeArrayValueType
 	, Program
@@ -360,7 +361,12 @@ data Node a where
 	InstanceIdNode :: Node Word32
 	ComponentNode :: OfVectorType v => ValueType -> ValueType -> Char -> Node v -> Node (VecElement v)
 	SwizzleNode :: (OfVectorType a, OfVectorType b) => ValueType -> ValueType -> String -> Node a -> Node b
-	SampleNode :: SamplerNode s c -> Node c -> Node s
+	SampleNode :: (OfVectorType (v c), OfVectorType (v Int32)) =>
+		{ sampleNodeSamplerNode :: SamplerNode s (v c)
+		, sampleNodeCoordsNode :: Node (v c)
+		, sampleNodeOffsetNode :: Maybe (Node (v Int32))
+		, sampleNodeLod :: SampleNodeLod v c
+		} -> Node s
 	CastNode :: (OfValueType a, OfValueType b) => ValueType -> ValueType -> Node a -> Node b
 	Combine2VecNode :: (OfValueType a, OfValueType b, OfValueType r)
 		=> ValueType -> ValueType -> ValueType -> Node a -> Node b -> Node r
@@ -372,6 +378,13 @@ data Node a where
 deriving instance Show (Node a)
 
 newtype SamplerNode s c = SamplerNode Sampler deriving Show
+
+data SampleNodeLod v a
+	= SampleNodeAutoLod
+	| SampleNodeLod (Node a)
+	| SampleNodeBiasLod (Node a)
+	| SampleNodeGradLod (Node (v a)) (Node (v a))
+	deriving Show
 
 nodeValueType :: OfValueType a => Node a -> ValueType
 nodeValueType node = valueType $ (undefined :: (Node a -> a)) node

@@ -515,11 +515,28 @@ glslGenerateProgram GlslConfig
 			InstanceIdNode -> "uint(gl_InstanceID)"
 			ComponentNode _ _ c a -> "(" <> nodeSource a <> ")." <> singleton c
 			SwizzleNode _ _ s a ->  "(" <> nodeSource a <> ")." <> fromString s
-			SampleNode (SamplerNode Sampler
-				{ samplerSlot = slot
-				, samplerSampleType = sampleType
-				}) c -> "texture2D(" <> samplerName slot <> ", " <> nodeSource c <> ")"
-				<> case sampleType of
+			SampleNode
+				{ sampleNodeSamplerNode = SamplerNode Sampler
+					{ samplerSlot = slot
+					, samplerSampleType = sampleType
+					}
+				, sampleNodeCoordsNode = c
+				, sampleNodeOffsetNode = mo
+				, sampleNodeLod = ll
+				} -> let
+				sc = samplerName slot <> ", " <> nodeSource c
+				f = case mo of
+					Nothing -> case ll of
+						SampleNodeAutoLod -> "texture(" <> sc <> ")"
+						SampleNodeLod l -> "textureLod(" <> sc <> ", " <> nodeSource l <> ")"
+						SampleNodeBiasLod b -> "textureBias(" <> sc <> ", " <> nodeSource b <> ")"
+						SampleNodeGradLod gx gy -> "textureGrad(" <> sc <> ", " <> nodeSource gx <> ", " <> nodeSource gy <> ")"
+					Just o -> case ll of
+						SampleNodeAutoLod -> "textureOffset(" <> sc <> ", " <> nodeSource o <> ")"
+						SampleNodeLod l -> "textureLodOffset(" <> sc <> ", " <> nodeSource l <> ", " <> nodeSource o <> ")"
+						SampleNodeBiasLod b -> "textureBias(" <> sc <> ", " <> nodeSource b <> ", " <> nodeSource o <> ")"
+						SampleNodeGradLod gx gy -> "textureGrad(" <> sc <> ", " <> nodeSource gx <> ", " <> nodeSource gy <> ", " <> nodeSource o <> ")"
+				in f <> case sampleType of
 					ScalarValueType _ -> ".x"
 					VectorValueType dim _ -> case dim of
 						Dimension1 -> ".x"

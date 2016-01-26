@@ -114,7 +114,7 @@ initGlyphRenderer device subpixelMode = do
 			(constf 1)
 			) $ do
 			case subpixelMode of
-				GlyphSubpixelModeNone -> colorTarget 0 $ cvec31 (xyz__ color) (w_ color * sample (sampler2Df 0) texcoord)
+				GlyphSubpixelModeNone -> colorTarget 0 $ cvec31 (xyz__ color) (w_ color * sampleLod (sampler2Df 0) texcoord (constf 0))
 				_ -> do
 					let (dxr, dxg, dxb, dyr, dyg, dyb) = case subpixelMode of
 						GlyphSubpixelModeNone -> undefined -- GHC warning defence, meh :(
@@ -122,15 +122,15 @@ initGlyphRenderer device subpixelMode = do
 						GlyphSubpixelModeHorizontalBGR -> (1, 0, -1, 0, 0, 0)
 						GlyphSubpixelModeVerticalRGB -> (0, 0, 0, -1, 0, 1)
 						GlyphSubpixelModeVerticalBGR -> (0, 0, 0, 1, 0, -1)
-					let r = w_ color * (sample (sampler2Df 0) $ texcoord
+					let r = w_ color * (sampleLod (sampler2Df 0) (texcoord
 						+ (ddx texcoord) * (vecFromScalar $ constf $ dxr / 3)
-						+ (ddy texcoord) * (vecFromScalar $ constf $ dyr / 3))
-					let g = w_ color * (sample (sampler2Df 0) $ texcoord
+						+ (ddy texcoord) * (vecFromScalar $ constf $ dyr / 3)) (constf 0))
+					let g = w_ color * (sampleLod (sampler2Df 0) (texcoord
 						+ (ddx texcoord) * (vecFromScalar $ constf $ dxg / 3)
-						+ (ddy texcoord) * (vecFromScalar $ constf $ dyg / 3))
-					let b = w_ color * (sample (sampler2Df 0) $ texcoord
+						+ (ddy texcoord) * (vecFromScalar $ constf $ dyg / 3)) (constf 0))
+					let b = w_ color * (sampleLod (sampler2Df 0) (texcoord
 						+ (ddx texcoord) * (vecFromScalar $ constf $ dxb / 3)
-						+ (ddy texcoord) * (vecFromScalar $ constf $ dyb / 3))
+						+ (ddy texcoord) * (vecFromScalar $ constf $ dyb / 3)) (constf 0))
 					dualColorTarget (cvec31 (xyz__ color) (constf 1)) (cvec1111 r g b (constf 1))
 
 	buffer <- VSM.new $ capacity * 3

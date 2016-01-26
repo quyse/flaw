@@ -68,7 +68,22 @@ nodeInfo node = case node of
 	InstanceIdNode -> emptyNodeInfo
 	ComponentNode _ _ _ a -> nodeInfo a
 	SwizzleNode _ _ _ a -> nodeInfo a
-	SampleNode (SamplerNode s) c -> mergeNodeInfo ([], [], [], [s]) (nodeInfo c)
+	SampleNode
+		{ sampleNodeSamplerNode = SamplerNode s
+		, sampleNodeCoordsNode = c
+		, sampleNodeOffsetNode = mo
+		, sampleNodeLod = ll
+		} -> let
+		baseInfo = mergeNodeInfo ([], [], [], [s]) (nodeInfo c)
+		infoWithOffset = case mo of
+			Just o -> mergeNodeInfo baseInfo (nodeInfo o)
+			Nothing -> baseInfo
+		infoWithLod = case ll of
+			SampleNodeAutoLod -> infoWithOffset
+			SampleNodeLod l -> mergeNodeInfo infoWithOffset (nodeInfo l)
+			SampleNodeBiasLod b -> mergeNodeInfo infoWithOffset (nodeInfo b)
+			SampleNodeGradLod gx gy -> mergeNodeInfo infoWithOffset $ mergeNodeInfo (nodeInfo gx) (nodeInfo gy)
+		in infoWithLod
 	CastNode _ _ a -> nodeInfo a
 	Combine2VecNode _ _ _ a b -> mergeNodeInfo (nodeInfo a) (nodeInfo b)
 	Combine3VecNode _ _ _ _ a b c -> mergeNodeInfo (nodeInfo a) $ mergeNodeInfo (nodeInfo b) (nodeInfo c)
