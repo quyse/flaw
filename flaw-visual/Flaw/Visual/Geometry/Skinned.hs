@@ -39,7 +39,7 @@ data SkinnedGeometry d = SkinnedGeometry
 	}
 
 -- | Generate expression for loading embedded skinned geometry with animations taken from Collada file.
--- Expression type is :: Device d => IO ((Geometry d, TextureId d, [Float -> Float4]), IO ())
+-- Expression type is :: Device d => IO (SkinnedGeometry d, IO ())
 embedLoadSkinnedGeometryExp :: FilePath -> ColladaM XML.Element -> ColladaM XML.Element -> Float -> Float -> ExpQ
 embedLoadSkinnedGeometryExp fileName getNodeElement getSkinElement timeStep timeLength = do
 	-- load file
@@ -109,5 +109,9 @@ embedLoadSkinnedGeometryExp fileName getNodeElement getSkinElement timeStep time
 					} $(embedExp textureBytes)
 				aos <- B.unsafeUseAsCString $(embedExp animationOffsetsBytes) $ peekArray $(litE $ integerL $ fromIntegral $ V.length animations) . castPtr
 				let ao = flip map aos $ \(Float4 kx ky x y) -> \t -> Float4 kx ky (x + t * $(litE $ rationalL $ 1 / toRational timeLength)) y
-				return (geometry, at, ao)
+				return SkinnedGeometry
+					{ skinnedGeometryGeometry = geometry
+					, skinnedGeometryAnimationTexture = at
+					, skinnedGeometryAnimations = ao
+					}
 				|]
