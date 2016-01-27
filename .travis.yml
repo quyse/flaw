@@ -10,15 +10,22 @@ addons:
     packages:
     - libgmp-dev
 
+os:
+# - linux
+- osx
+
 before_install:
 # download and unpack the stack executable
-- mkdir -p ~/.local/bin
-- export PATH=$HOME/.local/bin:$PATH
-- travis_retry curl -L https://www.stackage.org/stack/linux-x86_64 | tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack'
+# - mkdir -p ~/.local/bin
+# - export PATH=$HOME/.local/bin:$PATH
+# - travis_retry curl -L https://www.stackage.org/stack/linux-x86_64 | tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack'
 # download and install deps
-- bash .travis-install.sh
-- export PKG_CONFIG_PATH=$HOME/.deps/lib/pkgconfig
-- export LD_LIBRARY_PATH=$HOME/.deps/lib
+# - bash .travis-install.sh
+# - export PKG_CONFIG_PATH=$HOME/.deps/lib/pkgconfig
+# - export LD_LIBRARY_PATH=$HOME/.deps/lib
+# osx
+- brew update
+- brew install haskell-stack sdl2
 
 script: >-
   stack --no-terminal --install-ghc test
