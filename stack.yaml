@@ -8,6 +8,7 @@ packages:
 - flaw-build
 - flaw-bullet
 - flaw-canvas
+- flaw-collada
 - flaw-dx11
 - flaw-ffi
 - flaw-font

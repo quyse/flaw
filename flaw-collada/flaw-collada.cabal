@@ -1,4 +1,4 @@
-name:                flaw-asset
+name:                flaw-collada
 version:             0.1.0.0
 -- synopsis:            
 -- description:         
@@ -15,20 +15,12 @@ cabal-version:       >=1.10
 source-repository head
   type: git
   location: https://github.com/quyse/flaw.git
-  subdir: flaw-asset
+  subdir: flaw-collada
 
 library
   exposed-modules:
-    Flaw.Asset.Exec
-    Flaw.Asset.Geometry
-    Flaw.Asset.Task
-    Flaw.Asset.Util
-    Flaw.Asset.Vertex
+    Flaw.Asset.Collada
   -- other-extensions:    
-  build-depends:       array, base, bytestring, cereal, containers, flaw-base, flaw-build, flaw-ffi, flaw-graphics, flaw-math, mtl, primitive, process, template-haskell, text, vector, vector-algorithms, xml
+  build-depends:       base, bytestring, containers, flaw-math, mtl, text, vector, vector-algorithms, xml
   -- hs-source-dirs:      
   default-language:    Haskell2010
-  if !impl(ghcjs)
-    exposed-modules:
-      Flaw.Asset.Texture
-    build-depends: JuicyPixels

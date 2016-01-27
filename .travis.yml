@@ -29,6 +29,7 @@ script: >-
   flaw-build
   flaw-bullet
   flaw-canvas
+  flaw-collada
   flaw-ffi
   flaw-font
   flaw-font-fthb
