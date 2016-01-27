@@ -8,7 +8,8 @@ License: MIT
 
 module Flaw.Visual.Geometry.Skinned
 	( SkinnedGeometry(..)
-	, embedLoadSkinnedGeometryExp
+	, embedLoadTextureAnimatedSkinnedGeometryExp
+	, textureAnimatedSkinTransform
 	) where
 
 import Control.Monad
@@ -24,6 +25,7 @@ import Flaw.Asset.Collada
 import Flaw.Book
 import Flaw.Build
 import Flaw.Graphics
+import Flaw.Graphics.Program
 import Flaw.Graphics.Sampler
 import Flaw.Graphics.Texture
 import Flaw.Math
@@ -40,8 +42,8 @@ data SkinnedGeometry d = SkinnedGeometry
 
 -- | Generate expression for loading embedded skinned geometry with animations taken from Collada file.
 -- Expression type is :: Device d => IO (SkinnedGeometry d, IO ())
-embedLoadSkinnedGeometryExp :: FilePath -> ColladaM XML.Element -> ColladaM XML.Element -> Float -> Float -> ExpQ
-embedLoadSkinnedGeometryExp fileName getNodeElement getSkinElement timeStep timeLength = do
+embedLoadTextureAnimatedSkinnedGeometryExp :: FilePath -> ColladaM XML.Element -> ColladaM XML.Element -> Float -> Float -> ExpQ
+embedLoadTextureAnimatedSkinnedGeometryExp fileName getNodeElement getSkinElement timeStep timeLength = do
 	-- load file
 	bytes <- loadFile fileName
 
@@ -115,3 +117,38 @@ embedLoadSkinnedGeometryExp fileName getNodeElement getSkinElement timeStep time
 					, skinnedGeometryAnimations = ao
 					}
 				|]
+
+-- | Skin transform based on animation written to texture.
+textureAnimatedSkinTransform :: Int -> Node Float4 -> Node Float4 -> Node Word32_4 -> Program (Node Float4, Node Float3)
+textureAnimatedSkinTransform animationSamplerSlot animationOffset weights bones = do
+	-- function getting quaternion and offset for a bone
+	let transformBone boneOffsetY = do
+		let s = sampler2D4f animationSamplerSlot
+		c <- temp $ cvec11 (z_ animationOffset) boneOffsetY
+		return
+			( sampleLod s c (constf 0)
+			, xyz__ $ sampleLod s (c + cvec11 0 (y_ animationOffset)) (constf 0)
+			)
+
+	-- get bone offsets for bones of current vertex
+	boneOffsetYs <- temp $ xxxx__ animationOffset * cast bones + wwww__ animationOffset
+
+	-- get quatoffsets for vertex' bones
+	(q1, p1) <- transformBone $ x_ boneOffsetYs
+	(q2, p2) <- transformBone $ y_ boneOffsetYs
+	(q3, p3) <- transformBone $ z_ boneOffsetYs
+	(q4, p4) <- transformBone $ w_ boneOffsetYs
+
+	-- mix transforms
+	q <- temp $ normalize
+		$ q1 * xxxx__ weights
+		+ q2 * yyyy__ weights
+		+ q3 * zzzz__ weights
+		+ q4 * wwww__ weights
+	p <- temp
+		$ p1 * xxx__ weights
+		+ p2 * yyy__ weights
+		+ p3 * zzz__ weights
+		+ p4 * www__ weights
+
+	return (q, p)
