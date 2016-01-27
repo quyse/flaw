@@ -50,6 +50,7 @@ script: >-
   flaw-sqlite
   flaw-ui
   flaw-ui-default-style
+  flaw-visual
   flaw-window
 
 cache:

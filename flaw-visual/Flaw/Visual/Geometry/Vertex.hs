@@ -1,12 +1,12 @@
 {-|
-Module: Flaw.Asset.Vertex
+Module: Flaw.Visual.Geometry.Vertex
 Description: Useful vertex structures with support for Collada.
 License: MIT
 -}
 
 {-# LANGUAGE RankNTypes, StandaloneDeriving, TemplateHaskell #-}
 
-module Flaw.Asset.Vertex
+module Flaw.Visual.Geometry.Vertex
 	( ColladaVertex(..)
 	, VertexPNT(..)
 	, VertexPNTWB(..)

@@ -32,6 +32,7 @@ variables:
     flaw-sqlite
     flaw-ui
     flaw-ui-default-style
+    flaw-visual
     flaw-window
   PACKAGES_WINDOWS: >-
     flaw-app
@@ -60,6 +61,7 @@ variables:
     flaw-sqlite
     flaw-ui
     flaw-ui-default-style
+    flaw-visual
     flaw-window
   PACKAGES_WEB: >-
     flaw-app
@@ -75,6 +77,7 @@ variables:
     flaw-math
     flaw-physics
     flaw-sl
+    flaw-visual
     flaw-webgl
     flaw-window
   INTEGERSIMPLE_CONFIG_FIX: >-

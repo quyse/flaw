@@ -30,6 +30,7 @@ packages:
 - flaw-sqlite
 - flaw-ui
 - flaw-ui-default-style
+- flaw-visual
 - flaw-webgl
 - flaw-window
 - location:

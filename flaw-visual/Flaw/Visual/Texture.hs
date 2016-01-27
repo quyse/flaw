@@ -1,12 +1,12 @@
 {-|
-Module: Flaw.Asset.Texture
+Module: Flaw.Visual.Texture
 Description: Texture support.
 License: MIT
 -}
 
 {-# LANGUAGE FlexibleContexts, TemplateHaskell #-}
 
-module Flaw.Asset.Texture
+module Flaw.Visual.Texture
 	( loadTexture
 	) where
 
