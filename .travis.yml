@@ -41,6 +41,7 @@ script: >-
   flaw-build
   flaw-bullet
   flaw-canvas
+  flaw-collada
   flaw-ffi
   flaw-font
   flaw-font-fthb
@@ -61,6 +62,7 @@ script: >-
   flaw-sqlite
   flaw-ui
   flaw-ui-default-style
+  flaw-visual
   flaw-window
 
 cache:

@@ -11,6 +11,7 @@ variables:
     flaw-build
     flaw-bullet
     flaw-canvas
+    flaw-collada
     flaw-ffi
     flaw-font
     flaw-font-fthb
@@ -31,6 +32,7 @@ variables:
     flaw-sqlite
     flaw-ui
     flaw-ui-default-style
+    flaw-visual
     flaw-window
   PACKAGES_WINDOWS: >-
     flaw-app
@@ -40,6 +42,7 @@ variables:
     flaw-build
     flaw-bullet
     flaw-canvas
+    flaw-collada
     flaw-dx11
     flaw-ffi
     flaw-font
@@ -58,6 +61,7 @@ variables:
     flaw-sqlite
     flaw-ui
     flaw-ui-default-style
+    flaw-visual
     flaw-window
   PACKAGES_WEB: >-
     flaw-app
@@ -65,6 +69,7 @@ variables:
     flaw-base
     flaw-build
     flaw-canvas
+    flaw-collada
     flaw-ffi
     flaw-glsl
     flaw-graphics
@@ -72,6 +77,7 @@ variables:
     flaw-math
     flaw-physics
     flaw-sl
+    flaw-visual
     flaw-webgl
     flaw-window
   INTEGERSIMPLE_CONFIG_FIX: >-

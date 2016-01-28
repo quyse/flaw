@@ -27,14 +27,15 @@ library
   c-sources:
     -- libsquish
     src/alpha.cpp
-    -- src/clusterfit.cpp
-    -- src/colourblock.cpp
-    -- src/colourfit.cpp
-    -- src/colourset.cpp
-    -- src/maths.cpp
-    -- src/rangefit.cpp
-    -- src/singlecolourfit.cpp
-    -- src/squish.cpp
+    src/clusterfit.cpp
+    src/colourblock.cpp
+    src/colourfit.cpp
+    src/colourset.cpp
+    src/maths.cpp
+    src/rangefit.cpp
+    src/singlecolourfit.cpp
+    src/squish.cpp
     -- helpers
     src/flaw-squish.cpp
   cc-options: -DSQUISH_USE_SSE=2 -O3 -fno-exceptions
+  extra-libraries:     stdc++

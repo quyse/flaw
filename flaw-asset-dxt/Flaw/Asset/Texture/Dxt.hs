@@ -32,6 +32,15 @@ dxtCompressTexture textureInfo@TextureInfo
 	-- get compression function
 	(compressBlock, newFormat) <- case format of
 		UncompressedTextureFormat
+			{ textureFormatComponents = PixelRGB
+			, textureFormatValueType = PixelUint
+			, textureFormatPixelSize = Pixel24bit
+			, textureFormatColorSpace = colorSpace
+			} -> return (compressBC1Block, CompressedTextureFormat
+			{ textureFormatCompression = TextureCompressionBC1
+			, textureFormatColorSpace = colorSpace
+			})
+		UncompressedTextureFormat
 			{ textureFormatComponents = PixelR
 			, textureFormatValueType = PixelUint
 			, textureFormatPixelSize = Pixel8bit
@@ -40,7 +49,7 @@ dxtCompressTexture textureInfo@TextureInfo
 			{ textureFormatCompression = TextureCompressionBC4
 			, textureFormatColorSpace = colorSpace
 			})
-		_ -> throwIO $ DescribeFirstException "unsupported format for DXT compression"
+		_ -> throwIO $ DescribeFirstException $ "unsupported format for DXT compression: " ++ show format
 
 	-- new texture info
 	let newTextureInfo = textureInfo
@@ -113,4 +122,5 @@ dxtCompressTexture textureInfo@TextureInfo
 	newBytes <- B.unsafePackMallocCStringLen (newBytesPtr, newTotalImageSize)
 	return (newTextureInfo, newBytes)
 
+foreign import ccall unsafe "flaw_squish_compress_bc1" compressBC1Block :: Ptr () -> CInt -> Ptr () -> IO ()
 foreign import ccall unsafe "flaw_squish_compress_bc4" compressBC4Block :: Ptr () -> CInt -> Ptr () -> IO ()

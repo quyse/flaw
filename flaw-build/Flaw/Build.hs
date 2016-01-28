@@ -29,14 +29,14 @@ import Foreign.Marshal.Array
 import Foreign.Ptr
 import Foreign.Storable
 import Language.Haskell.TH
-import Language.Haskell.TH.Syntax(qAddDependentFile)
+import Language.Haskell.TH.Syntax(addDependentFile)
 import System.IO.Unsafe
 
 -- | Load file and add it as a dependency.
 loadFile :: FilePath -> Q BL.ByteString
 loadFile filePath = do
 	fileData <- runIO $ BL.readFile filePath
-	qAddDependentFile filePath
+	addDependentFile filePath
 	return fileData
 
 -- | Class of pure data may be embedded.
@@ -97,11 +97,13 @@ instance EmbedIO Bool where
 
 instance EmbedIO B.ByteString where
 	embedIOExp bytes = do
-		[| B.unsafePackAddressLen $(litE $ integerL $ fromIntegral $ B.length bytes) $(litE $ stringPrimL $ B.unpack bytes) |]
+		let len = B.length bytes
+		[| B.unsafePackAddressLen len $(litE $ stringPrimL $ B.unpack bytes) |]
 
 instance EmbedIO BL.ByteString where
 	embedIOExp bytes = do
-		[| liftM BL.fromStrict $ B.unsafePackAddressLen $(litE $ integerL $ fromIntegral $ BL.length bytes) $(litE $ stringPrimL $ BL.unpack bytes) |]
+		let len = BL.length bytes
+		[| liftM BL.fromStrict $ B.unsafePackAddressLen len $(litE $ stringPrimL $ BL.unpack bytes) |]
 
 instance EmbedIO a => EmbedIO [a] where
 	embedIOExp a = [| sequence $(listE $ map embedIOExp a) |]

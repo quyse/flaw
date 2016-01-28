@@ -25,9 +25,9 @@ import Flaw.Graphics.WebGL
 import Control.Monad.IO.Class
 import qualified Data.ByteString.Lazy as BL
 
-import Flaw.Asset.Texture
 import Flaw.Graphics
 import Flaw.Graphics.Sampler
+import Flaw.Visual.Texture
 
 #endif
 

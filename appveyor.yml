@@ -30,6 +30,7 @@ test_script:
   flaw-build
   flaw-bullet
   flaw-canvas
+  flaw-collada
   flaw-dx11
   flaw-ffi
   flaw-font
@@ -48,6 +49,7 @@ test_script:
   flaw-sqlite
   flaw-ui
   flaw-ui-default-style
+  flaw-visual
   flaw-window
 
 on_finish:
