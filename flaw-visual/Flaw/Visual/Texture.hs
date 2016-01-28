@@ -8,14 +8,20 @@ License: MIT
 
 module Flaw.Visual.Texture
 	( loadTexture
+	, loadDxtCompressedTextureExp
 	) where
 
 import Codec.Picture
 import Codec.Picture.Types
 import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy as BL
 import Foreign.Storable
+import Language.Haskell.TH
 
+import Flaw.Asset.Texture.Dxt
 import Flaw.Build
+import Flaw.Graphics
+import Flaw.Graphics.Sampler
 import Flaw.Graphics.Texture
 
 loadDynamicImageWithFormat :: Storable (PixelBaseComponent a) => Image a -> TextureFormat -> IO (TextureInfo, B.ByteString)
@@ -56,7 +62,12 @@ loadDynamicImage dynamicImage = case dynamicImage of
 		}
 	ImageYA8 pixelYA8Image -> loadDynamicImage $ ImageRGBA8 $ promoteImage pixelYA8Image
 	ImageYA16 pixelYA16Image -> loadDynamicImage $ ImageRGBA16 $ promoteImage pixelYA16Image
-	ImageRGB8 pixelRGB8Image -> loadDynamicImage $ ImageRGBA8 $ promoteImage pixelRGB8Image
+	ImageRGB8 pixelRGB8Image -> loadDynamicImageWithFormat pixelRGB8Image UncompressedTextureFormat
+		{ textureFormatComponents = PixelRGB
+		, textureFormatValueType = PixelUint
+		, textureFormatPixelSize = Pixel24bit
+		, textureFormatColorSpace = StandardColorSpace
+		}
 	ImageRGB16 pixelRGB16Image -> loadDynamicImage $ ImageRGBA16 $ promoteImage pixelRGB16Image
 	ImageRGBF pixelRGBFImage -> loadDynamicImageWithFormat pixelRGBFImage UncompressedTextureFormat
 		{ textureFormatComponents = PixelRGB
@@ -93,3 +104,14 @@ genEmbed ''PixelComponents
 genEmbed ''TextureCompression
 genEmbed ''TextureFormat
 genEmbed ''TextureInfo
+
+-- | Generate expression for loading embedded texture compressed to appropriate DXT format.
+-- Expression type is :: Device d => IO (TextureId d, IO ())
+loadDxtCompressedTextureExp :: FilePath -> ExpQ
+loadDxtCompressedTextureExp fileName = do
+	bytes <- loadFile fileName
+	(textureInfo, textureBytes) <- runIO $ loadTexture $ BL.toStrict bytes
+	(compressedTextureInfo, compressedTextureBytes) <- runIO $ dxtCompressTexture textureInfo textureBytes
+	[| \device -> createStaticTexture device
+		$(embedExp compressedTextureInfo) defaultSamplerStateInfo =<< $(embedIOExp compressedTextureBytes)
+		|]
