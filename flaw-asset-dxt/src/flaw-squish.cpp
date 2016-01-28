@@ -15,6 +15,7 @@ extern "C" void flaw_squish_compress_bc1(u8 const* input, int inputLinePitch, u8
 		rgbaInput[i * 4 + 0] = input[k + 0];
 		rgbaInput[i * 4 + 1] = input[k + 1];
 		rgbaInput[i * 4 + 2] = input[k + 2];
+		rgbaInput[i * 4 + 3] = 255;
 	}
 
 	int flags = kDxt1 | kColourIterativeClusterFit;
