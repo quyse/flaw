@@ -101,15 +101,7 @@ linux:
   - haskellstack
   - linux
 
-windows_gmp:
-  script:
-  - "%FIX_TH_WINDOWS%"
-  - "stack --no-terminal test %PACKAGES_WINDOWS%"
-  tags:
-  - haskellstack
-  - windows
-
-windows_integersimple:
+windows:
   script:
   - "%FIX_TH_WINDOWS%"
   - "%INTEGERSIMPLE_CONFIG_FIX%"
