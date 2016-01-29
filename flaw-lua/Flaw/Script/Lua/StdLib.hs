@@ -23,18 +23,21 @@ import Flaw.Script.Lua
 import Flaw.Script.Lua.Build
 import Flaw.Script.Lua.Operations
 
+registerFunc :: LuaMonad m => LuaValue m -> T.Text -> ([LuaValue m] -> m [LuaValue m]) -> m ()
+registerFunc e n f = do
+	c <- luaNewClosure f
+	luaValueSet e (LuaString n) c
+
+registerNotImplementedFunc :: LuaMonad m => LuaValue m -> T.Text -> m ()
+registerNotImplementedFunc e n = registerFunc e n $ \_ ->
+	throwLuaError $ LuaError $ LuaString $ "flaw-lua stdlib: " <> n <> " is not implemented"
+
+registerValue :: LuaMonad m => LuaValue m -> T.Text -> LuaValue m -> m ()
+registerValue e n v = luaValueSet e (LuaString n) v
+
 registerLuaBasicLib :: LuaMonad m => LuaValue m -> m ()
-registerLuaBasicLib env@LuaTable
-	{ luaTable = envt
-	} = do
-
+registerLuaBasicLib env = do
 	envVar <- newMutVar env
-
-	let func n f = do
-		c <- luaNewClosure f
-		liftPrim $ HT.insert envt (LuaString n) c
-
-	let notImplementedFunc n = func n $ \_ -> throwLuaError $ LuaError $ LuaString $ "flaw-lua: stdlib " <> n <> " is not implemented"
 
 	let
 		adjustArgs :: Int -> [LuaValue m] -> [LuaValue m]
@@ -44,12 +47,12 @@ registerLuaBasicLib env@LuaTable
 
 	-- basic functions
 
-	func "assert" $ \as@(x:xs) -> if luaCoerceToBool x then return as
+	registerFunc env "assert" $ \as@(x:xs) -> if luaCoerceToBool x then return as
 		else throwLuaError $ LuaError $ case xs of
 			msg:_ -> msg
 			_ -> LuaString "assertion failed!"
 
-	func "collectgarbage" $ \as -> let
+	registerFunc env "collectgarbage" $ \as -> let
 		[opt, _arg] = adjustArgs 2 as
 		in case luaCoerceToString opt of
 			Just s -> case s of
@@ -64,16 +67,16 @@ registerLuaBasicLib env@LuaTable
 				_ -> throwLuaError $ LuaError $ LuaString "collectgarbage: wrong opt"
 			Nothing -> throwLuaError $ LuaError $ LuaString "collectgarbage: wrong opt"
 
-	func "dofile" $ [lua|
+	registerFunc env "dofile" $ [lua|
 		local fileName = ...
 		return loadfile(fileName)()
 		|] envVar
 
-	func "error" $ \(msg:_) -> throwLuaError $ LuaError msg
+	registerFunc env "error" $ \(msg:_) -> throwLuaError $ LuaError msg
 
-	liftPrim $ HT.insert envt (LuaString "_G") env
+	registerValue env "_G" env
 
-	func "getmetatable" $ \(obj:_) -> case obj of
+	registerFunc env "getmetatable" $ \(obj:_) -> case obj of
 		LuaTable
 			{ luaTableMetaTable = mtVar
 			} -> do
@@ -89,7 +92,7 @@ registerLuaBasicLib env@LuaTable
 				_ -> return [LuaNil]
 		_ -> return [LuaNil]
 
-	func "ipairs" $ \(x:_) -> do
+	registerFunc env "ipairs" $ \(x:_) -> do
 		f <- luaNewClosure $ case x of
 			LuaTable
 				{ luaTable = t
@@ -102,29 +105,29 @@ registerLuaBasicLib env@LuaTable
 			_ -> \_ -> return []
 		return [f, x, LuaInteger 0]
 
-	notImplementedFunc "load"
+	registerNotImplementedFunc env "load"
 
-	func "loadfile" $ [lua|
+	registerFunc env "loadfile" $ [lua|
 		local fileName = ...
 		return _chunks[fileName]
 		|] envVar
 
-	notImplementedFunc "next"
+	registerNotImplementedFunc env "next"
 
-	notImplementedFunc "pairs"
+	registerNotImplementedFunc env "pairs"
 
-	func "pcall" $ \(f:as) -> catchLuaError (liftM (LuaBoolean True : ) $ luaValueCall f as) $ \e ->
+	registerFunc env "pcall" $ \(f:as) -> catchLuaError (liftM (LuaBoolean True : ) $ luaValueCall f as) $ \e ->
 		return [LuaBoolean False, LuaString $ T.pack $ show e]
 
-	func "print" $ \as -> do
+	registerFunc env "print" $ \as -> do
 		forM_ as $ \a -> case luaCoerceToString a of
 			Just s -> traceM $ T.unpack s
 			Nothing -> traceM "<<???>>"
 		return []
 
-	func "rawequal" $ \(a:b:_) -> return [LuaBoolean $ a == b]
+	registerFunc env "rawequal" $ \(a:b:_) -> return [LuaBoolean $ a == b]
 
-	func "rawget" $ \(t:i:_) -> case t of
+	registerFunc env "rawget" $ \(t:i:_) -> case t of
 		LuaTable
 			{ luaTable = tt
 			} -> do
@@ -132,7 +135,7 @@ registerLuaBasicLib env@LuaTable
 			return [fromMaybe LuaNil r]
 		_ -> return [LuaNil]
 
-	func "rawlen" $ \(t:_) -> case t of
+	registerFunc env "rawlen" $ \(t:_) -> case t of
 		LuaString s -> return [LuaInteger $ T.length s]
 		LuaTable
 			{ luaTableLength = lenVar
@@ -141,7 +144,7 @@ registerLuaBasicLib env@LuaTable
 			return [LuaInteger r]
 		_ -> throwLuaError $ LuaBadOperation "rawlen: table or string expected"
 
-	func "rawset" $ \(t:i:v:_) -> case t of
+	registerFunc env "rawset" $ \(t:i:v:_) -> case t of
 		LuaTable
 			{ luaTable = tt
 			, luaTableLength = lenVar
@@ -161,13 +164,13 @@ registerLuaBasicLib env@LuaTable
 			return [t]
 		_ -> throwLuaError $ LuaBadOperation "rawset: table expected"
 
-	func "select" $ \(n:as) -> case n of
+	registerFunc env "select" $ \(n:as) -> case n of
 		LuaInteger i -> if i == 0 then throwLuaError $ LuaBadOperation "select: zero index"
 			else return $ if i > 0 then drop (i - 1) as else drop (length as + i) as
 		LuaString "#" -> return [LuaInteger $ length as]
 		_ -> throwLuaError $ LuaBadOperation "select: non-zero index or string '#' expected"
 
-	func "setmetatable" $ \(t:mt:_) -> case t of
+	registerFunc env "setmetatable" $ \(t:mt:_) -> case t of
 		LuaTable
 			{ luaTableMetaTable = mtVar
 			} -> do
@@ -185,19 +188,19 @@ registerLuaBasicLib env@LuaTable
 			return [t]
 		_ -> throwLuaError $ LuaError $ LuaString "setmetatable: not a table"
 
-	func "tonumber" $ \(x:_) -> let
+	registerFunc env "tonumber" $ \(x:_) -> let
 		r = case luaCoerceToNumber x of
 			Just n -> LuaReal n
 			Nothing -> LuaNil
 		in return [r]
 
-	func "tostring" $ \(x:_) -> let
+	registerFunc env "tostring" $ \(x:_) -> let
 		r = case luaCoerceToString x of
 			Just s -> LuaString s
 			Nothing -> LuaNil
 		in return [r]
 
-	func "type" $ \(x:_) -> let
+	registerFunc env "type" $ \(x:_) -> let
 		t = case x of
 			LuaNil -> "nil"
 			LuaBoolean _ -> "boolean"
@@ -209,8 +212,6 @@ registerLuaBasicLib env@LuaTable
 			LuaTable {} -> "table"
 		in return [LuaString t]
 
-	liftPrim $ HT.insert envt (LuaString "_VERSION") $ LuaString "Lua 5.3"
+	registerValue env "_VERSION" $ LuaString "Lua 5.3"
 
-	notImplementedFunc "xpcall"
-
-registerLuaBasicLib _ = undefined
+	registerNotImplementedFunc env "xpcall"
