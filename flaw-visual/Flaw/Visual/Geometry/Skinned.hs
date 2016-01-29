@@ -4,7 +4,7 @@ Description: Skinned geometry support.
 License: MIT
 -}
 
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE OverloadedStrings, TemplateHaskell #-}
 
 module Flaw.Visual.Geometry.Skinned
 	( SkinnedGeometry(..)
@@ -14,12 +14,12 @@ module Flaw.Visual.Geometry.Skinned
 
 import Control.Monad
 import qualified Data.ByteString.Unsafe as B
+import qualified Data.Text as T
 import qualified Data.Vector as V
 import Foreign.Marshal.Array
 import Foreign.Ptr
 import Foreign.Storable
 import Language.Haskell.TH
-import qualified Text.XML.Light as XML
 
 import Flaw.Asset.Collada
 import Flaw.Book
@@ -42,7 +42,7 @@ data SkinnedGeometry d = SkinnedGeometry
 
 -- | Generate expression for loading embedded skinned geometry with animations taken from Collada file.
 -- Expression type is :: Device d => IO (SkinnedGeometry d, IO ())
-embedLoadTextureAnimatedSkinnedGeometryExp :: FilePath -> ColladaM XML.Element -> ColladaM XML.Element -> Float -> Float -> ExpQ
+embedLoadTextureAnimatedSkinnedGeometryExp :: FilePath -> ColladaM ColladaElement -> ColladaM ColladaElement -> Float -> Float -> ExpQ
 embedLoadTextureAnimatedSkinnedGeometryExp fileName getNodeElement getSkinElement timeStep timeLength = do
 	-- load file
 	bytes <- loadFile fileName
@@ -58,7 +58,7 @@ embedLoadTextureAnimatedSkinnedGeometryExp fileName getNodeElement getSkinElemen
 
 	case eitherResult of
 		Left err -> do
-			let msg = "failed to embed skinned geometry " ++ fileName ++ ": " ++ err
+			let msg = "failed to embed skinned geometry " ++ fileName ++ ": " ++ T.unpack err
 			reportError msg
 			[| error msg |]
 		Right (vertices, skin, animations) -> do

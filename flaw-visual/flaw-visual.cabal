@@ -25,6 +25,6 @@ library
     Flaw.Visual.Geometry.Vertex
     Flaw.Visual.Texture
   -- other-extensions:    
-  build-depends:       base, bytestring, flaw-asset-dxt, flaw-base, flaw-build, flaw-collada, flaw-ffi, flaw-graphics, flaw-math, JuicyPixels, primitive, template-haskell, vector, vector-algorithms, xml
+  build-depends:       base, bytestring, flaw-asset-dxt, flaw-base, flaw-build, flaw-collada, flaw-ffi, flaw-graphics, flaw-math, JuicyPixels, primitive, template-haskell, text, vector, vector-algorithms
   -- hs-source-dirs:      
   default-language:    Haskell2010

@@ -17,6 +17,7 @@ module Flaw.Visual.Geometry
 import Control.Monad.Primitive
 import qualified Data.ByteString as B
 import Data.Foldable
+import qualified Data.Text as T
 import qualified Data.Vector as V
 import qualified Data.Vector.Algorithms.Intro as VAI
 import qualified Data.Vector.Algorithms.Search as VAS
@@ -26,7 +27,6 @@ import qualified Data.Vector.Unboxed as VU
 import Data.Word
 import Foreign.Storable
 import Language.Haskell.TH
-import qualified Text.XML.Light as XML
 
 import Flaw.Asset.Collada
 import Flaw.Book
@@ -89,7 +89,7 @@ loadPackedGeometry device PackedGeometry
 
 -- | Generate expression for loading embedded geometry taken from Collada file.
 -- Expression type is :: Device d => d -> IO (Geometry d, IO ())
-embedLoadGeometryExp :: FilePath -> ColladaM XML.Element -> ExpQ
+embedLoadGeometryExp :: FilePath -> ColladaM ColladaElement -> ExpQ
 embedLoadGeometryExp fileName getElement = do
 	bytes <- loadFile fileName
 	let eitherVertices = runCollada $ do
@@ -97,7 +97,7 @@ embedLoadGeometryExp fileName getElement = do
 		createColladaVertices =<< parseGeometry =<< getElement
 	case eitherVertices of
 		Left err -> do
-			let msg = "failed to embed geometry " ++ fileName ++ ": " ++ err
+			let msg = "failed to embed geometry " ++ fileName ++ ": " ++ T.unpack err
 			reportError msg
 			[| error msg |]
 		Right vertices -> do
