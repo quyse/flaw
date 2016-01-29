@@ -13,7 +13,7 @@ module Flaw.Script.Lua.Chunk
 import Control.Monad
 import Data.Bits
 import qualified Data.ByteString as B
-import Data.IORef
+import Data.Primitive.MutVar
 import qualified Data.Serialize as S
 import Data.String
 import qualified Data.Text as T
@@ -184,7 +184,7 @@ data LuaCodeState = LuaCodeState
 	  -- | Start register of dynamic arguments.
 	  -- -1 if not set.
 	  luaCodeStateTop :: !Int
-	  -- | Expression representing dynamic arguments (of type [LuaValue]).
+	  -- | Expression representing dynamic arguments (of type [LuaValue m]).
 	, luaCodeStateTopValuesE :: ExpQ
 	}
 
@@ -217,18 +217,18 @@ compileLuaFunction LuaProto
 	-- stack
 	stackNames <- V.generateM maxStackSize $ \i -> newName $ "s" ++ show i
 	let stackStmts = V.toList $ V.generate maxStackSize $ \i ->
-		bindS (varP (stackNames V.! i)) [| newIORef LuaNil |]
+		bindS (varP (stackNames V.! i)) [| newMutVar LuaNil |]
 	let stack = V.generate maxStackSize $ \i -> varE $ stackNames V.! i
 
 	-- arguments & vararg
 	varargName <- newName "va"
-	let varargStmts = if isVararg then [bindS (varP varargName) [| newIORef [] |] ] else []
+	let varargStmts = if isVararg then [bindS (varP varargName) [| newMutVar [] |] ] else []
 	let argsSetStmts i =
 		if i < numParams then do
 			a <- newName "a"
 			x <- newName "x"
 			(restStmts, xs) <- argsSetStmts $ i + 1
-			let e = doE $ (noBindS [| writeIORef $(stack V.! i) $(varE x) |]) : restStmts
+			let e = doE $ (noBindS [| writeMutVar $(stack V.! i) $(varE x) |]) : restStmts
 			return
 				( [ noBindS $ caseE (varE a)
 						[ match [p| $(varP x) : $xs |] (normalB e) []
@@ -240,7 +240,7 @@ compileLuaFunction LuaProto
 		else if isVararg then do
 			a <- newName "a"
 			return
-				( [ noBindS [| writeIORef $(varE varargName) $(varE a) |]
+				( [ noBindS [| writeMutVar $(varE varargName) $(varE a) |]
 					]
 				, varP a
 				)
@@ -265,18 +265,18 @@ compileLuaFunction LuaProto
 		kbx = constants V.! bx
 
 		-- helper functions
-		kst j = constants V.! j -- :: LuaValue
-		r j = stack V.! j -- :: IORef LuaValue
-		rk j = -- :: IO LuaValue
+		kst j = constants V.! j -- :: LuaValue m
+		r j = stack V.! j -- :: MutVar (PrimState m) (LuaValue m)
+		rk j = -- :: m (LuaValue m)
 			if j `testBit` 8 then [| return $(kst (j `clearBit` 8)) |]
-			else [| readIORef $(r j) |]
-		u j = upvalues V.! j -- :: IORef LuaValue
+			else [| readMutVar $(r j) |]
+		u j = upvalues V.! j -- :: MutVar (PrimState m) (LuaValue m)
 		binop op = normalFlow [| do
 			p <- $(rk b)
 			q <- $(rk c)
-			writeIORef $(r a) =<< $op p q
+			writeMutVar $(r a) =<< $op p q
 			|]
-		unop op = normalFlow [| writeIORef $(r a) =<< $op =<< readIORef $(r b) |]
+		unop op = normalFlow [| writeMutVar $(r a) =<< $op =<< readMutVar $(r b) |]
 
 		-- next and next-after-next instruction ids
 		nextInstId = i + 1
@@ -299,7 +299,7 @@ compileLuaFunction LuaProto
 		-- static arg for call-like operations
 		staticArgStmtAndExp j = do
 			n <- newName $ "a" ++ show j
-			return (bindS (varP n) [| readIORef $(r j) |], varE n)
+			return (bindS (varP n) [| readMutVar $(r j) |], varE n)
 		-- get args (possibly dynamic)
 		getArgs :: Either Int [Int] -> LuaCodeState -> Q ([StmtQ], ExpQ)
 		getArgs eargs LuaCodeState
@@ -319,7 +319,7 @@ compileLuaFunction LuaProto
 			Right rets -> do
 				(retsStmts, retsPats) <- liftM unzip $ forM rets $ \j -> do
 					n <- newName $ "r" ++ show j
-					return (noBindS [| writeIORef $(r j) $(varE n) |], varP n)
+					return (noBindS [| writeMutVar $(r j) $(varE n) |], varP n)
 				let retPat = foldr (\p q -> [p| $p : $q |]) wildP retsPats
 				let mainStmt = if null rets then noBindS [| void $mainE |]
 					else bindS retPat [| liftM (++ repeat LuaNil) $mainE |]
@@ -341,7 +341,7 @@ compileLuaFunction LuaProto
 			(getArgsStmts, argsE) <- getArgs eargs codeState
 			f <- newName "f"
 			putRetsStmts <- putRets erets [| luaValueCall $(varE f) $argsE |] nextInstCode codeState
-			return $ (bindS (varP f) [| readIORef $(r a) |]) : getArgsStmts ++ putRetsStmts
+			return $ (bindS (varP f) [| readMutVar $(r a) |]) : getArgsStmts ++ putRetsStmts
 		-- get ax from extra arg
 		extraArg = do
 			let nx = opcodes VU.! (i + 1)
@@ -350,41 +350,41 @@ compileLuaFunction LuaProto
 
 		-- choose by instruction
 		in case x .&. (bit 6 - 1) of
-			OP_MOVE -> normalFlow [| writeIORef $(r a) =<< readIORef $(r b) |]
-			OP_LOADK -> normalFlow [| writeIORef $(r a) $kbx |]
+			OP_MOVE -> normalFlow [| writeMutVar $(r a) =<< readMutVar $(r b) |]
+			OP_LOADK -> normalFlow [| writeMutVar $(r a) $kbx |]
 			OP_LOADKX -> LuaInst [nextNextInstId] $ \[nextNextInstCode] codeState -> do
 				nax <- extraArg
 				nextNextInstStmts <- nextNextInstCode codeState
-				return $ (noBindS [| writeIORef $(r a) $(kst nax) |]) : nextNextInstStmts
+				return $ (noBindS [| writeMutVar $(r a) $(kst nax) |]) : nextNextInstStmts
 			OP_LOADBOOL -> LuaInst [if c > 0 then nextNextInstId else nextInstId] $ \[followingInstCode] codeState -> do
 				followingInstStmts <- followingInstCode codeState
-				return $ (noBindS [| writeIORef $(r a) $ LuaBoolean $(conE $ if b > 0 then 'True else 'False) |]) : followingInstStmts
-			OP_LOADNIL -> normalFlow $ doE $ flip map [a .. (a + b)] $ \j -> noBindS [| writeIORef $(r j) LuaNil |]
-			OP_GETUPVAL -> normalFlow [| writeIORef $(r a) =<< readIORef $(u b) |]
+				return $ (noBindS [| writeMutVar $(r a) $ LuaBoolean $(conE $ if b > 0 then 'True else 'False) |]) : followingInstStmts
+			OP_LOADNIL -> normalFlow $ doE $ flip map [a .. (a + b)] $ \j -> noBindS [| writeMutVar $(r j) LuaNil |]
+			OP_GETUPVAL -> normalFlow [| writeMutVar $(r a) =<< readMutVar $(u b) |]
 			OP_GETTABUP -> normalFlow [| do
-				t <- readIORef $(u b)
-				writeIORef $(r a) =<< luaValueGet t =<< $(rk c)
+				t <- readMutVar $(u b)
+				writeMutVar $(r a) =<< luaValueGet t =<< $(rk c)
 				|]
 			OP_GETTABLE -> normalFlow [| do
-				t <- readIORef $(r b)
-				writeIORef $(r a) =<< luaValueGet t =<< $(rk c)
+				t <- readMutVar $(r b)
+				writeMutVar $(r a) =<< luaValueGet t =<< $(rk c)
 				|]
 			OP_SETTABUP -> normalFlow [| do
-				t <- readIORef $(u a)
+				t <- readMutVar $(u a)
 				q <- $(rk b)
 				luaValueSet t q =<< $(rk c)
 				|]
-			OP_SETUPVAL -> normalFlow [| writeIORef $(u b) =<< readIORef $(r a) |]
+			OP_SETUPVAL -> normalFlow [| writeMutVar $(u b) =<< readMutVar $(r a) |]
 			OP_SETTABLE -> normalFlow [| do
-				t <- readIORef $(r a)
+				t <- readMutVar $(r a)
 				q <- $(rk b)
 				luaValueSet t q =<< $(rk c)
 				|]
-			OP_NEWTABLE -> normalFlow [| writeIORef $(r a) =<< luaNewTableSized $(litE $ integerL $ fromIntegral $ max b c) |]
+			OP_NEWTABLE -> normalFlow [| writeMutVar $(r a) =<< luaNewTableSized $(litE $ integerL $ fromIntegral $ max b c) |]
 			OP_SELF -> normalFlow [| do
-				writeIORef $(r $ a + 1) =<< readIORef $(r b)
-				t <- readIORef $(r b)
-				writeIORef $(r a) =<< luaValueGet t =<< $(rk c)
+				writeMutVar $(r $ a + 1) =<< readMutVar $(r b)
+				t <- readMutVar $(r b)
+				writeMutVar $(r a) =<< luaValueGet t =<< $(rk c)
 				|]
 			OP_ADD -> binop [| luaValueAdd |]
 			OP_SUB -> binop [| luaValueSub |]
@@ -407,18 +407,18 @@ compileLuaFunction LuaProto
 					f [] = return ([], [| LuaString T.empty |])
 					f [j] = do
 						p <- newName $ "p" ++ show j
-						return ([bindS (varP p) [| readIORef $(r j) |] ], varE p)
+						return ([bindS (varP p) [| readMutVar $(r j) |] ], varE p)
 					f (j:js) = do
 						p <- newName $ "p" ++ show j
 						q <- newName $ "q" ++ show j
 						(restStmts, restE) <- f js
 						return
-							( (bindS (varP p) [| readIORef $(r j) |]) : restStmts ++
+							( (bindS (varP p) [| readMutVar $(r j) |]) : restStmts ++
 								[bindS (varP q) [| luaValueConcat $(varE p) $restE |] ]
 							, varE q
 							)
 				(stmts, e) <- f [b..c]
-				doE $ stmts ++ [noBindS [| writeIORef $(r a) $e |]]
+				doE $ stmts ++ [noBindS [| writeMutVar $(r a) $e |]]
 			OP_JMP -> LuaInst [i + sbx + 1] $ \[jmpInstCode] codeState -> do
 				jmpInstStmts <- jmpInstCode codeState
 				return jmpInstStmts
@@ -429,7 +429,7 @@ compileLuaFunction LuaProto
 				nextInstStmts <- nextInstCode codeState
 				nextNextInstStmts <- nextNextInstCode codeState
 				return [noBindS [| do
-					p <- readIORef $(r a)
+					p <- readMutVar $(r a)
 					$(if c > 0 then
 						[| if luaCoerceToBool p then $(doE nextInstStmts) else $(doE nextNextInstStmts) |]
 						else
@@ -439,14 +439,14 @@ compileLuaFunction LuaProto
 				nextInstStmts <- nextInstCode codeState
 				nextNextInstStmts <- nextNextInstCode codeState
 				return [noBindS [| do
-					p <- readIORef $(r b)
+					p <- readMutVar $(r b)
 					$(if c > 0 then
-						[| if luaCoerceToBool p then $(doE $ (noBindS [| writeIORef $(r a) p |]) : nextInstStmts)
+						[| if luaCoerceToBool p then $(doE $ (noBindS [| writeMutVar $(r a) p |]) : nextInstStmts)
 							else $(doE nextNextInstStmts)
 						|]
 						else
 						[| if luaCoerceToBool p then $(doE nextNextInstStmts)
-							else $(doE $ (noBindS [| writeIORef $(r a) p |]) : nextInstStmts)
+							else $(doE $ (noBindS [| writeMutVar $(r a) p |]) : nextInstStmts)
 						|])
 					|] ]
 			OP_CALL -> callop
@@ -456,7 +456,7 @@ compileLuaFunction LuaProto
 				(getArgsStmts, argsE) <- getArgs (if b == 0 then Left (a + 1) else Right [(a + 1) .. (a + b - 1)]) codeState
 				f <- newName "f"
 				let callE = [| luaValueCall $(varE f) $argsE |]
-				return $ (bindS (varP f) [| readIORef $(r a) |]) : getArgsStmts ++ [noBindS callE]
+				return $ (bindS (varP f) [| readMutVar $(r a) |]) : getArgsStmts ++ [noBindS callE]
 			OP_RETURN -> LuaInst [] $ \[] codeState -> do
 				(getArgsStmts, argsE) <- getArgs (if b == 0 then Left a else Right [a .. (a + b - 2)]) codeState
 				return $ getArgsStmts ++ [noBindS [| return $argsE |] ]
@@ -464,22 +464,22 @@ compileLuaFunction LuaProto
 				nextInstStmts <- nextInstCode nullCodeState
 				jmpInstStmts <- jmpInstCode nullCodeState
 				return [noBindS [| do
-					step <- readIORef $(r $ a + 2)
-					idx <- readIORef $(r a)
+					step <- readMutVar $(r $ a + 2)
+					idx <- readMutVar $(r a)
 					newIdx <- luaValueAdd idx step
-					writeIORef $(r a) newIdx
-					limit <- readIORef $(r $ a + 1)
+					writeMutVar $(r a) newIdx
+					limit <- readMutVar $(r $ a + 1)
 					positiveStep <- luaValueLt (LuaInteger 0) step
 					loop <- if luaCoerceToBool positiveStep then luaValueLe newIdx limit else luaValueLe limit newIdx
-					if luaCoerceToBool loop then $(doE $ (noBindS [| writeIORef $(r $ a + 3) newIdx |]) : jmpInstStmts)
+					if luaCoerceToBool loop then $(doE $ (noBindS [| writeMutVar $(r $ a + 3) newIdx |]) : jmpInstStmts)
 					else $(doE nextInstStmts)
 					|] ]
 			OP_FORPREP -> LuaInst [i + sbx + 1] $ \[followingInstCode] codeState -> do
 				followingInstStmts <- followingInstCode codeState
 				return $ (noBindS [| do
-					step <- readIORef $(r $ a + 2)
-					idx <- readIORef $(r a)
-					writeIORef $(r a) =<< luaValueSub idx step
+					step <- readMutVar $(r $ a + 2)
+					idx <- readMutVar $(r a)
+					writeMutVar $(r a) =<< luaValueSub idx step
 					|]) : followingInstStmts
 			OP_TFORCALL -> callop
 				(Right [a + 1, a + 2])
@@ -488,11 +488,11 @@ compileLuaFunction LuaProto
 				nextInstStmts <- nextInstCode nullCodeState
 				followingInstStmts <- followingInstCode nullCodeState
 				return [noBindS [| do
-					cond <- readIORef $(r $ a + 1)
+					cond <- readMutVar $(r $ a + 1)
 					case cond of
 						LuaNil -> $(doE nextInstStmts)
 						_ -> do
-							writeIORef $(r a) cond
+							writeMutVar $(r a) cond
 							$(doE followingInstStmts)
 					|] ]
 			OP_SETLIST -> LuaInst [nextInstId] $ \[nextInstCode] codeState -> do
@@ -504,13 +504,13 @@ compileLuaFunction LuaProto
 					{ luaCodeStateTop = -1
 					}
 				return $ getArgsStmts ++
-					[ bindS (varP t) [| readIORef $(r a) |]
+					[ bindS (varP t) [| readMutVar $(r a) |]
 					, noBindS
 						[| forM_ (zip $argsE [1..]) $ \(p, j) -> luaValueSet $(varE t) (LuaInteger $ j + $(litE $ integerL $ fromIntegral $ (offset - 1) * fpf)) p |]
 					] ++ nextInstStmts
-			OP_CLOSURE -> normalFlow [| writeIORef $(r a) =<< luaNewClosure $(varE $ functionsNames V.! bx) |]
+			OP_CLOSURE -> normalFlow [| writeMutVar $(r a) =<< luaNewClosure $(varE $ functionsNames V.! bx) |]
 			OP_VARARG -> LuaInst [nextInstId] $ \[nextInstCode] codeState -> do
-				putRets (if b == 0 then Left a else Right [a .. (a + b - 2)]) [| readIORef $(varE varargName) |] nextInstCode codeState
+				putRets (if b == 0 then Left a else Right [a .. (a + b - 2)]) [| readMutVar $(varE varargName) |] nextInstCode codeState
 			--OP_EXTRAARG -- should not be processed here
 			_ -> LuaInst [] $ \[] _ -> fail "unknown Lua opcode"
 

@@ -7,36 +7,37 @@ License: MIT
 {-# LANGUAGE OverloadedStrings, QuasiQuotes #-}
 
 module Flaw.Script.Lua.StdLib
-	( registerLuaStdLib
+	( registerLuaBasicLib
 	) where
 
-import Control.Exception
 import Control.Monad
+import Control.Monad.Primitive
 import Data.Maybe
 import Data.Monoid
-import qualified Data.HashTable.IO as HT
+import qualified Data.HashTable.ST.Cuckoo as HT
+import Data.Primitive.MutVar
 import qualified Data.Text as T
-import Data.IORef
+import Debug.Trace
 
 import Flaw.Script.Lua
 import Flaw.Script.Lua.Build
 import Flaw.Script.Lua.Operations
 
-registerLuaStdLib :: LuaValue -> IO ()
-registerLuaStdLib env@LuaTable
+registerLuaBasicLib :: LuaMonad m => LuaValue m -> m ()
+registerLuaBasicLib env@LuaTable
 	{ luaTable = envt
 	} = do
 
-	envRef <- newIORef env
+	envVar <- newMutVar env
 
 	let func n f = do
 		c <- luaNewClosure f
-		HT.insert envt (LuaString n) c
+		liftPrim $ HT.insert envt (LuaString n) c
 
-	let notImplementedFunc n = func n $ \_ -> throwIO $ LuaError $ LuaString $ "flaw-lua: stdlib " <> n <> " is not implemented"
+	let notImplementedFunc n = func n $ \_ -> throwLuaError $ LuaError $ LuaString $ "flaw-lua: stdlib " <> n <> " is not implemented"
 
 	let
-		adjustArgs :: Int -> [LuaValue] -> [LuaValue]
+		adjustArgs :: Int -> [LuaValue m] -> [LuaValue m]
 		adjustArgs 0 _ = []
 		adjustArgs n (x:xs) = x : adjustArgs (n - 1) xs
 		adjustArgs n [] = LuaNil : adjustArgs (n - 1) []
@@ -44,7 +45,7 @@ registerLuaStdLib env@LuaTable
 	-- basic functions
 
 	func "assert" $ \as@(x:xs) -> if luaCoerceToBool x then return as
-		else throwIO $ LuaError $ case xs of
+		else throwLuaError $ LuaError $ case xs of
 			msg:_ -> msg
 			_ -> LuaString "assertion failed!"
 
@@ -60,28 +61,28 @@ registerLuaStdLib env@LuaTable
 				"setpause" -> return [LuaInteger 100]
 				"setstepmul" -> return [LuaInteger 200]
 				"isrunning" -> return [LuaBoolean True]
-				_ -> throwIO $ LuaError $ LuaString "collectgarbage: wrong opt"
-			Nothing -> throwIO $ LuaError $ LuaString "collectgarbage: wrong opt"
+				_ -> throwLuaError $ LuaError $ LuaString "collectgarbage: wrong opt"
+			Nothing -> throwLuaError $ LuaError $ LuaString "collectgarbage: wrong opt"
 
 	func "dofile" $ [lua|
 		local fileName = ...
 		return loadfile(fileName)()
-		|] envRef
+		|] envVar
 
-	func "error" $ \(msg:_) -> throwIO $ LuaError msg
+	func "error" $ \(msg:_) -> throwLuaError $ LuaError msg
 
-	HT.insert envt (LuaString "_G") env
+	liftPrim $ HT.insert envt (LuaString "_G") env
 
 	func "getmetatable" $ \(obj:_) -> case obj of
 		LuaTable
-			{ luaTableMetaTable = mtRef
+			{ luaTableMetaTable = mtVar
 			} -> do
-			mt <- readIORef mtRef
+			mt <- readMutVar mtVar
 			case mt of
 				LuaTable
 					{ luaTable = mtt
 					} -> do
-					maybeMttMt <- HT.lookup mtt (LuaString "__metatable")
+					maybeMttMt <- liftPrim $ HT.lookup mtt (LuaString "__metatable")
 					case maybeMttMt of
 						Just mttmt -> return [mttmt]
 						Nothing -> return [mt]
@@ -94,7 +95,7 @@ registerLuaStdLib env@LuaTable
 				{ luaTable = t
 				} -> \[_t, LuaInteger i] -> do
 				let k = LuaInteger $ i + 1
-				mv <- HT.lookup t k
+				mv <- liftPrim $ HT.lookup t k
 				case mv of
 					Just v -> return [k, v]
 					Nothing -> return []
@@ -106,19 +107,19 @@ registerLuaStdLib env@LuaTable
 	func "loadfile" $ [lua|
 		local fileName = ...
 		return _chunks[fileName]
-		|] envRef
+		|] envVar
 
 	notImplementedFunc "next"
 
 	notImplementedFunc "pairs"
 
-	func "pcall" $ \(f:as) -> catch (liftM (LuaBoolean True : ) $ luaValueCall f as) $ \(SomeException e) ->
+	func "pcall" $ \(f:as) -> catchLuaError (liftM (LuaBoolean True : ) $ luaValueCall f as) $ \e ->
 		return [LuaBoolean False, LuaString $ T.pack $ show e]
 
 	func "print" $ \as -> do
 		forM_ as $ \a -> case luaCoerceToString a of
-			Just s -> putStr $ T.unpack s
-			Nothing -> putStr "<<???>>"
+			Just s -> traceM $ T.unpack s
+			Nothing -> traceM "<<???>>"
 		return []
 
 	func "rawequal" $ \(a:b:_) -> return [LuaBoolean $ a == b]
@@ -127,62 +128,62 @@ registerLuaStdLib env@LuaTable
 		LuaTable
 			{ luaTable = tt
 			} -> do
-			r <- HT.lookup tt i
+			r <- liftPrim $ HT.lookup tt i
 			return [fromMaybe LuaNil r]
 		_ -> return [LuaNil]
 
 	func "rawlen" $ \(t:_) -> case t of
 		LuaString s -> return [LuaInteger $ T.length s]
 		LuaTable
-			{ luaTableLength = lenRef
+			{ luaTableLength = lenVar
 			} -> do
-			r <- readIORef lenRef
+			r <- readMutVar lenVar
 			return [LuaInteger r]
-		_ -> throwIO $ LuaBadOperation "rawlen: table or string expected"
+		_ -> throwLuaError $ LuaBadOperation "rawlen: table or string expected"
 
 	func "rawset" $ \(t:i:v:_) -> case t of
 		LuaTable
 			{ luaTable = tt
-			, luaTableLength = lenRef
+			, luaTableLength = lenVar
 			} -> do
-			mv <- HT.lookup tt i
+			mv <- liftPrim $ HT.lookup tt i
 			case mv of
 				Just _ -> case v of
 					LuaNil -> do
-						HT.delete tt i
-						modifyIORef' lenRef (+ (-1))
-					_ -> HT.insert tt i v
+						liftPrim $ HT.delete tt i
+						modifyMutVar' lenVar (+ (-1))
+					_ -> liftPrim $ HT.insert tt i v
 				Nothing -> case v of
 					LuaNil -> return ()
 					_ -> do
-						HT.insert tt i v
-						modifyIORef' lenRef (+ 1)
+						liftPrim $ HT.insert tt i v
+						modifyMutVar' lenVar (+ 1)
 			return [t]
-		_ -> throwIO $ LuaBadOperation "rawset: table expected"
+		_ -> throwLuaError $ LuaBadOperation "rawset: table expected"
 
 	func "select" $ \(n:as) -> case n of
-		LuaInteger i -> if i == 0 then throwIO $ LuaBadOperation "select: zero index"
+		LuaInteger i -> if i == 0 then throwLuaError $ LuaBadOperation "select: zero index"
 			else return $ if i > 0 then drop (i - 1) as else drop (length as + i) as
 		LuaString "#" -> return [LuaInteger $ length as]
-		_ -> throwIO $ LuaBadOperation "select: non-zero index or string '#' expected"
+		_ -> throwLuaError $ LuaBadOperation "select: non-zero index or string '#' expected"
 
 	func "setmetatable" $ \(t:mt:_) -> case t of
 		LuaTable
-			{ luaTableMetaTable = mtRef
+			{ luaTableMetaTable = mtVar
 			} -> do
-			omt <- readIORef mtRef
+			omt <- readMutVar mtVar
 			case omt of
 				LuaTable
 					{ luaTable = omtt
 					} -> do
-					momtmt <- HT.lookup omtt $ LuaString "__metatable"
+					momtmt <- liftPrim $ HT.lookup omtt $ LuaString "__metatable"
 					case momtmt of
-						Just _ -> throwIO $ LuaError $ LuaString "setmetatable: table has __metatable metafield"
+						Just _ -> throwLuaError $ LuaError $ LuaString "setmetatable: table has __metatable metafield"
 						Nothing -> return ()
 				_ -> return ()
-			writeIORef mtRef mt
+			writeMutVar mtVar mt
 			return [t]
-		_ -> throwIO $ LuaError $ LuaString "setmetatable: not a table"
+		_ -> throwLuaError $ LuaError $ LuaString "setmetatable: not a table"
 
 	func "tonumber" $ \(x:_) -> let
 		r = case luaCoerceToNumber x of
@@ -208,8 +209,8 @@ registerLuaStdLib env@LuaTable
 			LuaTable {} -> "table"
 		in return [LuaString t]
 
-	HT.insert envt (LuaString "_VERSION") $ LuaString "Lua 5.3"
+	liftPrim $ HT.insert envt (LuaString "_VERSION") $ LuaString "Lua 5.3"
 
 	notImplementedFunc "xpcall"
 
-registerLuaStdLib _ = undefined
+registerLuaBasicLib _ = undefined

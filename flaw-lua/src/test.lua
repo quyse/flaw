@@ -3,15 +3,15 @@ local allTestsOk = true
 local function test(s, f)
 	print("test " .. s .. " ...")
 	local t, ok, msg = measure_time(function() return pcall(f) end)
-	print(" " .. t .. "s ")
+	print(t .. "s")
 	if ok then
-		print("OK\n")
+		print("OK")
 	else
 		allTestsOk = false
 		if msg then
-			print("FAILED " .. msg .. "\n")
+			print("FAILED " .. msg)
 		else
-			print("FAILED\n")
+			print("FAILED")
 		end
 	end
 end

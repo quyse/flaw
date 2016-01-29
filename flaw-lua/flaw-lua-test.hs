@@ -11,7 +11,7 @@ module Main
 	) where
 
 import Control.Monad
-import Data.IORef
+import Data.Primitive.MutVar
 import Data.Time.Clock
 
 import Flaw.Script.Lua
@@ -24,9 +24,9 @@ main = do
 	let chunk = $(luaCompileFile "src/test.lua")
 
 	env <- luaNewTable
-	envRef <- newIORef env
+	envVar <- newMutVar env
 
-	registerLuaStdLib env
+	registerLuaBasicLib env
 
 	let registerFunction n f = luaValueSet env (LuaString n) =<< luaNewClosure f
 
@@ -36,4 +36,4 @@ main = do
 		t2 <- getCurrentTime
 		return $ (LuaReal $ fromRational $ toRational $ diffUTCTime t2 t1) : rs
 
-	void $ chunk envRef [LuaInteger 123, LuaString "hello"]
+	void $ chunk envVar [LuaInteger 123, LuaString "hello"]

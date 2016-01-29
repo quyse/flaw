@@ -27,7 +27,7 @@ library
   other-modules:
     Flaw.Script.Lua.FFI
   -- other-extensions:    
-  build-depends:       base, bytestring, cereal, flaw-base, flaw-build, flaw-lua-refimpl, hashable, hashtables, template-haskell, text, vector
+  build-depends:       base, bytestring, cereal, flaw-base, flaw-build, flaw-lua-refimpl, hashable, hashtables, primitive, template-haskell, text, vector
   -- hs-source-dirs:      
   default-language:    Haskell2010
 
@@ -41,5 +41,5 @@ test-suite flaw-lua-test
     Flaw.Script.Lua.FFI
     Flaw.Script.Lua.Operations
     Flaw.Script.Lua.StdLib
-  build-depends:       base, bytestring, cereal, flaw-base, flaw-build, flaw-lua-refimpl, hashable, hashtables, template-haskell, text, time, vector
+  build-depends:       base, bytestring, cereal, flaw-base, flaw-build, flaw-lua-refimpl, hashable, hashtables, primitive, template-haskell, text, time, vector
   default-language:    Haskell2010

@@ -7,47 +7,61 @@ License: MIT
 {-# LANGUAGE GADTs #-}
 
 module Flaw.Script.Lua
-	( LuaValue(..)
+	( LuaMonad(..)
+	, LuaValue(..)
 	, LuaError(..)
+	, LuaLoadError(..)
 	) where
 
 import Control.Exception
+import Control.Monad.Primitive
 import Data.Hashable
-import qualified Data.HashTable.IO as HT
-import Data.IORef
+import qualified Data.HashTable.ST.Cuckoo as HT
+import Data.Primitive.MutVar
 import qualified Data.Text as T
+import Data.Typeable
 import Data.Unique
 
+class PrimMonad m => LuaMonad m where
+	newLuaUnique :: m Unique
+	throwLuaError :: LuaError m -> m a
+	catchLuaError :: m a -> (LuaError m -> m a) -> m a
+
+instance LuaMonad IO where
+	newLuaUnique = newUnique
+	throwLuaError = throwIO
+	catchLuaError = catch
+
 -- | Lua value.
-data LuaValue where
+data LuaValue m where
 	-- | Standard 'nil' value.
-	LuaNil :: LuaValue
+	LuaNil :: LuaValue m
 	-- | Standard boolean value.
-	LuaBoolean :: !Bool -> LuaValue
+	LuaBoolean :: !Bool -> LuaValue m
 	-- | Integer 'number' value.
-	LuaInteger :: {-# UNPACK #-} !Int -> LuaValue
+	LuaInteger :: {-# UNPACK #-} !Int -> LuaValue m
 	-- | Real 'number' value.
-	LuaReal :: {-# UNPACK #-} !Double -> LuaValue
+	LuaReal :: {-# UNPACK #-} !Double -> LuaValue m
 	-- | String value.
-	LuaString :: !T.Text -> LuaValue
+	LuaString :: !T.Text -> LuaValue m
 	-- | Lua function
 	LuaClosure ::
 		{ luaClosureUnique :: !Unique
-		, luaClosure :: !([LuaValue] -> IO [LuaValue])
-		} -> LuaValue
+		, luaClosure :: !([LuaValue m] -> m [LuaValue m])
+		} -> LuaValue m
 	-- | User data.
 	LuaUserData ::
 		{ luaUserDataUnique :: !Unique
 		, luaUserData :: !a
-		} -> LuaValue
+		} -> LuaValue m
 	LuaTable ::
 		{ luaTableUnique :: !Unique
-		, luaTable :: !(HT.CuckooHashTable LuaValue LuaValue)
-		, luaTableLength :: !(IORef Int)
-		, luaTableMetaTable :: !(IORef LuaValue)
-		} -> LuaValue
+		, luaTable :: !(HT.HashTable (PrimState m) (LuaValue m) (LuaValue m))
+		, luaTableLength :: !(MutVar (PrimState m) Int)
+		, luaTableMetaTable :: !(MutVar (PrimState m) (LuaValue m))
+		} -> LuaValue m
 
-instance Eq LuaValue where
+instance Eq (LuaValue m) where
 	{-# INLINABLE (==) #-}
 	LuaNil == LuaNil = True
 	LuaBoolean a == LuaBoolean b = a == b
@@ -59,7 +73,7 @@ instance Eq LuaValue where
 	LuaTable { luaTableUnique = a } == LuaTable { luaTableUnique = b } = a == b
 	_ == _ = False
 
-instance Hashable LuaValue where
+instance Hashable (LuaValue m) where
 	{-# INLINABLE hashWithSalt #-}
 	hashWithSalt s v = case v of
 		LuaNil -> s `hashWithSalt` (0 :: Int)
@@ -77,7 +91,7 @@ instance Hashable LuaValue where
 			{ luaTableUnique = u
 			} -> s `hashWithSalt` (7 :: Int) `hashWithSalt` hashUnique u
 
-instance Show LuaValue where
+instance Show (LuaValue m) where
 	showsPrec p v q = case v of
 		LuaNil -> "LuaNil" ++ q
 		LuaBoolean b -> enclose $ \qq -> "LuaBoolean " ++ showsPrec 10 b qq
@@ -95,14 +109,19 @@ instance Show LuaValue where
 			} -> enclose $ \qq -> "LuaTable { luaTableUnique = " ++ showsPrec 0 (hashUnique u) qq
 		where enclose f = if p >= 10 then '(' : f (')' : q) else f q
 
-data LuaError
-	-- | Error while loading Lua chunk.
-	= LuaLoadError !T.Text
+data LuaError m
 	-- | Standard Lua error (e.g. thrown by 'error' stdlib function).
-	| LuaError !LuaValue
+	= LuaError !(LuaValue m)
 	-- | Operation is called on unsupported value, and value
 	-- doesn't have metatable, or doesn't have specific metamethod.
 	| LuaBadOperation !T.Text
 	deriving Show
 
-instance Exception LuaError
+instance Typeable m => Exception (LuaError m)
+
+-- | Error while loading Lua chunk.
+data LuaLoadError
+	= LuaLoadError !T.Text
+	deriving Show
+
+instance Exception LuaLoadError
