@@ -48,6 +48,7 @@ data LuaValue where
 		} -> LuaValue
 
 instance Eq LuaValue where
+	{-# INLINABLE (==) #-}
 	LuaNil == LuaNil = True
 	LuaBoolean a == LuaBoolean b = a == b
 	LuaInteger a == LuaInteger b = a == b
@@ -59,7 +60,7 @@ instance Eq LuaValue where
 	_ == _ = False
 
 instance Hashable LuaValue where
-	{-# INLINE hashWithSalt #-}
+	{-# INLINABLE hashWithSalt #-}
 	hashWithSalt s v = case v of
 		LuaNil -> s `hashWithSalt` (0 :: Int)
 		LuaBoolean b -> s `hashWithSalt` (1 :: Int) `hashWithSalt` b

@@ -52,6 +52,7 @@ import Data.Unique
 
 import Flaw.Script.Lua
 
+{-# INLINABLE luaCoerceToNumber #-}
 luaCoerceToNumber :: LuaValue -> Maybe Double
 luaCoerceToNumber v = case v of
 	LuaInteger i -> Just $ fromIntegral i
@@ -61,6 +62,7 @@ luaCoerceToNumber v = case v of
 		_ -> Nothing
 	_ -> Nothing
 
+{-# INLINABLE luaCoerceToInt #-}
 luaCoerceToInt :: LuaValue -> Maybe Int
 luaCoerceToInt v = case v of
 	LuaInteger i -> Just i
@@ -70,12 +72,14 @@ luaCoerceToInt v = case v of
 		_ -> Nothing
 	_ -> Nothing
 
+{-# INLINABLE luaCoerceToBool #-}
 luaCoerceToBool :: LuaValue -> Bool
 luaCoerceToBool v = case v of
 	LuaNil -> False
 	LuaBoolean b -> b
 	_ -> True
 
+{-# INLINABLE luaCoerceToString #-}
 luaCoerceToString :: LuaValue -> Maybe T.Text
 luaCoerceToString v = case v of
 	LuaInteger i -> Just $ T.pack $ show i
@@ -83,6 +87,7 @@ luaCoerceToString v = case v of
 	LuaString s -> Just s
 	_ -> Nothing
 
+{-# INLINABLE luaValueShow #-}
 luaValueShow :: LuaValue -> IO TL.Builder
 luaValueShow a = case a of
 	LuaNil -> return "nil"
@@ -106,6 +111,7 @@ luaValueShow a = case a of
 			return $ "[ " <> ks <> " ] = " <> vs <> "; "
 		return $ "{ " <> foldr (<>) "}" s
 
+{-# INLINABLE getMetaTable #-}
 getMetaTable :: LuaValue -> IO (Maybe (HT.CuckooHashTable LuaValue LuaValue))
 getMetaTable v = case v of
 	LuaTable
@@ -119,9 +125,11 @@ getMetaTable v = case v of
 			_ -> Nothing
 	_ -> return Nothing
 
+{-# INLINABLE tryUnaryMetaMethod #-}
 tryUnaryMetaMethod :: T.Text -> LuaValue -> IO LuaValue
 tryUnaryMetaMethod opName a = tryUnaryMetaMethodOr opName a $ throwIO $ LuaBadOperation opName
 
+{-# INLINABLE tryUnaryMetaMethodOr #-}
 tryUnaryMetaMethodOr :: T.Text -> LuaValue -> IO LuaValue -> IO LuaValue
 tryUnaryMetaMethodOr opName a other = do
 	maybeMetaTable <- getMetaTable a
@@ -133,9 +141,11 @@ tryUnaryMetaMethodOr opName a other = do
 				Nothing -> other
 		Nothing -> other
 
+{-# INLINABLE tryBinaryMetaMethod #-}
 tryBinaryMetaMethod :: T.Text -> LuaValue -> LuaValue -> IO LuaValue
 tryBinaryMetaMethod opName a b = tryBinaryMetaMethodOr opName a b $ throwIO $ LuaBadOperation opName
 
+{-# INLINABLE tryBinaryMetaMethodOr #-}
 tryBinaryMetaMethodOr :: T.Text -> LuaValue -> LuaValue -> IO LuaValue -> IO LuaValue
 tryBinaryMetaMethodOr opName a b other = do
 	maybeMetaTable <- do
@@ -151,6 +161,7 @@ tryBinaryMetaMethodOr opName a b other = do
 				Nothing -> other
 		Nothing -> other
 
+{-# INLINABLE numberBinaryOp #-}
 numberBinaryOp :: (Double -> Double -> Double) -> T.Text -> LuaValue -> LuaValue -> IO LuaValue
 numberBinaryOp op opName a b = do
 	let ma = luaCoerceToNumber a
@@ -159,6 +170,7 @@ numberBinaryOp op opName a b = do
 		(Just na, Just nb) -> return $ LuaReal $ op na nb
 		_ -> tryBinaryMetaMethod opName a b
 
+{-# INLINABLE integerBinaryOp #-}
 integerBinaryOp :: (Int -> Int -> Int) -> T.Text -> LuaValue -> LuaValue -> IO LuaValue
 integerBinaryOp op opName a b = do
 	let ma = luaCoerceToInt a
@@ -167,50 +179,64 @@ integerBinaryOp op opName a b = do
 		(Just na, Just nb) -> return $ LuaInteger $ op na nb
 		_ -> tryBinaryMetaMethod opName a b
 
+{-# INLINABLE integerOrNumberBinaryOp #-}
 integerOrNumberBinaryOp :: (Int -> Int -> Int) -> (Double -> Double -> Double) -> T.Text -> LuaValue -> LuaValue -> IO LuaValue
 integerOrNumberBinaryOp integerOp numberOp opName a b = case (a, b) of
 	(LuaInteger na, LuaInteger nb) -> return $ LuaInteger $ integerOp na nb
 	_ -> numberBinaryOp numberOp opName a b
 
+{-# INLINABLE luaValueAdd #-}
 luaValueAdd :: LuaValue -> LuaValue -> IO LuaValue
 luaValueAdd = integerOrNumberBinaryOp (+) (+) "__add"
 
+{-# INLINABLE luaValueSub #-}
 luaValueSub :: LuaValue -> LuaValue -> IO LuaValue
 luaValueSub = integerOrNumberBinaryOp (-) (-) "__sub"
 
+{-# INLINABLE luaValueMul #-}
 luaValueMul :: LuaValue -> LuaValue -> IO LuaValue
 luaValueMul = integerOrNumberBinaryOp (*) (*) "__mul"
 
+{-# INLINABLE luaValueMod #-}
 luaValueMod :: LuaValue -> LuaValue -> IO LuaValue
 luaValueMod = integerOrNumberBinaryOp rem irem "__mod" where
 	irem a b = a - fromIntegral ((truncate $ a / b) :: Int) * b
 
+{-# INLINABLE luaValuePow #-}
 luaValuePow :: LuaValue -> LuaValue -> IO LuaValue
 luaValuePow = numberBinaryOp pow "__pow" where
 	pow a b = exp $ log a * b
 
+{-# INLINABLE luaValueDiv #-}
 luaValueDiv :: LuaValue -> LuaValue -> IO LuaValue
 luaValueDiv = numberBinaryOp (/) "__div"
 
+{-# INLINABLE luaValueIDiv #-}
 luaValueIDiv :: LuaValue -> LuaValue -> IO LuaValue
 luaValueIDiv = integerOrNumberBinaryOp quot iquot "__idiv" where
 	iquot a b = fromIntegral ((truncate $ a / b) :: Int)
 
+{-# INLINABLE luaValueBAnd #-}
 luaValueBAnd :: LuaValue -> LuaValue -> IO LuaValue
 luaValueBAnd = integerBinaryOp (.&.) "__band"
 
+{-# INLINABLE luaValueBOr #-}
 luaValueBOr :: LuaValue -> LuaValue -> IO LuaValue
 luaValueBOr = integerBinaryOp (.|.) "__bor"
 
+{-# INLINABLE luaValueBXor #-}
 luaValueBXor :: LuaValue -> LuaValue -> IO LuaValue
 luaValueBXor = integerBinaryOp xor "__bxor"
 
+{-# INLINABLE luaValueShl #-}
 luaValueShl :: LuaValue -> LuaValue -> IO LuaValue
 luaValueShl = integerBinaryOp shiftL "__shl"
 
+{-# INLINABLE luaValueShr #-}
 luaValueShr :: LuaValue -> LuaValue -> IO LuaValue
 luaValueShr = integerBinaryOp shiftR "__shr"
 
+{-# INLINABLE luaValueUnm #-}
 luaValueUnm :: LuaValue -> IO LuaValue
 luaValueUnm a = case a of
 	LuaInteger n -> return $ LuaInteger $ negate n
@@ -218,14 +244,17 @@ luaValueUnm a = case a of
 		Just n -> return $ LuaReal $ negate n
 		Nothing -> tryUnaryMetaMethod "__unm" a
 
+{-# INLINABLE luaValueBNot #-}
 luaValueBNot :: LuaValue -> IO LuaValue
 luaValueBNot a = case luaCoerceToInt a of
 	Just n -> return $ LuaInteger $ complement n
 	Nothing -> tryUnaryMetaMethod "__bnot" a
 
+{-# INLINABLE luaValueNot #-}
 luaValueNot :: LuaValue -> IO LuaValue
 luaValueNot a = return $ LuaBoolean $ not $ luaCoerceToBool a
 
+{-# INLINABLE luaValueLen #-}
 luaValueLen :: LuaValue -> IO LuaValue
 luaValueLen a = case a of
 	LuaString s -> return $ LuaInteger $ T.length s
@@ -235,15 +264,18 @@ luaValueLen a = case a of
 			} -> liftM LuaInteger $ readIORef lenRef
 		_ -> throwIO $ LuaBadOperation "__len"
 
+{-# INLINABLE luaValueConcat #-}
 luaValueConcat :: LuaValue -> LuaValue -> IO LuaValue
 luaValueConcat a b = case (luaCoerceToString a, luaCoerceToString b) of
 	(Just sa, Just sb) -> return $ LuaString $ sa <> sb
 	_ -> tryBinaryMetaMethod "__concat" a b
 
+{-# INLINABLE luaValueEq #-}
 luaValueEq :: LuaValue -> LuaValue -> IO LuaValue
 luaValueEq a b = if a == b then return $ LuaBoolean True
 	else liftM (LuaBoolean . luaCoerceToBool) $ tryBinaryMetaMethodOr "__eq" a b $ return $ LuaBoolean False
 
+{-# INLINABLE luaValueLt #-}
 luaValueLt :: LuaValue -> LuaValue -> IO LuaValue
 luaValueLt a b = case (a, b) of
 	(LuaInteger na, LuaInteger nb) -> return $ LuaBoolean $ na < nb
@@ -252,6 +284,7 @@ luaValueLt a b = case (a, b) of
 		(Just na, Just nb) -> return $ LuaBoolean $ na < nb
 		_ -> liftM (LuaBoolean . luaCoerceToBool) $ tryBinaryMetaMethod "__lt" a b
 
+{-# INLINABLE luaValueLe #-}
 luaValueLe :: LuaValue -> LuaValue -> IO LuaValue
 luaValueLe a b = case (a, b) of
 	(LuaInteger na, LuaInteger nb) -> return $ LuaBoolean $ na <= nb
@@ -261,6 +294,7 @@ luaValueLe a b = case (a, b) of
 		_ -> liftM (LuaBoolean . luaCoerceToBool) $ tryBinaryMetaMethodOr "__le" a b $
 			liftM (LuaBoolean . not . luaCoerceToBool) $ tryBinaryMetaMethod "__lt" b a
 
+{-# INLINABLE luaValueGet #-}
 luaValueGet :: LuaValue -> LuaValue -> IO LuaValue
 luaValueGet t i = case t of
 	LuaTable
@@ -288,6 +322,7 @@ luaValueGet t i = case t of
 					_ -> return LuaNil
 	_ -> throwIO $ LuaBadOperation "__index"
 
+{-# INLINABLE luaValueSet #-}
 luaValueSet :: LuaValue -> LuaValue -> LuaValue -> IO ()
 luaValueSet t i v = case t of
 	LuaTable
@@ -329,6 +364,7 @@ luaValueSet t i v = case t of
 					_ -> setNew
 	_ -> throwIO $ LuaBadOperation "__newindex"
 
+{-# INLINABLE luaValueCall #-}
 luaValueCall :: LuaValue -> [LuaValue] -> IO [LuaValue]
 luaValueCall func args = case func of
 	LuaClosure
@@ -349,7 +385,9 @@ luaValueCall func args = case func of
 			_ -> throwIO $ LuaBadOperation "__call"
 	_ -> throwIO $ LuaBadOperation "__call"
 
+{-# INLINABLE luaNewTable #-}
 luaNewTable :: IO LuaValue
+{-# INLINABLE luaNewTableSized #-}
 luaNewTableSized :: Int -> IO LuaValue
 (luaNewTable, luaNewTableSized) = let
 	create t = do
@@ -364,6 +402,7 @@ luaNewTableSized :: Int -> IO LuaValue
 			}
 	in (create =<< HT.new, \size -> create =<< HT.newSized size)
 
+{-# INLINABLE luaNewClosure #-}
 luaNewClosure :: ([LuaValue] -> IO [LuaValue]) -> IO LuaValue
 luaNewClosure f = do
 	u <- newUnique
