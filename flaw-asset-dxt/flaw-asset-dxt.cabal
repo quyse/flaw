@@ -37,5 +37,5 @@ library
     src/squish.cpp
     -- helpers
     src/flaw-squish.cpp
-  cc-options: -DSQUISH_USE_SSE=2 -O3 -fno-exceptions
+  cc-options: -DSQUISH_USE_SSE=2 -O3 -fno-exceptions -fno-rtti
   extra-libraries:     stdc++

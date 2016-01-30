@@ -4,7 +4,7 @@ Description: Collada support.
 License: MIT
 -}
 
-{-# LANGUAGE FlexibleInstances, FunctionalDependencies, MultiParamTypeClasses, RankNTypes #-}
+{-# LANGUAGE FlexibleInstances, FunctionalDependencies, MultiParamTypeClasses, OverloadedStrings, RankNTypes #-}
 
 module Flaw.Asset.Collada
 	( Parse()
@@ -31,6 +31,7 @@ module Flaw.Asset.Collada
 	, ColladaSkin(..)
 	, ColladaBone(..)
 	, parseSkin
+	, ColladaElement
 	) where
 
 import Control.Monad
@@ -40,7 +41,9 @@ import Control.Monad.State
 import qualified Data.ByteString.Lazy as BL
 import Data.List
 import Data.Maybe
-import qualified Data.Map.Strict as Map
+import qualified Data.Map.Lazy as ML
+import qualified Data.Map.Strict as MS
+import Data.Monoid
 import qualified Data.Text as T
 import qualified Data.Vector as V
 import qualified Data.Vector.Algorithms.Intro as VAI
@@ -49,18 +52,18 @@ import qualified Data.Vector.Mutable as VM
 import qualified Data.Vector.Unboxed as VU
 import qualified Data.Vector.Unboxed.Mutable as VUM
 import Data.Word
-import qualified Text.XML.Light as XML
+import qualified Text.XML as XML
 
 import Flaw.Math
 import Flaw.Math.Transform
 
 data ColladaCache = ColladaCache
 	{ ccSettings :: !ColladaSettings
-	, ccContents :: [XML.Content]
-	, ccElementsById :: !(Map.Map String XML.Element)
-	, ccIntArrays :: !(Map.Map String (VU.Vector Int))
-	, ccFloatArrays :: !(Map.Map String (VU.Vector Float))
-	, ccNameArrays :: !(Map.Map String (V.Vector T.Text))
+	, ccRootElement :: !XML.Element
+	, ccElementsById :: !(MS.Map T.Text XML.Element)
+	, ccIntArrays :: !(MS.Map T.Text (VU.Vector Int))
+	, ccFloatArrays :: !(MS.Map T.Text (VU.Vector Float))
+	, ccNameArrays :: !(MS.Map T.Text (V.Vector T.Text))
 	}
 
 data ColladaSettings = ColladaSettings
@@ -69,63 +72,81 @@ data ColladaSettings = ColladaSettings
 	, csInvUnitMat :: Float4x4
 	}
 
-type ColladaM a = StateT ColladaCache (Either String) a
+type ColladaM a = StateT ColladaCache (Either T.Text) a
 
 -------- XML helpers.
 
-tryGetElementAttr :: String -> XML.Element -> ColladaM (Maybe String)
+tryGetElementAttr :: T.Text -> XML.Element -> Maybe T.Text
 tryGetElementAttr attrName XML.Element
-	{ XML.elAttribs = attribs
-	} = case filter (\XML.Attr { XML.attrKey = XML.QName { XML.qName = name } } -> name == attrName) attribs of
-	[XML.Attr { XML.attrVal = val }] -> return $ Just val
-	_ -> return Nothing
+	{ XML.elementAttributes = attributes
+	} = ML.lookup XML.Name
+	{ XML.nameLocalName = attrName
+	, XML.nameNamespace = Nothing
+	, XML.namePrefix = Nothing
+	} attributes
 
 -- | Get attribute of element.
-getElementAttr :: String -> XML.Element -> ColladaM String
-getElementAttr attrName element = do
-	maybeAttr <- tryGetElementAttr attrName element
-	case maybeAttr of
-		Just attr -> return attr
-		Nothing -> throwError $ show ("no exactly one attribute", attrName)
+getElementAttr :: T.Text -> XML.Element -> ColladaM T.Text
+getElementAttr attrName element = case tryGetElementAttr attrName element of
+	Just attr -> return attr
+	Nothing -> throwError $ "no exactly one attribute: " <> attrName
 
 -- | Get children elements with specified tag.
-getChildrenWithTag :: String -> XML.Element -> ColladaM [XML.Element]
+getChildrenWithTag :: T.Text -> XML.Element -> ColladaM [XML.Element]
 getChildrenWithTag tag XML.Element
-	{ XML.elContent = contents
-	} = return $ concatMap f contents where
-	f content = case content of
-		XML.Elem element@XML.Element
-			{ XML.elName = XML.QName
-				{ XML.qName = name
+	{ XML.elementNodes = nodes
+	} = return $ concatMap f nodes where
+	f node = case node of
+		XML.NodeElement element@XML.Element
+			{ XML.elementName = XML.Name
+				{ XML.nameLocalName = name
 				}
 			} -> if name == tag then [element] else []
 		_ -> []
 
-getSingleChildWithTag :: String -> XML.Element -> ColladaM XML.Element
+getSingleChildWithTag :: T.Text -> XML.Element -> ColladaM XML.Element
 getSingleChildWithTag tag element = do
 	children <- getChildrenWithTag tag element
 	case children of
 		[r] -> return r
-		_ -> throwError $ show ("no exactly one child", tag)
+		_ -> throwError $ "no exactly one child: " <> tag
 
-runCollada :: ColladaM a -> Either String a
+runCollada :: ColladaM a -> Either T.Text a
 runCollada r = evalStateT r undefined
 
 -- | Init collada cache.
 initColladaCache :: BL.ByteString -> ColladaM ()
 initColladaCache fileData = do
-	let
+	XML.Document
+		{ XML.documentRoot = rootElement
+		} <- case XML.parseLBS XML.def fileData of
+		Left e -> throwError $ "parse collada XML: " <> T.pack (show e)
+		Right document -> return document
+	put ColladaCache
+		{ ccSettings = ColladaSettings
+			{ csUnit = 1
+			, csUnitMat = identityTransform
+			, csInvUnitMat = identityTransform
+			}
+		, ccRootElement = rootElement
+		, ccElementsById = MS.empty
+		, ccIntArrays = MS.empty
+		, ccFloatArrays = MS.empty
+		, ccNameArrays = MS.empty
+		}
+	traverseElement rootElement
+	where
 		ignoreErrors q = catchError q (\_ -> return ())
 		traverseElement element@XML.Element
-			{ XML.elName = XML.QName
-				{ XML.qName = tag
+			{ XML.elementName = XML.Name
+				{ XML.nameLocalName = tag
 				}
-			, XML.elContent = contents
+			, XML.elementNodes = nodes
 			} = do
 			when (tag == "COLLADA") $ ignoreErrors $ do
 				assetElement <- getSingleChildWithTag "asset" element
 				unitElement <- getSingleChildWithTag "unit" assetElement
-				unit <- liftM read $ getElementAttr "meter" unitElement
+				unit <- liftM (read . T.unpack) $ getElementAttr "meter" unitElement
 				let invUnit = 1 / unit
 				state $ \cache@ColladaCache
 					{ ccSettings = settings
@@ -148,81 +169,67 @@ initColladaCache fileData = do
 				elementId <- getElementAttr "id" element
 				cache <- get
 				put $ cache
-					{ ccElementsById = Map.insert elementId element $ ccElementsById cache
+					{ ccElementsById = MS.insert elementId element $ ccElementsById cache
 					}
-			traverseContents contents
-		traverseContent content = case content of
-			XML.Elem element -> traverseElement element
+			mapM_ traverseNode nodes
+		traverseNode node = case node of
+			XML.NodeElement element -> traverseElement element
 			_ -> return ()
-		traverseContents = mapM_ traverseContent
-		fileContents = XML.parseXML fileData
-	put ColladaCache
-		{ ccSettings = ColladaSettings
-			{ csUnit = 1
-			, csUnitMat = identityTransform
-			, csInvUnitMat = identityTransform
-			}
-		, ccContents = fileContents
-		, ccElementsById = Map.empty
-		, ccIntArrays = Map.empty
-		, ccFloatArrays = Map.empty
-		, ccNameArrays = Map.empty
-		}
-	traverseContents fileContents
 
 -- | Get element by id.
-getElementById :: String -> ColladaM XML.Element
+getElementById :: T.Text -> ColladaM XML.Element
 getElementById name = do
 	cache <- get
-	case Map.lookup name $ ccElementsById cache of
+	case MS.lookup name $ ccElementsById cache of
 		Just element -> return element
-		Nothing -> throwError $ show ("no element", name)
+		Nothing -> throwError $ "no element: " <> name
 
 -- | Get element by #id or local name.
-resolveElement :: String -> ColladaM XML.Element
-resolveElement name = case name of
-	('#' : elementId) -> getElementById elementId
-	_ -> throwError "local addresses not implemented yet" -- TODO: local addresses
+resolveElement :: T.Text -> ColladaM XML.Element
+resolveElement name = case T.stripPrefix "#" name of
+	Just elementId -> getElementById elementId
+	Nothing -> throwError "local addresses not implemented yet" -- TODO: local addresses
 
 -- | Get all elements by tag.
-getAllElementsByTag :: String -> ColladaM [XML.Element]
+getAllElementsByTag :: T.Text -> ColladaM [XML.Element]
 getAllElementsByTag tag = do
 	ColladaCache
-		{ ccContents = rootContents
+		{ ccRootElement = rootElement
 		} <- get
-	let traverseContents contents = liftM concat $ forM contents $ \content -> case content of
-		XML.Elem element@XML.Element
-			{ XML.elName = XML.QName
-				{ XML.qName = elementName
+	return $ traverseElement rootElement []
+	where
+		traverseElement element@XML.Element
+			{ XML.elementName = XML.Name
+				{ XML.nameLocalName = elementName
 				}
-			, XML.elContent = elementContents
-			} -> do
-			subElements <- traverseContents elementContents
-			return $ if elementName == tag then element : subElements else subElements
-		_ -> return []
-	traverseContents rootContents
+			, XML.elementNodes = nodes
+			} results = if elementName == tag then element : nodesResults else nodesResults where
+			nodesResults = foldr traverseNode results nodes
+		traverseNode node results = case node of
+			XML.NodeElement element -> traverseElement element results
+			_ -> results
 
 class VG.Vector v a => Parse a v | a -> v where
-	parse :: String -> a
-	getParsedArrays :: ColladaM (Map.Map String (v a))
-	putParsedArrays :: (Map.Map String (v a) -> Map.Map String (v a)) -> ColladaM ()
+	parse :: T.Text -> a
+	getParsedArrays :: ColladaM (MS.Map T.Text (v a))
+	putParsedArrays :: (MS.Map T.Text (v a) -> MS.Map T.Text (v a)) -> ColladaM ()
 
 instance Parse Int VU.Vector where
-	parse = read
+	parse = read . T.unpack
 	getParsedArrays = liftM ccIntArrays get
 	putParsedArrays f = do
 		cache <- get
 		put cache { ccIntArrays = f $ ccIntArrays cache }
 
 instance Parse Float VU.Vector where
-	parse = read
+	parse = read . T.unpack
 	getParsedArrays = liftM ccFloatArrays get
 	putParsedArrays f = do
 		cache <- get
 		put cache { ccFloatArrays = f $ ccFloatArrays cache }
 
 instance Parse T.Text V.Vector where
-	parse = T.pack
+	parse = id
 	getParsedArrays = liftM ccNameArrays get
 	putParsedArrays f = do
 		cache <- get
@@ -230,10 +237,8 @@ instance Parse T.Text V.Vector where
 
 -- | Get contents of an element as CData, split into words and parse.
 parseArrayUncached :: Parse a v => XML.Element -> ColladaM (v a)
-parseArrayUncached element = case XML.elContent element of
-	[XML.Text XML.CData
-		{ XML.cdData = str
-		}] -> return $ VG.fromList $ map parse $ words str
+parseArrayUncached element = case XML.elementNodes element of
+	[XML.NodeContent content] -> return $ VG.fromList $ map parse $ T.words content
 	_ -> throwError "wrong array"
 
 -- | Get contents of an element as CData, split into words, parse and cache.
@@ -242,19 +247,19 @@ parseArray element = catchError withId withoutId where
 	withId = do
 		elementId <- getElementAttr "id" element
 		arrays <- getParsedArrays
-		case Map.lookup elementId arrays of
+		case MS.lookup elementId arrays of
 			Just result -> return result
 			Nothing -> do
 				result <- parseArrayUncached element
-				putParsedArrays $ Map.insert elementId result
+				putParsedArrays $ MS.insert elementId result
 				return result
 	withoutId _err = parseArrayUncached element
 
 -- | Parse "source" tag. Right now it just returns underlying array with stride.
 parseSource :: Parse a v => XML.Element -> ColladaM (v a, Int)
 parseSource element@XML.Element
-	{ XML.elName = XML.QName
-		{ XML.qName = name
+	{ XML.elementName = XML.Name
+		{ XML.nameLocalName = name
 		}
 	} = do
 	if name == "vertices" then do
@@ -272,7 +277,7 @@ parseSource element@XML.Element
 
 -- | "Input" tag structure.
 data ColladaInputTag = ColladaInputTag
-	{ citSemantic :: String
+	{ citSemantic :: T.Text
 	, citOffset :: Int
 	, citSourceElement :: XML.Element
 	}
@@ -281,7 +286,7 @@ data ColladaInputTag = ColladaInputTag
 parseInput :: XML.Element -> ColladaM ColladaInputTag
 parseInput inputElement = do
 	semantic <- getElementAttr "semantic" inputElement
-	offset <- liftM (maybe 0 parse) $ tryGetElementAttr "offset" inputElement
+	let offset = maybe 0 parse $ tryGetElementAttr "offset" inputElement
 	sourceElement <- resolveElement =<< getElementAttr "source" inputElement
 	return ColladaInputTag
 		{ citSemantic = semantic
@@ -333,7 +338,7 @@ parseTriangles element = do
 			values <- parseStridables =<< parseSource sourceElement
 			return $ VG.generate count $ \i -> values VG.! (flippedIndices VU.! (i * stride + offset))
 		[] -> return VG.empty
-		_ -> throwError $ show ("parseTriangles: wrong semantic", semantic)
+		_ -> throwError $ "parseTriangles: wrong semantic: " <> semantic
 
 	let positionIndices = case filter (\i -> citSemantic i == "VERTEX") inputs of
 		[ColladaInputTag
@@ -368,18 +373,18 @@ data ColladaTransformTag
 
 -- | Node.
 data ColladaNodeTag = ColladaNodeTag
-	{ cntID :: String
-	, cntSID :: String
-	, cntTransforms :: [(Maybe String, ColladaTransformTag)]
+	{ cntID :: !T.Text
+	, cntSID :: !T.Text
+	, cntTransforms :: [(Maybe T.Text, ColladaTransformTag)]
 	, cntSubnodes :: [ColladaNodeTag]
 	} deriving Show
 
 parseNode :: XML.Element -> ColladaM ColladaNodeTag
 parseNode element@XML.Element
-	{ XML.elContent = contents
+	{ XML.elementNodes = elementNodes
 	} = do
-	nodeId <- liftM (fromMaybe "") $ tryGetElementAttr "id" element
-	sid <- liftM (fromMaybe "") $ tryGetElementAttr "sid" element
+	let nodeId = fromMaybe "" $ tryGetElementAttr "id" element
+	let sid = fromMaybe "" $ tryGetElementAttr "sid" element
 
 	settings <- liftM ccSettings get
 	let unit = csUnit settings
@@ -390,10 +395,10 @@ parseNode element@XML.Element
 	let f node@ColladaNodeTag
 		{ cntTransforms = transforms
 		, cntSubnodes = subnodes
-		} content = case content of
-		XML.Elem subElement@XML.Element
-			{ XML.elName = XML.QName
-				{ XML.qName = subElementName
+		} elementNode = case elementNode of
+		XML.NodeElement subElement@XML.Element
+			{ XML.elementName = XML.Name
+				{ XML.nameLocalName = subElementName
 				}
 			} -> case subElementName of
 			"node" -> do
@@ -402,19 +407,19 @@ parseNode element@XML.Element
 					{ cntSubnodes = subnodes ++ [subnode]
 					}
 			"translate" -> do
-				maybeTransformSID <- tryGetElementAttr "sid" subElement
+				let maybeTransformSID = tryGetElementAttr "sid" subElement
 				[x, y, z] <- liftM VG.toList $ parseArray subElement
 				return node
 					{ cntTransforms = transforms ++ [(maybeTransformSID, ColladaTranslateTag $ Vec3 x y z * vecFromScalar unit)]
 					}
 			"rotate" -> do
-				maybeTransformSID <- tryGetElementAttr "sid" subElement
+				let maybeTransformSID = tryGetElementAttr "sid" subElement
 				[x, y, z, a] <- liftM VG.toList $ parseArray subElement
 				return node
 					{ cntTransforms = transforms ++ [(maybeTransformSID, ColladaRotateTag (Vec3 x y z) (a * pi / 180 :: Float))]
 					}
 			"matrix" -> do
-				maybeTransformSID <- tryGetElementAttr "sid" subElement
+				let maybeTransformSID = tryGetElementAttr "sid" subElement
 				mat <- liftM (`constructStridable` 0) $ parseArray subElement
 				return node
 					{ cntTransforms = transforms ++ [(maybeTransformSID, ColladaMatrixTag (unitMat `mul` (mat :: Float4x4) `mul` invUnitMat))]
@@ -426,7 +431,7 @@ parseNode element@XML.Element
 		, cntSID = sid
 		, cntTransforms = []
 		, cntSubnodes = []
-		} contents
+		} elementNodes
 
 -- | Parse "sampler" tag.
 -- Essentially just resolves INPUT and OUTPUT sources.
@@ -439,7 +444,7 @@ parseSampler element = do
 			{ citOffset = 0
 			, citSourceElement = sourceElement
 			}] -> parseSource sourceElement
-		_ -> throwError $ show ("parseSampler: wrong semantic", semantic)
+		_ -> throwError $ "parseSampler: wrong semantic: " <> semantic
 	resultInputs <- getInput "INPUT"
 	resultOutputs <- getInput "OUTPUT"
 	return (resultInputs, resultOutputs)
@@ -449,8 +454,8 @@ newtype ColladaAnimation = ColladaAnimation [ColladaChannelTag]
 
 -- | "Channel" tag structure.
 data ColladaChannelTag = ColladaChannelTag
-	{ cctTarget :: String
-	, cctSamplerElement :: XML.Element
+	{ cctTarget :: !T.Text
+	, cctSamplerElement :: !XML.Element
 	} deriving Show
 
 -- | Parse "animation" tag.
@@ -485,7 +490,7 @@ animateNode ColladaNodeTag
 				channelAnimators <- liftM concat $ forM channels $ \ColladaChannelTag
 					{ cctTarget = target
 					, cctSamplerElement = samplerElement
-					} -> case stripPrefix (nodeId ++ "/" ++ name) target of
+					} -> case T.stripPrefix (nodeId <> "/" <> name) target of
 						Just path -> case initialTransformTag of
 							ColladaTranslateTag _initialOffset -> case path of
 
@@ -505,7 +510,7 @@ animateNode ColladaNodeTag
 									a <- animateSampler samplerElement
 									return [\(ColladaTranslateTag (Vec3 x y _z)) time -> ColladaTranslateTag $ Vec3 x y (a time * unit)]
 
-								_ -> throwError $ "unknown path for translate tag: " ++ path
+								_ -> throwError $ "unknown path for translate tag: " <> path
 
 							ColladaRotateTag _initialAxis _initialAngle -> case path of
 
@@ -513,12 +518,12 @@ animateNode ColladaNodeTag
 									a <- animateSampler samplerElement
 									return [\(ColladaRotateTag axis _angle) time -> ColladaRotateTag axis (a time * pi / 180)]
 
-								_ -> throwError $ "unknown path for rotate tag: " ++ path
+								_ -> throwError $ "unknown path for rotate tag: " <> path
 
 							ColladaMatrixTag _initialMat -> case path of
 
 								-- TODO: implement matrix paths
-								_ -> throwError $ "unknown path for matrix tag: " ++ path
+								_ -> throwError $ "unknown path for matrix tag: " <> path
 
 						Nothing -> return []
 				-- resulting animation function
@@ -680,7 +685,7 @@ parseSkin (ColladaSkeleton nodes) skinElement = do
 
 	let findInput inputs semantic parent = case filter (\input -> citSemantic input == semantic) inputs of
 		[input] -> return input :: ColladaM ColladaInputTag
-		_ -> throwError $ "no single " ++ parent ++ " input with " ++ semantic ++ " semantic"
+		_ -> throwError $ "no single " <> parent <> " input with " <> semantic <> " semantic"
 
 	jointsJointInput <- findInput jointsInputs "JOINT" "joints"
 	jointsJointNames <- liftM fst $ parseSource $ citSourceElement jointsJointInput
@@ -692,14 +697,14 @@ parseSkin (ColladaSkeleton nodes) skinElement = do
 			{ csklnNodeTag = ColladaNodeTag
 				{ cntSID = sid
 				}
-			} -> T.pack sid == jointName) nodes of
+			} -> sid == jointName) nodes of
 			Just nodeIndex -> return ColladaBone
 				{ cboneSkeletonIndex = nodeIndex
 				, cboneInvBindTransform = transformFromMatrix $ unitMat `mul` (jointInvBindTransform :: Float4x4) `mul` bindShapeTransform `mul` invUnitMat
 				}
-			Nothing -> throwError $ "missing skeleton node for joint " ++ T.unpack jointName
+			Nothing -> throwError $ "missing skeleton node for joint " <> jointName
 
-	let namedBones = Map.fromList $ zip (V.toList jointsJointNames) [0..]
+	let namedBones = MS.fromList $ zip (V.toList jointsJointNames) [0..]
 
 	vertexWeightsElement <- getSingleChildWithTag "vertex_weights" skinElement
 	vertexWeightsInputs <- mapM parseInput =<< getChildrenWithTag "input" vertexWeightsElement
@@ -708,9 +713,9 @@ parseSkin (ColladaSkeleton nodes) skinElement = do
 	vertexWeightsJointInput <- findInput vertexWeightsInputs "JOINT" "vertex_weights"
 	vertexWeightsJointNames <- liftM fst $ parseSource $ citSourceElement vertexWeightsJointInput
 	let vertexWeightsJointOffset = citOffset vertexWeightsJointInput
-	vertexWeightsJointBones <- liftM V.convert $ V.forM vertexWeightsJointNames $ \jointName -> case Map.lookup jointName namedBones of
+	vertexWeightsJointBones <- liftM V.convert $ V.forM vertexWeightsJointNames $ \jointName -> case MS.lookup jointName namedBones of
 		Just bone -> return bone
-		Nothing -> throwError $ "missing bone for joint " ++ T.unpack jointName
+		Nothing -> throwError $ "missing bone for joint " <> jointName
 
 	vertexWeightsWeightInput <- findInput vertexWeightsInputs "WEIGHT" "vertex_weights"
 	vertexWeightsWeights <- liftM fst $ parseSource $ citSourceElement vertexWeightsWeightInput
@@ -776,3 +781,6 @@ parseSkin (ColladaSkeleton nodes) skinElement = do
 		}, ColladaSkin
 		{ cskinBones = skinBones
 		})
+
+-- Re-export of some XML types.
+type ColladaElement = XML.Element
