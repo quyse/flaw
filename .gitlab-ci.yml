@@ -69,7 +69,6 @@ variables:
     flaw-base
     flaw-build
     flaw-canvas
-    flaw-collada
     flaw-ffi
     flaw-glsl
     flaw-graphics
@@ -77,7 +76,6 @@ variables:
     flaw-math
     flaw-physics
     flaw-sl
-    flaw-visual
     flaw-webgl
     flaw-window
   INTEGERSIMPLE_CONFIG_FIX: >-
