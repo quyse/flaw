@@ -69,6 +69,10 @@ data Dx11Device = Dx11Device
 	, dx11DeviceShaderCache :: !SomeBinaryCache
 	-- | Debug mode.
 	, dx11DeviceDebug :: !Bool
+	-- | Normal rasterizer state.
+	, dx11DeviceNormalRasterizerState :: !ID3D11RasterizerState
+	-- | Rasterizer state with scissors enabled.
+	, dx11DeviceScissorRasterizerState :: !ID3D11RasterizerState
 	}
 
 instance Device Dx11Device where
@@ -836,21 +840,8 @@ dx11CreateDevice (DXGIDeviceId system adapter) shaderCache debug = describeExcep
 	-- load shader compiler and get compile function
 	d3dCompileProc <- liftM mkD3DCompile $ loadLibraryAndGetProcAddress "D3DCompiler_43.dll" "D3DCompile"
 
-	let device = Dx11Device
-		{ dx11DeviceSystem = system
-		, dx11DeviceInterface = deviceInterface
-		, dx11DeviceImmediateContext = contextInterface
-		, dx11DeviceD3DCompile = d3dCompileProc
-		, dx11DeviceShaderCache = SomeBinaryCache shaderCache
-		, dx11DeviceDebug = debug
-		}
-
-	-- create context from interface
-	context <- book bk $ dx11CreateContextFromInterface device contextInterface
-
-	-- create and set rasterizer state, in order to enable scissor
-	-- we don't use rasterizer state for something else yet, so just set it into context and forget
-	do
+	-- create rasterizer states (just two for now - with and without scissor)
+	(normalRasterizerStateInterface, scissorRasterizerStateInterface) <- do
 		let desc = D3D11_RASTERIZER_DESC
 			{ f_D3D11_RASTERIZER_DESC_FillMode = D3D11_FILL_SOLID
 			, f_D3D11_RASTERIZER_DESC_CullMode = D3D11_CULL_BACK
@@ -859,12 +850,29 @@ dx11CreateDevice (DXGIDeviceId system adapter) shaderCache debug = describeExcep
 			, f_D3D11_RASTERIZER_DESC_SlopeScaledDepthBias = 0
 			, f_D3D11_RASTERIZER_DESC_DepthBiasClamp = 0
 			, f_D3D11_RASTERIZER_DESC_DepthClipEnable = True
-			, f_D3D11_RASTERIZER_DESC_ScissorEnable = True
+			, f_D3D11_RASTERIZER_DESC_ScissorEnable = False
 			, f_D3D11_RASTERIZER_DESC_MultisampleEnable = False
 			, f_D3D11_RASTERIZER_DESC_AntialiasedLineEnable = False
 			}
-		rasterizerStateInterface <- book bk $ allocateCOMObject $ with desc $ \descPtr -> createCOMObjectViaPtr $ m_ID3D11Device_CreateRasterizerState deviceInterface descPtr
-		m_ID3D11DeviceContext_RSSetState contextInterface (pokeCOMObject rasterizerStateInterface)
+		normalRasterizerStateInterface <- book bk $ allocateCOMObject $ with desc $ createCOMObjectViaPtr . m_ID3D11Device_CreateRasterizerState deviceInterface
+		scissorRasterizerStateInterface <- book bk $ allocateCOMObject $ with desc
+			{ f_D3D11_RASTERIZER_DESC_ScissorEnable = True
+			} $ createCOMObjectViaPtr . m_ID3D11Device_CreateRasterizerState deviceInterface
+		return (normalRasterizerStateInterface, scissorRasterizerStateInterface)
+
+	let device = Dx11Device
+		{ dx11DeviceSystem = system
+		, dx11DeviceInterface = deviceInterface
+		, dx11DeviceImmediateContext = contextInterface
+		, dx11DeviceD3DCompile = d3dCompileProc
+		, dx11DeviceShaderCache = SomeBinaryCache shaderCache
+		, dx11DeviceDebug = debug
+		, dx11DeviceNormalRasterizerState = normalRasterizerStateInterface
+		, dx11DeviceScissorRasterizerState = scissorRasterizerStateInterface
+		}
+
+	-- create context from interface
+	context <- book bk $ dx11CreateContextFromInterface device contextInterface
 
 	return (device, context)
 
@@ -1516,7 +1524,11 @@ dx11GetDepthStencilState Dx11Context
 -- | Update context.
 dx11UpdateContext :: Dx11Context -> IO ()
 dx11UpdateContext context@Dx11Context
-	{ dx11ContextInterface = contextInterface
+	{ dx11ContextDevice = Dx11Device
+		{ dx11DeviceNormalRasterizerState = normalRasterizerStateInterface
+		, dx11DeviceScissorRasterizerState = scissorRasterizerStateInterface
+		}
+	, dx11ContextInterface = contextInterface
 	, dx11ContextActualState = Dx11ContextState
 		{ dx11ContextStateFrameBuffer = actualFrameBufferRef
 		, dx11ContextStateViewport = actualViewportRef
@@ -1596,15 +1608,16 @@ dx11UpdateContext context@Dx11Context
 			m_ID3D11DeviceContext_RSSetViewports contextInterface 1 viewportPtr
 
 	-- scissor
-	refSetup actualScissorRef desiredScissorRef $ \maybeScissor -> do
-		case maybeScissor of
-			Just (Vec4 left top right bottom) -> with RECT
+	refSetup actualScissorRef desiredScissorRef $ \maybeScissor -> case maybeScissor of
+		Just (Vec4 left top right bottom) -> do
+			m_ID3D11DeviceContext_RSSetState contextInterface (pokeCOMObject scissorRasterizerStateInterface)
+			with RECT
 				{ f_RECT_left = fromIntegral left
 				, f_RECT_top = fromIntegral top
 				, f_RECT_right = fromIntegral right
 				, f_RECT_bottom = fromIntegral bottom
 				} $ m_ID3D11DeviceContext_RSSetScissorRects contextInterface 1
-			Nothing -> m_ID3D11DeviceContext_RSSetScissorRects contextInterface 0 nullPtr
+		Nothing -> m_ID3D11DeviceContext_RSSetState contextInterface (pokeCOMObject normalRasterizerStateInterface)
 
 	-- vertex buffers
 	vectorSetup actualVertexBuffersVector desiredVertexBuffersVector $ \desiredVertexBuffers -> do
