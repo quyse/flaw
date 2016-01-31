@@ -201,17 +201,22 @@ compileLuaFunction LuaProto
 	, luaProtoIsVararg = isVararg
 	, luaProtoMaxStackSize = maxStackSize
 	, luaProtoOpcodes = opcodes
-	, luaProtoConstants = constants
+	, luaProtoConstants = protoConstants
 	, luaProtoUpvalues = protoUpvalues
 	, luaProtoFunctions = functions
 	} parentStack parentUpvalues = do
 
-	-- upvalues
+	-- constants and upvalues
+	constantsNames <- V.generateM (V.length protoConstants) $ \i -> newName $ "k" ++ show i
 	upvaluesNames <- V.generateM (V.length protoUpvalues) $ \i -> newName $ "u" ++ show i
-	let upvaluesStmt = letS $ V.toList $ V.generate (V.length protoUpvalues) $ \i -> let
-		(instack, idx) = protoUpvalues V.! i
-		upvalueValue = if instack then parentStack V.! idx else parentUpvalues V.! idx
-		in valD (varP (upvaluesNames V.! i)) (normalB upvalueValue) []
+	let constantsUpvaluesStmt = let
+		constantsLets = V.generate (V.length protoConstants) $ \i -> valD (varP (constantsNames V.! i)) (normalB (protoConstants V.! i)) []
+		upvaluesLets = V.generate (V.length protoUpvalues) $ \i -> let
+			(instack, idx) = protoUpvalues V.! i
+			upvalueValue = if instack then parentStack V.! idx else parentUpvalues V.! idx
+			in valD (varP (upvaluesNames V.! i)) (normalB upvalueValue) []
+		in letS $ V.toList $ constantsLets V.++ upvaluesLets
+	let constants = V.map varE constantsNames
 	let upvalues = V.map varE upvaluesNames
 
 	-- stack
@@ -558,5 +563,5 @@ compileLuaFunction LuaProto
 			return [valD (varP $ instructionsNames V.! i) (normalB $ doE stmts) []]
 		else return []
 
-	lamE [argsPat] $ doE $ upvaluesStmt : stackStmts ++ varargStmts ++ argsStmts
+	lamE [argsPat] $ doE $ constantsUpvaluesStmt : stackStmts ++ varargStmts ++ argsStmts
 		++ [functionsStmt, letS sharedInstructionsDecs, noBindS $ varE $ instructionsNames V.! 0]
