@@ -78,9 +78,9 @@ Win32Window* getWin32Window(HWND hWnd)
 	return (Win32Window*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
 }
 
-void updateMouseLock(Win32Window* window);
+void updateWin32WindowMouseLock(Win32Window* window);
 
-LRESULT WINAPI wndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
+LRESULT WINAPI win32WindowWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
 	Win32Window* window = getWin32Window(hWnd);
 	switch(msg)
@@ -95,19 +95,19 @@ LRESULT WINAPI wndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			unsigned state = LOWORD(wParam);
 			window->active = (state == WA_ACTIVE || state == WA_CLICKACTIVE);
 
-			updateMouseLock(window);
+			updateWin32WindowMouseLock(window);
 		}
 		break;
 	case WM_MOVE:
 		if(window)
-			updateMouseLock(window);
+			updateWin32WindowMouseLock(window);
 		break;
 	case WM_SIZE:
 		if(window)
 		{
 			window->clientWidth = LOWORD(lParam);
 			window->clientHeight = HIWORD(lParam);
-			updateMouseLock(window);
+			updateWin32WindowMouseLock(window);
 		}
 		break;
 	case WM_DESTROY:
@@ -146,7 +146,7 @@ Win32WindowSystem* initWin32WindowSystem()
 
 	WNDCLASS wndClass;
 	memset(&wndClass, 0, sizeof(wndClass));
-	wndClass.lpfnWndProc = wndProc;
+	wndClass.lpfnWndProc = win32WindowWndProc;
 	wndClass.hInstance = GetModuleHandle(NULL);
 	wndClass.hIcon = LoadIcon(NULL, IDI_APPLICATION);
 	wndClass.hCursor = LoadCursor(NULL, IDC_ARROW);
@@ -196,20 +196,20 @@ void runWin32WindowSystem(Win32WindowSystem* windowSystem)
 	}
 }
 
-void setMouseCursor(HWND hWnd, int cursor)
+void setWin32WindowMouseCursor(HWND hWnd, int cursor)
 {
 	Win32Window* window = getWin32Window(hWnd);
 	window->cursor = window->windowSystem->cursors[cursor];
 }
 
-void setMouseLock(HWND hWnd, int lock)
+void setWin32WindowMouseLock(HWND hWnd, int lock)
 {
 	Win32Window* window = getWin32Window(hWnd);
 	window->mouseLock = !!lock;
-	updateMouseLock(window);
+	updateWin32WindowMouseLock(window);
 }
 
-void updateMouseLock(Win32Window* window)
+void updateWin32WindowMouseLock(Win32Window* window)
 {
 	// get if we actually want to set mouse lock
 	BOOL actualMouseLock = window->mouseLock && window->active;

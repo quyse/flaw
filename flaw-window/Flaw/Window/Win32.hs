@@ -251,8 +251,8 @@ foreign import ccall unsafe "destroyWin32Window" c_destroyWin32Window :: HWND ->
 foreign import ccall unsafe "getClipboardTextBegin" c_getClipboardTextBegin :: HWND -> Ptr HANDLE -> Ptr CInt -> IO (Ptr WCHAR)
 foreign import ccall unsafe "getClipboardTextEnd" c_getClipboardTextEnd :: HANDLE -> IO ()
 foreign import ccall unsafe "setClipboardText" c_setClipboardText :: HWND -> Ptr WCHAR -> IO ()
-foreign import ccall unsafe "setMouseCursor" c_setMouseCursor :: HWND -> CInt -> IO ()
-foreign import ccall unsafe "setMouseLock" c_setMouseLock :: HWND -> CInt -> IO ()
+foreign import ccall unsafe "setWin32WindowMouseCursor" c_setMouseCursor :: HWND -> CInt -> IO ()
+foreign import ccall unsafe "setWin32WindowMouseLock" c_setMouseLock :: HWND -> CInt -> IO ()
 foreign import ccall unsafe "updateLayeredWin32Window" c_updateLayeredWin32Window :: HWND -> IO ()
 foreign import ccall unsafe "getLayeredWin32WindowBitmapData" c_getLayeredWin32WindowBitmapData :: HWND -> Ptr (Ptr CUChar) -> Ptr CInt -> Ptr CInt -> Ptr CInt -> IO ()
 
