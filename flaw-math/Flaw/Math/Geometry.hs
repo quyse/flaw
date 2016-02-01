@@ -10,7 +10,7 @@ module Flaw.Math.Geometry
 	, affineScaling
 	, affineLookAt
 	, affineAxisRotation
-	, affineFromQuaternion
+	, affineFromQuat
 	, projectionPerspectiveFov
 	) where
 
@@ -63,9 +63,9 @@ affineAxisRotation (Vec3 x y z) angle = r where
 	ca = cos ha
 	r = Quat $ Vec4 (x * sa) (y * sa) (z * sa) ca
 
-{-# INLINE affineFromQuaternion #-}
-affineFromQuaternion :: Quaternionized a => Quat a -> Mat4x4 a
-affineFromQuaternion (Quat (Vec4 x y z w)) = r where
+{-# INLINE affineFromQuat #-}
+affineFromQuat :: Quaternionized a => Quat a -> Mat4x4 a
+affineFromQuat (Quat (Vec4 x y z w)) = r where
 	ww = w * w
 	xx = x * x
 	yy = y * y
