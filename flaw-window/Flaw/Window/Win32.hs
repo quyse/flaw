@@ -93,6 +93,10 @@ instance Window Win32Window where
 		{ wWindowSystem = ws
 		, wHandle = hwnd
 		} mouseCursor = invokeWin32WindowSystem_ ws $ c_setMouseCursor hwnd $ fromIntegral $ fromEnum mouseCursor
+	setWindowMouseLock Win32Window
+		{ wWindowSystem = ws
+		, wHandle = hwnd
+		} mouseLock = invokeWin32WindowSystem_ ws $ c_setMouseLock hwnd (if mouseLock then 1 else 0)
 
 initWin32WindowSystem :: IO (Win32WindowSystem, IO ())
 initWin32WindowSystem = do
@@ -247,7 +251,8 @@ foreign import ccall unsafe "destroyWin32Window" c_destroyWin32Window :: HWND ->
 foreign import ccall unsafe "getClipboardTextBegin" c_getClipboardTextBegin :: HWND -> Ptr HANDLE -> Ptr CInt -> IO (Ptr WCHAR)
 foreign import ccall unsafe "getClipboardTextEnd" c_getClipboardTextEnd :: HANDLE -> IO ()
 foreign import ccall unsafe "setClipboardText" c_setClipboardText :: HWND -> Ptr WCHAR -> IO ()
-foreign import ccall unsafe "setMouseCursor" c_setMouseCursor :: HWND -> CInt -> IO ()
+foreign import ccall unsafe "setWin32WindowMouseCursor" c_setMouseCursor :: HWND -> CInt -> IO ()
+foreign import ccall unsafe "setWin32WindowMouseLock" c_setMouseLock :: HWND -> CInt -> IO ()
 foreign import ccall unsafe "updateLayeredWin32Window" c_updateLayeredWin32Window :: HWND -> IO ()
 foreign import ccall unsafe "getLayeredWin32WindowBitmapData" c_getLayeredWin32WindowBitmapData :: HWND -> Ptr (Ptr CUChar) -> Ptr CInt -> Ptr CInt -> Ptr CInt -> IO ()
 

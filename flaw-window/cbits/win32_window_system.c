@@ -40,7 +40,11 @@ typedef struct
 	Win32WindowCallback callback;
 	int clientWidth;
 	int clientHeight;
+	BOOL active;
 	HCURSOR cursor;
+	// Needed to know because ShowCursor() works as a counter.
+	BOOL cursorHidden;
+	BOOL mouseLock;
 } Win32Window;
 
 Win32Window* initWin32Window(Win32WindowSystem* windowSystem, Win32WindowCallback callback)
@@ -54,7 +58,10 @@ Win32Window* initWin32Window(Win32WindowSystem* windowSystem, Win32WindowCallbac
 	window->callback = callback;
 	window->clientWidth = 0;
 	window->clientHeight = 0;
+	window->active = TRUE;
 	window->cursor = windowSystem->cursors[0];
+	window->cursorHidden = FALSE;
+	window->mouseLock = FALSE;
 	return window;
 }
 
@@ -71,7 +78,9 @@ Win32Window* getWin32Window(HWND hWnd)
 	return (Win32Window*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
 }
 
-LRESULT WINAPI wndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
+void updateWin32WindowMouseLock(Win32Window* window);
+
+LRESULT WINAPI win32WindowWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
 	Win32Window* window = getWin32Window(hWnd);
 	switch(msg)
@@ -80,11 +89,25 @@ LRESULT WINAPI wndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		window = (Win32Window*)((CREATESTRUCT*)lParam)->lpCreateParams;
 		SetWindowLongPtr(hWnd, GWLP_USERDATA, (LONG_PTR)window);
 		break;
+	case WM_ACTIVATE:
+		if(window)
+		{
+			unsigned state = LOWORD(wParam);
+			window->active = (state == WA_ACTIVE || state == WA_CLICKACTIVE);
+
+			updateWin32WindowMouseLock(window);
+		}
+		break;
+	case WM_MOVE:
+		if(window)
+			updateWin32WindowMouseLock(window);
+		break;
 	case WM_SIZE:
 		if(window)
 		{
 			window->clientWidth = LOWORD(lParam);
 			window->clientHeight = HIWORD(lParam);
+			updateWin32WindowMouseLock(window);
 		}
 		break;
 	case WM_DESTROY:
@@ -123,7 +146,7 @@ Win32WindowSystem* initWin32WindowSystem()
 
 	WNDCLASS wndClass;
 	memset(&wndClass, 0, sizeof(wndClass));
-	wndClass.lpfnWndProc = wndProc;
+	wndClass.lpfnWndProc = win32WindowWndProc;
 	wndClass.hInstance = GetModuleHandle(NULL);
 	wndClass.hIcon = LoadIcon(NULL, IDI_APPLICATION);
 	wndClass.hCursor = LoadCursor(NULL, IDC_ARROW);
@@ -173,10 +196,40 @@ void runWin32WindowSystem(Win32WindowSystem* windowSystem)
 	}
 }
 
-void setMouseCursor(HWND hWnd, int cursor)
+void setWin32WindowMouseCursor(HWND hWnd, int cursor)
 {
 	Win32Window* window = getWin32Window(hWnd);
 	window->cursor = window->windowSystem->cursors[cursor];
+}
+
+void setWin32WindowMouseLock(HWND hWnd, int lock)
+{
+	Win32Window* window = getWin32Window(hWnd);
+	window->mouseLock = !!lock;
+	updateWin32WindowMouseLock(window);
+}
+
+void updateWin32WindowMouseLock(Win32Window* window)
+{
+	// get if we actually want to set mouse lock
+	BOOL actualMouseLock = window->mouseLock && window->active;
+
+	if(actualMouseLock)
+	{
+		// clip cursor into client rect in screen coordinates
+		RECT rect;
+		GetClientRect(window->hWnd, &rect);
+		MapWindowPoints(window->hWnd, NULL, (LPPOINT)&rect, 2);
+		ClipCursor(&rect);
+	}
+	else
+		ClipCursor(NULL);
+
+	if(actualMouseLock != window->cursorHidden)
+	{
+		ShowCursor(actualMouseLock ? FALSE : TRUE);
+		window->cursorHidden = actualMouseLock;
+	}
 }
 
 void createLayeredBitmap(Win32Window* window, HDC hdcScreen)
