@@ -8,6 +8,8 @@ License: MIT
 
 module Flaw.Visual.Geometry.Skinned
 	( SkinnedGeometry(..)
+	, SkinnedGeometryAnimation(..)
+	, textureAnimateSkinnedGeometry
 	, embedLoadTextureAnimatedSkinnedGeometryExp
 	, textureAnimatedSkinTransform
 	) where
@@ -37,8 +39,20 @@ import Flaw.Visual.Texture()
 data SkinnedGeometry d = SkinnedGeometry
 	{ skinnedGeometryGeometry :: !(Geometry d)
 	, skinnedGeometryAnimationTexture :: !(TextureId d)
-	, skinnedGeometryAnimations :: [Float -> Float4]
+	, skinnedGeometryAnimations :: [SkinnedGeometryAnimation d]
 	}
+
+data SkinnedGeometryAnimation d = SkinnedGeometryAnimation
+	{ skinnedGeometryAnimationOffset :: {-# UNPACK #-} !Float4
+	, skinnedGeometryAnimationInvLength :: {-# UNPACK #-} !Float
+	}
+
+{-# INLINE textureAnimateSkinnedGeometry #-}
+textureAnimateSkinnedGeometry :: SkinnedGeometryAnimation d -> Float -> Float4
+textureAnimateSkinnedGeometry SkinnedGeometryAnimation
+	{ skinnedGeometryAnimationOffset = Float4 kx ky x y
+	, skinnedGeometryAnimationInvLength = invLength
+	} t = Float4 kx ky (x + t * invLength) y
 
 -- | Generate expression for loading embedded skinned geometry with animations taken from Collada file.
 -- Expression type is :: Device d => IO (SkinnedGeometry d, IO ())
@@ -110,11 +124,14 @@ embedLoadTextureAnimatedSkinnedGeometryExp fileName getNodeElement getSkinElemen
 					, samplerWrapW = SamplerWrapClamp
 					} $(embedExp textureBytes)
 				aos <- B.unsafeUseAsCString $(embedExp animationOffsetsBytes) $ peekArray $(litE $ integerL $ fromIntegral $ V.length animations) . castPtr
-				let ao = flip map aos $ \(Float4 kx ky x y) -> \t -> Float4 kx ky (x + t * $(litE $ rationalL $ 1 / toRational timeLength)) y
+				let as = flip map aos $ \ao -> SkinnedGeometryAnimation
+					{ skinnedGeometryAnimationOffset = ao
+					, skinnedGeometryAnimationInvLength = $(litE $ rationalL $ 1 / toRational timeLength)
+					}
 				return SkinnedGeometry
 					{ skinnedGeometryGeometry = geometry
 					, skinnedGeometryAnimationTexture = at
-					, skinnedGeometryAnimations = ao
+					, skinnedGeometryAnimations = as
 					}
 				|]
 
