@@ -8,6 +8,7 @@ License: MIT
 
 module Flaw.Visual.Geometry.Vertex
 	( ColladaVertex(..)
+	, VertexPT(..)
 	, VertexPNT(..)
 	, VertexPNTWB(..)
 	) where
@@ -20,6 +21,23 @@ import Flaw.Math
 
 class ColladaVertex q where
 	createColladaVertices :: ColladaVerticesData -> ColladaM (V.Vector q)
+
+genStruct "VertexPT"
+	[ ([t| Float3 |], "position")
+	, ([t| Float2 |], "texcoord")
+	]
+
+deriving instance Eq VertexPT
+deriving instance Ord VertexPT
+
+instance ColladaVertex VertexPT where
+	createColladaVertices verticesData = do
+		positions <- cvdPositions verticesData
+		texcoords <- cvdTexcoords verticesData
+		return $ V.generate (cvdCount verticesData) $ \i -> VertexPT
+			{ f_VertexPT_position = positions V.! i
+			, f_VertexPT_texcoord = let Vec3 tx ty _tz = texcoords V.! i in Vec2 tx (1 - ty)
+			}
 
 genStruct "VertexPNT"
 	[ ([t| Float3 |], "position")
