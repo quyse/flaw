@@ -24,6 +24,7 @@ library
     Flaw.Visual.Geometry
     Flaw.Visual.Geometry.Skinned
     Flaw.Visual.Geometry.Vertex
+    Flaw.Visual.Skydome
     Flaw.Visual.Texture
   -- other-extensions:    
   build-depends:       base, bytestring, flaw-asset-dxt, flaw-base, flaw-build, flaw-collada, flaw-ffi, flaw-graphics, flaw-math, JuicyPixels, primitive, template-haskell, text, vector, vector-algorithms
