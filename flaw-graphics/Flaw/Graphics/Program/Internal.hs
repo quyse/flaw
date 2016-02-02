@@ -332,6 +332,10 @@ data Node a where
 	SignumNode :: (OfValueType a, Num a) => ValueType -> Node a -> Node a
 	MinNode :: OfValueType a => ValueType -> Node a -> Node a -> Node a
 	MaxNode :: OfValueType a => ValueType -> Node a -> Node a -> Node a
+	EqualNode :: OfValueType a => ValueType -> Node a -> Node a -> Node Bool
+	LessNode :: OfValueType a => ValueType -> Node a -> Node a -> Node Bool
+	LessEqualNode :: OfValueType a => ValueType -> Node a -> Node a -> Node Bool
+	IfNode :: OfValueType a => ValueType -> Node Bool -> Node a -> Node a -> Node a
 	PiNode :: (OfValueType a, Floating a) => ValueType -> Node a
 	ExpNode :: (OfValueType a, Floating a) => ValueType -> Node a -> Node a
 	SqrtNode :: (OfValueType a, Floating a) => ValueType -> Node a -> Node a

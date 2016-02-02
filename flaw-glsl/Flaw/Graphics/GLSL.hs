@@ -473,16 +473,20 @@ glslGenerateProgram GlslConfig
 					MatrixValueType _ _ _ -> concat $ intersperse ", " s
 				in valueTypeSource t <> "(" <> fromString content <> ")"
 			IndexNode _ _ a b -> "(" <> nodeSource a <> ")[" <> nodeSource b <> "]"
-			AddNode _ a b -> binaryOpSource '+' a b
-			SubtractNode _ a b -> binaryOpSource '-' a b
-			MultiplyNode _ a b -> binaryOpSource '*' a b
-			DivideNode _ a b -> binaryOpSource '/' a b
+			AddNode _ a b -> binaryOpSource "+" a b
+			SubtractNode _ a b -> binaryOpSource "-" a b
+			MultiplyNode _ a b -> binaryOpSource "*" a b
+			DivideNode _ a b -> binaryOpSource "/" a b
 			RecipNode _ a -> func1Source "rcp" a
 			NegateNode _ a -> "-(" <> nodeSource a <> ")"
 			AbsNode _ a -> func1Source "abs" a
 			SignumNode _ a -> func1Source "sign" a
 			MinNode _ a b -> func2Source "min" a b
 			MaxNode _ a b -> func2Source "max" a b
+			EqualNode _ a b -> binaryOpSource "==" a b
+			LessNode _ a b -> binaryOpSource "<" a b
+			LessEqualNode _ a b -> binaryOpSource "<=" a b
+			IfNode _ c a b -> "(" <> nodeSource c <> ") ? (" <> nodeSource a <> ") : (" <> nodeSource b <> ")"
 			PiNode t -> let
 				typedPi :: Floating a => Node a -> a
 				typedPi _ = pi
@@ -504,7 +508,7 @@ glslGenerateProgram GlslConfig
 			AsinhNode _ a -> func1Source "asinh" a
 			AtanhNode _ a -> func1Source "atanh" a
 			AcoshNode _ a -> func1Source "acosh" a
-			MulNode _ _ _ a b -> binaryOpSource '*' a b
+			MulNode _ _ _ a b -> binaryOpSource "*" a b
 			DotNode _ _ a b -> func2Source "dot" a b
 			CrossNode _ a b -> func2Source "cross" a b
 			NormNode _ _ a -> func1Source "length" a
@@ -549,8 +553,8 @@ glslGenerateProgram GlslConfig
 			Combine3VecNode _ _ _ t a b c -> func3Source (valueTypeSource t) a b c
 			Combine4VecNode _ _ _ _ t a b c d -> func4Source (valueTypeSource t) a b c d
 
-		binaryOpSource :: Char -> Node a -> Node b -> Builder
-		binaryOpSource op a b = "(" <> nodeSource a <> ") " <> singleton op <> " (" <> nodeSource b <> ")"
+		binaryOpSource :: Builder -> Node a -> Node b -> Builder
+		binaryOpSource op a b = "(" <> nodeSource a <> ") " <> op <> " (" <> nodeSource b <> ")"
 
 		func1Source :: Builder -> Node a -> Builder
 		func1Source func a = func

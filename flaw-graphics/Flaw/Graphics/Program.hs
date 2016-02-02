@@ -40,6 +40,7 @@ module Flaw.Graphics.Program
 	, depthTarget
 	, (!)
 	, min_, max_
+	, equal_ , less_, lessEqual_, if_
 	, ddx, ddy
 	, instanceId
 	) where
@@ -437,6 +438,18 @@ min_ a b = MinNode (nodeValueType a) a b
 
 max_ :: OfValueType a => Node a -> Node a -> Node a
 max_ a b = MaxNode (nodeValueType a) a b
+
+equal_ :: OfValueType a => Node a -> Node a -> Node Bool
+equal_ a b = EqualNode (nodeValueType a) a b
+
+less_ :: OfValueType a => Node a -> Node a -> Node Bool
+less_ a b = LessNode (nodeValueType a) a b
+
+lessEqual_ :: OfValueType a => Node a -> Node a -> Node Bool
+lessEqual_ a b = LessEqualNode (nodeValueType a) a b
+
+if_ :: OfValueType a => Node Bool -> Node a -> Node a -> Node a
+if_ c a b = IfNode (nodeValueType a) c a b
 
 ddx :: OfValueType a => Node a -> Node a
 ddx a = DdxNode (nodeValueType a) a
