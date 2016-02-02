@@ -30,7 +30,7 @@ vecComponents = "xyzw"
 
 -- | Whitelisted matrix dimensions.
 matDimensions :: [(Int, Int)]
-matDimensions = [(3, 4), (4, 4)] -- GHC 7.10.3 hangs if I add (3, 3), WTF???
+matDimensions = [(3, 3), (3, 4), (4, 4)]
 
 -- | Meaningful types for math.
 mathTypeNamesWithPrefix :: [(Name, String)]

@@ -13,9 +13,9 @@ module Flaw.Math
 	, VecX(..), VecY(..), VecZ(..), VecW(..)
 	, Vectorized(..)
 	, Vec1(..), Vec2(..), Vec3(..), Vec4(..)
-	, Mat3x4(..), Mat4x4(..)
+	, Mat3x3(..), Mat3x4(..), Mat4x4(..)
 	, pattern Vec1, pattern Vec2, pattern Vec3, pattern Vec4
-	, pattern Mat3x4, pattern Mat4x4
+	, pattern Mat3x3, pattern Mat3x4, pattern Mat4x4
 	, pattern Quat
 	, SwizzleVecX1(..), SwizzleVecX2(..), SwizzleVecX3(..), SwizzleVecX4(..)
 	, SwizzleVecY1(..), SwizzleVecY2(..), SwizzleVecY3(..), SwizzleVecY4(..)
@@ -33,12 +33,12 @@ module Flaw.Math
 	, Normalize(..)
 	, Mat(..)
 	, Mul(..)
-	, Float3x4, Float4x4
-	, Double3x4, Double4x4
-	, Int32_3x4, Int32_4x4
-	, Word32_3x4, Word32_4x4
-	, Int3x4, Int4x4
-	, Word8_3x4, Word8_4x4
+	, Float3x3, Float3x4, Float4x4
+	, Double3x3, Double3x4, Double4x4
+	, Int32_3x3, Int32_3x4, Int32_4x4
+	, Word32_3x3, Word32_3x4, Word32_4x4
+	, Int3x3, Int3x4, Int4x4
+	, Word8_3x3, Word8_3x4, Word8_4x4
 	, Quaternionized(..)
 	, Quat(..)
 	, Conjugate(..)
@@ -111,6 +111,9 @@ pattern Vec1 x <- (unvec1 -> x) where Vec1 x = vec1 x
 pattern Vec2 x y <- (unvec2 -> (x, y)) where Vec2 x y = vec2 x y
 pattern Vec3 x y z <- (unvec3 -> (x, y, z)) where Vec3 x y z = vec3 x y z
 pattern Vec4 x y z w <- (unvec4 -> (x, y, z, w)) where Vec4 x y z w = vec4 x y z w
+pattern Mat3x3 m11 m12 m13 m21 m22 m23 m31 m32 m33
+	<- (unmat3x3 -> (m11, m12, m13, m21, m22, m23, m31, m32, m33)) where
+	Mat3x3 m11 m12 m13 m21 m22 m23 m31 m32 m33 = mat3x3 m11 m12 m13 m21 m22 m23 m31 m32 m33
 pattern Mat3x4 m11 m12 m13 m14 m21 m22 m23 m24 m31 m32 m33 m34
 	<- (unmat3x4 -> (m11, m12, m13, m14, m21, m22, m23, m24, m31, m32, m33, m34)) where
 	Mat3x4 m11 m12 m13 m14 m21 m22 m23 m24 m31 m32 m33 m34 = mat3x4 m11 m12 m13 m14 m21 m22 m23 m24 m31 m32 m33 m34
