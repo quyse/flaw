@@ -22,6 +22,7 @@ library
     Flaw.Visual
     Flaw.Visual.Fog
     Flaw.Visual.Geometry
+    Flaw.Visual.Geometry.Basic
     Flaw.Visual.Geometry.Skinned
     Flaw.Visual.Geometry.Vertex
     Flaw.Visual.Skydome
