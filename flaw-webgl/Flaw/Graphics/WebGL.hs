@@ -606,13 +606,6 @@ webglInit jsCanvas needDepth = do
 		, "WEBGL_draw_buffers"
 		, "WEBGL_shared_resources"
 		, "EXT_shader_texture_lod"
-
-		, "WEBGL_compressed_texture_s3tc"
-		, "EXT_texture_filter_anisotropic"
-		, "OES_texture_float"
-		, "ANGLE_instanced_arrays"
-		, "OES_vertex_array_object"
-		, "WEBGL_draw_buffers"
 		]
 	forM_ extensions $ js_getExtension jsContext . fromString
 
