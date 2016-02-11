@@ -408,13 +408,13 @@ parseNode element@XML.Element
 					}
 			"translate" -> do
 				let maybeTransformSID = tryGetElementAttr "sid" subElement
-				[x, y, z] <- liftM VG.toList $ parseArray subElement
+				Vec3 x y z <- liftM (`constructStridable` 0) $ parseArray subElement
 				return node
 					{ cntTransforms = transforms ++ [(maybeTransformSID, ColladaTranslateTag $ Vec3 x y z * vecFromScalar unit)]
 					}
 			"rotate" -> do
 				let maybeTransformSID = tryGetElementAttr "sid" subElement
-				[x, y, z, a] <- liftM VG.toList $ parseArray subElement
+				Vec4 x y z a <- liftM (`constructStridable` 0) $ parseArray subElement
 				return node
 					{ cntTransforms = transforms ++ [(maybeTransformSID, ColladaRotateTag (Vec3 x y z) (a * pi / 180 :: Float))]
 					}
@@ -477,7 +477,11 @@ animateNode ColladaNodeTag
 	, cntTransforms = transformTags
 	} (ColladaAnimation channels) = do
 
-	unit <- liftM (csUnit . ccSettings) get
+	ColladaSettings
+		{ csUnit = unit
+		, csUnitMat = unitMat
+		, csInvUnitMat = invUnitMat
+		} <- liftM ccSettings get
 
 	-- list of animators (one per transform tag)
 	transformTagAnimators <- forM transformTags $ \(maybeName, initialTransformTag) -> do
@@ -514,6 +518,12 @@ animateNode ColladaNodeTag
 
 							ColladaRotateTag _initialAxis _initialAngle -> case path of
 
+								"" -> do
+									a <- animateSampler samplerElement
+									return [\(ColladaRotateTag _axis _angle) time -> let
+										Vec4 x y z angle = a time
+										in ColladaRotateTag (Vec3 x y z) (angle * pi / 180)]
+
 								".ANGLE" -> do
 									a <- animateSampler samplerElement
 									return [\(ColladaRotateTag axis _angle) time -> ColladaRotateTag axis (a time * pi / 180)]
@@ -522,7 +532,10 @@ animateNode ColladaNodeTag
 
 							ColladaMatrixTag _initialMat -> case path of
 
-								-- TODO: implement matrix paths
+								"" -> do
+									a <- animateSampler samplerElement
+									return [\(ColladaMatrixTag _matrix) time -> ColladaMatrixTag (unitMat `mul` (a time :: Float4x4) `mul` invUnitMat)]
+
 								_ -> throwError $ "unknown path for matrix tag: " <> path
 
 						Nothing -> return []
@@ -592,9 +605,19 @@ instance Animatable Float where
 	interpolateAnimatable t a b = a * (1 - t) + b * t
 
 instance Animatable Float3 where
-	animatableStride _ = 3
+	animatableStride = stridableStride
 	animatableConstructor v i = Vec3 (v VG.! i) (v VG.! (i + 1)) (v VG.! (i + 2))
 	interpolateAnimatable t a b = a * vecFromScalar (1 - t) + b * vecFromScalar t
+
+instance Animatable Float4 where
+	animatableStride = stridableStride
+	animatableConstructor v i = Vec4 (v VG.! i) (v VG.! (i + 1)) (v VG.! (i + 2)) (v VG.! (i + 3))
+	interpolateAnimatable t a b = a * vecFromScalar (1 - t) + b * vecFromScalar t
+
+instance Animatable Float4x4 where
+	animatableStride = stridableStride
+	animatableConstructor v i = constructStridable v i
+	interpolateAnimatable t a b = a * matFromScalar (1 - t) + b * matFromScalar t
 
 animateSampler :: Animatable a => XML.Element -> ColladaM (Float -> a)
 animateSampler element = do
@@ -674,9 +697,10 @@ data ColladaBone t = ColladaBone
 
 parseSkin :: Transform t => ColladaSkeleton -> XML.Element -> ColladaM (ColladaVerticesData, ColladaSkin (t Float))
 parseSkin (ColladaSkeleton nodes) skinElement = do
-	settings <- liftM ccSettings get
-	let unitMat = csUnitMat settings
-	let invUnitMat = csInvUnitMat settings
+	ColladaSettings
+		{ csUnitMat = unitMat
+		, csInvUnitMat = invUnitMat
+		} <- liftM ccSettings get
 
 	bindShapeTransform <- liftM (\v -> constructStridable v 0 :: Float4x4) (parseArray =<< getSingleChildWithTag "bind_shape_matrix" skinElement)
 
