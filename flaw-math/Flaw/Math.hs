@@ -143,6 +143,8 @@ class Mat m where
 	type MatElement m :: *
 	-- | Get matrix size.
 	matSize :: m -> (Int, Int) -- m is unused
+	-- | Create matrix from scalar (put scalar into every component).
+	matFromScalar :: MatElement m -> m
 
 -- | Class for general multiplication.
 class Mul a b where
@@ -450,6 +452,7 @@ do
 		matInstance <- instanceD (sequence [ [t| Vectorized $elemType |] ]) [t| Mat ($(conT dataName) $elemType) |] =<< addInlines
 			[ tySynInstD ''MatElement $ tySynEqn [ [t| $(conT dataName) $elemType |] ] elemType
 			, funD 'matSize [clause [wildP] (normalB [| ($(litE $ integerL $ toInteger dimN), $(litE $ integerL $ toInteger dimM)) |]) []]
+			, funD 'matFromScalar [clause [varP p] (normalB $ foldl appE (conE conName) $ replicate (dimN * dimM) (varE p)) []]
 			]
 
 		-- Num instance
