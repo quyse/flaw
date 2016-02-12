@@ -19,7 +19,9 @@ module Flaw.App
 	, AppInputManager
 	) where
 
+import Control.Concurrent
 import Control.Exception
+import Control.Monad
 import qualified Data.Text as T
 import Data.Time
 import Data.Typeable
@@ -155,13 +157,22 @@ initApp AppConfig
 {-# INLINE runApp #-}
 runApp :: (Float -> IO ()) -> IO ()
 runApp step = do
-	let f lastTime = do
-		currentTime <- getCurrentTime
-		let frameTime = fromRational $ toRational $ diffUTCTime currentTime lastTime
-		step frameTime
-		f currentTime
-	veryFirstTime <- getCurrentTime
-	catch (f veryFirstTime) $ \ExitAppException -> return ()
+	-- run everything in a separate thread, to not to be bounded to OS thread (main thread)
+	resultVar <- newEmptyMVar
+	void $ forkIO $ do
+		let run = do
+			let f lastTime = do
+				currentTime <- getCurrentTime
+				let frameTime = fromRational $ toRational $ diffUTCTime currentTime lastTime
+				step frameTime
+				f currentTime
+			veryFirstTime <- getCurrentTime
+			catch (f veryFirstTime) $ \ExitAppException -> return ()
+			return Nothing
+		result <- catch run $ return . Just
+		putMVar resultVar result
+	result <- takeMVar resultVar
+	maybe (return ()) (throwIO :: SomeException -> IO ()) result
 
 {-# INLINE exitApp #-}
 exitApp :: IO ()
