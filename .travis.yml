@@ -7,13 +7,25 @@ language: c
 matrix:
   include:
   - os: linux
-    env: OS=linux
+    env: OS=linux GHCVER=7.10.3
     addons:
       apt:
         packages:
-        - libgmp-dev
+        - ghc-7.10.3
+        sources:
+        - hvr-ghc
+  - os: linux
+    env: OS=linux GHCVER=HEAD
+    addons:
+      apt:
+        packages:
+        - ghc-head
+        sources:
+        - hvr-ghc
   - os: osx
     env: OS=osx
+  allow_failures:
+  - env: OS=linux GHCVER=HEAD
 
 before_install:
 - |-
