@@ -135,5 +135,58 @@ test("dynamic_values", function()
 	assert(t[1] == 6 and t[2] == 5 and t[3] == 4 and t[4] == 1 and t[5] == 2 and t[6] == 3)
 end)
 
+test("closures: changing upvalues", function()
+	local a = 1
+	local function f1(b)
+		assert(a == b)
+	end
+	f1(1)
+	a = 2
+	f1(2)
+	local function f2(b)
+		a = b
+	end
+	f2(3)
+	assert(a == 3)
+	f1(3)
+end)
+
+test("closures: upwards funarg problem", function()
+	local function f1(b)
+		local a = b
+		local function g1(c)
+			return c + a
+		end
+		local function g2(c)
+			a = c
+		end
+		return g1, g2
+	end
+	g1, g2 = f1(1)
+	assert(g1(2) == 3)
+	g2(4)
+	assert(g1(5) == 9)
+
+	local function q()
+		local function f2(b)
+			local a = b
+			local function g1(c)
+				return c - a
+			end
+			local function g2(c)
+				a = c
+			end
+			return g1, g2
+		end
+		f1 = f2
+	end
+	q()
+	assert(g1(7) == 11)
+	g1, g2 = f1(1)
+	assert(g1(2) == 1)
+	g2(4)
+	assert(g1(7) == 3)
+end)
+
 assert(allTestsOk, "SOME TESTS FAILED")
 print("ALL TESTS OK")
