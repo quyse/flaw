@@ -65,6 +65,7 @@ script: >-
   flaw-lua
   flaw-lua-refimpl
   flaw-math
+  flaw-mess
   flaw-oil
   flaw-oil-client
   flaw-oil-server

@@ -23,6 +23,7 @@ variables:
     flaw-lua
     flaw-lua-refimpl
     flaw-math
+    flaw-mess
     flaw-oil
     flaw-oil-client
     flaw-oil-server
@@ -53,6 +54,7 @@ variables:
     flaw-lua
     flaw-lua-refimpl
     flaw-math
+    flaw-mess
     flaw-oil
     flaw-oil-client
     flaw-oil-server
@@ -74,6 +76,7 @@ variables:
     flaw-graphics
     flaw-input
     flaw-math
+    flaw-mess
     flaw-physics
     flaw-sl
     flaw-webgl
