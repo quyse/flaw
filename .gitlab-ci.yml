@@ -76,7 +76,6 @@ variables:
     flaw-graphics
     flaw-input
     flaw-math
-    flaw-mess
     flaw-physics
     flaw-sl
     flaw-webgl
