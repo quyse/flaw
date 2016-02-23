@@ -20,7 +20,10 @@ source-repository head
 library
   exposed-modules:
     Flaw.Mess
+    Flaw.Mess.Dispatcher
+    Flaw.Mess.HashMapCache
+    Flaw.Mess.SimpleLogger
   -- other-extensions:    
-  build-depends:       base, bytestring, cereal, cryptonite, hashable, memory, transformers, unordered-containers
+  build-depends:       base, bytestring, cereal, cryptonite, flaw-base, hashable, memory, mtl, stm, time, transformers, unordered-containers
   -- hs-source-dirs:      
   default-language:    Haskell2010

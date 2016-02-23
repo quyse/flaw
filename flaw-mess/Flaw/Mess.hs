@@ -14,7 +14,6 @@ module Flaw.Mess
 	, ExpressionHash(..)
 	, hashExpression
 	, unhashExpression
-	, KnowingRootMonad(..)
 	, DispatchMonad(..)
 	, MessT()
 	, calc
@@ -150,7 +149,7 @@ data HashedExpression
 		}
 	deriving Show
 
-newtype ExpressionHash = ExpressionHash (Digest SHA1) deriving (Eq, Ord, Show)
+newtype ExpressionHash = ExpressionHash (Digest SHA256) deriving (Eq, Ord, Show)
 
 instance Hashable ExpressionHash where
 	hashWithSalt s (ExpressionHash d) = hashWithSalt s (BA.convert d :: B.ByteString)
@@ -229,16 +228,14 @@ unhashExpression = snd . u HM.empty where
 				(phm, pe) = u (HM.insert h e hm) p
 				in (phm, e)
 
--- | Basically a reader monad knowing "root" value.
-class Monad m => KnowingRootMonad m where
-	root :: m (Value m)
-
 class Monad m => DispatchMonad m where
+	-- | Get root value.
+	dispatchRootValue :: m (Value m)
 	-- | For each input pair get a value from cache if it's there,
 	-- otherwise perform calculation and put result into cache.
 	-- Fully reentrant. Performs calculation of values in parallel,
 	-- and returns when everything is calculated.
-	dispatch :: [(HashedExpression, m (Value m))] -> m [Value m]
+	dispatchCalc :: [(HashedExpression, m (Value m))] -> m [Value m]
 
 newtype MessT m a = MessT (m (Mess m a))
 
@@ -283,11 +280,11 @@ instance MonadIO m => MonadIO (MessT m) where
 	liftIO = lift . liftIO
 	{-# INLINE liftIO #-}
 
-calc :: (DispatchMonad m, KnowingRootMonad m) => [HashedExpression] -> m [Value m]
-calc = dispatch . map z where
+calc :: DispatchMonad m => [HashedExpression] -> m [Value m]
+calc = dispatchCalc . map z where
 	z he = (he, g he)
 	g he = case he of
-		HashedExpressionRoot {} -> root
+		HashedExpressionRoot {} -> dispatchRootValue
 		HashedExpressionPure
 			{ hashedExpressionData = d
 			} -> return $ DataValue d
