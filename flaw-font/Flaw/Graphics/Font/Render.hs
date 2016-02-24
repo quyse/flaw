@@ -347,12 +347,15 @@ renderTextRun positionsAndIndices position color = do
 -- | Shape multiple text runs and output it in RenderGlyphsM monad.
 renderTexts :: FontShaper s => s -> [(T.Text, Float4)] -> FontScript -> Float2 -> RenderTextCursorX -> RenderTextCursorY -> RenderGlyphsM c d ()
 renderTexts shaper textsWithColors script (Vec2 px py) cursorX cursorY = do
-	(runsPositionsAndIndices, Vec2 ax _ay) <- liftIO $ shapeText shaper (map fst textsWithColors) script
+	runsPositionsAndIndicesAndFinalPositions <- liftIO $ shapeText shaper (map fst textsWithColors) script
 	RenderGlyphsState
 		{ renderGlyphsStateRenderableFont = RenderableFont
 			{ renderableFontMaxGlyphBox = Vec4 _boxLeft boxTop _boxRight boxBottom
 			}
 		} <- ask
+	let Vec2 ax _ay = case runsPositionsAndIndicesAndFinalPositions of
+		[] -> Vec2 0 0
+		_ -> snd $ last runsPositionsAndIndicesAndFinalPositions
 	let x = case cursorX of
 		RenderTextCursorLeft -> px
 		RenderTextCursorCenter -> px - ax * 0.5
@@ -362,14 +365,15 @@ renderTexts shaper textsWithColors script (Vec2 px py) cursorX cursorY = do
 		RenderTextCursorTop -> py - boxTop
 		RenderTextCursorMiddle -> py - (boxTop + boxBottom) * 0.5
 		RenderTextCursorBottom -> py - boxBottom
-	forM_ (zip runsPositionsAndIndices $ map snd textsWithColors) $ \(positionsAndIndices, color) -> renderTextRun positionsAndIndices (Vec2 x y) color
+	forM_ (zip runsPositionsAndIndicesAndFinalPositions $ map snd textsWithColors) $
+		\((positionsAndIndices, _advance), color) -> renderTextRun positionsAndIndices (Vec2 x y) color
 
 -- | Perform right fold on bounds of glyphs.
 {-# INLINE foldrTextBounds #-}
-foldrTextBounds :: RenderableFont d -> (Float4 -> a -> a) -> a -> V.Vector (Float2, Int) -> a
+foldrTextBounds :: RenderableFont d -> (Float4 -> a -> a) -> a -> (V.Vector (Float2, Int), Float2) -> a
 foldrTextBounds RenderableFont
 	{ renderableFontGlyphs = renderableGlyphs
-	} f z positionsAndIndices = foldr f z bs where
+	} f z (positionsAndIndices, _finalPosition) = foldr f z bs where
 	bs = fmap glyphBounds positionsAndIndices
 	glyphBounds :: (Float2, Int) -> Float4
 	glyphBounds (glyphPosition, glyphIndex) = xyxy__ glyphPosition + renderableGlyphOffset (renderableGlyphs V.! glyphIndex)
