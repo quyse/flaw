@@ -37,8 +37,6 @@ data EditBox = EditBox
 	, editBoxMousedVar :: !(TVar Bool)
 	, editBoxFocusedVar :: !(TVar Bool)
 	, editBoxBlinkVar :: !(TVar Float)
-	-- | Render-delayed commands
-	--, editBoxRenderDelayedCommands :: !(TQueue EditBoxRender
 	}
 
 newEditBox :: STM EditBox

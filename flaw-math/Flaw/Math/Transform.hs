@@ -4,13 +4,20 @@ Description: Geometric functions.
 License: MIT
 -}
 
+{-# LANGUAGE Safe #-}
+
 module Flaw.Math.Transform
-	( Transform(..)
-	, quatAxisRotation
+	(
+	-- * Transform class
+	  Transform(..)
+	-- * Quaternion plus offset
 	, QuatOffset(..)
 	, FloatQO, DoubleQO
+	-- * Dual quaternion
 	, DualQuat(..)
 	, FloatDQ, DoubleDQ
+	-- * Helper functions
+	, quatAxisRotation
 	) where
 
 import Flaw.Math

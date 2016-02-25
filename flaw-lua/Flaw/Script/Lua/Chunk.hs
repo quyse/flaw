@@ -169,12 +169,9 @@ luaCompileChunk bytes = do
 	lamE [varP env] $ compileLuaFunction mainProto (V.singleton $ varE env) V.empty
 
 -- | Internal representation of instruction.
-data LuaInst = LuaInst
-	-- | Indices of instructions this instruction refers to.
-	[Int]
-	-- ^ Function accepting list of codes (corresponding to indices),
-	-- and returning code of the instruction.
-	([LuaCode] -> LuaCode)
+-- Contains indices of instructions this instruction refers to, and function
+-- accepting list of codes (corresponding to indices), and returning code of the instruction.
+data LuaInst = LuaInst [Int] ([LuaCode] -> LuaCode)
 
 -- | Internal representation of instruction's code.
 type LuaCode = LuaCodeState -> Q [StmtQ]

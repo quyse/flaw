@@ -4,7 +4,7 @@ Description: Template-Haskell generating math types and functions.
 License: MIT
 -}
 
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TemplateHaskell, Trustworthy #-}
 
 module Flaw.Math.Internal
 	( maxVecDimension
