@@ -37,6 +37,6 @@ class World w where
 	-- | Advance simulation.
 	simulate
 		:: w
-		-> Float -- | Time of one step.
-		-> Int -- | Number of steps.
+		-> Float -- ^ Time of one step.
+		-> Int -- ^ Number of steps.
 		-> IO ()

@@ -42,8 +42,8 @@ data GlyphInfo = GlyphInfo
 	}
 
 class FontShaper a where
-	-- | Shape multiple text parts and return lists of glyphs (position, glyph index), and final position.
-	shapeText :: a -> [T.Text] -> FontScript -> IO ([V.Vector (Float2, Int)], Float2)
+	-- | Shape multiple text parts and return lists of glyphs (position, glyph index) with final positions.
+	shapeText :: a -> [T.Text] -> FontScript -> IO [(V.Vector (Float2, Int), Float2)]
 
 -- | Font script.
 -- Contains 4-letter script code (according to http://unicode.org/iso15924/iso15924-codes.html),

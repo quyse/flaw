@@ -48,7 +48,7 @@ instance FontShaper HarfbuzzShaper where
 
 		-- loop for texts (inside single call to useAsPtr, as it does copying)
 		-- state monad contains advance vector
-		T.useAsPtr (mconcat texts) $ \unitedTextPtr unitedTextLen -> (flip runStateT) (Vec2 0 0) $ forM offsetsAndLengths $ \(offset, len) -> do
+		T.useAsPtr (mconcat texts) $ \unitedTextPtr unitedTextLen -> (flip evalStateT) (Vec2 0 0) $ forM offsetsAndLengths $ \(offset, len) -> do
 			-- set script and direction
 			liftIO $ hb_buffer_set_script hbBuffer script
 			liftIO $ hb_buffer_set_direction hbBuffer $ hb_script_get_horizontal_direction script
@@ -68,7 +68,7 @@ instance FontShaper HarfbuzzShaper where
 
 			liftIO $ hb_buffer_clear_contents hbBuffer
 
-			V.generateM glyphCount $ \i -> do
+			positionsAndGlyphIndices <- V.generateM glyphCount $ \i -> do
 				let hbGlyphPositionPtr = plusPtr hbGlyphPositions $ i * hb_glyph_position_t_size
 				xOffset <- liftIO $ peek $ hb_x_offset hbGlyphPositionPtr
 				yOffset <- liftIO $ peek $ hb_y_offset hbGlyphPositionPtr
@@ -76,10 +76,12 @@ instance FontShaper HarfbuzzShaper where
 				yAdvance <- liftIO $ peek $ hb_y_advance hbGlyphPositionPtr
 				codepoint <- liftIO $ peek $ hb_codepoint $ plusPtr hbGlyphInfos $ i * hb_glyph_info_t_size
 
-				position <- get
-				put $ position + Vec2 (fromIntegral xAdvance / 64) (fromIntegral yAdvance / 64)
+				position <- state $ \position -> (position, position + Vec2 (fromIntegral xAdvance / 64) (fromIntegral yAdvance / 64))
 
 				return (position + Vec2 (fromIntegral xOffset / 64) (fromIntegral yOffset / 64), fromIntegral codepoint)
+
+			lastPosition <- get
+			return (positionsAndGlyphIndices, lastPosition)
 
 data Hb_font_t
 data Hb_buffer_t

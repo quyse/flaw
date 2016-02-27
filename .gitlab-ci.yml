@@ -117,3 +117,18 @@ web:
   tags:
   - haskellstack
   - ghcjs
+
+pages:
+  stage: deploy
+  script:
+  - "stack --no-terminal build --haddock $PACKAGES_LINUX"
+  - "mkdir public"
+  - "cp -r $(stack path --local-doc-root) public/docs"
+  tags:
+  - haskellstack
+  - linux
+  artifacts:
+    paths:
+    - public
+  only:
+  - master

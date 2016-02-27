@@ -37,8 +37,6 @@ data EditBox = EditBox
 	, editBoxMousedVar :: !(TVar Bool)
 	, editBoxFocusedVar :: !(TVar Bool)
 	, editBoxBlinkVar :: !(TVar Float)
-	-- | Render-delayed commands
-	--, editBoxRenderDelayedCommands :: !(TQueue EditBoxRender
 	}
 
 newEditBox :: STM EditBox
@@ -148,24 +146,13 @@ instance Element EditBox where
 			renderIntersectScissor $ Vec4 (px + 1) (py + 1) (px + sx - 1) (py + sy - 1)
 
 			-- manually shape glyphs
-			(runs@[beforeRun, selectedRun, afterRun], _advance) <- liftIO $ shapeText fontShaper [textBefore, textSelected, textAfter] textScript
+			runs@[beforeRun, selectedRun, _afterRun] <- liftIO $ shapeText fontShaper [textBefore, textSelected, textAfter] textScript
 
-			-- calculate some bounds of runs
-			let Vec2 selectionMinX selectionMaxX = foldrTextBounds renderableFont
-				(\(Vec4 left _top right _bottom) (Vec2 minLeft maxRight) -> Vec2 (min left minLeft) (max right maxRight)) (Vec2 1e9 (-1e9)) selectedRun
-			let beforeRight = foldrTextBounds renderableFont
-				(\(Vec4 _left _top right _bottom) maxRight -> max right maxRight) (-1e9) beforeRun
-			let afterLeft = foldrTextBounds renderableFont
-				(\(Vec4 left _top _right _bottom) minLeft -> min left minLeft) 1e9 afterRun
-
-			-- get cursor x
-			let cursorX =
-				if T.null textSelected then
-					if T.null textBefore then 
-						if T.null textAfter then 0 else afterLeft
-					else
-						if T.null textAfter then beforeRight else (beforeRight + afterLeft) * 0.5
-				else if selectionStart < selectionEnd then selectionMaxX else selectionMinX
+			-- special offset for cursor and selection relative to text
+			let hackyOffsetX = 1
+			let selectionMinX = hackyOffsetX + x_ (snd beforeRun)
+			let selectionMaxX = hackyOffsetX + x_ (snd selectedRun)
+			let cursorX = if selectionStart < selectionEnd then selectionMaxX else selectionMinX
 
 			-- offset from left side
 			let textOffsetX = 2
@@ -197,20 +184,20 @@ instance Element EditBox where
 			-- draw selection
 			when (not $ T.null textSelected) $ do
 				drawBorderedRectangle canvas
-					(Vec4 (floor $ textX + selectionMinX - 1) (floor $ textX + selectionMinX) (floor $ textX + selectionMaxX) (floor $ textX + selectionMaxX + 1))
+					(Vec4 (floor $ textX + selectionMinX - 1) (floor $ textX + selectionMinX) (floor $ textX + selectionMaxX + 1) (floor $ textX + selectionMaxX + 2))
 					(Vec4 (floor selectionTop) (floor $ selectionTop + 1) (floor $ selectionBottom - 1) (floor selectionBottom))
 					(styleFillColor selectedStyle) (styleBorderColor selectedStyle)
 
 			-- draw blinking cursor
 			when (blink * 2 < 1) $ do
 				drawBorderedRectangle canvas
-					(Vec4 (floor $ textX + cursorX - 1) (floor $ textX + cursorX) (floor $ textX + cursorX) (floor $ textX + cursorX + 1))
+					(Vec4 (floor $ textX + cursorX) (floor $ textX + cursorX + 1) (floor $ textX + cursorX + 1) (floor $ textX + cursorX + 1))
 					(Vec4 (floor selectionTop) (floor $ selectionTop + 1) (floor $ selectionBottom - 1) (floor selectionBottom))
 					(styleFillColor selectedStyle) (styleBorderColor selectedStyle)
 
 			-- render glyphs
 			renderGlyphs glyphRenderer renderableFont $ do
-				forM_ (zip runs [styleTextColor style, styleTextColor selectedStyle, styleTextColor style]) $ \(positionsAndIndices, color) -> do
+				forM_ (zip runs [styleTextColor style, styleTextColor selectedStyle, styleTextColor style]) $ \((positionsAndIndices, _advance), color) -> do
 					renderTextRun positionsAndIndices textXY color
 
 	processInputEvent EditBox

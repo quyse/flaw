@@ -17,10 +17,8 @@ class Lockstep a where
 	-- Usually it's a combined set of commands sent by clients.
 	data LockstepIntent a :: *
 	-- | Calculate new state.
+	-- Returns result (next) state and function to rebase intent to the next state.
 	runLockstep
-		-- | Current state.
-		:: LockstepState a
-		-- | Intent to apply on current state.
-		-> LockstepIntent a
-		-- | Result (next) state and function to rebase intent to the next state.
+		:: LockstepState a -- ^ Current state.
+		-> LockstepIntent a -- ^ Intent to apply on current state.
 		-> (LockstepState a, LockstepIntent a -> LockstepIntent a)

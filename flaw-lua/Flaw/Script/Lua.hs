@@ -34,22 +34,22 @@ instance LuaMonad IO where
 
 -- | Lua value.
 data LuaValue m where
-	-- | Standard 'nil' value.
+	-- Standard 'nil' value.
 	LuaNil :: LuaValue m
-	-- | Standard boolean value.
+	-- Standard boolean value.
 	LuaBoolean :: !Bool -> LuaValue m
-	-- | Integer 'number' value.
+	-- Integer 'number' value.
 	LuaInteger :: {-# UNPACK #-} !Int -> LuaValue m
-	-- | Real 'number' value.
+	-- Real 'number' value.
 	LuaReal :: {-# UNPACK #-} !Double -> LuaValue m
-	-- | String value.
+	-- String value.
 	LuaString :: !T.Text -> LuaValue m
-	-- | Lua function
+	-- Lua function
 	LuaClosure ::
 		{ luaClosureUnique :: !Unique
 		, luaClosure :: !([LuaValue m] -> m [LuaValue m])
 		} -> LuaValue m
-	-- | User data.
+	-- User data.
 	LuaUserData ::
 		{ luaUserDataUnique :: !Unique
 		, luaUserData :: !a
