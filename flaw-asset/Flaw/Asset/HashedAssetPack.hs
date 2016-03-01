@@ -17,6 +17,7 @@ module Flaw.Asset.HashedAssetPack
 import Control.Concurrent.STM
 import Control.Exception
 import Control.Monad
+import qualified Data.ByteArray as BA
 import qualified Data.ByteArray.Encoding as BA
 import qualified Data.HashMap.Strict as HM
 import Data.Maybe
@@ -68,7 +69,7 @@ instance (AssetPack ap, AssetId ap ~ T.Text) => AssetPack (HashedAssetPack ap) w
 
 	putAsset (HashedAssetPackBuilder assetPackBuilder idsVar) assetId asset = do
 		-- calculate hashed name
-		let hashedName = T.decodeUtf8 $ BA.convertToBase BA.Base16 $ (C.hashFinalize $ C.hashUpdate C.hashInit asset :: C.Digest C.SHA256)
+		let hashedName = T.decodeUtf8 $ BA.convertToBase BA.Base64URLUnpadded $ BA.takeView (C.hashFinalize $ C.hashUpdate C.hashInit asset :: C.Digest C.SHA256) 10
 		-- full name
 		underlyingAssetId <- evaluate $ hashedName <> "-" <> assetId
 
