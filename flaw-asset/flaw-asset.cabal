@@ -19,9 +19,13 @@ source-repository head
 
 library
   exposed-modules:
-    Flaw.Asset.Exec
-    Flaw.Asset.Task
+    Flaw.Asset
+    Flaw.Asset.FolderAssetPack
+    Flaw.Asset.HashedAssetPack
   -- other-extensions:    
-  build-depends:       base, bytestring, cereal, process
+  build-depends:       base, bytestring, cereal, cereal-text, cryptonite, memory, stm, text, unordered-containers
   -- hs-source-dirs:      
   default-language:    Haskell2010
+  if impl(ghcjs)
+    build-depends:     ghcjs-base
+    js-sources:        js/flaw-asset.js
