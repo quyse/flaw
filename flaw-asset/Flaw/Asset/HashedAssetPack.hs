@@ -49,20 +49,21 @@ saveHashedAssetPackBuilder (HashedAssetPackBuilder packBuilder idsVar) packAsset
 	ids <- readTVarIO idsVar
 	putAsset packBuilder packAssetId $ S.encode $ HM.toList ids
 
+handler :: T.Text -> SomeException -> IO a
+handler assetId e = throwIO AssetError
+	{ assetErrorAssetId = assetId
+	, assetErrorReason = UnderlyingAssetError e
+	}
+
 instance (AssetPack ap, AssetId ap ~ T.Text) => AssetPack (HashedAssetPack ap) where
 	type AssetId (HashedAssetPack ap) = T.Text
 
-	loadAsset (HashedAssetPack assetPack ids) assetId = handle handler $ do
+	loadAsset (HashedAssetPack assetPack ids) assetId = handle (handler assetId) $ do
 		case HM.lookup assetId ids of
 			Just ai -> loadAsset assetPack ai
 			Nothing -> throwIO AssetError
 				{ assetErrorAssetId = assetId
 				, assetErrorReason = WrongAssetId
-				}
-		where
-			handler e = throwIO AssetError
-				{ assetErrorAssetId = assetId
-				, assetErrorReason = UnderlyingAssetError e
 				}
 
 	data AssetPackBuilder (HashedAssetPack assetPack) = HashedAssetPackBuilder !(AssetPackBuilder assetPack) !(TVar (HM.HashMap T.Text T.Text))
@@ -82,3 +83,12 @@ instance (AssetPack ap, AssetId ap ~ T.Text) => AssetPack (HashedAssetPack ap) w
 
 		-- write underlying asset
 		putAsset assetPackBuilder underlyingAssetId asset
+
+instance (WebAssetPack ap, AssetId ap ~ T.Text) => WebAssetPack (HashedAssetPack ap) where
+	getWebAssetUrl (HashedAssetPack assetPack ids) assetId = handle (handler assetId) $ do
+		case HM.lookup assetId ids of
+			Just ai -> getWebAssetUrl assetPack ai
+			Nothing -> throwIO AssetError
+				{ assetErrorAssetId = assetId
+				, assetErrorReason = WrongAssetId
+				}
