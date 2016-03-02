@@ -1,6 +1,7 @@
 # FLAW Engine
 
-[![Build Status](https://travis-ci.org/quyse/flaw.svg?branch=master)](https://travis-ci.org/quyse/flaw)
+[![Travis Build Status](https://travis-ci.org/quyse/flaw.svg?branch=master)](https://travis-ci.org/quyse/flaw)
+[![Gitlab Build Status](https://gitlab.com/quyse/flaw/badges/master/build.svg)](https://gitlab.com/quyse/flaw/builds)
 
 FLAW is a highly experimental game engine written in Haskell. In very early stage. Heavily based on my another work [Inanity](https://github.com/quyse/inanity). The goal is to discover new horizons for using Haskell in game development.
 
