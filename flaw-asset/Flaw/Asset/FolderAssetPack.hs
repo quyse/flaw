@@ -1,6 +1,6 @@
 {-|
 Module: Flaw.Asset.FolderAssetPack
-Description: Simplest asset pack loading assets from files (or via AJAX request in case of web).
+Description: Asset pack loading assets from files (or via AJAX request in case of web).
 License: MIT
 -}
 
