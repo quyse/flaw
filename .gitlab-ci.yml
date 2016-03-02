@@ -122,6 +122,7 @@ pages:
   - "stack --no-terminal build --haddock $PACKAGES_LINUX"
   - "mkdir public"
   - "cp -r $(stack path --local-doc-root) public/docs"
+  - "curl -o public/docs/badge.svg https://img.shields.io/badge/haddock-$(date +%Y/%m/%d)-blue.svg"
   tags:
   - haskellstack
   - linux
