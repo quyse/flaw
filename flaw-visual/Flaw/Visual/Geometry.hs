@@ -4,19 +4,23 @@ Description: Geometry.
 License: MIT
 -}
 
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 module Flaw.Visual.Geometry
 	( Geometry(..)
 	, PackedGeometry(..)
 	, packGeometry
 	, loadPackedGeometry
-	, embedLoadGeometryExp
+	, emitGeometryAsset
+	, loadGeometryAsset
 	) where
 
+import Control.Exception
+import Control.Monad
 import Control.Monad.Primitive
 import qualified Data.ByteString as B
 import Data.Foldable
+import qualified Data.Serialize as S
 import qualified Data.Text as T
 import qualified Data.Vector as V
 import qualified Data.Vector.Algorithms.Intro as VAI
@@ -26,11 +30,13 @@ import qualified Data.Vector.Generic.Mutable as VGM
 import qualified Data.Vector.Unboxed as VU
 import Data.Word
 import Foreign.Storable
+import GHC.Generics(Generic)
 import Language.Haskell.TH
 
 import Flaw.Asset.Collada
 import Flaw.Book
 import Flaw.Build
+import Flaw.Exception
 import Flaw.Graphics
 import Flaw.Visual.Geometry.Vertex
 
@@ -46,9 +52,9 @@ data PackedGeometry = PackedGeometry
 	, packedGeometryIndicesCount :: {-# UNPACK #-} !Int
 	, packedGeometryVertexStride :: {-# UNPACK #-} !Int
 	, packedGeometryIsIndices32Bit :: !Bool
-	}
+	} deriving Generic
 
-genEmbed ''PackedGeometry
+instance S.Serialize PackedGeometry
 
 -- | Pack raw vertices.
 packGeometry :: (Ord a, Storable a) => V.Vector a -> IO PackedGeometry
@@ -87,22 +93,25 @@ loadPackedGeometry device PackedGeometry
 		, geometryIndicesCount = indicesCount
 		}
 
--- | Generate expression for loading embedded geometry taken from Collada file.
--- Expression type is :: Device d => d -> IO (Geometry d, IO ())
-embedLoadGeometryExp :: FilePath -> ColladaM ColladaElement -> ExpQ
-embedLoadGeometryExp fileName getElement = do
+-- | Pack geometry into bytestring.
+emitGeometryAsset :: FilePath -> ColladaM ColladaElement -> Q B.ByteString
+emitGeometryAsset fileName getElement = do
 	bytes <- loadFile fileName
 	let eitherVertices = runCollada $ do
 		initColladaCache bytes
 		createColladaVertices =<< parseGeometry =<< getElement
 	case eitherVertices of
+		Right vertices -> liftM S.encode $ runIO $ packGeometry (vertices :: V.Vector VertexPNT)
 		Left err -> do
-			let msg = "failed to embed geometry " ++ fileName ++ ": " ++ T.unpack err
+			let msg = "failed to emit geometry asset " ++ fileName ++ ": " ++ T.unpack err
 			reportError msg
-			[| error msg |]
-		Right vertices -> do
-			packedGeometry <- runIO $ packGeometry (vertices :: V.Vector VertexPNT)
-			[| flip loadPackedGeometry $(embedExp packedGeometry) |]
+			return B.empty
+
+-- | Load geometry from bytestring.
+loadGeometryAsset :: Device d => d -> B.ByteString -> IO (Geometry d, IO ())
+loadGeometryAsset device bytes = case S.decode bytes of
+	Right packedGeometry -> loadPackedGeometry device packedGeometry
+	Left err -> throwIO $ DescribeFirstException $ "failed to load geometry asset: " ++ err
 
 -- | Create indices for raw vertices.
 indexVertices :: (PrimMonad m, Ord a) => V.Vector a -> m (V.Vector a, VU.Vector Int)

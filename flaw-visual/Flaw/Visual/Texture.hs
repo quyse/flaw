@@ -4,22 +4,28 @@ Description: Texture support.
 License: MIT
 -}
 
-{-# LANGUAGE FlexibleContexts, TemplateHaskell #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Flaw.Visual.Texture
 	( loadTexture
-	, loadDxtCompressedTextureExp
+	, emitTextureAsset
+	, emitDxtCompressedTextureAsset
+	, loadTextureAsset
 	) where
 
 import Codec.Picture
 import Codec.Picture.Types
+import Control.Exception
+import Control.Monad
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
+import qualified Data.Serialize as S
 import Foreign.Storable
 import Language.Haskell.TH
 
 import Flaw.Asset.Texture.Dxt
 import Flaw.Build
+import Flaw.Exception
 import Flaw.Graphics
 import Flaw.Graphics.Sampler
 import Flaw.Graphics.Texture
@@ -97,21 +103,18 @@ loadTexture bytes = do
 		Right dynamicImage -> loadDynamicImage dynamicImage
 		Left err -> fail err
 
-genEmbed ''PixelSize
-genEmbed ''ColorSpace
-genEmbed ''PixelValueType
-genEmbed ''PixelComponents
-genEmbed ''TextureCompression
-genEmbed ''TextureFormat
-genEmbed ''TextureInfo
+emitTextureAsset :: FilePath -> Q B.ByteString
+emitTextureAsset fileName = do
+	bytes <- loadFile fileName
+	liftM S.encode $ runIO $ loadTexture $ BL.toStrict bytes
 
--- | Generate expression for loading embedded texture compressed to appropriate DXT format.
--- Expression type is :: Device d => IO (TextureId d, IO ())
-loadDxtCompressedTextureExp :: FilePath -> ExpQ
-loadDxtCompressedTextureExp fileName = do
+emitDxtCompressedTextureAsset :: FilePath -> Q B.ByteString
+emitDxtCompressedTextureAsset fileName = do
 	bytes <- loadFile fileName
 	(textureInfo, textureBytes) <- runIO $ loadTexture $ BL.toStrict bytes
-	(compressedTextureInfo, compressedTextureBytes) <- runIO $ dxtCompressTexture textureInfo textureBytes
-	[| \device -> createStaticTexture device
-		$(embedExp compressedTextureInfo) defaultSamplerStateInfo =<< $(embedIOExp compressedTextureBytes)
-		|]
+	liftM S.encode $ runIO $ dxtCompressTexture textureInfo textureBytes
+
+loadTextureAsset :: Device d => d -> B.ByteString -> IO (TextureId d, IO ())
+loadTextureAsset device bytes = case S.decode bytes of
+	Right (textureInfo, textureBytes) -> createStaticTexture device textureInfo defaultSamplerStateInfo textureBytes
+	Left err -> throwIO $ DescribeFirstException $ "failed to load texture asset: " ++ err

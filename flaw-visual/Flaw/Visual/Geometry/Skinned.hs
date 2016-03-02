@@ -4,28 +4,34 @@ Description: Skinned geometry support.
 License: MIT
 -}
 
-{-# LANGUAGE OverloadedStrings, TemplateHaskell #-}
+{-# LANGUAGE DeriveGeneric, OverloadedStrings #-}
 
 module Flaw.Visual.Geometry.Skinned
 	( SkinnedGeometry(..)
 	, SkinnedGeometryAnimation(..)
 	, textureAnimateSkinnedGeometry
-	, embedLoadTextureAnimatedSkinnedGeometryExp
+	, emitTextureAnimatedSkinnedGeometryAsset
+	, loadTextureAnimatedSkinnedGeometryAsset
 	, textureAnimatedSkinTransform
 	) where
 
+import Control.Exception
 import Control.Monad
+import qualified Data.ByteString as B
 import qualified Data.ByteString.Unsafe as B
+import qualified Data.Serialize as S
 import qualified Data.Text as T
 import qualified Data.Vector as V
 import Foreign.Marshal.Array
 import Foreign.Ptr
 import Foreign.Storable
+import GHC.Generics(Generic)
 import Language.Haskell.TH
 
 import Flaw.Asset.Collada
 import Flaw.Book
 import Flaw.Build
+import Flaw.Exception
 import Flaw.Graphics
 import Flaw.Graphics.Program
 import Flaw.Graphics.Sampler
@@ -39,25 +45,33 @@ import Flaw.Visual.Texture()
 data SkinnedGeometry d = SkinnedGeometry
 	{ skinnedGeometryGeometry :: !(Geometry d)
 	, skinnedGeometryAnimationTexture :: !(TextureId d)
-	, skinnedGeometryAnimations :: [SkinnedGeometryAnimation d]
+	, skinnedGeometryAnimations :: !(V.Vector SkinnedGeometryAnimation)
 	}
 
-data SkinnedGeometryAnimation d = SkinnedGeometryAnimation
+data PackedSkinnedGeometry = PackedSkinnedGeometry
+	{ packedSkinnedGeometryGeometry :: !PackedGeometry
+	, packedSkinnedGeometryAnimationTexture :: (TextureInfo, B.ByteString)
+	, packedSkinnedGeometryAnimationOffsetsBytes :: !B.ByteString
+	, packedSkinnedGeometryAnimationInvLength :: {-# UNPACK #-} !Float
+	} deriving Generic
+
+instance S.Serialize PackedSkinnedGeometry
+
+data SkinnedGeometryAnimation = SkinnedGeometryAnimation
 	{ skinnedGeometryAnimationOffset :: {-# UNPACK #-} !Float4
 	, skinnedGeometryAnimationInvLength :: {-# UNPACK #-} !Float
-	}
+	} deriving Generic
 
 {-# INLINE textureAnimateSkinnedGeometry #-}
-textureAnimateSkinnedGeometry :: SkinnedGeometryAnimation d -> Float -> Float4
+textureAnimateSkinnedGeometry :: SkinnedGeometryAnimation -> Float -> Float4
 textureAnimateSkinnedGeometry SkinnedGeometryAnimation
 	{ skinnedGeometryAnimationOffset = Float4 kx ky x y
 	, skinnedGeometryAnimationInvLength = invLength
 	} t = Float4 kx ky (x + t * invLength) y
 
--- | Generate expression for loading embedded skinned geometry with animations taken from Collada file.
--- Expression type is :: Device d => IO (SkinnedGeometry d, IO ())
-embedLoadTextureAnimatedSkinnedGeometryExp :: FilePath -> ColladaM ColladaElement -> ColladaM ColladaElement -> Float -> Float -> ExpQ
-embedLoadTextureAnimatedSkinnedGeometryExp fileName getNodeElement getSkinElement timeStep timeLength = do
+-- | Return asset representing skinned geometry with animations taken from Collada file.
+emitTextureAnimatedSkinnedGeometryAsset :: FilePath -> ColladaM ColladaElement -> ColladaM ColladaElement -> Float -> Float -> Q B.ByteString
+emitTextureAnimatedSkinnedGeometryAsset fileName getNodeElement getSkinElement timeStep timeLength = do
 	-- load file
 	bytes <- loadFile fileName
 
@@ -74,7 +88,7 @@ embedLoadTextureAnimatedSkinnedGeometryExp fileName getNodeElement getSkinElemen
 		Left err -> do
 			let msg = "failed to embed skinned geometry " ++ fileName ++ ": " ++ T.unpack err
 			reportError msg
-			[| error msg |]
+			return B.empty
 		Right (vertices, skin, animations) -> do
 			packedGeometry <- runIO $ packGeometry (vertices :: V.Vector VertexPNTWB)
 			let framesCount = floor $ timeLength / timeStep
@@ -113,27 +127,41 @@ embedLoadTextureAnimatedSkinnedGeometryExp fileName getNodeElement getSkinElemen
 				(2 / fromIntegral height) (1 / fromIntegral height)
 				(0.5 / fromIntegral width) (fromIntegral i / fromIntegral (V.length animations) + 0.5 / fromIntegral height)
 			animationOffsetsBytes <- runIO $ packVector animationOffsets
-			[| \device -> withSpecialBook $ \bk -> do
-				geometry <- book bk $ loadPackedGeometry device $(embedExp packedGeometry)
-				at <- book bk $ createStaticTexture device $(embedExp textureInfo) defaultSamplerStateInfo
-					{ samplerMinFilter = SamplerLinearFilter
-					, samplerMipFilter = SamplerPointFilter
-					, samplerMagFilter = SamplerLinearFilter
-					, samplerWrapU = SamplerWrapClamp
-					, samplerWrapV = SamplerWrapClamp
-					, samplerWrapW = SamplerWrapClamp
-					} $(embedExp textureBytes)
-				aos <- B.unsafeUseAsCString $(embedExp animationOffsetsBytes) $ peekArray $(litE $ integerL $ fromIntegral $ V.length animations) . castPtr
-				let as = flip map aos $ \ao -> SkinnedGeometryAnimation
-					{ skinnedGeometryAnimationOffset = ao
-					, skinnedGeometryAnimationInvLength = $(litE $ rationalL $ 1 / toRational timeLength)
-					}
-				return SkinnedGeometry
-					{ skinnedGeometryGeometry = geometry
-					, skinnedGeometryAnimationTexture = at
-					, skinnedGeometryAnimations = as
-					}
-				|]
+			return $ S.encode $ PackedSkinnedGeometry
+				{ packedSkinnedGeometryGeometry = packedGeometry
+				, packedSkinnedGeometryAnimationTexture = (textureInfo, textureBytes)
+				, packedSkinnedGeometryAnimationOffsetsBytes = animationOffsetsBytes
+				, packedSkinnedGeometryAnimationInvLength = 1 / timeLength
+				}
+
+loadTextureAnimatedSkinnedGeometryAsset :: Device d => d -> B.ByteString -> IO (SkinnedGeometry d, IO ())
+loadTextureAnimatedSkinnedGeometryAsset device bytes = case S.decode bytes of
+	Left err -> throwIO $ DescribeFirstException $ "failed to load texture animated skinned geometry asset: " ++ err
+	Right PackedSkinnedGeometry
+		{ packedSkinnedGeometryGeometry = packedGeometry
+		, packedSkinnedGeometryAnimationTexture = (textureInfo, textureBytes)
+		, packedSkinnedGeometryAnimationOffsetsBytes = animationOffsetsBytes
+		, packedSkinnedGeometryAnimationInvLength = animationInvLength
+		} -> withSpecialBook $ \bk -> do
+		geometry <- book bk $ loadPackedGeometry device packedGeometry
+		animationTexture <- book bk $ createStaticTexture device textureInfo defaultSamplerStateInfo
+			{ samplerMinFilter = SamplerLinearFilter
+			, samplerMipFilter = SamplerPointFilter
+			, samplerMagFilter = SamplerLinearFilter
+			, samplerWrapU = SamplerWrapClamp
+			, samplerWrapV = SamplerWrapClamp
+			, samplerWrapW = SamplerWrapClamp
+			} textureBytes
+		animationOffsets <- unpackVector animationOffsetsBytes
+		let animations = flip V.map animationOffsets $ \animationOffset -> SkinnedGeometryAnimation
+			{ skinnedGeometryAnimationOffset = animationOffset
+			, skinnedGeometryAnimationInvLength = animationInvLength
+			}
+		return SkinnedGeometry
+			{ skinnedGeometryGeometry = geometry
+			, skinnedGeometryAnimationTexture = animationTexture
+			, skinnedGeometryAnimations = animations
+			}
 
 -- | Skin transform based on animation written to texture.
 textureAnimatedSkinTransform :: Int -> Node Float4 -> Node Float4 -> Node Word32_4 -> Program (Node Float4, Node Float3)
