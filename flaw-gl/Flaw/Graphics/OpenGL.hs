@@ -593,6 +593,7 @@ instance Device GlContext where
 			, glslConfigUnsignedUnsupported = False
 			, glslConfigUniformBlocks = useUniformBufferObject
 			, glslConfigInOutSyntax = True
+			, glslConfigTextureSampleDimensionSpecifier = False
 			}
 		glslProgram@GlslProgram
 			{ glslProgramAttributes = attributes

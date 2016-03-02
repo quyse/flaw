@@ -122,7 +122,7 @@ instance Device WebGLDevice where
 
 	createSamplerState _device _samplerInfo = describeException "failed to create WebGL sampler state" $ do
 		-- TODO
-		return (WebGLSamplerStateId, undefined)
+		return (WebGLSamplerStateId, return ())
 
 	createReadableRenderTarget _ _ _ _ _ = throwIO $ DescribeFirstException "not implemented"
 
@@ -144,7 +144,7 @@ instance Device WebGLDevice where
 			{ webglVertexBufferId = bufferId
 			, webglVertexBufferBuffer = jsBuffer
 			, webglVertexBufferStride = stride
-			}, undefined)
+			}, return ())
 
 	createStaticIndexBuffer device@WebGLDevice
 		{ webglDeviceContext = jsContext
@@ -160,7 +160,7 @@ instance Device WebGLDevice where
 			, webglIndexBufferBuffer = jsBuffer
 			, webglIndexBufferMode = webgl_TRIANGLES
 			, webglIndexBufferFormat = format
-			}, undefined)
+			}, return ())
 
 	createProgram device@WebGLDevice
 		{ webglDeviceContext = jsContext
@@ -178,6 +178,14 @@ instance Device WebGLDevice where
 				throwIO $ DescribeFirstException ("failed to compile shader", textFromJSString jsLog)
 
 		-- generate GLSL
+		let glslConfig = GlslConfig
+			{ glslConfigVersion = Nothing
+			, glslConfigForceFloatAttributes = True
+			, glslConfigUnsignedUnsupported = True
+			, glslConfigUniformBlocks = False
+			, glslConfigInOutSyntax = False
+			, glslConfigTextureSampleDimensionSpecifier = True
+			}
 		GlslProgram
 			{ glslProgramAttributes = attributes
 			, glslProgramUniformBlocks = _uniformBlocks
@@ -185,7 +193,7 @@ instance Device WebGLDevice where
 			, glslProgramSamplers = samplers
 			, glslProgramFragmentTargets = _fragmentTargets
 			, glslProgramShaders = shaders
-			} <- liftM (glslGenerateProgram glslWebGLConfig) $ runProgram program
+			} <- liftM (glslGenerateProgram glslConfig) $ runProgram program
 
 		-- create program
 		jsProgram <- js_createProgram jsContext
@@ -237,7 +245,7 @@ instance Device WebGLDevice where
 			, webglProgramProgram = jsProgram
 			, webglProgramAttributes = map glslAttributeInfo attributes
 			, webglProgramUniforms = programUniforms
-			}, undefined)
+			}, return ())
 
 	createUniformBuffer device size = describeException "failed to create WebGL uniform buffer" $ do
 		bufferId <- webglAllocateId device
@@ -245,7 +253,7 @@ instance Device WebGLDevice where
 		return (WebGLUniformBufferId
 			{ webglUniformBufferId = bufferId
 			, webglUniformBufferPtr = ptr
-			}, undefined)
+			}, return ())
 
 data WebGLContext = WebGLContext
 	{ webglContextContext :: !JS_WebGLContext

@@ -1,6 +1,6 @@
 {-|
 Module: Flaw.Graphics.GLSL
-Description: GLSL generator for WebGL graphics.
+Description: GLSL generator for OpenGL/WebGL graphics.
 License: MIT
 -}
 
@@ -8,7 +8,6 @@ License: MIT
 
 module Flaw.Graphics.GLSL
 	( GlslConfig(..)
-	, glslWebGLConfig
 	, GlslAttribute(..)
 	, GlslUniformBlock(..)
 	, GlslUniform(..)
@@ -44,16 +43,8 @@ data GlslConfig = GlslConfig
 	, glslConfigUniformBlocks :: !Bool
 	-- | Use "in" and "out" keywords instead of "attribute" and "varying", declare fragment targets.
 	, glslConfigInOutSyntax :: !Bool
-	}
-
--- | GLSL config for WebGL.
-glslWebGLConfig :: GlslConfig
-glslWebGLConfig = GlslConfig
-	{ glslConfigVersion = Nothing
-	, glslConfigForceFloatAttributes = True
-	, glslConfigUnsignedUnsupported = True
-	, glslConfigUniformBlocks = False
-	, glslConfigInOutSyntax = False
+	-- | Use dimension specifiers in texture sampling functions (like texture2D vs texture).
+	, glslConfigTextureSampleDimensionSpecifier :: !Bool
 	}
 
 data GlslAttribute = GlslAttribute
@@ -123,6 +114,7 @@ glslGenerateProgram GlslConfig
 	, glslConfigUnsignedUnsupported = configUnsignedUnsupported
 	, glslConfigUniformBlocks = configUniformBlocks
 	, glslConfigInOutSyntax = configInOutSyntax
+	, glslConfigTextureSampleDimensionSpecifier = configTextureSampleDimensionSpecifier
 	} state = program where
 	-- generate program information
 	SL.ProgramInfo shaders = SL.programInfo state
@@ -523,23 +515,33 @@ glslGenerateProgram GlslConfig
 				{ sampleNodeSamplerNode = SamplerNode Sampler
 					{ samplerSlot = slot
 					, samplerSampleType = sampleType
+					, samplerCoordsType = coordsType
 					}
 				, sampleNodeCoordsNode = c
 				, sampleNodeOffsetNode = mo
 				, sampleNodeLod = ll
 				} -> let
 				sc = samplerName slot <> ", " <> nodeSource c
+				coordsDim = if configTextureSampleDimensionSpecifier then case coordsType of
+					ScalarValueType _ -> "1D"
+					VectorValueType dim _ -> case dim of
+						Dimension1 -> "1D"
+						Dimension2 -> "2D"
+						Dimension3 -> "3D"
+						Dimension4 -> "4D"
+					MatrixValueType _ _ _ -> error "invalid coords type"
+					else mempty
 				f = case mo of
 					Nothing -> case ll of
-						SampleNodeAutoLod -> "texture(" <> sc <> ")"
-						SampleNodeLod l -> "textureLod(" <> sc <> ", " <> nodeSource l <> ")"
-						SampleNodeBiasLod b -> "textureBias(" <> sc <> ", " <> nodeSource b <> ")"
-						SampleNodeGradLod gx gy -> "textureGrad(" <> sc <> ", " <> nodeSource gx <> ", " <> nodeSource gy <> ")"
+						SampleNodeAutoLod -> "texture" <> coordsDim <> "(" <> sc <> ")"
+						SampleNodeLod l -> "texture" <> coordsDim <> "Lod(" <> sc <> ", " <> nodeSource l <> ")"
+						SampleNodeBiasLod b -> "texture" <> coordsDim <> "Bias(" <> sc <> ", " <> nodeSource b <> ")"
+						SampleNodeGradLod gx gy -> "texture" <> coordsDim <> "Grad(" <> sc <> ", " <> nodeSource gx <> ", " <> nodeSource gy <> ")"
 					Just o -> case ll of
-						SampleNodeAutoLod -> "textureOffset(" <> sc <> ", " <> nodeSource o <> ")"
-						SampleNodeLod l -> "textureLodOffset(" <> sc <> ", " <> nodeSource l <> ", " <> nodeSource o <> ")"
-						SampleNodeBiasLod b -> "textureBias(" <> sc <> ", " <> nodeSource b <> ", " <> nodeSource o <> ")"
-						SampleNodeGradLod gx gy -> "textureGrad(" <> sc <> ", " <> nodeSource gx <> ", " <> nodeSource gy <> ", " <> nodeSource o <> ")"
+						SampleNodeAutoLod -> "texture" <> coordsDim <> "Offset(" <> sc <> ", " <> nodeSource o <> ")"
+						SampleNodeLod l -> "texture" <> coordsDim <> "LodOffset(" <> sc <> ", " <> nodeSource l <> ", " <> nodeSource o <> ")"
+						SampleNodeBiasLod b -> "texture" <> coordsDim <> "Bias(" <> sc <> ", " <> nodeSource b <> ", " <> nodeSource o <> ")"
+						SampleNodeGradLod gx gy -> "texture" <> coordsDim <> "Grad(" <> sc <> ", " <> nodeSource gx <> ", " <> nodeSource gy <> ", " <> nodeSource o <> ")"
 				in f <> case sampleType of
 					ScalarValueType _ -> ".x"
 					VectorValueType dim _ -> case dim of
