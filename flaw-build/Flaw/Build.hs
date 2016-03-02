@@ -14,6 +14,7 @@ module Flaw.Build
 	, fileExp
 	, packList
 	, packVector
+	, unpackVector
 	, genEmbed
 	) where
 
@@ -157,6 +158,13 @@ packVector v = do
 	VS.unsafeWith (VG.convert v) $ \vecPtr -> do
 		copyArray bytesPtr vecPtr len
 	B.unsafePackMallocCStringLen (castPtr bytesPtr, len * sizeOf (VG.head v))
+
+-- | Unpack storable vector from bytestring.
+unpackVector :: (Storable a, VG.Vector v a) => B.ByteString -> IO (v a)
+unpackVector bytes = wu $ \u -> B.unsafeUseAsCStringLen bytes $ \(ptr, len) -> VG.generateM (len `quot` sizeOf u) $ peekElemOff $ castPtr ptr
+	where
+		wu :: (a -> IO (v a)) -> IO (v a)
+		wu m = m undefined
 
 -- | Generate Embed instance for ADT.
 {- Example:
