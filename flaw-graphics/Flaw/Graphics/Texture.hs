@@ -4,6 +4,8 @@ Description: Abstract texture things.
 License: MIT
 -}
 
+{-# LANGUAGE DeriveGeneric #-}
+
 module Flaw.Graphics.Texture
 	( TextureFormat(..)
 	, PixelComponents(..)
@@ -20,6 +22,8 @@ module Flaw.Graphics.Texture
 	) where
 
 import Data.Bits
+import qualified Data.Serialize as S
+import GHC.Generics(Generic)
 
 -- | Texture formats.
 data TextureFormat
@@ -33,7 +37,9 @@ data TextureFormat
 		{ textureFormatCompression :: TextureCompression
 		, textureFormatColorSpace :: ColorSpace
 		}
-	deriving Show
+	deriving (Generic, Show)
+
+instance S.Serialize TextureFormat
 
 -- | Pixel components for texture format.
 data PixelComponents
@@ -41,14 +47,18 @@ data PixelComponents
 	| PixelRG
 	| PixelRGB
 	| PixelRGBA
-	deriving Show
+	deriving (Generic, Show)
+
+instance S.Serialize PixelComponents
 
 -- | Pixel value type.
 data PixelValueType
 	= PixelUntyped
 	| PixelUint
 	| PixelFloat
-	deriving Show
+	deriving (Generic, Show)
+
+instance S.Serialize PixelValueType
 
 -- | Pixel size.
 data PixelSize
@@ -59,7 +69,9 @@ data PixelSize
 	| Pixel64bit
 	| Pixel96bit
 	| Pixel128bit
-	deriving Show
+	deriving (Generic, Show)
+
+instance S.Serialize PixelSize
 
 -- | Texture compression.
 -- Sizes in descriptions are given for 4x4 pixel blocks (obviously).
@@ -85,13 +97,17 @@ data TextureCompression
 	| TextureCompressionBC5
 	-- | RG signed (128 bit, simply two BC4 blocks)
 	| TextureCompressionBC5Signed
-	deriving Show
+	deriving (Generic, Show)
+
+instance S.Serialize TextureCompression
 
 -- | Color space.
 data ColorSpace
 	= LinearColorSpace
 	| StandardColorSpace
-	deriving Show
+	deriving (Generic, Show)
+
+instance S.Serialize ColorSpace
 
 -- | Texture information.
 {- Acceptable combinations:
@@ -112,7 +128,9 @@ data TextureInfo = TextureInfo
 	-- | Number of textures in array.
 	-- Zero means non-array.
 	, textureCount :: Int
-	} deriving Show
+	} deriving (Generic, Show)
+
+instance S.Serialize TextureInfo
 
 -- | Various byte metrics of texture.
 data TextureMetrics = TextureMetrics
