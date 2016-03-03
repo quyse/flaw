@@ -21,8 +21,8 @@ library
   exposed-modules:
     Flaw.Asset
     Flaw.Asset.FolderAssetPack
-    Flaw.Asset.HashedAssetPack
     Flaw.Asset.HashMapAssetPack
+    Flaw.Asset.RemapAssetPack
   -- other-extensions:    
   build-depends:       base, bytestring, cereal, cereal-text, cryptonite, flaw-build, hashable, memory, stm, template-haskell, text, unordered-containers
   -- hs-source-dirs:      
