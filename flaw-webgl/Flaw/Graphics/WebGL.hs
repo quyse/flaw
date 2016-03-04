@@ -138,8 +138,7 @@ instance Device WebGLDevice where
 		bufferId <- webglAllocateId device
 		jsBuffer <- js_createBuffer jsContext
 		js_bindBuffer jsContext webgl_ARRAY_BUFFER jsBuffer
-		jsDataBuffer <- byteStringToJsBuffer bytes
-		js_bufferData jsContext webgl_ARRAY_BUFFER jsDataBuffer webgl_STATIC_DRAW
+		js_bufferData jsContext webgl_ARRAY_BUFFER (byteStringToJsBuffer bytes) webgl_STATIC_DRAW
 		return (WebGLVertexBufferId
 			{ webglVertexBufferId = bufferId
 			, webglVertexBufferBuffer = jsBuffer
@@ -152,8 +151,7 @@ instance Device WebGLDevice where
 		bufferId <- webglAllocateId device
 		jsBuffer <- js_createBuffer jsContext
 		js_bindBuffer jsContext webgl_ELEMENT_ARRAY_BUFFER jsBuffer
-		jsDataBuffer <- byteStringToJsBuffer bytes
-		js_bufferData jsContext webgl_ELEMENT_ARRAY_BUFFER jsDataBuffer webgl_STATIC_DRAW
+		js_bufferData jsContext webgl_ELEMENT_ARRAY_BUFFER (byteStringToJsBuffer bytes) webgl_STATIC_DRAW
 		let format = if is32Bit then webgl_UNSIGNED_INT else webgl_UNSIGNED_SHORT
 		return (WebGLIndexBufferId
 			{ webglIndexBufferId = bufferId
@@ -720,19 +718,19 @@ webglUpdateContext WebGLContext
 		let count = if size > 0 then size else 1
 		withForeignPtr foreignPtr $ \bufferPtr -> case t of
 			ScalarValueType ScalarFloat -> do
-				js_uniform1fv jsContext jsLocation =<< js_ptrToFloat32Array (bufferPtr `plusPtr` offset) count
+				js_uniform1fv jsContext jsLocation $ js_ptrToFloat32Array (bufferPtr `plusPtr` offset) count
 			ScalarValueType ScalarInt -> do
-				js_uniform1iv jsContext jsLocation =<< js_ptrToFloat32Array (bufferPtr `plusPtr` offset) count
+				js_uniform1iv jsContext jsLocation $ js_ptrToFloat32Array (bufferPtr `plusPtr` offset) count
 			VectorValueType Dimension1 ScalarFloat -> do
-				js_uniform1fv jsContext jsLocation =<< js_ptrToFloat32Array (bufferPtr `plusPtr` offset) count
+				js_uniform1fv jsContext jsLocation $ js_ptrToFloat32Array (bufferPtr `plusPtr` offset) count
 			VectorValueType Dimension2 ScalarFloat -> do
-				js_uniform2fv jsContext jsLocation =<< js_ptrToFloat32Array (bufferPtr `plusPtr` offset) (count * 2)
+				js_uniform2fv jsContext jsLocation $ js_ptrToFloat32Array (bufferPtr `plusPtr` offset) (count * 2)
 			VectorValueType Dimension3 ScalarFloat -> do
-				js_uniform3fv jsContext jsLocation =<< js_ptrToFloat32Array (bufferPtr `plusPtr` offset) (count * 3)
+				js_uniform3fv jsContext jsLocation $ js_ptrToFloat32Array (bufferPtr `plusPtr` offset) (count * 3)
 			VectorValueType Dimension4 ScalarFloat -> do
-				js_uniform4fv jsContext jsLocation =<< js_ptrToFloat32Array (bufferPtr `plusPtr` offset) (count * 4)
+				js_uniform4fv jsContext jsLocation $ js_ptrToFloat32Array (bufferPtr `plusPtr` offset) (count * 4)
 			MatrixValueType Dimension4 Dimension4 ScalarFloat -> do
-				js_uniformMatrix4fv jsContext jsLocation =<< js_ptrToFloat32Array (bufferPtr `plusPtr` offset) (count * 16)
+				js_uniformMatrix4fv jsContext jsLocation $ js_ptrToFloat32Array (bufferPtr `plusPtr` offset) (count * 16)
 			_ -> throwIO $ DescribeFirstException ("wrong WebGL uniform type", t)
 
 	-- uniform buffers
@@ -813,14 +811,16 @@ loadWebGLTexture2DFromURL device@WebGLDevice
 		, webglTextureTexture = jsTexture
 		}, return ())
 
-byteStringToJsBuffer :: B.ByteString -> IO JSVal
-byteStringToJsBuffer bytes = do
+byteStringToJsBuffer :: B.ByteString -> JSVal
+byteStringToJsBuffer bytes =
+	-- looks like there's no exported function to get a view for a part of the buffer
+	-- there's only non-exported JavaScript.TypedArray.DataView.dataView' function
 	let (buf, off, len) = GHCJS.Buffer.fromByteString bytes
-	r <- js_unwrapBuf buf off len
-	return r
-foreign import javascript unsafe "$r = new Uint8Array($1.buf, $2, $3)" js_unwrapBuf :: GHCJS.Buffer.Buffer -> Int -> Int -> IO JSVal
+	in js_unwrapBuf buf off len
 
-foreign import javascript unsafe "$r = $1.f3.subarray($1_2, $1_2 + $2)" js_ptrToFloat32Array :: Ptr () -> Int -> IO JSVal
+foreign import javascript unsafe "new DataView($1.buf, $2, $3)" js_unwrapBuf :: GHCJS.Buffer.Buffer -> Int -> Int -> JSVal
+
+foreign import javascript unsafe "$1.f3.subarray($1_2, $1_2 + $2)" js_ptrToFloat32Array :: Ptr () -> Int -> JSVal
 
 instance Eq (VertexBufferId WebGLDevice) where
 	WebGLVertexBufferId { webglVertexBufferId = a } == WebGLVertexBufferId { webglVertexBufferId = b } = a == b
