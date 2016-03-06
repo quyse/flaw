@@ -68,7 +68,7 @@ instance FontShaper HarfbuzzShaper where
 
 			liftIO $ hb_buffer_clear_contents hbBuffer
 
-			positionsAndGlyphIndices <- V.generateM glyphCount $ \i -> do
+			shapedGlyphs <- V.generateM glyphCount $ \i -> do
 				let hbGlyphPositionPtr = plusPtr hbGlyphPositions $ i * hb_glyph_position_t_size
 				xOffset <- liftIO $ peek $ hb_x_offset hbGlyphPositionPtr
 				yOffset <- liftIO $ peek $ hb_y_offset hbGlyphPositionPtr
@@ -78,10 +78,13 @@ instance FontShaper HarfbuzzShaper where
 
 				position <- state $ \position -> (position, position + Vec2 (fromIntegral xAdvance / 64) (fromIntegral yAdvance / 64))
 
-				return (position + Vec2 (fromIntegral xOffset / 64) (fromIntegral yOffset / 64), fromIntegral codepoint)
+				return ShapedGlyph
+					{ shapedGlyphPosition = position + Vec2 (fromIntegral xOffset / 64) (fromIntegral yOffset / 64)
+					, shapedGlyphIndex = fromIntegral codepoint
+					}
 
 			lastPosition <- get
-			return (positionsAndGlyphIndices, lastPosition)
+			return (shapedGlyphs, lastPosition)
 
 data Hb_font_t
 data Hb_buffer_t

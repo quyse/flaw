@@ -197,8 +197,8 @@ instance Element EditBox where
 
 			-- render glyphs
 			renderGlyphs glyphRenderer renderableFont $ do
-				forM_ (zip runs [styleTextColor style, styleTextColor selectedStyle, styleTextColor style]) $ \((positionsAndIndices, _advance), color) -> do
-					renderTextRun positionsAndIndices textXY color
+				forM_ (zip runs [styleTextColor style, styleTextColor selectedStyle, styleTextColor style]) $ \((shapedGlyphs, _advance), color) -> do
+					renderTextRun shapedGlyphs textXY color
 
 	processInputEvent EditBox
 		{ editBoxTextVar = textVar

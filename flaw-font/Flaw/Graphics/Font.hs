@@ -8,6 +8,7 @@ module Flaw.Graphics.Font
 	( Glyphs(..)
 	, GlyphInfo(..)
 	, FontShaper(..)
+	, ShapedGlyph(..)
 	, FontScript(..)
 	, fontScriptUnknown
 	) where
@@ -43,7 +44,12 @@ data GlyphInfo = GlyphInfo
 
 class FontShaper a where
 	-- | Shape multiple text parts and return lists of glyphs (position, glyph index) with final positions.
-	shapeText :: a -> [T.Text] -> FontScript -> IO [(V.Vector (Float2, Int), Float2)]
+	shapeText :: a -> [T.Text] -> FontScript -> IO [(V.Vector ShapedGlyph, Float2)]
+
+data ShapedGlyph = ShapedGlyph
+	{ shapedGlyphPosition :: {-# UNPACK #-} !Float2
+	, shapedGlyphIndex :: {-# UNPACK #-} !Int
+	}
 
 -- | Font script.
 -- Contains 4-letter script code (according to http://unicode.org/iso15924/iso15924-codes.html),

@@ -332,12 +332,15 @@ data RenderTextCursorX = RenderTextCursorLeft | RenderTextCursorCenter | RenderT
 data RenderTextCursorY = RenderTextCursorBaseline | RenderTextCursorTop | RenderTextCursorMiddle | RenderTextCursorBottom
 
 -- | Render raw glyphs.
-renderTextRun :: V.Vector (Float2, Int) -> Float2 -> Float4 -> RenderGlyphsM c d ()
-renderTextRun positionsAndIndices position color = do
+renderTextRun :: V.Vector ShapedGlyph -> Float2 -> Float4 -> RenderGlyphsM c d ()
+renderTextRun shapedGlyphs position color = do
 	RenderGlyphsState
 		{ renderGlyphsStateAddGlyph = addGlyph
 		} <- ask
-	forM_ positionsAndIndices $ \(glyphPosition, glyphIndex) -> do
+	forM_ shapedGlyphs $ \ShapedGlyph
+		{ shapedGlyphPosition = glyphPosition
+		, shapedGlyphIndex = glyphIndex
+		} -> do
 		lift $ addGlyph GlyphToRender
 			{ glyphToRenderPosition = position + glyphPosition
 			, glyphToRenderIndex = glyphIndex
@@ -347,15 +350,15 @@ renderTextRun positionsAndIndices position color = do
 -- | Shape multiple text runs and output it in RenderGlyphsM monad.
 renderTexts :: FontShaper s => s -> [(T.Text, Float4)] -> FontScript -> Float2 -> RenderTextCursorX -> RenderTextCursorY -> RenderGlyphsM c d ()
 renderTexts shaper textsWithColors script (Vec2 px py) cursorX cursorY = do
-	runsPositionsAndIndicesAndFinalPositions <- liftIO $ shapeText shaper (map fst textsWithColors) script
+	runsShapedGlyphsAndFinalPositions <- liftIO $ shapeText shaper (map fst textsWithColors) script
 	RenderGlyphsState
 		{ renderGlyphsStateRenderableFont = RenderableFont
 			{ renderableFontMaxGlyphBox = Vec4 _boxLeft boxTop _boxRight boxBottom
 			}
 		} <- ask
-	let Vec2 ax _ay = case runsPositionsAndIndicesAndFinalPositions of
+	let Vec2 ax _ay = case runsShapedGlyphsAndFinalPositions of
 		[] -> Vec2 0 0
-		_ -> snd $ last runsPositionsAndIndicesAndFinalPositions
+		_ -> snd $ last runsShapedGlyphsAndFinalPositions
 	let x = case cursorX of
 		RenderTextCursorLeft -> px
 		RenderTextCursorCenter -> px - ax * 0.5
@@ -365,15 +368,18 @@ renderTexts shaper textsWithColors script (Vec2 px py) cursorX cursorY = do
 		RenderTextCursorTop -> py - boxTop
 		RenderTextCursorMiddle -> py - (boxTop + boxBottom) * 0.5
 		RenderTextCursorBottom -> py - boxBottom
-	forM_ (zip runsPositionsAndIndicesAndFinalPositions $ map snd textsWithColors) $
-		\((positionsAndIndices, _advance), color) -> renderTextRun positionsAndIndices (Vec2 x y) color
+	forM_ (zip runsShapedGlyphsAndFinalPositions $ map snd textsWithColors) $
+		\((shapedGlyphs, _advance), color) -> renderTextRun shapedGlyphs (Vec2 x y) color
 
 -- | Perform right fold on bounds of glyphs.
 {-# INLINE foldrTextBounds #-}
-foldrTextBounds :: RenderableFont d -> (Float4 -> a -> a) -> a -> (V.Vector (Float2, Int), Float2) -> a
+foldrTextBounds :: RenderableFont d -> (Float4 -> a -> a) -> a -> (V.Vector ShapedGlyph, Float2) -> a
 foldrTextBounds RenderableFont
 	{ renderableFontGlyphs = renderableGlyphs
-	} f z (positionsAndIndices, _finalPosition) = foldr f z bs where
-	bs = fmap glyphBounds positionsAndIndices
-	glyphBounds :: (Float2, Int) -> Float4
-	glyphBounds (glyphPosition, glyphIndex) = xyxy__ glyphPosition + renderableGlyphOffset (renderableGlyphs V.! glyphIndex)
+	} f z (shapedGlyphs, _finalPosition) = foldr f z bs where
+	bs = fmap glyphBounds shapedGlyphs
+	glyphBounds :: ShapedGlyph -> Float4
+	glyphBounds ShapedGlyph
+		{ shapedGlyphPosition = glyphPosition
+		, shapedGlyphIndex = glyphIndex
+		} = xyxy__ glyphPosition + renderableGlyphOffset (renderableGlyphs V.! glyphIndex)
