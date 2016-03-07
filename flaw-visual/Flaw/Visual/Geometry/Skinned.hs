@@ -40,7 +40,7 @@ import Flaw.Math
 import Flaw.Math.Transform
 import Flaw.Visual.Geometry
 import Flaw.Visual.Geometry.Vertex
-import Flaw.Visual.Texture()
+import Flaw.Visual.Texture
 
 data SkinnedGeometry d = SkinnedGeometry
 	{ skinnedGeometryGeometry :: !(Geometry d)
@@ -50,7 +50,7 @@ data SkinnedGeometry d = SkinnedGeometry
 
 data PackedSkinnedGeometry = PackedSkinnedGeometry
 	{ packedSkinnedGeometryGeometry :: !PackedGeometry
-	, packedSkinnedGeometryAnimationTexture :: (TextureInfo, B.ByteString)
+	, packedSkinnedGeometryAnimationTexture :: !PackedTexture
 	, packedSkinnedGeometryAnimationOffsetsBytes :: !B.ByteString
 	, packedSkinnedGeometryAnimationInvLength :: {-# UNPACK #-} !Float
 	} deriving Generic
@@ -129,7 +129,10 @@ emitTextureAnimatedSkinnedGeometryAsset fileName getNodeElement getSkinElement t
 			animationOffsetsBytes <- runIO $ packVector animationOffsets
 			return $ S.encode $ PackedSkinnedGeometry
 				{ packedSkinnedGeometryGeometry = packedGeometry
-				, packedSkinnedGeometryAnimationTexture = (textureInfo, textureBytes)
+				, packedSkinnedGeometryAnimationTexture = PackedTexture
+					{ packedTextureBytes = textureBytes
+					, packedTextureInfo = textureInfo
+					}
 				, packedSkinnedGeometryAnimationOffsetsBytes = animationOffsetsBytes
 				, packedSkinnedGeometryAnimationInvLength = 1 / timeLength
 				}
@@ -139,7 +142,10 @@ loadTextureAnimatedSkinnedGeometryAsset device bytes = case S.decode bytes of
 	Left err -> throwIO $ DescribeFirstException $ "failed to load texture animated skinned geometry asset: " ++ err
 	Right PackedSkinnedGeometry
 		{ packedSkinnedGeometryGeometry = packedGeometry
-		, packedSkinnedGeometryAnimationTexture = (textureInfo, textureBytes)
+		, packedSkinnedGeometryAnimationTexture = PackedTexture
+			{ packedTextureBytes = textureBytes
+			, packedTextureInfo = textureInfo
+			}
 		, packedSkinnedGeometryAnimationOffsetsBytes = animationOffsetsBytes
 		, packedSkinnedGeometryAnimationInvLength = animationInvLength
 		} -> withSpecialBook $ \bk -> do

@@ -41,6 +41,9 @@ loadPlainTextureAsset device assetPack assetId = do
 #ifdef ghcjs_HOST_OS
 	loadWebGLTexture2DFromURL device =<< getWebAssetUrl assetPack assetId
 #else
-	(textureInfo, textureBytes) <- loadTexture =<< loadAsset assetPack assetId
+	PackedTexture
+		{ packedTextureBytes = textureBytes
+		, packedTextureInfo = textureInfo
+		} <- loadTexture =<< loadAsset assetPack assetId
 	createStaticTexture device textureInfo defaultSamplerStateInfo textureBytes
 #endif
