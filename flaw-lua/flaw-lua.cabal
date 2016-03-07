@@ -33,13 +33,7 @@ library
 
 test-suite flaw-lua-test
   type:                exitcode-stdio-1.0
-  main-is:             flaw-lua-test.hs
-  other-modules:
-    Flaw.Script.Lua
-    Flaw.Script.Lua.Build
-    Flaw.Script.Lua.Chunk
-    Flaw.Script.Lua.FFI
-    Flaw.Script.Lua.Operations
-    Flaw.Script.Lua.StdLib
-  build-depends:       base, bytestring, cereal, flaw-base, flaw-build, flaw-lua-refimpl, hashable, hashtables, primitive, template-haskell, text, time, vector
+  main-is:             lua-test.hs
+  hs-source-dirs:      test
+  build-depends:       base, flaw-lua, primitive, time
   default-language:    Haskell2010

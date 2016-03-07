@@ -31,10 +31,7 @@ library
 
 test-suite repo-test
   type:                exitcode-stdio-1.0
-  main-is:             repotest.hs
-  other-modules:
-    Flaw.Oil.ClientRepo
-    Flaw.Oil.Repo
-    Flaw.Oil.ServerRepo
-  build-depends:       base, bytestring, cereal, flaw-base, flaw-sqlite, mtl, text, vector
+  main-is:             repo-test.hs
+  hs-source-dirs:      test
+  build-depends:       base, flaw-base, flaw-oil, mtl, text
   default-language:    Haskell2010
