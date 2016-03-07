@@ -119,10 +119,12 @@ web:
 pages:
   stage: deploy
   script:
-  - "stack --no-terminal build --haddock $PACKAGES_LINUX"
+  - "stack --no-terminal build --test --haddock --coverage $PACKAGES_LINUX"
   - "mkdir public"
-  - "cp -r $(stack path --local-doc-root) public/docs"
+  - "mv $(stack path --local-doc-root) public/docs"
+  - "mv $(stack path --local-hpc-root) public/hpc"
   - "curl -o public/docs/badge.svg https://img.shields.io/badge/haddock-$(date +%Y/%m/%d)-blue.svg"
+  - "curl -o public/hpc/badge.svg https://img.shields.io/badge/test%20coverage-$(date +%Y/%m/%d)-orange.svg"
   tags:
   - haskellstack
   - linux
