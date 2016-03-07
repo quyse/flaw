@@ -36,7 +36,6 @@ import Foreign.Ptr
 import Foreign.Storable
 
 import Flaw.Book
-import Flaw.Exception
 
 data SqliteDb = SqliteDb
 	{ sqliteDbPtr :: !(Ptr C_sqlite3)
@@ -64,7 +63,7 @@ sqliteDb fileName = do
 			dbPtr <- peek dbPtrPtr
 			when (r /= SQLITE_OK) $ do
 				when (dbPtr /= nullPtr) $ void $ sqlite3_close dbPtr
-				throwIO $ DescribeFirstException "failed to open sqlite db"
+				throwIO $ SqliteOpenError fileName
 			return (dbPtr, void $ sqlite3_close dbPtr)
 
 	-- create transaction statements
@@ -134,7 +133,7 @@ sqliteStep (SqliteQuery SqliteStmt
 sqliteFinalStep :: SqliteQuery -> IO ()
 sqliteFinalStep query = do
 	r <- sqliteStep query
-	when r $ throwIO $ DescribeFirstException "non-final SQLite step"
+	when r $ throwIO SqliteStepNotFinal
 
 -- | Perform SQLite transaction.
 sqliteTransaction :: SqliteDb -> (IO () -> IO a) -> IO a
@@ -152,7 +151,7 @@ sqliteTransaction SqliteDb
 	let commit = do
 		-- check that transaction is not finished
 		finished <- readIORef finishedRef
-		when finished $ throwIO $ DescribeFirstException "failed to commit finished transaction"
+		when finished $ throwIO SqliteTransactionAlreadyFinished
 		-- commit
 		void $ sqlite3_reset releaseStmtPtr
 		sqliteCheckError dbPtr (== SQLITE_DONE) $ sqlite3_step releaseStmtPtr
@@ -233,13 +232,22 @@ throwSqliteError :: Ptr C_sqlite3 -> IO a
 throwSqliteError dbPtr = do
 	errCode <- sqlite3_errcode dbPtr
 	errMsgPtr <- sqlite3_errmsg dbPtr
-	errMsg <- liftM T.decodeUtf8 $ B.packCString errMsgPtr
-	throwIO $ DescribeFirstException $ "SQLite error " ++ show errCode ++ ": " ++ T.unpack errMsg
+	errMsgBytes <- B.packCString errMsgPtr
+	throwIO $ SqliteError (fromIntegral errCode) (T.decodeUtf8 errMsgBytes)
 
 sqliteCheckError :: Ptr C_sqlite3 -> (CInt -> Bool) -> IO CInt -> IO ()
 sqliteCheckError dbPtr cond io = do
 	r <- io
 	when (not $ cond r) $ throwSqliteError dbPtr
+
+data SqliteError
+	= SqliteError {-# UNPACK #-} !Int !T.Text
+	| SqliteOpenError !T.Text
+	| SqliteStepNotFinal
+	| SqliteTransactionAlreadyFinished
+	deriving Show
+
+instance Exception SqliteError
 
 -- FFI: types
 
