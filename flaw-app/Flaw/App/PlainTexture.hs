@@ -11,7 +11,6 @@ module Flaw.App.PlainTexture
 	, loadPlainTextureAsset
 	) where
 
-import Control.Monad
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
 import Language.Haskell.TH
@@ -34,7 +33,7 @@ import Flaw.Visual.Texture
 
 -- | Emit texture asset suitable for direct loading in web.
 emitPlainTextureAsset :: FilePath -> Q B.ByteString
-emitPlainTextureAsset fileName = liftM BL.toStrict $ loadFile fileName
+emitPlainTextureAsset fileName = fmap BL.toStrict $ loadFile fileName
 
 loadPlainTextureAsset :: WebAssetPack ap => AppGraphicsDevice -> ap -> AssetId ap -> IO (TextureId AppGraphicsDevice, IO ())
 loadPlainTextureAsset device assetPack assetId = do

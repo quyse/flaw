@@ -51,7 +51,7 @@ asyncRunInFlow (Flow queue) operation = writeTQueue queue $ do
 runInFlow :: Flow -> IO a -> IO a
 runInFlow flow operation = do
 	resultVar <- newEmptyMVar
-	atomically $ asyncRunInFlow flow $ putMVar resultVar =<< handle (return . Left) (liftM Right operation)
+	atomically $ asyncRunInFlow flow $ putMVar resultVar =<< handle (return . Left) (fmap Right operation)
 	r <- takeMVar resultVar
 	case r of
 		Right a -> return a

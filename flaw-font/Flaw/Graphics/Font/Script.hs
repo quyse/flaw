@@ -139,7 +139,7 @@ import Data.Char
 
 -- | Encode font script.
 fontScript :: String -> FontScript
-fontScript [a, b, c, d] = FontScript $ (fromIntegral $ ord a `shiftL` 24) .|. (fromIntegral $ ord b `shiftL` 16) .|. (fromIntegral $ ord c `shiftL` 8) .|. (fromIntegral $ ord d)
+fontScript [a, b, c, d] = FontScript $ fromIntegral (ord a `shiftL` 24) .|. fromIntegral (ord b `shiftL` 16) .|. fromIntegral (ord c `shiftL` 8) .|. fromIntegral (ord d)
 fontScript _ = error "wrong font script code"
 
 fontScriptArabic               :: FontScript

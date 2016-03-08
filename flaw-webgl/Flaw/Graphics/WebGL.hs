@@ -191,7 +191,7 @@ instance Device WebGLDevice where
 			, glslProgramSamplers = samplers
 			, glslProgramFragmentTargets = _fragmentTargets
 			, glslProgramShaders = shaders
-			} <- liftM (glslGenerateProgram glslConfig) $ runProgram program
+			} <- fmap (glslGenerateProgram glslConfig) $ runProgram program
 
 		-- create program
 		jsProgram <- js_createProgram jsContext
@@ -213,8 +213,7 @@ instance Device WebGLDevice where
 		-- link program
 		js_linkProgram jsContext jsProgram
 		jsStatus <- js_getProgramParameter jsContext jsProgram webgl_LINK_STATUS
-		if pFromJSVal jsStatus then return ()
-		else throwIO $ DescribeFirstException "failed to link program"
+		unless (pFromJSVal jsStatus) $ throwIO $ DescribeFirstException "failed to link program"
 
 		-- set as current
 		js_useProgram jsContext jsProgram
@@ -282,13 +281,13 @@ webglCreateContextState = do
 	frameBuffer <- newIORef $ WebGLFrameBufferId nullRef
 	viewport <- newIORef $ Int4 0 0 0 0
 	vertexBuffers <- A.newArray (0, 7) nullVertexBuffer
-	indexBuffer <- newIORef $ WebGLIndexBufferId
+	indexBuffer <- newIORef WebGLIndexBufferId
 		{ webglIndexBufferId = 0
 		, webglIndexBufferBuffer = JS_WebGLBuffer nullRef
 		, webglIndexBufferMode = webgl_TRIANGLES
 		, webglIndexBufferFormat = webgl_UNSIGNED_SHORT
 		}
-	uniformBuffers <- A.newArray (0, 7) $ WebGLUniformBufferId
+	uniformBuffers <- A.newArray (0, 7) WebGLUniformBufferId
 		{ webglUniformBufferId = 0
 		, webglUniformBufferPtr = undefined
 		}
@@ -296,7 +295,7 @@ webglCreateContextState = do
 		{ webglTextureId = 0
 		, webglTextureTexture = JS_WebGLTexture nullRef
 		}, WebGLSamplerStateId)
-	program <- newIORef $ WebGLProgramId
+	program <- newIORef WebGLProgramId
 		{ webglProgramId = 0
 		, webglProgramProgram = JS_WebGLProgram nullRef
 		, webglProgramAttributes = []
@@ -329,7 +328,7 @@ webglSetDefaultContextState WebGLContextState
 	writeIORef viewportRef $ Int4 0 0 0 0
 	vertexBuffersBounds <- getBounds vertexBuffersArray
 	forM_ (range vertexBuffersBounds) $ \i -> writeArray vertexBuffersArray i nullVertexBuffer
-	writeIORef indexBufferRef $ WebGLIndexBufferId
+	writeIORef indexBufferRef WebGLIndexBufferId
 		{ webglIndexBufferId = 0
 		, webglIndexBufferBuffer = JS_WebGLBuffer nullRef
 		, webglIndexBufferMode = webgl_TRIANGLES
@@ -345,7 +344,7 @@ webglSetDefaultContextState WebGLContextState
 		{ webglTextureId = 0
 		, webglTextureTexture = JS_WebGLTexture nullRef
 		} , WebGLSamplerStateId)
-	writeIORef programRef $ WebGLProgramId
+	writeIORef programRef WebGLProgramId
 		{ webglProgramId = 0
 		, webglProgramProgram = JS_WebGLProgram nullRef
 		, webglProgramAttributes = []
@@ -566,8 +565,7 @@ webglInit :: DOM.Element -> Bool -> IO ((WebGLDevice, WebGLContext, WebGLPresent
 webglInit jsCanvas needDepth = do
 	-- get context
 	jsContext@(JS_WebGLContext jsContextVal) <- js_getWebGLContext jsCanvas needDepth
-	if isNull jsContextVal then throwIO $ DescribeFirstException "cannot get WebGL context"
-	else return ()
+	when (isNull jsContextVal) $ throwIO $ DescribeFirstException "cannot get WebGL context"
 	-- create device
 	createIdRef <- newIORef 1
 	let device = WebGLDevice
@@ -667,21 +665,19 @@ webglUpdateContext WebGLContext
 		refSetup actualRef desiredRef setup = do
 			actual <- readIORef actualRef
 			desired <- readIORef desiredRef
-			if actual /= desired then do
+			when (actual /= desired) $ do
 				setup desired
 				writeIORef actualRef desired
-			else return ()
 
 	let
 		arraySetup :: Eq a => IOArray Int a -> IOArray Int a -> ([a] -> IO ()) -> IO ()
 		arraySetup actualArray desiredArray setup = do
 			actual <- getElems actualArray
 			desired <- getElems desiredArray
-			if actual /= desired then do
+			when (actual /= desired) $ do
 				setup desired
 				bounds <- getBounds desiredArray
 				forM_ (range bounds) $ \i -> writeArray actualArray i =<< readArray desiredArray i
-			else return ()
 
 	-- framebuffer
 	-- TODO: supporting only default framebuffer for now
@@ -744,10 +740,9 @@ webglUpdateContext WebGLContext
 			{ webglTextureId = textureId
 			, webglTextureTexture = jsTexture
 			}, _samplerState), i) -> do
-			if textureId > 0 then do
+			when (textureId > 0) $ do
 				js_activeTexture jsContext $ webgl_TEXTURE0 + i
 				js_bindTexture jsContext webgl_TEXTURE_2D jsTexture
-			else return ()
 
 	-- vertex buffers
 	arraySetup actualVertexBuffersArray desiredVertexBuffersArray $ \desiredVertexBuffers -> do

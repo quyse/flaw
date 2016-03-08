@@ -16,7 +16,6 @@ module Flaw.Visual.Geometry
 	) where
 
 import Control.Exception
-import Control.Monad
 import Control.Monad.Primitive
 import qualified Data.ByteString as B
 import Data.Foldable
@@ -101,7 +100,7 @@ emitGeometryAsset fileName getElement = do
 		initColladaCache bytes
 		createColladaVertices =<< parseGeometry =<< getElement
 	case eitherVertices of
-		Right vertices -> liftM S.encode $ runIO $ packGeometry (vertices :: V.Vector VertexPNT)
+		Right vertices -> fmap S.encode $ runIO $ packGeometry (vertices :: V.Vector VertexPNT)
 		Left err -> do
 			let msg = "failed to emit geometry asset " ++ fileName ++ ": " ++ T.unpack err
 			reportError msg

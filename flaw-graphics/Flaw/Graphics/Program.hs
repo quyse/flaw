@@ -73,7 +73,7 @@ withUndefinedM :: (a -> m (Node a)) -> m (Node a)
 withUndefinedM q = q undefined
 
 -- | Create vector as a combination of scalars/vectors.
-liftM concat $ forM
+fmap concat $ forM
 	[ [1, 1]
 	, [1, 1, 1], [1, 2], [2, 1]
 	, [1, 1, 1, 1], [1, 1, 2], [1, 2, 1], [2, 1, 1], [1, 3], [3, 1]]

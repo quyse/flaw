@@ -41,7 +41,7 @@ mathQuaternionTypeNamesWithPrefix :: [(Name, String)]
 mathQuaternionTypeNamesWithPrefix = [(''Float, "Float"), (''Double, "Double")]
 
 swizzleVariantFilter :: String -> String -> Bool
-swizzleVariantFilter components variant = all (\c -> elem c components) variant && elem (last components) variant
+swizzleVariantFilter components variant = all (`elem` components) variant && elem (last components) variant
 
 -- | Return list of swizzle variants for a given length.
 genSwizzleVariants :: Int -> [String]
@@ -50,7 +50,7 @@ genSwizzleVariants len = [c : v | c <- vecComponents, v <- genSwizzleVariants $ 
 
 -- | Add inline pragmas for all functions.
 addInlines :: [DecQ] -> Q [DecQ]
-addInlines qdecs = liftM concat $ forM qdecs $ \qdec -> do
+addInlines qdecs = fmap concat $ forM qdecs $ \qdec -> do
 	dec <- qdec
 	return $ case dec of
 		FunD funName _clauses -> [return dec, pragInlD funName Inline FunLike AllPhases]

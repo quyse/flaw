@@ -33,7 +33,7 @@ currentProtocolVersion = ProtocolVersion 1
 
 instance S.Serialize ProtocolVersion where
 	put (ProtocolVersion number) = S.put number
-	get = liftM ProtocolVersion S.get
+	get = fmap ProtocolVersion S.get
 
 data ClientHandshakePacket
 	= ClientHandshakePacket ProtocolVersion B.ByteString
@@ -103,7 +103,7 @@ serveArena socketSocket ticketWitness newArena = do
 			let play arena = do
 				reply ServerArenaStartedPacket
 				return $ playArena arena accountId arenaPass socket
-			action <- atomically $ do
+			join $ atomically $ do
 				-- kick account if logged into different arena
 				-- look for existing arena
 				arenas <- readTVar arenasVar
@@ -117,7 +117,6 @@ serveArena socketSocket ticketWitness newArena = do
 							_ <- forkIO $ finally (runArena arena) $ do
 								atomically $ modifyTVar' arenasVar $ M.delete arenaId
 							playAction
-			action
 
 		-- fork thread for client
 		let work = do

@@ -12,7 +12,6 @@ module Flaw.Window.Web.Canvas
 	) where
 
 import Control.Concurrent.STM
-import Control.Monad
 import Data.Maybe
 import qualified Data.Text as T
 import GHCJS.Marshal
@@ -44,8 +43,8 @@ instance Window Canvas where
 	getWindowClientSize Canvas
 		{ canvasElement = domCanvas
 		} = do
-		width <- liftM floor $ DOM.getClientWidth domCanvas
-		height <- liftM floor $ DOM.getClientHeight domCanvas
+		width <- fmap floor $ DOM.getClientWidth domCanvas
+		height <- fmap floor $ DOM.getClientHeight domCanvas
 		return (width, height)
 	chanWindowEvents Canvas
 		{ canvasEventsChan = eventsChan

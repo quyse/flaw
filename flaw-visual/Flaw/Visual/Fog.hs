@@ -22,7 +22,7 @@ exponentialHeightFog eyePosition pointPosition fogParams = do
 	let k1 = x_ fogParams
 	let k2 = y_ fogParams
 	let generalCase = exp $ (exp (k1 * z_ eyePosition + k2) - exp (k1 * z_ pointPosition + k2)) / (z_ toPointDirection * k1)
-	let horizontalCase = exp $ (negate $ norm toPoint) * exp (k1 * z_ pointPosition + k2)
+	let horizontalCase = exp $ negate (norm toPoint) * exp (k1 * z_ pointPosition + k2)
 	temp $ if_ (abs (z_ toPointDirection) `less_` constf 0.01) horizontalCase generalCase
 
 -- | The same as `exponentialHeightFog`, but for infinitely far point.

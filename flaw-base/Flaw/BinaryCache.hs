@@ -14,7 +14,6 @@ module Flaw.BinaryCache
 	, newBinaryCacheHashMap
 	) where
 
-import Control.Monad
 import qualified Data.ByteString as B
 import qualified Data.HashMap.Strict as HM
 import Data.IORef
@@ -35,8 +34,8 @@ instance BinaryCache NullBinaryCache where
 newtype BinaryCacheHashMap = BinaryCacheHashMap (IORef (HM.HashMap B.ByteString B.ByteString))
 
 instance BinaryCache BinaryCacheHashMap where
-	getCachedBinary (BinaryCacheHashMap hmRef) key = liftM (HM.lookupDefault B.empty key) $ readIORef hmRef
+	getCachedBinary (BinaryCacheHashMap hmRef) key = fmap (HM.lookupDefault B.empty key) $ readIORef hmRef
 	setCachedBinary (BinaryCacheHashMap hmRef) key value = modifyIORef' hmRef $ HM.insert key value
 
 newBinaryCacheHashMap :: IO BinaryCacheHashMap
-newBinaryCacheHashMap = liftM BinaryCacheHashMap $ newIORef HM.empty
+newBinaryCacheHashMap = fmap BinaryCacheHashMap $ newIORef HM.empty

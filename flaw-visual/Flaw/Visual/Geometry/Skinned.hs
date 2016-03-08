@@ -127,7 +127,7 @@ emitTextureAnimatedSkinnedGeometryAsset fileName getNodeElement getSkinElement t
 				(2 / fromIntegral height) (1 / fromIntegral height)
 				(0.5 / fromIntegral width) (fromIntegral i / fromIntegral (V.length animations) + 0.5 / fromIntegral height)
 			animationOffsetsBytes <- runIO $ packVector animationOffsets
-			return $ S.encode $ PackedSkinnedGeometry
+			return $ S.encode PackedSkinnedGeometry
 				{ packedSkinnedGeometryGeometry = packedGeometry
 				, packedSkinnedGeometryAnimationTexture = PackedTexture
 					{ packedTextureBytes = textureBytes

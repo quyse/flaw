@@ -78,7 +78,7 @@ instance System DXGISystem where
 				-- enumerate modes
 				modeDescs <- alloca $ \modesCountPtr -> do
 					hresultCheck =<< m_IDXGIOutput_GetDisplayModeList output (wrapEnum DXGI_FORMAT_R8G8B8A8_UNORM) 0 modesCountPtr nullPtr
-					modesCount <- liftM fromIntegral $ peek modesCountPtr
+					modesCount <- fmap fromIntegral $ peek modesCountPtr
 					allocaArray modesCount $ \modeDescsPtr -> do
 						hresultCheck =<< m_IDXGIOutput_GetDisplayModeList output (wrapEnum DXGI_FORMAT_R8G8B8A8_UNORM) 0 modesCountPtr modeDescsPtr
 						peekArray modesCount modeDescsPtr
@@ -119,7 +119,7 @@ displayModeInfoFromDesc desc = info where
 		{ displayModeName = T.pack $ show desc
 		, displayModeWidth = fromIntegral $ f_DXGI_MODE_DESC_Width desc
 		, displayModeHeight = fromIntegral $ f_DXGI_MODE_DESC_Height desc
-		, displayModeRefreshRate = (fromIntegral $ f_DXGI_RATIONAL_Numerator refreshRate) % (fromIntegral $ f_DXGI_RATIONAL_Denominator refreshRate)
+		, displayModeRefreshRate = fromIntegral (f_DXGI_RATIONAL_Numerator refreshRate) % fromIntegral (f_DXGI_RATIONAL_Denominator refreshRate)
 		}
 	refreshRate = f_DXGI_MODE_DESC_RefreshRate desc
 

@@ -30,7 +30,7 @@ main = do
 
 	let registerFunction n f = luaValueSet env (LuaString n) =<< luaNewClosure f
 
-	registerFunction "measure_time" $ \((LuaClosure { luaClosure = f }) : as) -> do
+	registerFunction "measure_time" $ \(LuaClosure { luaClosure = f } : as) -> do
 		t1 <- getCurrentTime
 		rs <- f as
 		t2 <- getCurrentTime

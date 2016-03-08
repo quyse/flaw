@@ -80,7 +80,7 @@ serverRepoMaxRevision ServerRepo
 	} = do
 	sqliteQuery stmtGetMaxRevision $ \query -> do
 		r <- sqliteStep query
-		when (not r) $ throwIO $ DescribeFirstException "failed to get server repo max revision"
+		unless r $ throwIO $ DescribeFirstException "failed to get server repo max revision"
 		sqliteColumn query 0
 
 -- | Sync operation.
@@ -114,7 +114,7 @@ syncServerRepo repo@ServerRepo
 	lag <- sqliteQuery stmtPullTotalSize $ \query -> do
 		sqliteBind query 1 clientRevision
 		r <- sqliteStep query
-		when (not r) $ throwIO $ DescribeFirstException "failed to determine total pull size"
+		unless r $ throwIO $ DescribeFirstException "failed to determine total pull size"
 		sqliteColumn query 0
 
 	-- loop for push items
@@ -164,7 +164,7 @@ syncServerRepo repo@ServerRepo
 		sqliteBind query 1 lastKnownClientRevision
 		sqliteBind query 2 clientUpperRevision
 		r <- sqliteStep query
-		if r then liftM (+ (-1)) $ sqliteColumn query 0
+		if r then fmap (+ (-1)) $ sqliteColumn query 0
 		else return clientUpperRevision
 
 	-- commit transaction

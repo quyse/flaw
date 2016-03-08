@@ -110,7 +110,7 @@ renderQuads QuadRenderer
 
 	let flush = do
 		count <- liftIO $ readIORef bufferIndexRef
-		if count > 0 then do
+		when (count > 0) $ do
 			-- upload data to vertex buffer
 			let (foreignPtr, _size) = VSM.unsafeToForeignPtr0 buffer
 			bytes <- liftIO $ B.unsafePackCStringLen (castPtr $ unsafeForeignPtrToPtr foreignPtr, count * 6 * sizeOf (undefined :: Float4))
@@ -118,7 +118,6 @@ renderQuads QuadRenderer
 			liftIO $ touchForeignPtr foreignPtr
 			-- render batch
 			renderDraw $ count * 6
-		else return ()
 		liftIO $ writeIORef bufferIndexRef 0
 
 	Vec4 viewportLeft viewportTop viewportRight viewportBottom <- renderGetViewport
@@ -131,8 +130,7 @@ renderQuads QuadRenderer
 		} -> do
 		do
 			bufferIndex <- liftIO $ readIORef bufferIndexRef
-			if bufferIndex >= capacity then flush
-			else return ()
+			when (bufferIndex >= capacity) flush
 		liftIO $ do
 			let Vec4 p1x p1y p2x p2y = position * viewportScale + viewportOffset
 			bufferIndex <- readIORef bufferIndexRef

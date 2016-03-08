@@ -108,7 +108,7 @@ instance Element EditBox where
 			}
 		} (Vec2 px py) = do
 		passwordMode <- readTVar passwordModeVar
-		text <- liftM (\text -> if passwordMode then T.map (const '●') text else text) $ readTVar textVar
+		text <- fmap (\text -> if passwordMode then T.map (const '●') text else text) $ readTVar textVar
 		textScript <- readTVar textScriptVar
 		Vec2 sx sy <- readTVar sizeVar
 		moused <- readTVar mousedVar
@@ -177,12 +177,12 @@ instance Element EditBox where
 						return newScroll
 					else return scroll
 
-			let textXY@(Vec2 textX _textY) = Vec2 (fromIntegral px + 1 + textOffsetX - scroll) (fromIntegral py + 1 + ((fromIntegral $ sy - 2) - boxTop - boxBottom) * 0.5)
+			let textXY@(Vec2 textX _textY) = Vec2 (fromIntegral px + 1 + textOffsetX - scroll) (fromIntegral py + 1 + (fromIntegral (sy - 2) - boxTop - boxBottom) * 0.5)
 			let selectionTop = fromIntegral (py + 1) + (fromIntegral (sy - 2) - (boxBottom - boxTop)) * 0.5
 			let selectionBottom = fromIntegral (py + 1) + (fromIntegral (sy - 2) + (boxBottom - boxTop)) * 0.5
 
 			-- draw selection
-			when (not $ T.null textSelected) $ do
+			unless (T.null textSelected) $ do
 				drawBorderedRectangle canvas
 					(Vec4 (floor $ textX + selectionMinX - 1) (floor $ textX + selectionMinX) (floor $ textX + selectionMaxX + 1) (floor $ textX + selectionMaxX + 2))
 					(Vec4 (floor selectionTop) (floor $ selectionTop + 1) (floor $ selectionBottom - 1) (floor selectionBottom))

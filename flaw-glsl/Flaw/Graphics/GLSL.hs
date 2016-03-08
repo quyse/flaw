@@ -197,7 +197,7 @@ glslGenerateProgram GlslConfig
 			}
 
 		-- GLSL fragment targets
-		resFragmentTargets = if configInOutSyntax then concat $ map resFragmentTarget targets else []
+		resFragmentTargets = if configInOutSyntax then concatMap resFragmentTarget targets else []
 		resFragmentTarget target = case target of
 			PositionTarget _ -> []
 			ColorTarget slot _ -> [GlslFragmentTarget
@@ -246,8 +246,8 @@ glslGenerateProgram GlslConfig
 			{ tempIndex = i
 			, tempType = t
 			} = (if configInOutSyntax then "out " else "varying ") <> valueTypeSource t <> " " <> interpolantName i <> ";\n"
-		otherShaderInfos = concat $ map (\(otherStage, otherShaderInfo) -> if otherStage == stage then [] else [otherShaderInfo]) shaders
-		tempUsedByOtherStage i = or $ map (any (i ==) . map tempIndex . SL.shaderTemps) otherShaderInfos
+		otherShaderInfos = concatMap (\(otherStage, otherShaderInfo) -> if otherStage == stage then [] else [otherShaderInfo]) shaders
+		tempUsedByOtherStage i = any (elem i . map tempIndex . SL.shaderTemps) otherShaderInfos
 
 		-- uniform blocks source
 		uniformBlocks = groupBy eqUniformBySlot $ sortBy compareUniformBySlot uniforms
@@ -258,7 +258,7 @@ glslGenerateProgram GlslConfig
 			blockSource = foldr mappend mempty $ map uniformInBlockSource $ addBlockGaps blockUniforms 0
 			uniformInBlockSource u = "\t" <> uniformDefinitionSource u
 			addBlockGaps ua@(u:us) offset
-				| advance == 0 = u : (addBlockGaps us $ offset + (valueTypeScalarsCount $ uniformType u) * count * 4)
+				| advance == 0 = u : addBlockGaps us (offset + valueTypeScalarsCount (uniformType u) * count * 4)
 				| advance `mod` 4 == 0 && advance >= 4 = Uniform
 					{ uniformSlot = uniformSlot u
 					, uniformOffset = offset

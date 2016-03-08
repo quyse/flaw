@@ -42,7 +42,6 @@ module Flaw.FFI.Win32
 	, winUTF16ToText
 	) where
 
-import Control.Monad
 import qualified Data.ByteString.Builder as BSB
 import qualified Data.ByteString.Lazy as BL
 import Data.Bits
@@ -108,7 +107,7 @@ loadLibrary name = withCWString name winapi_loadLibraryW
 foreign import stdcall safe "LoadLibraryW" winapi_loadLibraryW :: CWString -> IO HMODULE
 
 getProcAddress :: HMODULE -> String -> IO (FunPtr a)
-getProcAddress hmodule functionName = liftM castPtrToFunPtr $ withCString functionName $ winapi_getProcAddress hmodule
+getProcAddress hmodule functionName = fmap castPtrToFunPtr $ withCString functionName $ winapi_getProcAddress hmodule
 
 foreign import stdcall safe "GetProcAddress" winapi_getProcAddress :: HMODULE -> CString -> IO (Ptr ())
 

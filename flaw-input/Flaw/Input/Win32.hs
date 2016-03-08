@@ -234,10 +234,10 @@ initWin32Input window@Win32Window
 							(intPtrToPtr $ fromIntegral lParam)
 							(0x10000003 {- RID_INPUT -})
 							blockPtr blockSizePtr (fromIntegral $ sizeOf (undefined :: RAWINPUTHEADER))
-					if r > 0 then do
+					when (r > 0) $ do
 						let eventHeaderPtr = castPtr blockPtr
 						let eventDataPtr = plusPtr blockPtr $ sizeOf (undefined :: RAWINPUTHEADER)
-						eventType <- liftM f_RAWINPUTHEADER_dwType $ peek eventHeaderPtr
+						eventType <- fmap f_RAWINPUTHEADER_dwType $ peek eventHeaderPtr
 						case eventType of
 							RIM_TYPEKEYBOARD -> do
 								keyboardData <- peek $ castPtr eventDataPtr
@@ -273,13 +273,11 @@ initWin32Input window@Win32Window
 								let lastY = f_RAWMOUSE_lLastY mouseData
 								let wheelChanged = (flags .&. 0x0400 {- RI_MOUSE_WHEEL -}) > 0
 
-								if lastX /= 0 || lastY /= 0 || wheelChanged then do
+								when (lastX /= 0 || lastY /= 0 || wheelChanged) $ do
 									let wheel = if wheelChanged then f_RAWMOUSE_usButtonData mouseData else 0
 									addMouseEvent $ RawMouseMoveEvent (fromIntegral lastX) (fromIntegral lastY) (fromIntegral wheel)
-								else return ()
 
 							_ -> return ()
-					else return ()
 			_ -> return ()
 
 	-- register raw input
@@ -298,7 +296,6 @@ initWin32Input window@Win32Window
 			}
 		] $ \ridPtr -> do
 		winapi_RegisterRawInputDevices ridPtr 2 (fromIntegral $ sizeOf (undefined :: RAWINPUTDEVICE))
-	if not success then throwIO $ DescribeFirstException "failed to register raw input"
-	else return ()
+	unless success $ throwIO $ DescribeFirstException "failed to register raw input"
 
 	return inputManager

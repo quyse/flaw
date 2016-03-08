@@ -69,13 +69,13 @@ instance System GlSystem where
 		-- get video drivers
 		driversCount <- SDL.getNumVideoDrivers
 		drivers <- forM [0..(driversCount - 1)] $ \i -> do
-			name <- liftM T.decodeUtf8 (B.unsafePackCString =<< SDL.getVideoDriver i)
+			name <- fmap T.decodeUtf8 (B.unsafePackCString =<< SDL.getVideoDriver i)
 			return (i, name)
 
 		-- get displays
 		displaysCount <- SDL.getNumVideoDisplays
 		displays <- forM [0..(displaysCount - 1)] $ \i -> do
-			name <- liftM T.decodeUtf8 (B.unsafePackCString =<< SDL.getDisplayName i)
+			name <- fmap T.decodeUtf8 (B.unsafePackCString =<< SDL.getDisplayName i)
 			modesCount <- SDL.getNumDisplayModes i
 			modes <- alloca $ \modePtr -> forM [0..(modesCount - 1)] $ \j -> do
 				checkSdlError (== 0) $ SDL.getDisplayMode i j modePtr
@@ -602,7 +602,7 @@ instance Device GlContext where
 			, glslProgramSamplers = samplers
 			, glslProgramFragmentTargets = fragmentTargets
 			, glslProgramShaders = shaders
-			} <- liftM (glslGenerateProgram glslConfig) $ runProgram program
+			} <- fmap (glslGenerateProgram glslConfig) $ runProgram program
 
 		-- create program
 		programName <- book bk $ do
@@ -713,7 +713,7 @@ instance Device GlContext where
 					len <- alloca $ \lenPtr -> do
 						glGetProgramiv programName GL_PROGRAM_BINARY_LENGTH lenPtr
 						glCheckErrors 0 "get binary program length"
-						liftM fromIntegral $ peek lenPtr
+						fmap fromIntegral $ peek lenPtr
 					when (len > 0) $ do
 						bytesPtr <- mallocBytes len
 						binaryProgram <- alloca $ \formatPtr -> do
@@ -1144,12 +1144,12 @@ instance Presenter GlContext GlSystem GlContext GlContext where
 		-- get viewport size
 		(width, height) <- alloca $ \widthPtr -> alloca $ \heightPtr -> do
 			SDL.glGetDrawableSize windowHandle widthPtr heightPtr
-			width <- liftM fromIntegral $ peek widthPtr
-			height <- liftM fromIntegral $ peek heightPtr
+			width <- fmap fromIntegral $ peek widthPtr
+			height <- fmap fromIntegral $ peek heightPtr
 			return (width, height)
 
 		-- setup state
-		writeIORef frameBufferRef $ GlFrameBufferId
+		writeIORef frameBufferRef GlFrameBufferId
 			{ glFrameBufferName = 0
 			, glFrameBufferWidth = width
 			, glFrameBufferHeight = height
@@ -1270,7 +1270,7 @@ createGlContext _deviceId window@SdlWindow
 				0x9148 -> "GL_DEBUG_SEVERITY_LOW"
 				0x826B -> "GL_DEBUG_SEVERITY_NOTIFICATION"
 				_ -> show messageSeverity
-			message <- liftM T.decodeUtf8 $ B.unsafePackCStringLen (messagePtr, fromIntegral messageLength)
+			message <- fmap T.decodeUtf8 $ B.unsafePackCStringLen (messagePtr, fromIntegral messageLength)
 			putStrLn $ "*** OpenGL debug message ***" ++
 				"\n  source:    " ++ messageSourceStr ++
 				"\n  type:      " ++ messageTypeStr ++
@@ -1301,7 +1301,7 @@ glNullProgram = GlProgramId
 
 glCreateContextState :: IO GlContextState
 glCreateContextState = do
-	frameBuffer <- newIORef $ GlFrameBufferId
+	frameBuffer <- newIORef GlFrameBufferId
 		{ glFrameBufferName = 0
 		, glFrameBufferWidth = 0
 		, glFrameBufferHeight = 0
@@ -1344,7 +1344,7 @@ glSetDefaultContextState GlContextState
 	, glContextStateDepthWrite = depthWriteRef
 	, glContextStateBlendState = blendStateRef
 	} = do
-	writeIORef frameBufferRef $ GlFrameBufferId
+	writeIORef frameBufferRef GlFrameBufferId
 		{ glFrameBufferName = 0
 		, glFrameBufferWidth = 0
 		, glFrameBufferHeight = 0
@@ -1479,7 +1479,7 @@ glUpdateContext context@GlContext
 			writeIORef actualIndexBufferRef $ GlIndexBufferId (-1) 0
 
 	-- uniform buffers
-	uniformBindings <- liftM glProgramUniforms $ readIORef desiredProgramRef
+	uniformBindings <- fmap glProgramUniforms $ readIORef desiredProgramRef
 	forM_ [0..(VM.length actualUniformBuffersVector - 1)] $ \i -> do
 		actualUniformBuffer <- VM.read actualUniformBuffersVector i
 		desiredUniformBuffer <- VM.read desiredUniformBuffersVector i
@@ -1572,7 +1572,7 @@ glUpdateContext context@GlContext
 			glCheckErrors 0 "bind array buffer"
 
 			-- bind attributes
-			attributeSlots <- liftM glProgramAttributeSlots $ readIORef desiredProgramRef
+			attributeSlots <- fmap glProgramAttributeSlots $ readIORef desiredProgramRef
 			V.forM_ attributeSlots $ \GlAttributeSlot
 				{ glAttributeSlotElements = elements
 				, glAttributeSlotDivisor = divisor
@@ -1600,7 +1600,7 @@ glUpdateContext context@GlContext
 						glCheckErrors 0 "vertex attrib divisor"
 
 	-- disable unused attributes
-	newBoundAttributesCount <- liftM glProgramAttributesCount $ readIORef desiredProgramRef
+	newBoundAttributesCount <- fmap glProgramAttributesCount $ readIORef desiredProgramRef
 	oldBoundAttributesCount <- readIORef boundAttributesCountRef
 	forM_ [newBoundAttributesCount .. (oldBoundAttributesCount - 1)] $ \i -> do
 		glDisableVertexAttribArray (fromIntegral i)

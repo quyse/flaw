@@ -4,7 +4,7 @@ Description: General Window framework.
 License: MIT
 -}
 
-{-# LANGUAGE GADTs, TypeFamilies, DeriveDataTypeable #-}
+{-# LANGUAGE GADTs, TypeFamilies #-}
 
 module Flaw.Window
 	( Window(..)

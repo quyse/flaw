@@ -17,7 +17,6 @@ module Flaw.FFI
 	, forwardRef
 	) where
 
-import Control.Monad
 import Foreign.Marshal.Array
 import Foreign.Ptr
 import Foreign.Storable
@@ -46,7 +45,7 @@ genEnum underlyingType typeName es = do
 		instance Storable $(conT $ mkName typeName) where
 			sizeOf _ = sizeOf (undefined :: $(underlyingType))
 			alignment _ = alignment (undefined :: $(underlyingType))
-			peek addr = liftM (toEnum . fromIntegral) (peek (castPtr addr) :: IO $(underlyingType))
+			peek addr = fmap (toEnum . fromIntegral) (peek (castPtr addr) :: IO $(underlyingType))
 			poke addr val = poke (castPtr addr) ((fromIntegral $ fromEnum val) :: $(underlyingType))
 		|]
 	return $ dataDec : enumDec : storableDecs
@@ -66,7 +65,7 @@ data Field = Field
 
 -- | Check if list is no more that specified limit.
 listNoLongerThan :: [a] -> Int -> Bool
-listNoLongerThan (_:xs) len = if len <= 0 then False else listNoLongerThan xs $ len - 1
+listNoLongerThan (_:xs) len = len > 0 && listNoLongerThan xs (len - 1)
 listNoLongerThan [] _ = True
 
 -- | Poke array with length limit.
@@ -158,7 +157,7 @@ genStructWithArrays :: String -> [(TypeQ, String, Int)] -> Q [Dec]
 genStructWithArrays typeName fs = do
 	(fields, endExp) <- processFields typeName fs
 	dataDec <- dataD (return []) (mkName typeName) [] [recC (mkName typeName) $ map dataFieldDec fields] [''Show]
-	fieldsDecs <- liftM concat $ sequence $ map (sequence . fieldDecs) fields
+	fieldsDecs <- fmap concat $ mapM (sequence . fieldDecs) fields
 	let sizeOfName = mkName $ "struct_sizeOf_" ++ typeName
 	let alignmentName = mkName $ "struct_alignment_" ++ typeName
 	structDecs <- sequence
@@ -190,8 +189,8 @@ genStructWithEndUnion typeName hfs selectorIndex ufs = do
 	(headerFields, headerEndExp) <- processFields typeName hfs
 	unionFields <- mapM (\(_ufe, uft, ufn) -> processField typeName uft ufn 0 headerEndExp) ufs
 	dataDec <- dataD (return []) (mkName typeName) [] [recC (mkName $ typeName ++ "_" ++ (fieldNameStr unionField)) $ map dataFieldDec $ headerFields ++ [unionField] | unionField <- unionFields] [''Show]
-	headerFieldsDecs <- liftM concat $ sequence $ map (sequence . fieldDecs) headerFields
-	unionFieldsDecs <- liftM concat $ sequence $ map (sequence . fieldDecs) unionFields
+	headerFieldsDecs <- fmap concat $ mapM (sequence . fieldDecs) headerFields
+	unionFieldsDecs <- fmap concat $ mapM (sequence . fieldDecs) unionFields
 	let sizeOfName = mkName $ "struct_sizeOf_" ++ typeName
 	let alignmentName = mkName $ "struct_alignment_" ++ typeName
 	structDecs <- sequence

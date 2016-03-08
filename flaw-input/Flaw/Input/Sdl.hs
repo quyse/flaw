@@ -11,6 +11,7 @@ module Flaw.Input.Sdl
 
 import Control.Concurrent.STM
 import Control.Exception
+import Control.Monad
 import qualified Data.ByteString.Unsafe as B
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
@@ -145,7 +146,7 @@ initSdlInput window = do
 				bytes <- B.unsafePackCStringLen (ptr, len)
 				case T.decodeUtf8' bytes of
 					Left _e -> return ()
-					Right t -> if T.length t == 0 then return () else do
+					Right t -> unless (T.length t == 0) $ do
 						char <- evaluate $ T.head t
 						addKeyboardEvent $ CharEvent char
 			SDL.MouseButtonEvent

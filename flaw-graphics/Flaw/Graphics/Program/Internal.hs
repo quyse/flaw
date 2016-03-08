@@ -122,7 +122,7 @@ instance OfValueType Bool where
 	valueType _ = ScalarValueType ScalarBool
 
 -- instance (OfScalarType a, Vectorized a) => OfValueType (Vec{1..4} a)
-liftM concat $ forM [1..maxVecDimension] $ \c -> do
+fmap concat $ forM [1..maxVecDimension] $ \c -> do
 	let name = mkName $ "Vec" ++ [intToDigit c]
 	let t = conT name
 	let d = conE $ mkName $ "Dimension" ++ [intToDigit c]
@@ -134,7 +134,7 @@ liftM concat $ forM [1..maxVecDimension] $ \c -> do
 		|]
 
 -- instance (OfScalarType a, Vectorized a) => OfValueType (Mat{1..4}x{1..4} a)
-liftM concat $ forM matDimensions $ \(ci, cj) -> do
+fmap concat $ forM matDimensions $ \(ci, cj) -> do
 	let name = mkName $ "Mat" ++ [intToDigit ci, 'x', intToDigit cj]
 	let t = conT name
 	let di = conE $ mkName $ "Dimension" ++ [intToDigit ci]

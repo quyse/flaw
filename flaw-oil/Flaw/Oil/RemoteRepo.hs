@@ -42,7 +42,7 @@ initHttpRemoteRepo httpManager url = do
 		{ H.method = H.methodGet
 		, H.queryString = T.encodeUtf8 $ T.pack "manifest"
 		}
-	body <- tryFewTimes $ H.withResponse request httpManager $ liftM BL.fromChunks . H.brConsume . H.responseBody
+	body <- tryFewTimes $ H.withResponse request httpManager $ fmap BL.fromChunks . H.brConsume . H.responseBody
 	manifest <- case S.decodeLazy body of
 		Right manifest -> return manifest
 		Left err -> throwIO $ DescribeFirstException ("failed to parse manifest", err)
@@ -64,7 +64,7 @@ syncHttpRemoteRepo HttpRemoteRepo
 		, H.requestBody = H.RequestBodyLBS $ S.encodeLazy push
 		}
 	-- send request
-	body <- tryFewTimes $ H.withResponse request httpManager $ liftM BL.fromChunks . H.brConsume . H.responseBody
+	body <- tryFewTimes $ H.withResponse request httpManager $ fmap BL.fromChunks . H.brConsume . H.responseBody
 	-- decode body
 	case S.decodeLazy body of
 		Right p -> return p
@@ -82,7 +82,7 @@ watchHttpRemoteRepo HttpRemoteRepo
 		, H.requestBody = H.RequestBodyLBS $ S.encodeLazy clientRevision
 		}
 	-- send request
-	body <- H.withResponse request httpManager $ liftM BL.fromChunks . H.brConsume . H.responseBody
+	body <- H.withResponse request httpManager $ fmap BL.fromChunks . H.brConsume . H.responseBody
 	-- decode body
 	case S.decodeLazy body of
 		Right serverRevision -> return serverRevision
@@ -97,8 +97,8 @@ tryFewTimes io = do
 	let throttle timeBefore = do
 		let throttlePause = 5000000 -- microseconds
 		timeAfter <- getCurrentTime
-		let pause = max 0 $ min throttlePause $ throttlePause - (floor $ diffUTCTime timeAfter timeBefore)
-		when (pause > 0) $ threadDelay $ pause
+		let pause = max 0 $ min throttlePause $ throttlePause - floor (diffUTCTime timeAfter timeBefore)
+		when (pause > 0) $ threadDelay pause
 
 	let trying i = do
 		timeBefore <- getCurrentTime

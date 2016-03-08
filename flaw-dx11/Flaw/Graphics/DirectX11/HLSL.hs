@@ -109,19 +109,19 @@ hlslGenerateProgram state = program where
 		source = inputsSource <> outputsSource <> uniformBuffersSource <> samplersSource <> codeSource
 
 		-- inputs source
-		inputsSource = "struct Input\n{\n" <> (foldr mappend mempty $ map varSource inputs) <> "};\n"
+		inputsSource = "struct Input\n{\n" <> foldr mappend mempty (map varSource inputs) <> "};\n"
 		inputs = map varAttribute attributes ++ map varInterpolant inInterpolants
 		-- in-interpolants are temps used during this stage, but defined at another stage
 		inInterpolants = filter (\temp -> tempStage temp /= stage) temps
 
 		-- outputs source
-		outputsSource = "struct Output\n{\n" <> (foldr mappend mempty $ map varSource outputs) <> "};\n"
+		outputsSource = "struct Output\n{\n" <> foldr mappend mempty (map varSource outputs) <> "};\n"
 		-- important: targets should be after interpolants, to have them in the same registers in accepting stage
-		outputs = map varInterpolant outInterpolants ++ concat (map varsTarget targets)
+		outputs = map varInterpolant outInterpolants ++ concatMap varsTarget targets
 		-- out-interpolants are temps defined at this stage, but used by some other stage
 		outInterpolants = filter (\temp -> tempStage temp == stage && tempUsedByOtherStage (tempIndex temp)) temps
-		otherShaderInfos = concat $ map (\(otherStage, otherShaderInfo) -> if otherStage == stage then [] else [otherShaderInfo]) shaders
-		tempUsedByOtherStage i = or $ map (any (i ==) . map tempIndex . SL.shaderTemps) otherShaderInfos
+		otherShaderInfos = concatMap (\(otherStage, otherShaderInfo) -> if otherStage == stage then [] else [otherShaderInfo]) shaders
+		tempUsedByOtherStage i = any (elem i . map tempIndex . SL.shaderTemps) otherShaderInfos
 
 		-- uniform buffers source
 		uniformBuffers = groupBy eqUniformBySlot $ sortBy compareUniformBySlot uniforms

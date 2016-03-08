@@ -100,13 +100,13 @@ instance Show (LuaValue m) where
 		LuaString t -> enclose $ \qq -> "LuaString " ++ showsPrec 10 t qq
 		LuaClosure
 			{ luaClosureUnique = u
-			} -> enclose $ \qq -> "LuaClosure { luaClosureUnique = " ++ showsPrec 0 (hashUnique u) qq
+			} -> enclose $ \qq -> "LuaClosure { luaClosureUnique = " ++ shows (hashUnique u) qq
 		LuaUserData
 			{ luaUserDataUnique = u
-			} -> enclose $ \qq -> "LuaUserData { luaUserDataUnique = " ++ showsPrec 0 (hashUnique u) qq
+			} -> enclose $ \qq -> "LuaUserData { luaUserDataUnique = " ++ shows (hashUnique u) qq
 		LuaTable
 			{ luaTableUnique = u
-			} -> enclose $ \qq -> "LuaTable { luaTableUnique = " ++ showsPrec 0 (hashUnique u) qq
+			} -> enclose $ \qq -> "LuaTable { luaTableUnique = " ++ shows (hashUnique u) qq
 		where enclose f = if p >= 10 then '(' : f (')' : q) else f q
 
 data LuaError m

@@ -14,6 +14,7 @@ module Flaw.Game.TlsSocket
 import Control.Exception
 import Control.Concurrent
 import Control.Concurrent.STM
+import Control.Monad
 import Data.Default.Class
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
@@ -74,8 +75,8 @@ runTlsSocket params underlyingSocket = do
 	let backend = TLS.Backend
 		{ TLS.backendFlush = return ()
 		, TLS.backendClose = atomically $ send underlyingSocket B.empty
-		, TLS.backendSend = \bytes -> atomically $ send underlyingSocket bytes
-		, TLS.backendRecv = \len -> atomically $ receiveBytes underlyingSocket len
+		, TLS.backendSend = atomically . send underlyingSocket
+		, TLS.backendRecv = atomically . receiveBytes underlyingSocket
 		}
 
 	-- create context
@@ -90,8 +91,7 @@ runTlsSocket params underlyingSocket = do
 	_ <- forkIO $ do
 		let loop = do
 			bytes <- atomically $ readTBQueue sendQueue
-			if B.null bytes then return ()
-			else do
+			unless (B.null bytes) $ do
 				TLS.sendData context $ BL.fromStrict bytes
 				loop
 		finally loop $ do
@@ -107,8 +107,7 @@ runTlsSocket params underlyingSocket = do
 	_ <- forkIO $ do
 		let loop = do
 			bytes <- TLS.recvData context
-			if B.null bytes then return ()
-			else do
+			unless (B.null bytes) $ do
 				atomically $ writeTBQueue receiveQueue bytes
 				loop
 		finally loop $ do

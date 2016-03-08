@@ -81,7 +81,7 @@ newRemapAssetPackBuilder assetPackBuilder remap = do
 	return $ RemapAssetPackBuilder assetPackBuilder remap idsVar
 
 saveRemapAssetPackBuilder :: (S.Serialize ai, S.Serialize (AssetId ap)) => AssetPackBuilder (RemapAssetPack ap ai) -> IO B.ByteString
-saveRemapAssetPackBuilder (RemapAssetPackBuilder _assetPackBuilder _remap idsVar) = liftM (S.encode . HM.toList) $ readTVarIO idsVar
+saveRemapAssetPackBuilder (RemapAssetPackBuilder _assetPackBuilder _remap idsVar) = fmap (S.encode . HM.toList) $ readTVarIO idsVar
 
 handler :: (Typeable ai, Show ai) => ai -> SomeException -> IO a
 handler assetId e = throwIO AssetError
@@ -91,4 +91,4 @@ handler assetId e = throwIO AssetError
 
 -- | One particular function suitable for generating "hashed" names.
 remapAssetWithHash :: T.Text -> B.ByteString -> T.Text
-remapAssetWithHash assetId asset = (T.decodeUtf8 $ BA.convertToBase BA.Base64URLUnpadded $ BA.takeView (C.hashFinalize $ C.hashUpdate C.hashInit asset :: C.Digest C.SHA256) 10) <> "-" <> assetId
+remapAssetWithHash assetId asset = T.decodeUtf8 (BA.convertToBase BA.Base64URLUnpadded $ BA.takeView (C.hashFinalize $ C.hashUpdate C.hashInit asset :: C.Digest C.SHA256) 10) <> "-" <> assetId

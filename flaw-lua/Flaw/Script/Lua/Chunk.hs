@@ -79,11 +79,11 @@ luaCompileChunk bytes = do
 		chunkHeader <- S.getByteString (B.length luaChunkHeader)
 		when (chunkHeader /= luaChunkHeader) $ fail "wrong Lua chunk header"
 
-		let getInt = liftM fromIntegral S.getWord32le :: S.Get Int
+		let getInt = fmap fromIntegral S.getWord32le :: S.Get Int
 
 		let getString = do
 			b <- S.getWord8
-			size <- if b == 0xff then liftM fromIntegral S.getWordhost else return $ fromIntegral b
+			size <- if b == 0xff then fmap fromIntegral S.getWordhost else return $ fromIntegral b
 			if size == 0 then return B.empty
 			else S.getByteString $ size - 1
 
@@ -93,9 +93,9 @@ luaCompileChunk bytes = do
 			source <- getString
 			lineDefined <- getInt
 			lastLineDefined <- getInt
-			numParams <- liftM fromIntegral S.getWord8
-			isVararg <- liftM ( > 0) S.getWord8
-			maxStackSize <- liftM fromIntegral S.getWord8
+			numParams <- fmap fromIntegral S.getWord8
+			isVararg <- fmap ( > 0) S.getWord8
+			maxStackSize <- fmap fromIntegral S.getWord8
 
 			-- opcodes
 			opcodesCount <- getInt
@@ -111,13 +111,13 @@ luaCompileChunk bytes = do
 				case t of
 					LUA_TNIL -> return [| LuaNil |]
 					LUA_TBOOLEAN -> do
-						b <- liftM ( > 0) S.getWord8
+						b <- fmap ( > 0) S.getWord8
 						return [| LuaBoolean b |]
 					LUA_TNUMFLT -> do
 						n <- S.getFloat64le
 						return [| LuaReal n |]
 					LUA_TNUMINT -> do
-						n <- liftM fromIntegral S.getWord64host :: S.Get Int
+						n <- fmap fromIntegral S.getWord64host :: S.Get Int
 						return [| LuaInteger n |]
 					LUA_TSHRSTR -> getStringConstant
 					LUA_TLNGSTR -> getStringConstant
@@ -284,7 +284,7 @@ compileLuaFunction LuaProto
 		nextInstId = i + 1
 		nextNextInstId = i + 2
 		-- append next instruction
-		normalFlow e = LuaInst [nextInstId] $ \[nextInstCode] codeState -> liftM ((noBindS e) :) $ nextInstCode codeState
+		normalFlow e = LuaInst [nextInstId] $ \[nextInstCode] codeState -> fmap ((noBindS e) :) $ nextInstCode codeState
 		-- conditional operation
 		condbinop op = LuaInst [nextInstId, nextNextInstId] $ \[nextInstCode, nextNextInstCode] codeState -> do
 			nextInstStmts <- nextInstCode codeState
@@ -310,21 +310,21 @@ compileLuaFunction LuaProto
 			} = case eargs of
 			Right args -> do
 				when (top >= 0) $ reportError "flaw-lua: dynamic values are lost"
-				(stmts, argsEs) <- liftM unzip $ mapM staticArgStmtAndExp args
+				(stmts, argsEs) <- fmap unzip $ mapM staticArgStmtAndExp args
 				return (stmts, listE argsEs)
 			Left firstArg -> do
 				when (top < 0) $ reportError "flaw-lua: expected dynamic values for opcode"
-				(stmts, argsEs) <- liftM unzip $ mapM staticArgStmtAndExp [firstArg .. (top - 1)]
+				(stmts, argsEs) <- fmap unzip $ mapM staticArgStmtAndExp [firstArg .. (top - 1)]
 				return (stmts, foldr (\p q -> [| $p : $q |]) topValuesE argsEs)
 		putRets :: Either Int [Int] -> ExpQ -> LuaCode -> LuaCodeState -> Q [StmtQ]
 		putRets erets mainE nextInstCode codeState = case erets of
 			Right rets -> do
-				(retsStmts, retsPats) <- liftM unzip $ forM rets $ \j -> do
+				(retsStmts, retsPats) <- fmap unzip $ forM rets $ \j -> do
 					n <- newName $ "r" ++ show j
 					return (noBindS [| writeMutVar $(r j) $(varE n) |], varP n)
 				let retPat = foldr (\p q -> [p| $p : $q |]) wildP retsPats
 				let mainStmt = if null rets then noBindS [| void $mainE |]
-					else bindS retPat [| liftM (++ repeat LuaNil) $mainE |]
+					else bindS retPat [| fmap (++ repeat LuaNil) $mainE |]
 				nextInstStmts <- nextInstCode codeState
 					{ luaCodeStateTop = -1
 					}
@@ -553,7 +553,7 @@ compileLuaFunction LuaProto
 		return $ f followingInstsCodes
 	-- emit stmts for all instructions with >1 ref
 	-- instructions with 1 ref will be emitted automatically
-	sharedInstructionsDecs <- liftM (concat . V.toList) $ V.generateM (VU.length opcodes) $ \i ->
+	sharedInstructionsDecs <- fmap (concat . V.toList) $ V.generateM (VU.length opcodes) $ \i ->
 		if instructionsRefCounts VU.! i > 1 then do
 			code <- getInstructionCode $ instructions V.! i
 			stmts <- code nullCodeState

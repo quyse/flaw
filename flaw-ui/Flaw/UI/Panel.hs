@@ -125,7 +125,7 @@ instance Element Panel where
 			} = do
 			childPosition <- readTVar childPositionVar
 			renderElement element drawer $ position + childPosition
-		renderChildren <- foldrM (\a b -> liftM (>> b) a) (return ()) $ map drawChild childrenRenderOrder
+		renderChildren <- foldrM (\a b -> fmap (>> b) a) (return ()) $ map drawChild childrenRenderOrder
 		-- return
 		return $ renderScope $ do
 			renderIntersectScissor $ Vec4 px py (px + sx) (py + sy)
@@ -227,7 +227,7 @@ instance Element Panel where
 				CursorMoveEvent x y -> do
 					-- if no mouse button is pressed, we can update "moused" child
 					-- so we do "mouse capture" by default
-					mousePressed <- liftM or $ forM [minBound .. maxBound] $ getMouseButtonState mouseState
+					mousePressed <- fmap or $ forM [minBound .. maxBound] $ getMouseButtonState mouseState
 					mousedChild <- if mousePressed then readTVar lastMousedChildVar else do
 						-- determine child with the mouse on it
 						let

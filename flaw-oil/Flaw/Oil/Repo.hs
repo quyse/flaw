@@ -95,7 +95,7 @@ openRepoDb fileName (RepoVersion version) = withSpecialBook $ \bk -> do
 		stmt <- book tempBk $ sqliteStmt db $ T.pack "PRAGMA application_id"
 		sqliteQuery stmt $ \query -> do
 			r <- sqliteStep query
-			when (not r) $ throwIO $ DescribeFirstException "failed to get application_id"
+			unless r $ throwIO $ DescribeFirstException "failed to get application_id"
 			currentAppVersion <- sqliteColumn query 0
 			-- if version is not set yet
 			if currentAppVersion == 0 then do

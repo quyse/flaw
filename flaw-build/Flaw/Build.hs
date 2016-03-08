@@ -61,7 +61,7 @@ instance Embed T.Text where
 	embedExp t = [| T.pack $(litE $ stringL $ T.unpack t) |]
 
 instance Embed Name where
-	embedExp n = [| mkName $(litE $ stringL $ (maybe "" (++ ".") $ nameModule n) ++ nameBase n) |]
+	embedExp n = [| mkName $(litE $ stringL $ maybe "" (++ ".") (nameModule n) ++ nameBase n) |]
 
 instance Embed B.ByteString where
 	embedExp bytes = [| unsafePerformIO $(embedIOExp bytes) |]
@@ -104,7 +104,7 @@ instance EmbedIO B.ByteString where
 instance EmbedIO BL.ByteString where
 	embedIOExp bytes = do
 		let len = BL.length bytes
-		[| liftM BL.fromStrict $ B.unsafePackAddressLen len $(litE $ stringPrimL $ BL.unpack bytes) |]
+		[| fmap BL.fromStrict $ B.unsafePackAddressLen len $(litE $ stringPrimL $ BL.unpack bytes) |]
 
 instance EmbedIO a => EmbedIO [a] where
 	embedIOExp a = [| sequence $(listE $ map embedIOExp a) |]

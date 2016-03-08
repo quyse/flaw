@@ -190,7 +190,7 @@ clientRepoRevision repo@ClientRepo
 		preCutRevision <- sqliteQuery stmtPreCutChunks $ \query -> do
 			sqliteBind query 1 globalRevision
 			r <- sqliteStep query
-			when (not r) $ throwIO $ DescribeFirstException "failed to get pre-cut revision"
+			unless r $ throwIO $ DescribeFirstException "failed to get pre-cut revision"
 			sqliteColumn query 0
 		-- try again if it actually increased
 		if (preCutRevision > globalRevision) then preCutChunks preCutRevision
@@ -235,7 +235,7 @@ getKeyItemValue ClientRepo
 	} itemId = sqliteQuery stmtGetKeyItemValue $ \query -> do
 	sqliteBind query 1 itemId
 	r <- sqliteStep query
-	when (not r) $ throwIO $ DescribeFirstException "failed to get key item value"
+	unless r $ throwIO $ DescribeFirstException "failed to get key item value"
 	sqliteColumn query 0
 
 getKeyItemValueLength :: ClientRepo -> ItemId -> IO Int64
@@ -244,7 +244,7 @@ getKeyItemValueLength ClientRepo
 	} itemId = sqliteQuery stmtGetKeyItemValueLength $ \query -> do
 	sqliteBind query 1 itemId
 	r <- sqliteStep query
-	when (not r) $ throwIO $ DescribeFirstException "failed to get key item value length"
+	unless r $ throwIO $ DescribeFirstException "failed to get key item value length"
 	sqliteColumn query 0
 
 changeKeyItemValue :: ClientRepo -> ItemId -> B.ByteString -> IO ()
@@ -270,7 +270,7 @@ fillKeyItems query = do
 			VUM.write v (fromIntegral (itemStatus :: CInt)) itemId
 			step
 	step
-	liftM KeyItems $ VU.unsafeFreeze v
+	fmap KeyItems $ VU.unsafeFreeze v
 
 getKeyItems :: ClientRepo -> B.ByteString -> IO KeyItems
 getKeyItems ClientRepo
@@ -338,7 +338,7 @@ pushClientRepo repo@ClientRepo
 	-- get upper revision
 	clientUpperRevision <- sqliteQuery stmtGetUpperRevision $ \query -> do
 		r <- sqliteStep query
-		when (not r) $ throwIO $ DescribeFirstException "failed to get upper revision"
+		unless r $ throwIO $ DescribeFirstException "failed to get upper revision"
 		sqliteColumn query 0
 
 	-- select keys to push

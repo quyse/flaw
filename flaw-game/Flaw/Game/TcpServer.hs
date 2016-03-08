@@ -24,11 +24,11 @@ runTcpServer host port = do
 		}) (Just host) (Just $ show port)
 
 	listeningSocket <- case addrs of
-		(N.AddrInfo
+		N.AddrInfo
 			{ N.addrFamily = addrFamily
 			, N.addrProtocol = addrProtocol
 			, N.addrAddress = addrAddress
-			}) : _restAddrs -> do
+			} : _restAddrs -> do
 			listeningSocket <- N.socket addrFamily N.Stream addrProtocol
 			N.bind listeningSocket addrAddress
 			N.listen listeningSocket 5

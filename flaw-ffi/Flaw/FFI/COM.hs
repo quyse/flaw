@@ -29,7 +29,6 @@ module Flaw.FFI.COM
 	) where
 
 import Control.Exception
-import Control.Monad
 import Data.UUID
 import Foreign.Marshal.Alloc
 import Foreign.Ptr
@@ -49,8 +48,7 @@ genCOMInterface "IUnknown" "00000000-0000-0000-C000-000000000046" []
 comInitialize :: IO ()
 comInitialize = do
 	hr <- winapi_CoInitialize nullPtr
-	if hresultFailed hr then fail "cannot initialize COM"
-	else return ()
+	when (hresultFailed hr) $ fail "cannot initialize COM"
 
 foreign import stdcall safe "CoInitialize" winapi_CoInitialize :: Ptr () -> IO HRESULT
 
@@ -67,7 +65,7 @@ comQueryInterface this = alloca $ \out -> do
 		poke iid $ getIID (undefined :: b)
 		m_IUnknown_QueryInterface this iid out
 	if hresultFailed hr then return Nothing
-	else liftM Just $ peekCOMObject . castPtr =<< peek out
+	else fmap Just $ peekCOMObject . castPtr =<< peek out
 
 -- | Ensure release of COM object after computation.
 withCOMObject :: IUnknown_Class a => IO a -> (a -> IO b) -> IO b

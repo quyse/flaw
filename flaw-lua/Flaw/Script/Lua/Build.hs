@@ -12,7 +12,6 @@ module Flaw.Script.Lua.Build
 	, lua
 	) where
 
-import Control.Monad
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
 import Data.String
@@ -34,7 +33,7 @@ luaCompile bytes name = do
 
 luaCompileFile :: FilePath -> ExpQ
 luaCompileFile fileName = do
-	bytes <- liftM BL.toStrict $ loadFile fileName
+	bytes <- fmap BL.toStrict $ loadFile fileName
 	luaCompile bytes $ T.pack fileName
 
 lua :: QuasiQuoter

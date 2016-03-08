@@ -130,7 +130,6 @@ module Flaw.Graphics.DirectX11.FFI
 	, mkD3DCompile
 	) where
 
-import Control.Monad
 import Data.Bits
 import Data.Word
 import Foreign.Ptr
@@ -990,7 +989,7 @@ genStructWithEndUnion "D3D11_UNORDERED_ACCESS_VIEW_DESC"
 
 ------- Interfaces
 
-liftM concat $ sequence
+fmap concat $ sequence
 	-- ID3DBlob (actually ID3D10Blob)
 	[ genCOMInterface "ID3DBlob" "8BA5FB08-5195-40e2-AC58-0D989C3A0102" ["IUnknown"]
 		[ ([t| IO (Ptr ()) |], "GetBufferPointer")

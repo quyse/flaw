@@ -116,7 +116,7 @@ registerLuaBasicLib env = do
 
 	registerNotImplementedFunc env "pairs"
 
-	registerFunc env "pcall" $ \(f:as) -> catchLuaError (liftM (LuaBoolean True : ) $ luaValueCall f as) $ \e ->
+	registerFunc env "pcall" $ \(f:as) -> catchLuaError (fmap (LuaBoolean True : ) $ luaValueCall f as) $ \e ->
 		return [LuaBoolean False, LuaString $ T.pack $ show e]
 
 	registerFunc env "print" $ \as -> do

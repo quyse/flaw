@@ -17,7 +17,6 @@ module Flaw.Visual.Texture
 import Codec.Picture
 import Codec.Picture.Types
 import Control.Exception
-import Control.Monad
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.Serialize as S
@@ -118,7 +117,7 @@ loadTexture bytes = do
 emitTextureAsset :: FilePath -> Q B.ByteString
 emitTextureAsset fileName = do
 	bytes <- loadFile fileName
-	liftM S.encode $ runIO $ loadTexture $ BL.toStrict bytes
+	fmap S.encode $ runIO $ loadTexture $ BL.toStrict bytes
 
 emitDxtCompressedTextureAsset :: FilePath -> Q B.ByteString
 emitDxtCompressedTextureAsset fileName = do

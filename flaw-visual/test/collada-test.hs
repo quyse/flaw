@@ -38,7 +38,7 @@ main = do
 	(geomVert, skeleton, animateSkel, skin, skinVert) <- case e of
 		Right q -> return q
 		Left err -> do
-			putStrLn $ show err
+			print err
 			exitFailure
 
 	void $ evaluate =<< packGeometry (geomVert :: V.Vector VertexPNT)

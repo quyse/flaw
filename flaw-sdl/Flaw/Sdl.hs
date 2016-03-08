@@ -13,6 +13,7 @@ module Flaw.Sdl
 
 import Control.Concurrent.MVar
 import Control.Exception
+import Control.Monad
 import Data.Bits
 import Foreign.C.String
 import Foreign.C.Types
@@ -45,13 +46,11 @@ initSdlSubsystem :: SDL.InitFlag -> IO ((), IO ())
 initSdlSubsystem newFlags = do
 	(flags, initCount) <- takeMVar flagsVar
 	let additionalFlags = newFlags .&. (complement flags)
-	if additionalFlags > 0 then do
+	when (additionalFlags > 0) $ do
 		-- if SDL wasn't initialized before, do it
-		if flags == 0 then checkSdlError (>= 0) $ SDL.init 0
-		else return ()
+		when (flags == 0) $ checkSdlError (>= 0) $ SDL.init 0
 		-- initialize subsystems
 		checkSdlError (>= 0) $ SDL.initSubSystem additionalFlags
-	else return ()
 	putMVar flagsVar (flags .|. newFlags, initCount + 1)
 	return ((), deinitSdl)
 
@@ -61,8 +60,7 @@ initSdlVideo = initSdlSubsystem SDL.SDL_INIT_VIDEO
 checkSdlError :: (CInt -> Bool) -> IO CInt -> IO ()
 checkSdlError isSuccess f = do
 	r <- f
-	if isSuccess r then return ()
-	else throwIO . SdlException =<< peekCString =<< SDL.getError
+	unless (isSuccess r) $ throwIO . SdlException =<< peekCString =<< SDL.getError
 
 checkSdlResult :: IO (Ptr ()) -> IO (Ptr ())
 checkSdlResult f = do

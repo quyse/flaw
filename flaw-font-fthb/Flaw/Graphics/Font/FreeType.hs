@@ -32,8 +32,7 @@ import Flaw.Graphics.Font.FreeType.FFI
 
 ftErrorCheck :: String -> FT_Error -> IO ()
 ftErrorCheck errorMessage errorCode = do
-	if errorCode == 0 then return ()
-	else fail $ show ("FreeType error", errorMessage, errorCode)
+	unless (errorCode == 0) $ fail $ show ("FreeType error", errorMessage, errorCode)
 
 newtype FreeTypeLibrary = FreeTypeLibrary FT_Library
 
@@ -86,11 +85,10 @@ createFreeTypeGlyphs FreeTypeFont
 	} halfScaleX halfScaleY = do
 
 	-- set pixel size with scale
-	if halfScaleX > 0 || halfScaleY > 0 then
+	when (halfScaleX > 0 || halfScaleY > 0) $
 		ftErrorCheck "FT_Set_Pixel_Sizes" =<< ft_Set_Pixel_Sizes ftFace
 			(fromIntegral $ size * (halfScaleX * 2 + 1))
 			(fromIntegral $ size * (halfScaleY * 2 + 1))
-	else return ()
 
 	-- get number of glyphs
 	glyphsCount <- flaw_ft_get_num_glyphs ftFace
@@ -138,9 +136,9 @@ createFreeTypeGlyphs FreeTypeFont
 						let maxi = min (i + 1) bitmapRows
 						let minj = max (j - halfScaleX * 2) 0
 						let maxj = min (j + 1) bitmapWidth
-						pixelSum <- liftM sum $ forM [mini..(maxi - 1)] $ \ii -> do
-							liftM sum $ forM [minj..(maxj - 1)] $ \jj -> do
-								liftM fromIntegral $ VSM.read pixels $ ii * bitmapWidth + jj
+						pixelSum <- fmap sum $ forM [mini..(maxi - 1)] $ \ii -> do
+							fmap sum $ forM [minj..(maxj - 1)] $ \jj -> do
+								fmap fromIntegral $ VSM.read pixels $ ii * bitmapWidth + jj
 						VSM.write blurredPixels (i * width + j) $ fromIntegral $ pixelSum `div` fullScale;
 				return blurredPixels
 			else return pixels
@@ -166,8 +164,7 @@ createFreeTypeGlyphs FreeTypeFont
 			)
 
 	-- restore pixel size
-	if halfScaleX > 0 || halfScaleY > 0 then
+	when (halfScaleX > 0 || halfScaleY > 0) $
 		ftErrorCheck "FT_Set_Pixel_Sizes" =<< ft_Set_Pixel_Sizes ftFace (fromIntegral size) (fromIntegral size)
-	else return ()
 
 	return imagesAndInfos

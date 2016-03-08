@@ -185,7 +185,7 @@ initSdlWindowSystem debug = withSpecialBook $ \bk -> do
 
 			-- get window
 			maybeWindow <- case maybeWindowId of
-				Just windowId -> liftM (HashMap.lookup windowId) $ atomically $ readTVar windowsVar
+				Just windowId -> fmap (HashMap.lookup windowId) $ atomically $ readTVar windowsVar
 				Nothing -> return Nothing
 
 			-- if there's a window, call user callbacks
@@ -229,7 +229,7 @@ initSdlWindowSystem debug = withSpecialBook $ \bk -> do
 
 			-- check if quit flag is set
 			quit <- readIORef quitRef
-			if quit then return () else loop
+			unless quit loop
 
 		loop
 

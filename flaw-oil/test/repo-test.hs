@@ -69,9 +69,9 @@ check Client
 	{ clientName = name
 	, clientRepo = repo
 	} key value = lift $ do
-	repoValue <- liftM T.decodeUtf8 $ clientRepoGetValue repo $ T.encodeUtf8 key
+	repoValue <- fmap T.decodeUtf8 $ clientRepoGetValue repo $ T.encodeUtf8 key
 	let ok = value == repoValue
-	when (not ok) failTest
+	unless ok failTest
 	putStrLn $ T.unpack $ (if ok then "OK    " else "WRONG ") <> "checkValue: client=" <> name <> ", key=" <> key <> ", value=" <> value <> ", repoValue=" <> repoValue
 
 change :: Client -> T.Text -> T.Text -> SessionM ()

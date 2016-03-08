@@ -18,6 +18,7 @@ module Flaw.Game.Socket
 import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Exception
+import Control.Monad
 import qualified Data.ByteString as B
 import Data.Monoid
 import qualified Data.Serialize as S
@@ -79,12 +80,10 @@ processNetworkSocket socket receiveQueueSize = do
 	_ <- forkIO $ do
 		let doSend bytes = do
 			sent <- N.send socket bytes
-			if sent == B.length bytes then return ()
-			else doSend $ B.drop sent bytes
+			unless (sent == B.length bytes) $ doSend $ B.drop sent bytes
 		let loop = do
 			bytes <- atomically $ readTQueue sendQueue
-			if B.null bytes then return ()
-			else do
+			unless (B.null bytes) $ do
 				doSend bytes
 				loop
 		finally loop $ N.shutdown socket N.ShutdownBoth
@@ -96,8 +95,7 @@ processNetworkSocket socket receiveQueueSize = do
 	_ <- forkIO $ do
 		let work = do
 			bytes <- N.recv socket 4096
-			if B.null bytes then return ()
-			else do
+			unless (B.null bytes) $ do
 				atomically $ writeTBQueue receiveQueue bytes
 				work
 		finally work $ do
@@ -134,11 +132,9 @@ receiveSerialize socket g = loop $ S.runGetPartial g where
 		if B.null bytes then return $ Left "socket ended suddenly"
 		else case parse bytes of
 			S.Fail err rest -> do
-				if B.null rest then return ()
-				else unreceive socket rest
+				unless (B.null rest) $ unreceive socket rest
 				return $ Left err
 			S.Partial nextParse -> loop nextParse
 			S.Done result rest -> do
-				if B.null rest then return ()
-				else unreceive socket rest
+				unless (B.null rest) $ unreceive socket rest
 				return $ Right result

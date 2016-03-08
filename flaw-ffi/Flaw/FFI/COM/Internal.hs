@@ -66,4 +66,4 @@ instance Exception FailedHRESULT
 
 -- | Throw exception if HRESULT is failed.
 hresultCheck :: HRESULT -> IO ()
-hresultCheck hr = if hresultFailed hr then throwIO $ FailedHRESULT hr else return ()
+hresultCheck hr = when (hresultFailed hr) $ throwIO $ FailedHRESULT hr

@@ -11,7 +11,6 @@ module Main
 	) where
 
 import Control.Concurrent.STM
-import Control.Monad
 import qualified Data.ByteString.Lazy as BL
 import Data.Monoid
 import qualified Data.Serialize as S
@@ -98,8 +97,7 @@ run Options
 
 		-- helper methods
 		let respondFail status msg = respond $ W.responseLBS status
-			[(H.hContentType, "text/plain; charset=utf-8")] $
-			BL.fromStrict $ msg
+			[(H.hContentType, "text/plain; charset=utf-8")] $ BL.fromStrict msg
 
 		case W.queryString request of
 
@@ -109,7 +107,7 @@ run Options
 
 			[("sync", Nothing)] -> do
 				-- read request
-				body <- liftM (BL.take $ fromIntegral $ syncRequestBodyLimit + 1) $ W.lazyRequestBody request
+				body <- fmap (BL.take $ fromIntegral $ syncRequestBodyLimit + 1) $ W.lazyRequestBody request
 				if BL.length body <= fromIntegral syncRequestBodyLimit then do
 					-- deserialize push
 					case S.decodeLazy body of
@@ -132,7 +130,7 @@ run Options
 				else respondFail H.status400 "too big sync request"
 
 			[("watch", Nothing)] -> do
-				body <- liftM (BL.take $ watchRequestBodyLimit + 1) $ W.lazyRequestBody request
+				body <- fmap (BL.take $ watchRequestBodyLimit + 1) $ W.lazyRequestBody request
 				if BL.length body <= watchRequestBodyLimit then do
 					-- deserialize revision
 					case S.decodeLazy body of

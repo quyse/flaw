@@ -123,14 +123,14 @@ initGlyphRenderer device subpixelMode = do
 						GlyphSubpixelModeVerticalRGB -> (0, 0, 0, -1, 0, 1)
 						GlyphSubpixelModeVerticalBGR -> (0, 0, 0, 1, 0, -1)
 					let r = w_ color * (sampleLod (sampler2Df 0) (texcoord
-						+ (ddx texcoord) * (vecFromScalar $ constf $ dxr / 3)
-						+ (ddy texcoord) * (vecFromScalar $ constf $ dyr / 3)) (constf 0))
+						+ (ddx texcoord) * vecFromScalar (constf $ dxr / 3)
+						+ (ddy texcoord) * vecFromScalar (constf $ dyr / 3)) (constf 0))
 					let g = w_ color * (sampleLod (sampler2Df 0) (texcoord
-						+ (ddx texcoord) * (vecFromScalar $ constf $ dxg / 3)
-						+ (ddy texcoord) * (vecFromScalar $ constf $ dyg / 3)) (constf 0))
+						+ (ddx texcoord) * vecFromScalar (constf $ dxg / 3)
+						+ (ddy texcoord) * vecFromScalar (constf $ dyg / 3)) (constf 0))
 					let b = w_ color * (sampleLod (sampler2Df 0) (texcoord
-						+ (ddx texcoord) * (vecFromScalar $ constf $ dxb / 3)
-						+ (ddy texcoord) * (vecFromScalar $ constf $ dyb / 3)) (constf 0))
+						+ (ddx texcoord) * vecFromScalar (constf $ dxb / 3)
+						+ (ddy texcoord) * vecFromScalar (constf $ dyb / 3)) (constf 0))
 					dualColorTarget (cvec31 (xyz__ color) (constf 1)) (cvec1111 r g b (constf 1))
 
 	buffer <- VSM.new $ capacity * 3
@@ -262,7 +262,7 @@ renderGlyphs GlyphRenderer
 
 	let flush = do
 		count <- liftIO $ readIORef bufferIndexRef
-		if count > 0 then do
+		when (count > 0) $ do
 			-- upload data to uniform buffer
 			let (foreignPtr, len) = VSM.unsafeToForeignPtr0 buffer
 			bytes <- liftIO $ B.unsafePackCStringLen (castPtr $ unsafeForeignPtrToPtr foreignPtr, len * sizeOf (undefined :: Float4))
@@ -270,7 +270,6 @@ renderGlyphs GlyphRenderer
 			liftIO $ touchForeignPtr foreignPtr
 			-- render batch
 			renderDrawInstanced count 6
-		else return ()
 		liftIO $ writeIORef bufferIndexRef 0
 
 	Vec4 viewportLeft viewportTop viewportRight viewportBottom <- renderGetViewport

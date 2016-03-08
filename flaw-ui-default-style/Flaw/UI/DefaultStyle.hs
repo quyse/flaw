@@ -12,7 +12,6 @@ module Flaw.UI.DefaultStyle
 	) where
 
 import Control.Concurrent.STM
-import Control.Monad
 import qualified Data.ByteString.Lazy as BL
 import Data.Char
 
@@ -50,7 +49,7 @@ initDefaultStyleDrawer device = withSpecialBook $ \bk -> do
 	freeTypeLibrary <- book bk initFreeType
 
 	-- embedded font
-	fontData <- $(embedIOExp =<< liftM BL.toStrict (loadFile "src/DejaVuSans.ttf"))
+	fontData <- $(embedIOExp =<< fmap BL.toStrict (loadFile "src/DejaVuSans.ttf"))
 	let loadFont size xscale yscale = do
 		font <- book bk $ loadFreeTypeFont freeTypeLibrary size fontData
 		fontShaper <- book bk $ createHarfbuzzShaper font
@@ -78,7 +77,7 @@ initDefaultStyleDrawer device = withSpecialBook $ \bk -> do
 		_ -> error "wrong color format"
 		where
 			z c1 c2 = fromIntegral ((h c1) * 16 + h c2) / 255
-			h c = if c >= '0' && c <= '9' then ord c - ord '0' else if c >= 'a' && c <= 'f' then ord c - ord 'a' + 10 else error "wrong hex symbol"
+			h c = if isDigit c then ord c - ord '0' else if c >= 'a' && c <= 'f' then ord c - ord 'a' + 10 else error "wrong hex symbol"
 			corr c = exp $ log c * 2.2
 
 	-- styles

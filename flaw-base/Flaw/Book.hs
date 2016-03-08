@@ -14,14 +14,13 @@ module Flaw.Book
 	) where
 
 import Control.Exception
-import Control.Monad
 import Data.IORef
 
 newtype Book = Book (IORef [IO ()])
 
 {-# INLINE newBook #-}
 newBook :: IO Book
-newBook = liftM Book $ newIORef []
+newBook = fmap Book $ newIORef []
 
 {-# INLINE freeBook #-}
 freeBook :: Book -> IO ()

@@ -195,7 +195,7 @@ run Options
 					} <- syncClientRepo clientRepo manifest $ syncHttpRemoteRepo remoteRepo
 
 				-- display changes if requested
-				when displayUpdates $ forM_ changes $ putStrLn . show
+				when displayUpdates $ mapM_ print changes
 
 				-- determine if we need to sync more
 				when (lag > 0) syncStep
@@ -230,7 +230,7 @@ run Options
 
 		OptionCheckCommand -> do
 			(ok, desc) <- repoDbCheckIntegrity $ repoDb clientRepo
-			when (not quiet) $ putStr $ T.unpack desc
+			unless quiet $ putStr $ T.unpack desc
 			if ok then exitSuccess else exitFailure
 
 		OptionOptimizeCommand -> repoDbVacuum $ repoDb clientRepo

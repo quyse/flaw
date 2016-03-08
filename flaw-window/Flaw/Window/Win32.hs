@@ -125,7 +125,7 @@ initWin32WindowSystem = do
 
 	let shutdown = do
 		-- send a message to stop window loop
-		invokeWin32WindowSystem_ ws $ c_stopWin32WindowSystem
+		invokeWin32WindowSystem_ ws c_stopWin32WindowSystem
 		-- wait for actual completion
 		readMVar $ wsShutdownVar ws
 		-- free resources

@@ -160,7 +160,7 @@ sqliteTransaction SqliteDb
 	finally (io commit) $ do
 		-- rollback if not finished
 		finished <- readIORef finishedRef
-		when (not finished) $ do
+		unless finished $ do
 			void $ sqlite3_reset rollbackToStmtPtr
 			void $ sqlite3_step rollbackToStmtPtr
 			void $ sqlite3_reset releaseStmtPtr
@@ -221,7 +221,7 @@ instance SqliteData T.Text where
 		}) column = do
 		ptr <- sqlite3_column_text stmtPtr column
 		len <- sqlite3_column_bytes stmtPtr column
-		liftM T.decodeUtf8 $ B.packCStringLen (ptr, fromIntegral len)
+		fmap T.decodeUtf8 $ B.packCStringLen (ptr, fromIntegral len)
 
 sqliteLastInsertRowId :: SqliteDb -> IO Int64
 sqliteLastInsertRowId SqliteDb
@@ -238,7 +238,7 @@ throwSqliteError dbPtr = do
 sqliteCheckError :: Ptr C_sqlite3 -> (CInt -> Bool) -> IO CInt -> IO ()
 sqliteCheckError dbPtr cond io = do
 	r <- io
-	when (not $ cond r) $ throwSqliteError dbPtr
+	unless (cond r) $ throwSqliteError dbPtr
 
 data SqliteError
 	= SqliteError {-# UNPACK #-} !Int !T.Text
