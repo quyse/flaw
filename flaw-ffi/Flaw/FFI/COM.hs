@@ -29,6 +29,7 @@ module Flaw.FFI.COM
 	) where
 
 import Control.Exception
+import Control.Monad
 import Data.UUID
 import Foreign.Marshal.Alloc
 import Foreign.Ptr
