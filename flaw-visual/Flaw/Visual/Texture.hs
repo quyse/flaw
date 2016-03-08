@@ -127,7 +127,11 @@ emitDxtCompressedTextureAsset fileName = do
 		{ packedTextureBytes = textureBytes
 		, packedTextureInfo = textureInfo
 		} <- runIO $ loadTexture $ BL.toStrict bytes
-	liftM S.encode $ runIO $ dxtCompressTexture textureInfo textureBytes
+	(compressedTextureInfo, compressedTextureBytes) <- runIO $ dxtCompressTexture textureInfo textureBytes
+	return $ S.encode PackedTexture
+		{ packedTextureBytes = compressedTextureBytes
+		, packedTextureInfo = compressedTextureInfo
+		}
 
 loadTextureAsset :: Device d => d -> B.ByteString -> IO (TextureId d, IO ())
 loadTextureAsset device bytes = case S.decode bytes of
