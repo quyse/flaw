@@ -121,7 +121,7 @@ pages:
   script:
   - "stack --no-terminal build --test --haddock --coverage $PACKAGES_LINUX"
   - "mkdir public"
-  - "hlint . --cross --report=public/hlint.html"
+  - "hlint . --cross --no-exit-code --quiet --report=public/hlint.html"
   - "mv $(stack path --local-doc-root) public/docs"
   - "mv $(stack path --local-hpc-root) public/hpc"
   - "curl -o public/docs/badge.svg https://img.shields.io/badge/haddock-$(date +%Y/%m/%d)-blue.svg"
