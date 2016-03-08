@@ -20,6 +20,7 @@ module Flaw.FFI.COM.Internal
 	) where
 
 import Control.Exception
+import Control.Monad
 import Data.Typeable
 import Foreign.Ptr
 import Foreign.Storable
