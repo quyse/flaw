@@ -1,0 +1,19 @@
+engines:
+  hlint:
+    enabled: true
+  fixme:
+    enabled: true
+ratings:
+  paths:
+  - "**.hs"
+  - "**.cabal"
+  - "**.c"
+  - "**.cpp"
+  - "**.js"
+exclude_paths:
+  - "flaw-bullet/src/bullet"
+  - "flaw-font-fthb/src/freetype"
+  - "flaw-font-fthb/src/harfbuzz"
+  - "flaw-font-fthb/src/ucdn"
+  - "flaw-sqlite/src/sqlite"
+  - "flaw-lua-refimpl/src"
