@@ -21,6 +21,6 @@ library
   exposed-modules:
     Flaw.Physics
   -- other-extensions:    
-  build-depends:       base, flaw-base, flaw-math
+  build-depends:       base, flaw-math, vector
   -- hs-source-dirs:      
   default-language:    Haskell2010

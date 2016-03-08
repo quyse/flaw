@@ -12,8 +12,10 @@ module Flaw.Physics.Bullet
 	) where
 
 import Data.Coerce
+import qualified Data.Vector as V
 import Foreign.C.Types
 import Foreign.Marshal.Alloc
+import Foreign.Marshal.Array
 import Foreign.Marshal.Utils
 import Foreign.Ptr
 import Foreign.Storable
@@ -34,6 +36,12 @@ instance World BulletWorld where
 
 	createSphereShape (BulletWorld pWorld) radius = do
 		pShape <- flaw_bullet_newSphereShape pWorld (coerce radius)
+		return (BulletShape pShape, flaw_bullet_freeShape pShape)
+
+	createConvexHullShape (BulletWorld pWorld) points = do
+		pShape <- allocaArray (V.length points) $ \pPoints -> do
+			V.imapM_ (pokeElemOff pPoints) points
+			flaw_bullet_newConvexHullShape pWorld (castPtr pPoints) (fromIntegral $ V.length points)
 		return (BulletShape pShape, flaw_bullet_freeShape pShape)
 
 	createBody (BulletWorld pWorld) (BulletShape pShape) motion position (FloatQ orientation) = do
@@ -65,6 +73,7 @@ foreign import ccall safe flaw_bullet_newWorld :: IO (Ptr C_BulletWorld)
 foreign import ccall safe flaw_bullet_freeWorld :: Ptr C_BulletWorld -> IO ()
 foreign import ccall safe flaw_bullet_newBoxShape :: Ptr C_BulletWorld -> Ptr CFloat -> IO (Ptr C_btCollisionShape)
 foreign import ccall safe flaw_bullet_newSphereShape :: Ptr C_BulletWorld -> CFloat -> IO (Ptr C_btCollisionShape)
+foreign import ccall safe flaw_bullet_newConvexHullShape :: Ptr C_BulletWorld -> Ptr CFloat -> CInt -> IO (Ptr C_btCollisionShape)
 foreign import ccall safe flaw_bullet_freeShape :: Ptr C_btCollisionShape -> IO ()
 foreign import ccall safe flaw_bullet_newRigidBody :: Ptr C_BulletWorld -> Ptr C_btCollisionShape -> Ptr CFloat -> Ptr CFloat -> CFloat -> IO (Ptr C_BulletRigidBody)
 foreign import ccall safe flaw_bullet_freeRigidBody :: Ptr C_BulletWorld -> Ptr C_BulletRigidBody -> IO ()

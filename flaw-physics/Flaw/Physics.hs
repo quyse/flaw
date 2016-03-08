@@ -11,6 +11,8 @@ module Flaw.Physics
 	, Motion(..)
 	) where
 
+import qualified Data.Vector as V
+
 import Flaw.Math
 
 data Motion
@@ -25,6 +27,7 @@ class World w where
 	data Body w :: *
 	createBoxShape :: w -> Float3 -> IO (Shape w, IO ())
 	createSphereShape :: w -> Float -> IO (Shape w, IO ())
+	createConvexHullShape :: w -> V.Vector Float3 -> IO (Shape w, IO ())
 	-- | Create rigid body.
 	createBody
 		:: w
