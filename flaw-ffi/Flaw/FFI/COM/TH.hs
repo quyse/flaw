@@ -142,7 +142,7 @@ genCOMInterface interfaceNameStr iid parentInterfaceNames ms = do
 		return (binding, field)
 	mp1s <- mapM mp1 methods
 	let peekCOMVirtualTableDec = funD 'peekCOMVirtualTable [clause [varP thisParamName, varP vtParamName] body []] where
-		body = normalB $ doE $ peekParentBinds ++ (map fst mp1s) ++ [noBindS $ appE (varE 'return) $ recConE interfaceName $ return (thisName, VarE thisParamName) : parentFieldsConstr ++ map (return . snd) mp1s]
+		body = normalB $ doE $ peekParentBinds ++ map fst mp1s ++ [noBindS $ appE (varE 'return) $ recConE interfaceName $ return (thisName, VarE thisParamName) : parentFieldsConstr ++ map (return . snd) mp1s]
 	comInterfaceInstanceDec <- instanceD (return []) [t| COMInterface $(conT interfaceName) |]
 		[ funD 'getIID [clause [wildP] (normalB $ varE iidName) []]
 		, funD 'getCOMInterfaceName [clause [wildP] (normalB $ litE $ StringL interfaceNameStr) []]
@@ -170,7 +170,7 @@ genCOMInterface interfaceNameStr iid parentInterfaceNames ms = do
 	paramName <- newName "a"
 	-- class IInterface_Class a
 	classDec <- classD (sequence [ [t| COMInterface $(varT paramName) |] ]) className [PlainTV paramName] []
-		((sigD comGetName [t| $(varT paramName) -> $(conT interfaceName) |]) : (concatMap (\method -> methodClassDecs method paramName $ varE comGetName) methods))
+		(sigD comGetName [t| $(varT paramName) -> $(conT interfaceName) |] : concatMap (\method -> methodClassDecs method paramName $ varE comGetName) methods)
 	-- instance IInterface_Class IInterface
 	instanceDec <- instanceD (return []) [t| $(conT className) $(conT interfaceName) |]
 		[ valD (varP comGetName) (normalB [| id |]) []
@@ -180,4 +180,4 @@ genCOMInterface interfaceNameStr iid parentInterfaceNames ms = do
 	iidSigDec <- sigD iidName [t| IID |]
 	iidValDec <- valD (varP iidName) (normalB [| fromJust (UUID.fromString $(litE $ stringL iid)) |]) []
 	methodsTopDecs <- mapM methodTopDecs methods
-	return $ dataDec : comInterfaceInstanceDec : eqInterfaceInstanceDec : ordInterfaceInstanceDec : classDec : instanceDec : endSigDec : endValDec : iidSigDec : iidValDec : (concat methodsTopDecs) ++ parentInstanceDecs
+	return $ dataDec : comInterfaceInstanceDec : eqInterfaceInstanceDec : ordInterfaceInstanceDec : classDec : instanceDec : endSigDec : endValDec : iidSigDec : iidValDec : concat methodsTopDecs ++ parentInstanceDecs

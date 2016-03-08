@@ -101,7 +101,7 @@ getChildrenWithTag tag XML.Element
 			{ XML.elementName = XML.Name
 				{ XML.nameLocalName = name
 				}
-			} -> if name == tag then [element] else []
+			} -> [element | name == tag]
 		_ -> []
 
 getSingleChildWithTag :: T.Text -> XML.Element -> ColladaM XML.Element

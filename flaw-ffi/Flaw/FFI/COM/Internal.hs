@@ -50,7 +50,7 @@ class COMInterface i where
 
 -- | Get COM object from pointer.
 peekCOMObject :: COMInterface a => Ptr a -> IO a
-peekCOMObject this = peek ((castPtr this) :: Ptr (Ptr ())) >>= peekCOMVirtualTable this
+peekCOMObject this = peek (castPtr this :: Ptr (Ptr ())) >>= peekCOMVirtualTable this
 
 -- | If HRESULT value represents success.
 hresultSucceeded :: HRESULT -> Bool

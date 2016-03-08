@@ -159,10 +159,10 @@ checkPushLimits Manifest
 		else case foldrM f 0 items of
 			Right _valuesTotalSize -> Nothing
 			Left err -> Just err
-	f (key, value) valuesTotalSize =
-		if B.length key > maxKeySize then Left SyncTooBigKeyError
-		else if B.length value > maxValueSize then Left SyncTooBigValueError
-		else let newValuesTotalSize = valuesTotalSize + B.length value in
+	f (key, value) valuesTotalSize
+		| B.length key > maxKeySize = Left SyncTooBigKeyError
+		| B.length value > maxValueSize = Left SyncTooBigValueError
+		| otherwise = let newValuesTotalSize = valuesTotalSize + B.length value in
 			if newValuesTotalSize > maxPushValuesTotalSize then Left SyncTooBigPushValuesTotalSize
 			else Right newValuesTotalSize
 

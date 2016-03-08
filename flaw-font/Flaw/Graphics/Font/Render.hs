@@ -122,15 +122,15 @@ initGlyphRenderer device subpixelMode = do
 						GlyphSubpixelModeHorizontalBGR -> (1, 0, -1, 0, 0, 0)
 						GlyphSubpixelModeVerticalRGB -> (0, 0, 0, -1, 0, 1)
 						GlyphSubpixelModeVerticalBGR -> (0, 0, 0, 1, 0, -1)
-					let r = w_ color * (sampleLod (sampler2Df 0) (texcoord
-						+ (ddx texcoord) * vecFromScalar (constf $ dxr / 3)
-						+ (ddy texcoord) * vecFromScalar (constf $ dyr / 3)) (constf 0))
-					let g = w_ color * (sampleLod (sampler2Df 0) (texcoord
-						+ (ddx texcoord) * vecFromScalar (constf $ dxg / 3)
-						+ (ddy texcoord) * vecFromScalar (constf $ dyg / 3)) (constf 0))
-					let b = w_ color * (sampleLod (sampler2Df 0) (texcoord
-						+ (ddx texcoord) * vecFromScalar (constf $ dxb / 3)
-						+ (ddy texcoord) * vecFromScalar (constf $ dyb / 3)) (constf 0))
+					let r = w_ color * sampleLod (sampler2Df 0) (texcoord
+						+ ddx texcoord * vecFromScalar (constf $ dxr / 3)
+						+ ddy texcoord * vecFromScalar (constf $ dyr / 3)) (constf 0)
+					let g = w_ color * sampleLod (sampler2Df 0) (texcoord
+						+ ddx texcoord * vecFromScalar (constf $ dxg / 3)
+						+ ddy texcoord * vecFromScalar (constf $ dyg / 3)) (constf 0)
+					let b = w_ color * sampleLod (sampler2Df 0) (texcoord
+						+ ddx texcoord * vecFromScalar (constf $ dxb / 3)
+						+ ddy texcoord * vecFromScalar (constf $ dyb / 3)) (constf 0)
 					dualColorTarget (cvec31 (xyz__ color) (constf 1)) (cvec1111 r g b (constf 1))
 
 	buffer <- VSM.new $ capacity * 3
@@ -311,7 +311,7 @@ renderGlyphs GlyphRenderer
 			let tright' = kx * right' + bx
 			let tbottom' = ky * bottom' + by
 			-- write values into instanced buffer
-			VSM.write buffer bufferIndex $ (Vec4 roundedLeft roundedBottom roundedRight roundedTop) * viewportScale + viewportOffset
+			VSM.write buffer bufferIndex $ Vec4 roundedLeft roundedBottom roundedRight roundedTop * viewportScale + viewportOffset
 			VSM.write buffer (bufferIndex + capacity) $ Vec4 tleft' tbottom' tright' ttop'
 			VSM.write buffer (bufferIndex + capacity * 2) color
 			-- advance index

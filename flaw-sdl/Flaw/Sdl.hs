@@ -45,7 +45,7 @@ deinitSdl = do
 initSdlSubsystem :: SDL.InitFlag -> IO ((), IO ())
 initSdlSubsystem newFlags = do
 	(flags, initCount) <- takeMVar flagsVar
-	let additionalFlags = newFlags .&. (complement flags)
+	let additionalFlags = newFlags .&. complement flags
 	when (additionalFlags > 0) $ do
 		-- if SDL wasn't initialized before, do it
 		when (flags == 0) $ checkSdlError (>= 0) $ SDL.init 0

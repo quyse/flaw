@@ -232,7 +232,7 @@ initWin32Input window@Win32Window
 					r <- with (fromIntegral blockSize) $ \blockSizePtr -> do
 						winapi_GetRawInputData
 							(intPtrToPtr $ fromIntegral lParam)
-							(0x10000003 {- RID_INPUT -})
+							0x10000003 {- RID_INPUT -}
 							blockPtr blockSizePtr (fromIntegral $ sizeOf (undefined :: RAWINPUTHEADER))
 					when (r > 0) $ do
 						let eventHeaderPtr = castPtr blockPtr

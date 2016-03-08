@@ -48,7 +48,7 @@ instance FontShaper HarfbuzzShaper where
 
 		-- loop for texts (inside single call to useAsPtr, as it does copying)
 		-- state monad contains advance vector
-		T.useAsPtr (mconcat texts) $ \unitedTextPtr unitedTextLen -> (flip evalStateT) (Vec2 0 0) $ forM offsetsAndLengths $ \(offset, len) -> do
+		T.useAsPtr (mconcat texts) $ \unitedTextPtr unitedTextLen -> flip evalStateT (Vec2 0 0) $ forM offsetsAndLengths $ \(offset, len) -> do
 			-- set script and direction
 			liftIO $ hb_buffer_set_script hbBuffer script
 			liftIO $ hb_buffer_set_direction hbBuffer $ hb_script_get_horizontal_direction script

@@ -159,7 +159,7 @@ createFreeTypeGlyphs FreeTypeFont
 				, glyphLeftTopX = 0
 				, glyphLeftTopY = 0
 				, glyphOffsetX = halfScaleX + fromIntegral bitmapLeft
-				, glyphOffsetY = halfScaleY - (fromIntegral bitmapTop)
+				, glyphOffsetY = halfScaleY - fromIntegral bitmapTop
 				}
 			)
 

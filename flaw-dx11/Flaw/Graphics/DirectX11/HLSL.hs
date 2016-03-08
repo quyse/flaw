@@ -109,13 +109,13 @@ hlslGenerateProgram state = program where
 		source = inputsSource <> outputsSource <> uniformBuffersSource <> samplersSource <> codeSource
 
 		-- inputs source
-		inputsSource = "struct Input\n{\n" <> foldr mappend mempty (map varSource inputs) <> "};\n"
+		inputsSource = "struct Input\n{\n" <> foldr (mappend . varSource) mempty inputs <> "};\n"
 		inputs = map varAttribute attributes ++ map varInterpolant inInterpolants
 		-- in-interpolants are temps used during this stage, but defined at another stage
 		inInterpolants = filter (\temp -> tempStage temp /= stage) temps
 
 		-- outputs source
-		outputsSource = "struct Output\n{\n" <> foldr mappend mempty (map varSource outputs) <> "};\n"
+		outputsSource = "struct Output\n{\n" <> foldr (mappend . varSource) mempty outputs <> "};\n"
 		-- important: targets should be after interpolants, to have them in the same registers in accepting stage
 		outputs = map varInterpolant outInterpolants ++ concatMap varsTarget targets
 		-- out-interpolants are temps defined at this stage, but used by some other stage
@@ -125,11 +125,11 @@ hlslGenerateProgram state = program where
 
 		-- uniform buffers source
 		uniformBuffers = groupBy eqUniformBySlot $ sortBy compareUniformBySlot uniforms
-		uniformBuffersSource = foldr mappend mempty $ map uniformBufferSource uniformBuffers
+		uniformBuffersSource = foldr (mappend . uniformBufferSource) mempty uniformBuffers
 		uniformBufferSource bufferUniforms = bufferHeader <> bufferSource <> bufferFooter where
 			bufferHeader = "cbuffer CB" <> fromString (show slot) <> " : register(b" <> fromString (show slot) <> ")\n{\n"
 			bufferFooter = "};\n"
-			bufferSource = foldr mappend mempty $ map uniformInBufferSource bufferUniforms
+			bufferSource = foldr (mappend . uniformInBufferSource) mempty bufferUniforms
 			uniformInBufferSource Uniform
 				{ uniformOffset = offset
 				, uniformSize = size
@@ -145,7 +145,7 @@ hlslGenerateProgram state = program where
 		compareUniformBySlot a b = compare (uniformSlot a) (uniformSlot b)
 
 		-- samplers source
-		samplersSource = foldr mappend mempty $ map samplerSource samplers
+		samplersSource = foldr (mappend . samplerSource) mempty samplers
 		samplerSource Sampler
 			{ samplerSlot = slot
 			, samplerDimension = dimension
@@ -164,7 +164,7 @@ hlslGenerateProgram state = program where
 			<> tempsSource <> targetsSource <> outInterpolantsAssignmentsSource <> "\treturn output;\n}\n"
 
 		-- definitions of temp variables
-		tempsSource = foldr mappend mempty $ map tempSource temps
+		tempsSource = foldr (mappend . tempSource) mempty temps
 		tempSource Temp
 			{ tempIndex = i
 			, tempNode = node
@@ -173,13 +173,13 @@ hlslGenerateProgram state = program where
 			} = "\t" <> valueTypeSource t <> " " <> tempName i <> " = " <> (if ts == stage then nodeSource node else "input." <> interpolantName i) <> ";\n"
 
 		-- assignments to out-interpolants
-		outInterpolantsAssignmentsSource = foldr mappend mempty $ map outInterpolantAssignmentSource outInterpolants
+		outInterpolantsAssignmentsSource = foldr (mappend . outInterpolantAssignmentSource) mempty outInterpolants
 		outInterpolantAssignmentSource Temp
 			{ tempIndex = i
 			} = "\toutput." <> interpolantName i <> " = " <> tempName i <> ";\n"
 
 		-- outputting targets
-		targetsSource = foldr mappend mempty $ map targetSource targets
+		targetsSource = foldr (mappend . targetSource) mempty targets
 		targetSource target = case target of
 			PositionTarget node -> "\toutput.vTP = " <> nodeSource node <> ";\n"
 			ColorTarget i node -> "\toutput." <> targetColorName i <> " = " <> nodeSource node <> ";\n"
@@ -278,10 +278,10 @@ hlslGenerateProgram state = program where
 
 		-- | HLSL needs text semantics. Generate such a text for string.
 		semanticString :: Int -> Builder
-		semanticString = fromString . (str 8) where
+		semanticString = fromString . str 8 where
 			str :: Int -> Int -> String
 			str 0 _ = ""
-			str n i = (chr (ord 'A' + i `rem` 26)) : str (n - 1) (i `div` 26)
+			str n i = chr (ord 'A' + i `rem` 26) : str (n - 1) (i `div` 26)
 
 		interpolantName :: Int -> Builder
 		interpolantName i = "i" <> fromString (show i)
@@ -313,8 +313,8 @@ hlslGenerateProgram state = program where
 				s = valueToShowList v
 				content = case t of
 					ScalarValueType _ -> head s
-					VectorValueType _ _ -> concat $ intersperse ", " s
-					MatrixValueType _ _ _ -> concat $ intersperse ", " s
+					VectorValueType _ _ -> intercalate ", " s
+					MatrixValueType {} -> intercalate ", " s
 				in valueTypeSource t <> "(" <> fromString content <> ")"
 			IndexNode _ _ a b -> "(" <> nodeSource a <> ")[" <> nodeSource b <> "]"
 			AddNode _ a b -> binaryOpSource "+" a b

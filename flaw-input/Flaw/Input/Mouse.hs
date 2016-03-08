@@ -54,7 +54,7 @@ instance InputDevice MouseState MouseEvent where
 		case event of
 			MouseDownEvent button -> writeArray buttonsArray button True
 			MouseUpEvent button -> writeArray buttonsArray button False
-			RawMouseMoveEvent _ _ _ -> return ()
+			RawMouseMoveEvent {} -> return ()
 			CursorMoveEvent x y -> writeTVar cursorVar (x, y)
 
 getMouseButtonState :: MouseState -> MouseButton -> STM Bool

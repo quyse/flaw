@@ -75,8 +75,8 @@ instance Transform QuatOffset where
 	{-# INLINE identityTransform #-}
 	identityTransform = QuatOffset (Quat (Vec4 0 0 0 1)) (Vec3 0 0 0)
 	{-# INLINE applyTransform #-}
-	applyTransform (QuatOffset q p) (Vec3 x y z) = (Vec3 rx ry rz) + p where
-		Quat (Vec4 rx ry rz _rw) = q * (Quat (Vec4 x y z 0)) * (conjugate q)
+	applyTransform (QuatOffset q p) (Vec3 x y z) = Vec3 rx ry rz + p where
+		Quat (Vec4 rx ry rz _rw) = q * Quat (Vec4 x y z 0) * conjugate q
 	{-# INLINE combineTransform #-}
 	combineTransform t2@(QuatOffset q2 _p2) (QuatOffset q1 p1) = QuatOffset (q2 * q1) (applyTransform t2 p1)
 	{-# INLINE transformToMatrix #-}

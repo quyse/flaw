@@ -222,7 +222,7 @@ glslGenerateProgram GlslConfig
 			Nothing -> mempty
 
 		-- attributes source
-		attributesSource = foldr mappend mempty $ map attributeDefinitionSource attributes
+		attributesSource = foldr (mappend . attributeDefinitionSource) mempty attributes
 		attributeDefinitionSource Attribute
 			{ attributeSlot = slot
 			, attributeOffset = offset
@@ -231,7 +231,7 @@ glslGenerateProgram GlslConfig
 
 		-- in-interpolants source
 		-- in-interpolants are temps used during this stage, but defined at another stage
-		inInterpolantsSource = foldr mappend mempty $ map inInterpolantSource $ filter (\temp -> tempStage temp /= stage) temps
+		inInterpolantsSource = foldr (mappend . inInterpolantSource) mempty $ filter (\temp -> tempStage temp /= stage) temps
 		inInterpolantSource Temp
 			{ tempIndex = i
 			, tempType = t
@@ -241,7 +241,7 @@ glslGenerateProgram GlslConfig
 		outInterpolants = filter (\temp -> tempStage temp == stage && tempUsedByOtherStage (tempIndex temp)) temps
 
 		-- out-interpolants source
-		outInterpolantsSource = foldr mappend mempty $ map outInterpolantSource outInterpolants
+		outInterpolantsSource = foldr (mappend . outInterpolantSource) mempty outInterpolants
 		outInterpolantSource Temp
 			{ tempIndex = i
 			, tempType = t
@@ -251,11 +251,11 @@ glslGenerateProgram GlslConfig
 
 		-- uniform blocks source
 		uniformBlocks = groupBy eqUniformBySlot $ sortBy compareUniformBySlot uniforms
-		uniformBlocksSource = foldr mappend mempty $ map uniformBlockSource uniformBlocks
+		uniformBlocksSource = foldr (mappend . uniformBlockSource) mempty uniformBlocks
 		uniformBlockSource blockUniforms = blockHeader <> blockSource <> blockFooter where
 			blockHeader = "layout(std140) uniform " <> uniformBlockName (uniformSlot $ head blockUniforms) <> "\n{\n"
 			blockFooter = "};\n"
-			blockSource = foldr mappend mempty $ map uniformInBlockSource $ addBlockGaps blockUniforms 0
+			blockSource = foldr (mappend . uniformInBlockSource) mempty $ addBlockGaps blockUniforms 0
 			uniformInBlockSource u = "\t" <> uniformDefinitionSource u
 			addBlockGaps ua@(u:us) offset
 				| advance == 0 = u : addBlockGaps us (offset + valueTypeScalarsCount (uniformType u) * count * 4)
@@ -281,7 +281,7 @@ glslGenerateProgram GlslConfig
 		compareUniformBySlot a b = compare (uniformSlot a) (uniformSlot b)
 
 		-- uniforms source
-		uniformsSource = foldr mappend mempty $ map uniformSource uniforms
+		uniformsSource = foldr (mappend . uniformSource) mempty uniforms
 		uniformSource uniform = "uniform " <> uniformDefinitionSource uniform
 
 		-- helper function for uniform
@@ -293,7 +293,7 @@ glslGenerateProgram GlslConfig
 			} = valueTypeSource t <> " " <> uniformName slot offset <> (if size > 0 then "[" <> fromString (show size) <> "]" else mempty) <> ";\n"
 
 		-- samplers source
-		samplersSource = foldr mappend mempty $ map samplerSource samplers
+		samplersSource = foldr (mappend . samplerSource) mempty samplers
 		samplerSource Sampler
 			{ samplerSlot = slot
 			, samplerDimension = dimension
@@ -310,7 +310,7 @@ glslGenerateProgram GlslConfig
 				SamplerCube -> "samplerCube"
 
 		-- target decls source
-		targetDeclsSource = if configInOutSyntax then foldr mappend mempty $ map targetDeclSource targets else mempty
+		targetDeclsSource = if configInOutSyntax then foldr (mappend . targetDeclSource) mempty targets else mempty
 		targetDeclSource target = case target of
 			PositionTarget _ -> mempty
 			ColorTarget slot _ -> "out " <> valueTypeSource (VectorValueType Dimension4 ScalarFloat) <> " " <> targetColorName slot <> ";\n"
@@ -321,7 +321,7 @@ glslGenerateProgram GlslConfig
 		codeSource = "void main()\n{\n" <> tempsSource <> outInterpolantsAssignmentsSource <> targetsSource <> "}\n"
 
 		-- definitions of temp variables
-		tempsSource = foldr mappend mempty $ map tempSource temps
+		tempsSource = foldr (mappend . tempSource) mempty temps
 		tempSource Temp
 			{ tempIndex = i
 			, tempNode = node
@@ -334,13 +334,13 @@ glslGenerateProgram GlslConfig
 				_ -> node
 
 		-- assignments to out-interpolants
-		outInterpolantsAssignmentsSource = foldr mappend mempty $ map outInterpolantAssignmentSource outInterpolants
+		outInterpolantsAssignmentsSource = foldr (mappend . outInterpolantAssignmentSource) mempty outInterpolants
 		outInterpolantAssignmentSource Temp
 			{ tempIndex = i
 			} = "\t" <> interpolantName i <> " = " <> tempName i <> ";\n"
 
 		-- outputting targets
-		targetsSource = foldr mappend mempty $ map targetSource targets
+		targetsSource = foldr (mappend . targetSource) mempty targets
 		targetSource target = case target of
 			PositionTarget node -> "\t" <> targetPositionName <> " = " <> nodeSource node <> ";\n"
 			ColorTarget slot node -> "\t" <> targetColorName slot <> " = " <> nodeSource node <> ";\n"
@@ -371,8 +371,10 @@ glslGenerateProgram GlslConfig
 		targetPositionName = "gl_Position"
 
 		targetColorName :: Int -> Builder
-		targetColorName i = if configInOutSyntax then "r" <> fromString (show i) else
-			if i == 0 then "gl_FragColor" else "gl_FragData[" <> fromString (show i) <> "]"
+		targetColorName i
+			| configInOutSyntax = "r" <> fromString (show i)
+			| i == 0 = "gl_FragColor"
+			| otherwise = "gl_FragData[" <> fromString (show i) <> "]"
 
 		targetDepthName :: Builder
 		targetDepthName = "gl_FragDepth"
@@ -461,8 +463,8 @@ glslGenerateProgram GlslConfig
 				s = valueToShowList v
 				content = case t of
 					ScalarValueType _ -> head s
-					VectorValueType _ _ -> concat $ intersperse ", " s
-					MatrixValueType _ _ _ -> concat $ intersperse ", " s
+					VectorValueType _ _ -> intercalate ", " s
+					MatrixValueType {} -> intercalate ", " s
 				in valueTypeSource t <> "(" <> fromString content <> ")"
 			IndexNode _ _ a b -> "(" <> nodeSource a <> ")[" <> nodeSource b <> "]"
 			AddNode _ a b -> binaryOpSource "+" a b
@@ -529,7 +531,7 @@ glslGenerateProgram GlslConfig
 						Dimension2 -> "2D"
 						Dimension3 -> "3D"
 						Dimension4 -> "4D"
-					MatrixValueType _ _ _ -> error "invalid coords type"
+					MatrixValueType {} -> error "invalid coords type"
 					else mempty
 				f = case mo of
 					Nothing -> case ll of
@@ -549,7 +551,7 @@ glslGenerateProgram GlslConfig
 						Dimension2 -> ".xy"
 						Dimension3 -> ".xyz"
 						Dimension4 -> mempty
-					MatrixValueType _ _ _ -> mempty
+					MatrixValueType {} -> mempty
 			CastNode _ t a -> valueTypeSource t <> "(" <> nodeSource a <> ")"
 			Combine2VecNode _ _ t a b -> func2Source (valueTypeSource t) a b
 			Combine3VecNode _ _ _ t a b c -> func3Source (valueTypeSource t) a b c

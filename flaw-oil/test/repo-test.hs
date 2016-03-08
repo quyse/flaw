@@ -37,10 +37,10 @@ data Session = Session
 
 type SessionM = ReaderT Session IO
 
-session :: T.Text -> (SessionM ()) -> IO ()
+session :: T.Text -> SessionM () -> IO ()
 session name m = sessionWithManifest name defaultManifest m
 
-sessionWithManifest :: T.Text -> Manifest -> (SessionM ()) -> IO ()
+sessionWithManifest :: T.Text -> Manifest -> SessionM () -> IO ()
 sessionWithManifest name manifest m = withBook $ \bk -> do
 	putStrLn $ T.unpack $ "session started: " <> name
 	serverRepo <- book bk $ openServerRepo ":memory:"

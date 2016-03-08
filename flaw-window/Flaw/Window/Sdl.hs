@@ -81,7 +81,7 @@ instance Window SdlWindow where
 		{ swSystem = SdlWindowSystem
 			{ swsMouseCursors = mouseCursors
 			}
-		} mouseCursor = SDL.setCursor $ mouseCursors V.! (fromEnum mouseCursor)
+		} mouseCursor = SDL.setCursor $ mouseCursors V.! fromEnum mouseCursor
 	setWindowMouseLock _ mouseLock = checkSdlError (== 0) $ SDL.setRelativeMouseMode mouseLock
 
 initSdlWindowSystem :: Bool -> IO (SdlWindowSystem, IO ())

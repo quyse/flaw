@@ -424,7 +424,7 @@ instance Device Dx11Device where
 				, f_DXGI_SAMPLE_DESC_Quality = 0
 				}
 			, f_D3D11_TEXTURE2D_DESC_Usage = D3D11_USAGE_DEFAULT
-			, f_D3D11_TEXTURE2D_DESC_BindFlags = fromIntegral ((fromEnum D3D11_BIND_RENDER_TARGET) .|. (fromEnum D3D11_BIND_SHADER_RESOURCE))
+			, f_D3D11_TEXTURE2D_DESC_BindFlags = fromIntegral $ fromEnum D3D11_BIND_RENDER_TARGET .|. fromEnum D3D11_BIND_SHADER_RESOURCE
 			, f_D3D11_TEXTURE2D_DESC_CPUAccessFlags = 0
 			, f_D3D11_TEXTURE2D_DESC_MiscFlags = 0
 			}
@@ -506,7 +506,7 @@ instance Device Dx11Device where
 				, f_DXGI_SAMPLE_DESC_Quality = 0
 				}
 			, f_D3D11_TEXTURE2D_DESC_Usage = D3D11_USAGE_DEFAULT
-			, f_D3D11_TEXTURE2D_DESC_BindFlags = fromIntegral ((fromEnum D3D11_BIND_DEPTH_STENCIL) .|. (fromEnum D3D11_BIND_SHADER_RESOURCE))
+			, f_D3D11_TEXTURE2D_DESC_BindFlags = fromIntegral $ fromEnum D3D11_BIND_DEPTH_STENCIL .|. fromEnum D3D11_BIND_SHADER_RESOURCE
 			, f_D3D11_TEXTURE2D_DESC_CPUAccessFlags = 0
 			, f_D3D11_TEXTURE2D_DESC_MiscFlags = 0
 			}
@@ -621,7 +621,7 @@ instance Device Dx11Device where
 					createCOMObjectViaPtr $ m_ID3D11Device_CreateBuffer deviceInterface descPtr subresourceDataPtr
 
 		return
-			( (Dx11IndexBufferId bufferInterface (if is32bit then DXGI_FORMAT_R32_UINT else DXGI_FORMAT_R16_UINT) D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST)
+			( Dx11IndexBufferId bufferInterface (if is32bit then DXGI_FORMAT_R32_UINT else DXGI_FORMAT_R16_UINT) D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST
 			, releaseBufferInterface
 			)
 
@@ -711,9 +711,9 @@ instance Device Dx11Device where
 			} = describeException ("failed to compile shader", source, entryPoint, profile) $ do
 			-- calculate flags
 			let optimize = not debug
-			let flags = fromIntegral $ (fromEnum D3DCOMPILE_ENABLE_STRICTNESS) .|. (fromEnum D3DCOMPILE_PACK_MATRIX_COLUMN_MAJOR)
+			let flags = fromIntegral $ fromEnum D3DCOMPILE_ENABLE_STRICTNESS .|. fromEnum D3DCOMPILE_PACK_MATRIX_COLUMN_MAJOR
 				.|. (if debug then fromEnum D3DCOMPILE_DEBUG else 0)
-				.|. (if optimize then fromEnum D3DCOMPILE_OPTIMIZATION_LEVEL3 else (fromEnum D3DCOMPILE_OPTIMIZATION_LEVEL0) .|. (fromEnum D3DCOMPILE_SKIP_OPTIMIZATION))
+				.|. (if optimize then fromEnum D3DCOMPILE_OPTIMIZATION_LEVEL3 else fromEnum D3DCOMPILE_OPTIMIZATION_LEVEL0 .|. fromEnum D3DCOMPILE_SKIP_OPTIMIZATION)
 			-- get cache key
 			let cacheKey = S.encode (source, entryPoint, profile, flags)
 			-- try to use cache
@@ -795,7 +795,7 @@ instance Device Dx11Device where
 		} size = describeException "failed to create DirectX11 uniform buffer" $ do
 		-- round up size to be divisible by sizeof(vec4)
 		-- also make it non-zero
-		let roundedSize = ((if size > 0 then size else 1) + 15) .&. (complement 15)
+		let roundedSize = ((if size > 0 then size else 1) + 15) .&. complement 15
 
 		-- desc
 		let desc = D3D11_BUFFER_DESC
@@ -990,7 +990,7 @@ instance Context Dx11Context Dx11Device where
 		dx11ClearDepthStencil context 0 stencil (fromEnum D3D11_CLEAR_STENCIL)
 
 	contextClearDepthStencil context depth stencil = do
-		dx11ClearDepthStencil context depth stencil ((fromEnum D3D11_CLEAR_DEPTH) .|. (fromEnum D3D11_CLEAR_STENCIL))
+		dx11ClearDepthStencil context depth stencil (fromEnum D3D11_CLEAR_DEPTH .|. fromEnum D3D11_CLEAR_STENCIL)
 
 	contextUploadUniformBuffer context uniformBuffer bytes = do
 		case uniformBuffer of
@@ -1372,7 +1372,7 @@ dx11CreatePresenter device@Dx11Device
 			{ f_DXGI_SAMPLE_DESC_Count = 1
 			, f_DXGI_SAMPLE_DESC_Quality = 0
 			}
-		, f_DXGI_SWAP_CHAIN_DESC_BufferUsage = fromIntegral $ (fromEnum DXGI_USAGE_BACK_BUFFER) .|. (fromEnum DXGI_USAGE_RENDER_TARGET_OUTPUT)
+		, f_DXGI_SWAP_CHAIN_DESC_BufferUsage = fromIntegral $ fromEnum DXGI_USAGE_BACK_BUFFER .|. fromEnum DXGI_USAGE_RENDER_TARGET_OUTPUT
 		, f_DXGI_SWAP_CHAIN_DESC_BufferCount = 2
 		, f_DXGI_SWAP_CHAIN_DESC_OutputWindow = hwnd
 		, f_DXGI_SWAP_CHAIN_DESC_Windowed = True
@@ -1484,7 +1484,7 @@ dx11DepthTestFunc depthTestFunc = case depthTestFunc of
 	DepthTestFuncAlways -> D3D11_COMPARISON_ALWAYS
 
 dx11CalcDepthStencilStateCode :: D3D11_COMPARISON_FUNC -> Bool -> Int
-dx11CalcDepthStencilStateCode comparisonFunc depthWrite = (fromEnum comparisonFunc) .|. (if depthWrite then 8 else 0)
+dx11CalcDepthStencilStateCode comparisonFunc depthWrite = fromEnum comparisonFunc .|. (if depthWrite then 8 else 0)
 
 dx11GetDepthStencilState :: Dx11Context -> D3D11_COMPARISON_FUNC -> Bool -> Int -> IO ID3D11DepthStencilState
 dx11GetDepthStencilState Dx11Context
@@ -1617,7 +1617,7 @@ dx11UpdateContext context@Dx11Context
 	vectorSetup actualVertexBuffersVector desiredVertexBuffersVector $ \desiredVertexBuffers -> do
 		let buffersCount = V.length desiredVertexBuffers
 		allocaArray buffersCount $ \buffersInterfacesPtr -> allocaArray buffersCount $ \stridesPtr -> allocaArray buffersCount $ \offsetsPtr -> do
-			(flip V.imapM_) desiredVertexBuffers $ \i vertexBuffer -> do
+			flip V.imapM_ desiredVertexBuffers $ \i vertexBuffer -> do
 				let (bufferInterfacePtr, stride) = case vertexBuffer of
 					Dx11VertexBufferId bufferInterface stride' -> (pokeCOMObject bufferInterface, stride')
 					Dx11NullVertexBufferId -> (nullPtr, 0)
@@ -1638,7 +1638,7 @@ dx11UpdateContext context@Dx11Context
 	vectorSetup actualUniformBuffersVector desiredUniformBuffersVector $ \desiredUniformBuffers -> do
 		let buffersCount = V.length desiredUniformBuffers
 		allocaArray buffersCount $ \buffersInterfacesPtr -> do
-			(flip V.imapM_) desiredUniformBuffers $ \i uniformBuffer -> do
+			flip V.imapM_ desiredUniformBuffers $ \i uniformBuffer -> do
 				pokeElemOff buffersInterfacesPtr i $ case uniformBuffer of
 					Dx11UniformBufferId bufferInterface -> pokeCOMObject bufferInterface
 					Dx11NullUniformBufferId -> nullPtr
@@ -1650,7 +1650,7 @@ dx11UpdateContext context@Dx11Context
 		let samplersCount = V.length desiredSamplers
 		allocaArray samplersCount $ \srvInterfacesPtr -> do
 			allocaArray samplersCount $ \ssInterfacesPtr -> do
-				(flip V.imapM_) desiredSamplers $ \i (texture, samplerState) -> do
+				flip V.imapM_ desiredSamplers $ \i (texture, samplerState) -> do
 					let (srvInterfacePtr, ssInterfacePtr) = case texture of
 						Dx11TextureId srvInterface textureSamplerState -> case samplerState of
 							Dx11SamplerStateId ssInterface -> (pokeCOMObject srvInterface, pokeCOMObject ssInterface)

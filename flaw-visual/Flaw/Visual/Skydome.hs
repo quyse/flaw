@@ -28,4 +28,4 @@ skydomeGeometry device meridiansCount topParallelsCount bottomParallelsCount =
 
 skydomeTransform :: Node Float4x4 -> Node Float3 -> Float -> Program (Node Float4)
 skydomeTransform viewProj position distance = do
-	temp $ viewProj `mul` (cvec31 (position * vecFromScalar (constf distance)) (constf 1))
+	temp $ viewProj `mul` cvec31 (position * vecFromScalar (constf distance)) (constf 1)

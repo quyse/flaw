@@ -62,10 +62,10 @@ packGeometry rawVertices = do
 	verticesBytes <- packVector vertices
 	(isIndices32Bit, indicesBytes) <- do
 		if length vertices > 0x10000 then do
-			indicesBytes <- packVector ((VG.map fromIntegral indices) :: VU.Vector Word32)
+			indicesBytes <- packVector (VG.map fromIntegral indices :: VU.Vector Word32)
 			return (True, indicesBytes)
 		else do
-			indicesBytes <- packVector ((VG.map fromIntegral indices) :: VU.Vector Word16)
+			indicesBytes <- packVector (VG.map fromIntegral indices :: VU.Vector Word16)
 			return (False, indicesBytes)
 	return PackedGeometry
 		{ packedGeometryVerticesBytes = verticesBytes

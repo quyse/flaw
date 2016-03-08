@@ -107,7 +107,10 @@ instance Element Button where
 		moused <- readTVar mousedVar
 		pressed <- readTVar pressedVar
 		-- get style
-		let style = if pressed then pressedStyle else if moused || focused then mousedStyle else normalStyle
+		let style
+			| pressed = pressedStyle
+			| moused || focused = mousedStyle
+			| otherwise = normalStyle
 		-- calculate visual rendering
 		visualRender <- renderVisual visual drawer (Vec2 (px + 1) (py + 1)) size style
 		-- return rendering monad

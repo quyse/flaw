@@ -76,8 +76,11 @@ initDefaultStyleDrawer device = withSpecialBook $ \bk -> do
 		[r1, r2, g1, g2, b1, b2, a1, a2] -> Vec4 (corr $ z r1 r2) (corr $ z g1 g2) (corr $ z b1 b2) (z a1 a2)
 		_ -> error "wrong color format"
 		where
-			z c1 c2 = fromIntegral ((h c1) * 16 + h c2) / 255
-			h c = if isDigit c then ord c - ord '0' else if c >= 'a' && c <= 'f' then ord c - ord 'a' + 10 else error "wrong hex symbol"
+			z c1 c2 = fromIntegral (h c1 * 16 + h c2) / 255
+			h c
+				| isDigit c = ord c - ord '0'
+				| c >= 'a' && c <= 'f' = ord c - ord 'a' + 10
+				| otherwise = error "wrong hex symbol"
 			corr c = exp $ log c * 2.2
 
 	-- styles

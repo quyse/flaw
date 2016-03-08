@@ -193,7 +193,7 @@ clientRepoRevision repo@ClientRepo
 			unless r $ throwIO $ DescribeFirstException "failed to get pre-cut revision"
 			sqliteColumn query 0
 		-- try again if it actually increased
-		if (preCutRevision > globalRevision) then preCutChunks preCutRevision
+		if preCutRevision > globalRevision then preCutChunks preCutRevision
 		else return globalRevision
 	firstGlobalRevision <- getManifestValue repo ManifestKeyGlobalRevision 0
 	globalRevision <- preCutChunks firstGlobalRevision
@@ -469,7 +469,7 @@ cleanupClientRepo ClientRepo
 
 -- | Helper function to perform sync.
 syncClientRepo :: ClientRepo -> Manifest -> (Push -> IO Pull) -> IO ClientRepoPullInfo
-syncClientRepo repo manifest sync = (flip onException) (cleanupClientRepo repo) $ do
+syncClientRepo repo manifest sync = flip onException (cleanupClientRepo repo) $ do
 	-- perform push on client repo
 	(push, pushState) <- pushClientRepo repo manifest
 	pull <- sync push

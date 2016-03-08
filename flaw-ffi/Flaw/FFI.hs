@@ -171,7 +171,7 @@ genStructWithArrays typeName fs = do
 		return (return (fieldName field, VarE varName), bindS (varP varName) $ appE (fieldPeek field) addr)
 	let peekDec addr = do
 		decs <- mapM (peekFieldDec addr) fields
-		doE $ (map snd decs) ++ [noBindS $ appE (varE 'return) $ recConE (mkName typeName) $ map fst decs]
+		doE $ map snd decs ++ [noBindS $ appE (varE 'return) $ recConE (mkName typeName) $ map fst decs]
 
 	instanceDecs <- [d|
 		instance Storable $(conT $ mkName typeName) where
@@ -188,7 +188,7 @@ genStructWithEndUnion :: String -> [(TypeQ, String, Int)] -> Int -> [(String, Ty
 genStructWithEndUnion typeName hfs selectorIndex ufs = do
 	(headerFields, headerEndExp) <- processFields typeName hfs
 	unionFields <- mapM (\(_ufe, uft, ufn) -> processField typeName uft ufn 0 headerEndExp) ufs
-	dataDec <- dataD (return []) (mkName typeName) [] [recC (mkName $ typeName ++ "_" ++ (fieldNameStr unionField)) $ map dataFieldDec $ headerFields ++ [unionField] | unionField <- unionFields] [''Show]
+	dataDec <- dataD (return []) (mkName typeName) [] [recC (mkName $ typeName ++ "_" ++ fieldNameStr unionField) $ map dataFieldDec $ headerFields ++ [unionField] | unionField <- unionFields] [''Show]
 	headerFieldsDecs <- fmap concat $ mapM (sequence . fieldDecs) headerFields
 	unionFieldsDecs <- fmap concat $ mapM (sequence . fieldDecs) unionFields
 	let sizeOfName = mkName $ "struct_sizeOf_" ++ typeName
@@ -204,11 +204,11 @@ genStructWithEndUnion typeName hfs selectorIndex ufs = do
 		return (varName, return (fieldName field, VarE varName), bindS (varP varName) $ appE (fieldPeek field) addr)
 	let peekDec addr = do
 		headerDecs <- mapM (peekFieldDec addr) headerFields
-		let makeMatch (unionField, (matchPatStr, _, matchName)) = do
+		let makeMatch unionField (matchPatStr, _, matchName) = do
 			(_un, uc, ud) <- peekFieldDec addr unionField
 			match (conP (mkName matchPatStr) []) (normalB $ doE [ud, noBindS $ appE (varE 'return) $ recConE (mkName $ typeName ++ "_" ++ matchName) $ [c | (_n, c, _d) <- headerDecs] ++ [uc]]) []
 		let (sn, _sc, _sd) = headerDecs !! selectorIndex
-		let caseExp = caseE (varE sn) $ map makeMatch $ zip unionFields ufs
+		let caseExp = caseE (varE sn) $ zipWith makeMatch unionFields ufs
 		doE $ [d | (_n, _c, d) <- headerDecs] ++ [noBindS caseExp]
 
 	let pokeFieldDec addr field = do
@@ -217,7 +217,7 @@ genStructWithEndUnion typeName hfs selectorIndex ufs = do
 	let pokeDec addr value = do
 		let makeMatch unionField = do
 			decs <- mapM (pokeFieldDec addr) $ headerFields ++ [unionField]
-			match (recP (mkName $ typeName ++ "_" ++ (fieldNameStr unionField)) $ map fst decs) (normalB $ doE $ map snd decs) []
+			match (recP (mkName $ typeName ++ "_" ++ fieldNameStr unionField) $ map fst decs) (normalB $ doE $ map snd decs) []
 		caseE value $ map makeMatch unionFields
 
 	instanceDecs <- [d|

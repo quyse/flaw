@@ -185,7 +185,7 @@ forM [(len, maxComp) | len <- [1..4], maxComp <- [1..4]] $ \(len, maxComp) -> do
 	let genSig variant = do
 		sigD (mkName $ variant ++ "__") [t| $(varT tvV) -> $(conT resultTypeName) $(varT tvV) |]
 	classD (sequence [ [t| $(conT $ mkName $ "Vec" ++ [toUpper c]) $(varT tvV) |] | c <- components])
-		className [PlainTV tvV] [] $ (familyKindD typeFam resultTypeName [PlainTV tvV] StarT) : map genSig variants
+		className [PlainTV tvV] [] $ familyKindD typeFam resultTypeName [PlainTV tvV] StarT : map genSig variants
 
 -- Things per math type.
 fmap concat $ forM mathTypeNamesWithPrefix $ \(mathTypeName, mathTypePrefix) -> do
@@ -267,7 +267,7 @@ do
 			let funName = mkName [component, '_']
 			varName <- newName [component]
 			instanceD (sequence [ [t| Vectorized $elemType |] ]) [t| $(conT className) ($(conT dataName) $elemType) |] =<< addInlines
-				[ funD funName [clause [conP conName [if c == component then (varP varName) else wildP | c <- components]] (normalB (varE varName)) []]
+				[ funD funName [clause [conP conName [if c == component then varP varName else wildP | c <- components]] (normalB (varE varName)) []]
 				]
 
 		-- instance for Dot class
@@ -285,13 +285,13 @@ do
 		normInstance <- instanceD (sequence [ [t| Vectorized $elemType |], [t| Floating $elemType |] ]) [t| Norm ($(conT dataName) $elemType) |] =<< addInlines
 			[ funD 'norm [clause [] (normalB $ [| sqrt . norm2 |]) []]
 			, funD 'norm2 [clause [conP conName $ map varP as]
-				(normalB $ foldl1 (\a b -> [| $a + $b |]) $ map (\a -> [| $a * $a |]) $ map varE as) []]
+				(normalB $ foldl1 (\a b -> [| $a + $b |]) $ map ((\a -> [| $a * $a |]) . varE) as) []]
 			]
 
 		-- instance for Normalize class
 		normalizeInstance <- do
 			instanceD (sequence [ [t| Vectorized $elemType |], [t| Floating $elemType |] ]) [t| Normalize ($(conT dataName) $elemType) |] =<< addInlines
-				[ funD 'normalize [clause [varP p] (normalB [| $(varE p) * (vecFromScalar (1 / norm $(varE p))) |]) []]
+				[ funD 'normalize [clause [varP p] (normalB [| $(varE p) * vecFromScalar (1 / norm $(varE p)) |]) []]
 				]
 
 		-- instance for SwizzleVec{maxComp}{dim} class
@@ -306,7 +306,7 @@ do
 			let funDecl variant = do
 				let expr = foldl (\v c -> appE v [| $(varE (mkName [c, '_'])) $(varE tvV) |]) (conE conName) variant
 				funD (mkName $ variant ++ "__") [clause [varP tvV] (normalB expr) []]
-			instanceD (sequence [ [t| Vectorized $elemType |] ]) [t| $(conT instanceName) ($(conT srcDataName) $elemType) |] =<< addInlines (resultDecl : (map funDecl variants))
+			instanceD (sequence [ [t| Vectorized $elemType |] ]) [t| $(conT instanceName) ($(conT srcDataName) $elemType) |] =<< addInlines (resultDecl : map funDecl variants)
 
 		let binaryOp opName = funD opName
 			[ clause
@@ -428,8 +428,8 @@ do
 			t <- newName "t"
 			instanceD (sequence [ [t| Vectorized $elemType |], [t| Show $elemType |] ]) [t| Show ($(conT dataName) $elemType) |] =<< addInlines
 				[ funD 'showsPrec [clause [varP p, conP conName $ map varP as, varP q] (normalB [| if $(varE p) >= 10 then '(' : $(varE s) (')' : $(varE q)) else $(varE s) $(varE q) |])
-					[ funD s [clause [varP h] (normalB [| $(litE $ stringL $ "Vec" ++ dimStr) ++ $(foldr appE (varE h) $ map (appE (varE f) . varE) as) |]) []]
-					, funD f [clause [varP t, varP h] (normalB [| ' ' : (showsPrec 10 $(varE t) $(varE h)) |]) []]
+					[ funD s [clause [varP h] (normalB [| $(litE $ stringL $ "Vec" ++ dimStr) ++ $(foldr (appE . appE (varE f) . varE) (varE h) as) |]) []]
+					, funD f [clause [varP t, varP h] (normalB [| ' ' : showsPrec 10 $(varE t) $(varE h) |]) []]
 					]]
 				]
 
@@ -537,8 +537,8 @@ do
 			t <- newName "t"
 			instanceD (sequence [ [t| Vectorized $elemType |], [t| Show $elemType |] ]) [t| Show ($(conT dataName) $elemType) |] =<< addInlines
 				[ funD 'showsPrec [clause [varP p, conP conName $ map varP as, varP q] (normalB [| if $(varE p) >= 10 then '(' : $(varE s) (')' : $(varE q)) else $(varE s) $(varE q) |])
-					[ funD s [clause [varP h] (normalB [| $(litE $ stringL $ "Mat" ++ dimStr) ++ $(foldr appE (varE h) $ map (appE (varE f) . varE) as) |]) []]
-					, funD f [clause [varP t, varP h] (normalB [| ' ' : (showsPrec 10 $(varE t) $(varE h)) |]) []]
+					[ funD s [clause [varP h] (normalB [| $(litE $ stringL $ "Mat" ++ dimStr) ++ $(foldr (appE . appE (varE f) . varE) (varE h) as) |]) []]
+					, funD f [clause [varP t, varP h] (normalB [| ' ' : showsPrec 10 $(varE t) $(varE h) |]) []]
 					]]
 				]
 
@@ -603,18 +603,15 @@ do
 		vecMatMuls <- mapM genVecMatMul $ do
 			n <- [1..maxVecDimension]
 			(m, k) <- matDimensions
-			if n == m then [(m, k)]
-			else []
+			[(m, k) | n == m]
 		matVecMuls <- mapM genMatVecMul $ do
 			(n, m) <- matDimensions
 			k <- [1..maxVecDimension]
-			if m == k then [(n, m)]
-			else []
+			[(n, m) | m == k]
 		matMatMuls <- mapM genMatMatMul $ do
 			(n, m1) <- matDimensions
 			(m2, k) <- matDimensions
-			if m1 == m2 then [(n, m1, k)]
-			else []
+			[(n, m1, k) | m1 == m2]
 		
 		return $ concat [vecMatMuls, matVecMuls, matMatMuls]
 

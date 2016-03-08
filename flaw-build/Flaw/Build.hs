@@ -55,7 +55,7 @@ instance Embed Double where
 	embedExp n = litE $ rationalL $ toRational n
 
 instance Embed Bool where
-	embedExp b = if b then (conE 'True) else (conE 'False)
+	embedExp b = conE $ if b then 'True else 'False
 
 instance Embed T.Text where
 	embedExp t = [| T.pack $(litE $ stringL $ T.unpack t) |]
@@ -214,8 +214,8 @@ genEmbed dn = do
 						return (n, xn, en)
 					let enStmt (_n, xn, en) = bindS (varP en) [| embedExp $(varE xn) |]
 					let fExp (n, _xn, en) = [| return ($(embedExp n), $(varE en)) |]
-					let body = normalB $ doE ((map enStmt xs) ++
-						[noBindS [| recConE $(embedExp conName) $(listE $ map fExp xs) |]])
+					let body = normalB $ doE $ map enStmt xs ++
+						[noBindS [| recConE $(embedExp conName) $(listE $ map fExp xs) |]]
 					match (recP conName [return (n, VarP xn) | (n, xn, _en) <- xs]) body []
 				InfixC _st1 conName _st2 -> do
 					x1 <- newName "x1"

@@ -194,10 +194,10 @@ calcTextureMetrics TextureInfo
 		mipLinePitch = case format of
 			UncompressedTextureFormat
 				{ textureFormatPixelSize = ps
-				} -> mipWidth * (pixelSizeByteSize ps)
+				} -> mipWidth * pixelSizeByteSize ps
 			CompressedTextureFormat
 				{ textureFormatCompression = c
-				} -> ((mipWidth + 3) `shiftR` 2) * (compressed4x4BlockSize c)
+				} -> ((mipWidth + 3) `shiftR` 2) * compressed4x4BlockSize c
 		mipSlicePitch = case format of
 			UncompressedTextureFormat {} -> mipHeight * mipLinePitch
 			CompressedTextureFormat {} -> ((mipHeight + 3) `shiftR` 2) * mipLinePitch
