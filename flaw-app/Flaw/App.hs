@@ -66,9 +66,9 @@ import Flaw.Input.Sdl
 import Flaw.Window.Sdl
 
 type AppWindow = SdlWindow
-type AppGraphicsDevice = GlDevice
-type AppGraphicsContext = GlContext
-type AppGraphicsPresenter = GlPresenter
+type AppGraphicsDevice = OpenGLDevice
+type AppGraphicsContext = OpenGLContext
+type AppGraphicsPresenter = OpenGLPresenter
 type AppInputManager = SdlInputManager
 
 #endif
@@ -140,11 +140,10 @@ initApp AppConfig
 
 	inputManager <- initSdlInput window
 
-	graphicsSystem <- book bk createGlSystem
+	graphicsSystem <- book bk createOpenGLSystem
 	graphicsDevices <- book bk $ getInstalledDevices graphicsSystem
-	graphicsContext <- book bk $ createGlContext (fst $ head graphicsDevices) window binaryCache debug
+	(graphicsContext, presenter) <- book bk $ createOpenGLPresenter (fst $ head graphicsDevices) window binaryCache debug
 	let graphicsDevice = graphicsContext
-	let presenter = graphicsContext
 
 #endif
 

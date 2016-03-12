@@ -19,9 +19,18 @@ source-repository head
 
 library
   exposed-modules:
-    Flaw.Graphics.OpenGL
   other-modules:
-  -- other-extensions:    
-  build-depends:       base, bytestring, cereal, flaw-base, flaw-glsl, flaw-graphics, flaw-math, flaw-sdl, flaw-window, OpenGLRaw, sdl2, text, vector
+    Flaw.Graphics.GlContext
+  build-depends:       base, bytestring, cereal, flaw-base, flaw-glsl, flaw-graphics, flaw-math, flaw-window, text, vector
+  if impl(ghcjs)
+    exposed-modules:
+      Flaw.Graphics.WebGL
+    other-modules:
+      Flaw.Graphics.WebGL.FFI
+    build-depends:       ghcjs-base, ghcjs-dom
+  else
+    exposed-modules:
+      Flaw.Graphics.OpenGL
+    build-depends:       flaw-sdl, OpenGLRaw, sdl2
   -- hs-source-dirs:      
   default-language:    Haskell2010
