@@ -66,6 +66,8 @@ import Graphics.GL.Core33
 import Graphics.GL.EXT.TextureCompressionS3TC
 import Graphics.GL.EXT.TextureSRGB
 
+import Flaw.Graphics.OpenGL.FFI
+
 #endif
 
 -- | 'GlContext' is a 'Device' and 'Context' simultaneously.
@@ -125,7 +127,7 @@ data GlAttribute = GlAttribute
 	-- | Is attribute normalized.
 	, glAttributeIsNormalized :: {-# UNPACK #-} !GLboolean
 	-- | Is attribute integer.
-	, glAttributeIsInteger :: !GLboolean
+	, glAttributeIsInteger :: {-# UNPACK #-} !GLboolean
 	-- | Offset within vertex buffer.
 	, glAttributeOffset :: {-# UNPACK #-} !IntPtr
 	}
@@ -142,41 +144,41 @@ instance Device GlContext where
 	newtype TextureId GlContext = GlTextureId GLuint deriving Eq
 	newtype SamplerStateId GlContext = GlSamplerStateId GLuint deriving Eq
 	data BlendStateId GlContext
-		= GlBlendStateId BlendStateInfo
+		= GlBlendStateId {-# UNPACK #-} !BlendStateInfo
 		| GlNullBlendStateId
 		deriving Eq
 	data RenderTargetId GlContext = GlRenderTargetId
-		{ glRenderTargetName :: !GLuint
-		, glRenderTargetWidth :: !Int
-		, glRenderTargetHeight :: !Int
+		{ glRenderTargetName :: {-# UNPACK #-} !TextureName
+		, glRenderTargetWidth :: {-# UNPACK #-} !Int
+		, glRenderTargetHeight :: {-# UNPACK #-} !Int
 		}
 	data DepthStencilTargetId GlContext = GlDepthStencilTargetId
-		{ glDepthStencilTargetName :: !GLuint
-		, glDepthStencilWidth :: !Int
-		, glDepthStencilHeight :: !Int
+		{ glDepthStencilTargetName :: {-# UNPACK #-} !TextureName
+		, glDepthStencilWidth :: {-# UNPACK #-} !Int
+		, glDepthStencilHeight :: {-# UNPACK #-} !Int
 		}
 	data FrameBufferId GlContext = GlFrameBufferId
-		{ glFrameBufferName :: !GLuint
-		, glFrameBufferWidth :: !Int
-		, glFrameBufferHeight :: !Int
+		{ glFrameBufferName :: {-# UNPACK #-} !FramebufferName
+		, glFrameBufferWidth :: {-# UNPACK #-} !Int
+		, glFrameBufferHeight :: {-# UNPACK #-} !Int
 		} deriving Eq
-	data VertexBufferId GlContext = GlVertexBufferId !GLuint !GLsizei deriving Eq
-	data IndexBufferId GlContext = GlIndexBufferId !GLuint !GLenum
+	data VertexBufferId GlContext = GlVertexBufferId {-# UNPACK #-} !BufferName {-# UNPACK #-} !GLsizei deriving Eq
+	data IndexBufferId GlContext = GlIndexBufferId {-# UNPACK #-} !BufferName {-# UNPACK #-} !GLenum
 	data ProgramId GlContext = GlProgramId
-		{ glProgramName :: !GLuint
-		, glProgramVertexArrayName :: !GLuint
-		, glProgramAttributeSlots ::  !(V.Vector GlAttributeSlot)
+		{ glProgramName :: {-# UNPACK #-} !GLuint
+		, glProgramVertexArrayName :: {-# UNPACK #-} !VertexArrayName
+		, glProgramAttributeSlots :: {-# UNPACK #-} !(V.Vector GlAttributeSlot)
 		-- | Number of generic vertex attributes used (i.e. used attributes are from 0 to this number minus 1).
 		-- Only for manual binding, i.e. zero when vertex array is used.
-		, glProgramAttributesCount :: !Int
+		, glProgramAttributesCount :: {-# UNPACK #-} !Int
 		-- | "Manual" uniforms by slot.
-		, glProgramUniforms :: !(V.Vector (V.Vector GlUniform))
+		, glProgramUniforms :: {-# UNPACK #-} !(V.Vector (V.Vector GlUniform))
 		}
 	data UniformBufferId GlContext
 		-- | Real uniform buffer: buffer name, size.
-		= GlUniformBufferId !GLuint !Int
+		= GlUniformBufferId {-# UNPACK #-} !BufferName {-# UNPACK #-} !Int
 		-- | Emulated uniform buffer: bytestring ref.
-		| GlUniformMemoryBufferId !(IORef B.ByteString)
+		| GlUniformMemoryBufferId {-# UNPACK #-} !(IORef B.ByteString)
 		-- | Null uniform buffer.
 		| GlNullUniformBufferId
 
@@ -216,11 +218,7 @@ instance Device GlContext where
 			{ textureMipsMetrics = mipsMetrics
 			} = calcTextureMetrics textureInfo
 
-		-- allocate texture name
-		textureName <- alloca $ \namePtr -> do
-			glGenTextures 1 namePtr
-			glCheckErrors 0 "gen texture"
-			peek namePtr
+		textureName <- glAllocTextureName
 
 		let (compressed, glInternalFormat, glFormat, glType) = glFormatFromTextureFormat format
 
@@ -327,7 +325,7 @@ instance Device GlContext where
 		-- setup sampling
 		glSetupTextureSampling glTarget samplerStateInfo
 
-		return (GlTextureId textureName, invoke $ with textureName $ glDeleteTextures 1)
+		return (GlTextureId textureName, invoke $ glDeleteTextureName textureName)
 
 	createSamplerState GlContext
 		{ glContextInvoke = invoke
@@ -339,11 +337,8 @@ instance Device GlContext where
 		, samplerMaxLod = maxLod
 		, samplerBorderColor = borderColor
 		} = invoke $ describeException "failed to create OpenGL sampler state" $ do
-		-- allocate sampler name
-		samplerName <- alloca $ \namePtr -> do
-			glGenSamplers 1 namePtr
-			glCheckErrors 0 "gen sampler"
-			peek namePtr
+
+		samplerName <- glAllocSamplerName
 
 		-- setup sampler
 
@@ -375,7 +370,7 @@ instance Device GlContext where
 		with borderColor $ glSamplerParameterfv samplerName GL_TEXTURE_BORDER_COLOR . castPtr
 		glCheckErrors 0 "border color"
 
-		return (GlSamplerStateId samplerName, invoke $ with samplerName $ glDeleteSamplers 1)
+		return (GlSamplerStateId samplerName, invoke $ glDeleteSamplerName samplerName)
 
 	createBlendState _context blendStateInfo = return (GlBlendStateId blendStateInfo, return ())
 
@@ -385,11 +380,8 @@ instance Device GlContext where
 			{ glCapsArbTextureStorage = useTextureStorage
 			}
 		} width height format samplerStateInfo = invoke $ describeException "failed to create OpenGL readable render target" $ do
-		-- allocate texture name
-		textureName <- alloca $ \namePtr -> do
-			glGenTextures 1 namePtr
-			glCheckErrors 0 "gen texture"
-			peek namePtr
+
+		textureName <- glAllocTextureName
 
 		glBindTexture GL_TEXTURE_2D textureName
 		glCheckErrors 0 "bind texture"
@@ -411,15 +403,13 @@ instance Device GlContext where
 			{ glRenderTargetName = textureName
 			, glRenderTargetWidth = width
 			, glRenderTargetHeight = height
-			}, GlTextureId textureName), invoke $ with textureName $ glDeleteTextures 1)
+			}, GlTextureId textureName), invoke $ glDeleteTextureName textureName)
 
 	createDepthStencilTarget GlContext
 		{ glContextInvoke = invoke
 		} width height = invoke $ describeException "failed to create OpenGL depth stencil target" $ do
-		-- allocate texture name
-		textureName <- alloca $ \namePtr -> do
-			glGenTextures 1 namePtr
-			peek namePtr
+
+		textureName <- glAllocTextureName
 
 		glBindTexture GL_TEXTURE_2D textureName
 		glCheckErrors 0 "bind texture"
@@ -437,7 +427,7 @@ instance Device GlContext where
 			{ glDepthStencilTargetName = textureName
 			, glDepthStencilWidth = width
 			, glDepthStencilHeight = height
-			}, invoke $ with textureName $ glDeleteTextures 1)
+			}, invoke $ glDeleteTextureName textureName)
 
 	createReadableDepthStencilTarget context width height = do
 		(depthStencilTarget@GlDepthStencilTargetId
@@ -455,11 +445,8 @@ instance Device GlContext where
 		, glDepthStencilWidth = depthStencilWidth
 		, glDepthStencilHeight = depthStencilHeight
 		} = invoke $ describeException "failed to create OpenGL framebuffer" $ do
-		-- allocate framebuffer name
-		framebufferName <- alloca $ \namePtr -> do
-			glGenFramebuffers 1 namePtr
-			glCheckErrors 0 "gen framebuffer"
-			peek namePtr
+
+		framebufferName <- glAllocFramebufferName
 
 		-- bind framebuffer
 		glBindFramebuffer GL_FRAMEBUFFER framebufferName
@@ -496,40 +483,30 @@ instance Device GlContext where
 
 		writeIORef actualFrameBufferRef frameBufferId
 
-		return (frameBufferId, invoke $ with framebufferName $ glDeleteFramebuffers 1)
+		return (frameBufferId, invoke $ glDeleteFramebufferName framebufferName)
 
 	createStaticVertexBuffer GlContext
 		{ glContextInvoke = invoke
 		} bytes stride = invoke $ describeException "failed to create OpenGL static vertex buffer" $ do
-		-- allocate buffer name
-		bufferName <- alloca $ \namePtr -> do
-			glGenBuffers 1 namePtr
-			glCheckErrors 0 "gen buffer"
-			peek namePtr
-
+		bufferName <- glAllocBufferName
 		glBindBuffer GL_ARRAY_BUFFER bufferName
 		glCheckErrors 0 "bind buffer"
 		B.unsafeUseAsCStringLen bytes $ \(bytesPtr, bytesLen) -> do
 			glBufferData GL_ARRAY_BUFFER (fromIntegral bytesLen) bytesPtr GL_STATIC_DRAW
 		glCheckErrors 0 "buffer data"
 
-		return (GlVertexBufferId bufferName (fromIntegral stride), invoke $ with bufferName $ glDeleteBuffers 1)
+		return (GlVertexBufferId bufferName (fromIntegral stride), invoke $ glDeleteBufferName bufferName)
 
 	createDynamicVertexBuffer GlContext
 		{ glContextInvoke = invoke
 		} size stride = invoke $ describeException "failed to create OpenGL dynamic vertex buffer" $ do
-		-- allocate buffer name
-		bufferName <- alloca $ \namePtr -> do
-			glGenBuffers 1 namePtr
-			glCheckErrors 0 "gen buffer"
-			peek namePtr
-
+		bufferName <- glAllocBufferName
 		glBindBuffer GL_ARRAY_BUFFER bufferName
 		glCheckErrors 0 "bind buffer"
 		glBufferData GL_ARRAY_BUFFER (fromIntegral size) nullPtr GL_DYNAMIC_DRAW
 		glCheckErrors 0 "buffer data"
 
-		return (GlVertexBufferId bufferName (fromIntegral stride), invoke $ with bufferName $ glDeleteBuffers 1)
+		return (GlVertexBufferId bufferName (fromIntegral stride), invoke $ glDeleteBufferName bufferName)
 
 	createStaticIndexBuffer GlContext
 		{ glContextInvoke = invoke
@@ -537,12 +514,7 @@ instance Device GlContext where
 			{ glContextStateIndexBuffer = actualIndexBufferRef
 			}
 		} bytes is32Bit = invoke $ describeException "failed to create OpenGL static index buffer" $ do
-		-- allocate buffer name
-		bufferName <- alloca $ \namePtr -> do
-			glGenBuffers 1 namePtr
-			glCheckErrors 0 "gen buffer"
-			peek namePtr
-
+		bufferName <- glAllocBufferName
 		glBindBuffer GL_ELEMENT_ARRAY_BUFFER bufferName
 		glCheckErrors 0 "bind buffer"
 		B.unsafeUseAsCStringLen bytes $ \(bytesPtr, bytesLen) -> do
@@ -557,7 +529,7 @@ instance Device GlContext where
 
 		writeIORef actualIndexBufferRef $ GlIndexBufferId 0 GL_UNSIGNED_SHORT
 
-		return (indexBufferId, invoke $ with bufferName $ glDeleteBuffers 1)
+		return (indexBufferId, invoke $ glDeleteBufferName bufferName)
 
 	createProgram GlContext
 		{ glContextInvoke = invoke
@@ -570,12 +542,10 @@ instance Device GlContext where
 			{ glContextStateProgram = actualProgramRef
 			}
 		, glContextProgramCache = SomeBinaryCache programCache
-		} program = invoke $ describeException "failed to create OpenGL program" $ do
+		} program = invoke $ describeException "failed to create OpenGL program" $ withSpecialBook $ \bk -> do
 
 		-- reset current program in order to correctly rebind it later for drawing
 		writeIORef actualProgramRef glNullProgram
-
-		bk <- newBook
 
 		-- generate GLSL
 		let glslConfig = GlslConfig
@@ -797,11 +767,8 @@ instance Device GlContext where
 		(vertexArrayName, attributeSlots, attributesCount) <- if capArbVertexAttribBinding then do
 			-- create vertex array
 			vaName <- book bk $ do
-				vaName <- alloca $ \vaNamePtr -> do
-					glGenVertexArrays 1 vaNamePtr
-					glCheckErrors 0 "gen vertex array"
-					peek vaNamePtr
-				return (vaName, with vaName $ glDeleteVertexArrays 1)
+				vaName <- glAllocVertexArrayName
+				return (vaName, glDeleteVertexArrayName vaName)
 
 			-- bind vertex array
 			glBindVertexArray vaName
@@ -885,13 +852,13 @@ instance Device GlContext where
 
 			return (0, attributeSlots, length attributes)
 
-		return (GlProgramId
+		return GlProgramId
 			{ glProgramName = programName
 			, glProgramVertexArrayName = vertexArrayName
 			, glProgramAttributeSlots = attributeSlots
 			, glProgramAttributesCount = attributesCount
 			, glProgramUniforms = uniformBindings
-			}, invoke $ freeBook bk)
+			}
 
 	createUniformBuffer GlContext
 		{ glContextInvoke = invoke
@@ -901,18 +868,13 @@ instance Device GlContext where
 		} size = invoke $ describeException "failed to create OpenGL uniform buffer" $ do
 
 		if useUniformBufferObject then do
-			-- allocate buffer name
-			bufferName <- alloca $ \namePtr -> do
-				glGenBuffers 1 namePtr
-				glCheckErrors 0 "gen buffer"
-				peek namePtr
-
+			bufferName <- glAllocBufferName
 			glBindBuffer GL_UNIFORM_BUFFER bufferName
 			glCheckErrors 0 "bind buffer"
 			glBufferData GL_UNIFORM_BUFFER (fromIntegral size) nullPtr GL_DYNAMIC_DRAW
 			glCheckErrors 0 "buffer data"
 			
-			return (GlUniformBufferId bufferName size, invoke $ with bufferName $ glDeleteBuffers 1)
+			return (GlUniformBufferId bufferName size, invoke $ glDeleteBufferName bufferName)
 		else do
 			bufferRef <- newIORef B.empty
 			return (GlUniformMemoryBufferId bufferRef, return ())

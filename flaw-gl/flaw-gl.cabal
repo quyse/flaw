@@ -31,6 +31,8 @@ library
   else
     exposed-modules:
       Flaw.Graphics.OpenGL
+    other-modules:
+      Flaw.Graphics.OpenGL.FFI
     build-depends:       flaw-sdl, OpenGLRaw, sdl2
   -- hs-source-dirs:      
   default-language:    Haskell2010
