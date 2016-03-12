@@ -70,13 +70,13 @@ variables:
     flaw-build
     flaw-canvas
     flaw-ffi
+    flaw-gl
     flaw-glsl
     flaw-graphics
     flaw-input
     flaw-math
     flaw-physics
     flaw-sl
-    flaw-webgl
     flaw-window
   INTEGERSIMPLE_CONFIG_FIX: >-
     powershell
