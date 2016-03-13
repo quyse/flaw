@@ -37,14 +37,22 @@ module Flaw.Graphics.OpenGL.FFI
 	, glCompressedTexSubImage1D_bs
 	, glCompressedTexSubImage2D_bs
 	, glCompressedTexSubImage3D_bs
+	, glTexImage2D_null
+	-- * Clearing
+	, glClearBufferiv_1
+	, glClearBufferfv_1
+	, glClearBufferfv_4
 	) where
 
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Unsafe as B
 import Foreign.Marshal.Alloc
 import Foreign.Marshal.Utils
+import Foreign.Ptr
 import Foreign.Storable
 import Graphics.GL.Core33
+
+import Flaw.Math
 
 type BufferName = GLuint
 type TextureName = GLuint
@@ -161,3 +169,20 @@ glCompressedTexSubImage2D_bs target level xoffset yoffset width height format by
 glCompressedTexSubImage3D_bs :: GLenum -> GLint -> GLint -> GLint -> GLint -> GLsizei -> GLsizei -> GLsizei -> GLenum -> B.ByteString -> IO ()
 glCompressedTexSubImage3D_bs target level xoffset yoffset zoffset width height depth format bytes =
 	B.unsafeUseAsCStringLen bytes $ \(ptr, len) -> glCompressedTexSubImage3D target level xoffset yoffset zoffset width height depth format (fromIntegral len) ptr
+
+{-# INLINABLE glTexImage2D_null #-}
+glTexImage2D_null :: GLenum -> GLint -> GLint -> GLsizei -> GLsizei -> GLint -> GLenum -> GLenum -> IO ()
+glTexImage2D_null target level internalFormat width height border format type_ =
+	glTexImage2D target level internalFormat width height border format type_ nullPtr
+
+{-# INLINABLE glClearBufferiv_1 #-}
+glClearBufferiv_1 :: GLenum -> GLint -> GLint -> IO ()
+glClearBufferiv_1 buffer drawBuffer ival = with ival $ glClearBufferiv buffer drawBuffer
+
+{-# INLINABLE glClearBufferfv_1 #-}
+glClearBufferfv_1 :: GLenum -> GLint -> GLfloat -> IO ()
+glClearBufferfv_1 buffer drawBuffer fval = with fval $ glClearBufferfv buffer drawBuffer
+
+{-# INLINABLE glClearBufferfv_4 #-}
+glClearBufferfv_4 :: GLenum -> GLint -> Float4 -> IO ()
+glClearBufferfv_4 buffer drawBuffer fval = with fval $ glClearBufferfv buffer drawBuffer . castPtr

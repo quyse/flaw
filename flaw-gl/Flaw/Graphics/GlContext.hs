@@ -393,7 +393,7 @@ instance Device GlContext where
 		if useTextureStorage then
 			glTexStorage2D GL_TEXTURE_2D 1 glInternalFormat (fromIntegral width) (fromIntegral height)
 		else
-			glTexImage2D GL_TEXTURE_2D 0 (fromIntegral glInternalFormat) (fromIntegral width) (fromIntegral height) 0 glFormat glType nullPtr
+			glTexImage2D_null GL_TEXTURE_2D 0 (fromIntegral glInternalFormat) (fromIntegral width) (fromIntegral height) 0 glFormat glType
 		glCheckErrors 0 "texture storage"
 
 		-- setup sampling
@@ -413,7 +413,7 @@ instance Device GlContext where
 
 		glBindTexture GL_TEXTURE_2D textureName
 		glCheckErrors 0 "bind texture"
-		glTexImage2D GL_TEXTURE_2D 0 (fromIntegral GL_DEPTH_STENCIL) (fromIntegral width) (fromIntegral height) 0 GL_DEPTH_STENCIL GL_UNSIGNED_INT_24_8 nullPtr
+		glTexImage2D_null GL_TEXTURE_2D 0 (fromIntegral GL_DEPTH_STENCIL) (fromIntegral width) (fromIntegral height) 0 GL_DEPTH_STENCIL GL_UNSIGNED_INT_24_8
 		glCheckErrors 0 "tex image"
 
 		glTexParameteri GL_TEXTURE_2D GL_TEXTURE_MIN_FILTER $ fromIntegral GL_NEAREST
@@ -882,18 +882,18 @@ instance Device GlContext where
 instance Context GlContext GlContext where
 	contextClearColor context targetIndex color = do
 		glUpdateFrameBufferViewportScissor context
-		with color $ glClearBufferfv GL_COLOR (fromIntegral targetIndex) . castPtr
+		glClearBufferfv_4 GL_COLOR (fromIntegral targetIndex) color
 		glCheckErrors 1 "clear color"
 
 	contextClearDepth context depth = do
 		glUpdateFrameBufferViewportScissor context
 		glEnableDepthWriteForClearing context
-		with depth $ glClearBufferfv GL_DEPTH 0
+		glClearBufferfv_1 GL_DEPTH 0 depth
 		glCheckErrors 1 "clear depth"
 
 	contextClearStencil context stencil = do
 		glUpdateFrameBufferViewportScissor context
-		with (fromIntegral stencil) $ glClearBufferiv GL_STENCIL 0
+		glClearBufferiv_1 GL_STENCIL 0 (fromIntegral stencil)
 		glCheckErrors 1 "clear stencil"
 
 	contextClearDepthStencil context depth stencil = do
