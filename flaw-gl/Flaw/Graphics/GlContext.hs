@@ -261,7 +261,7 @@ instance Device GlContext where
 		let glInternalFormatS = fromIntegral glInternalFormat
 
 		-- loop for mips
-		B.unsafeUseAsCString bytes $ \textureData -> forM_ (zip [0..(mips - 1)] mipsMetrics) $ \(mip, mipMetrics) -> do
+		forM_ (zip [0..(mips - 1)] mipsMetrics) $ \(mip, mipMetrics) -> do
 			let
 				mipWidth = fromIntegral $ textureMipWidth mipMetrics
 				mipHeight = fromIntegral $ textureMipHeight mipMetrics
@@ -282,39 +282,39 @@ instance Device GlContext where
 				glCheckErrors 0 "set unpack row length"
 
 			-- get mip data
-			let mipData = textureData `plusPtr` mipOffset
+			let mipBytes = B.take mipSize $ B.drop mipOffset bytes
 
 			-- upload data
 			if useTextureStorage then
 				if compressed then
 					case textureType of
-						Texture3D      -> glCompressedTexSubImage3D glTarget mip 0 0 0 mipWidth mipHeight mipDepth glInternalFormat mipSize mipData
-						Texture2DArray -> glCompressedTexSubImage3D glTarget mip 0 0 0 mipWidth mipHeight count    glInternalFormat mipSize mipData
-						Texture2D      -> glCompressedTexSubImage2D glTarget mip 0 0   mipWidth mipHeight          glInternalFormat mipSize mipData
-						Texture1DArray -> glCompressedTexSubImage2D glTarget mip 0 0   mipWidth count              glInternalFormat mipSize mipData
-						Texture1D      -> glCompressedTexSubImage1D glTarget mip 0     mipWidth                    glInternalFormat mipSize mipData
+						Texture3D      -> glCompressedTexSubImage3D_bs glTarget mip 0 0 0 mipWidth mipHeight mipDepth glInternalFormat mipBytes
+						Texture2DArray -> glCompressedTexSubImage3D_bs glTarget mip 0 0 0 mipWidth mipHeight count    glInternalFormat mipBytes
+						Texture2D      -> glCompressedTexSubImage2D_bs glTarget mip 0 0   mipWidth mipHeight          glInternalFormat mipBytes
+						Texture1DArray -> glCompressedTexSubImage2D_bs glTarget mip 0 0   mipWidth count              glInternalFormat mipBytes
+						Texture1D      -> glCompressedTexSubImage1D_bs glTarget mip 0     mipWidth                    glInternalFormat mipBytes
 				else
 					case textureType of
-						Texture3D      -> glTexSubImage3D glTarget mip 0 0 0 mipWidth mipHeight mipDepth glFormat glType mipData
-						Texture2DArray -> glTexSubImage3D glTarget mip 0 0 0 mipWidth mipHeight count    glFormat glType mipData
-						Texture2D      -> glTexSubImage2D glTarget mip 0 0   mipWidth mipHeight          glFormat glType mipData
-						Texture1DArray -> glTexSubImage2D glTarget mip 0 0   mipWidth count              glFormat glType mipData
-						Texture1D      -> glTexSubImage1D glTarget mip 0     mipWidth                    glFormat glType mipData
+						Texture3D      -> glTexSubImage3D_bs glTarget mip 0 0 0 mipWidth mipHeight mipDepth glFormat glType mipBytes
+						Texture2DArray -> glTexSubImage3D_bs glTarget mip 0 0 0 mipWidth mipHeight count    glFormat glType mipBytes
+						Texture2D      -> glTexSubImage2D_bs glTarget mip 0 0   mipWidth mipHeight          glFormat glType mipBytes
+						Texture1DArray -> glTexSubImage2D_bs glTarget mip 0 0   mipWidth count              glFormat glType mipBytes
+						Texture1D      -> glTexSubImage1D_bs glTarget mip 0     mipWidth                    glFormat glType mipBytes
 			else
 				if compressed then
 					case textureType of
-						Texture3D      -> glCompressedTexImage3D glTarget mip glInternalFormat mipWidth mipHeight mipDepth 0 mipSize mipData
-						Texture2DArray -> glCompressedTexImage3D glTarget mip glInternalFormat mipWidth mipHeight count    0 mipSize mipData
-						Texture2D      -> glCompressedTexImage2D glTarget mip glInternalFormat mipWidth mipHeight          0 mipSize mipData
-						Texture1DArray -> glCompressedTexImage2D glTarget mip glInternalFormat mipWidth count              0 mipSize mipData
-						Texture1D      -> glCompressedTexImage1D glTarget mip glInternalFormat mipWidth                    0 mipSize mipData
+						Texture3D      -> glCompressedTexImage3D_bs glTarget mip glInternalFormat mipWidth mipHeight mipDepth 0 mipBytes
+						Texture2DArray -> glCompressedTexImage3D_bs glTarget mip glInternalFormat mipWidth mipHeight count    0 mipBytes
+						Texture2D      -> glCompressedTexImage2D_bs glTarget mip glInternalFormat mipWidth mipHeight          0 mipBytes
+						Texture1DArray -> glCompressedTexImage2D_bs glTarget mip glInternalFormat mipWidth count              0 mipBytes
+						Texture1D      -> glCompressedTexImage1D_bs glTarget mip glInternalFormat mipWidth                    0 mipBytes
 				else
 					case textureType of
-						Texture3D      -> glTexImage3D glTarget mip glInternalFormatS mipWidth mipHeight mipDepth 0 glFormat glType mipData
-						Texture2DArray -> glTexImage3D glTarget mip glInternalFormatS mipWidth mipHeight count    0 glFormat glType mipData
-						Texture2D      -> glTexImage2D glTarget mip glInternalFormatS mipWidth mipHeight          0 glFormat glType mipData
-						Texture1DArray -> glTexImage2D glTarget mip glInternalFormatS mipWidth count              0 glFormat glType mipData
-						Texture1D      -> glTexImage1D glTarget mip glInternalFormatS mipWidth                    0 glFormat glType mipData
+						Texture3D      -> glTexImage3D_bs glTarget mip glInternalFormatS mipWidth mipHeight mipDepth 0 glFormat glType mipBytes
+						Texture2DArray -> glTexImage3D_bs glTarget mip glInternalFormatS mipWidth mipHeight count    0 glFormat glType mipBytes
+						Texture2D      -> glTexImage2D_bs glTarget mip glInternalFormatS mipWidth mipHeight          0 glFormat glType mipBytes
+						Texture1DArray -> glTexImage2D_bs glTarget mip glInternalFormatS mipWidth count              0 glFormat glType mipBytes
+						Texture1D      -> glTexImage1D_bs glTarget mip glInternalFormatS mipWidth                    0 glFormat glType mipBytes
 			glCheckErrors 0 "tex image"
 
 		unless useTextureStorage $ do
