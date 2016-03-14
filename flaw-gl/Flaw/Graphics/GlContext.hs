@@ -563,7 +563,7 @@ instance Device GlContext where
 			, glslProgramSamplers = samplers
 			, glslProgramFragmentTargets = fragmentTargets
 			, glslProgramShaders = shaders
-			} <- fmap (glslGenerateProgram glslConfig) $ runProgram program
+			} <- glslGenerateProgram glslConfig <$> runProgram program
 
 		-- create program
 		programName <- book bk $ do
@@ -674,7 +674,7 @@ instance Device GlContext where
 					len <- alloca $ \lenPtr -> do
 						glGetProgramiv programName GL_PROGRAM_BINARY_LENGTH lenPtr
 						glCheckErrors 0 "get binary program length"
-						fmap fromIntegral $ peek lenPtr
+						fromIntegral <$> peek lenPtr
 					when (len > 0) $ do
 						bytesPtr <- mallocBytes len
 						binaryProgram <- alloca $ \formatPtr -> do
@@ -1354,7 +1354,7 @@ glUpdateContext context@GlContext
 			glCheckErrors 0 "bind array buffer"
 
 			-- bind attributes
-			attributeSlots <- fmap glProgramAttributeSlots $ readIORef desiredProgramRef
+			attributeSlots <- glProgramAttributeSlots <$> readIORef desiredProgramRef
 			V.forM_ attributeSlots $ \GlAttributeSlot
 				{ glAttributeSlotElements = elements
 				, glAttributeSlotDivisor = divisor
@@ -1375,14 +1375,14 @@ glUpdateContext context@GlContext
 						glVertexAttribIPointer i size t stride (intPtrToPtr offset)
 					else
 						glVertexAttribPointer i size t isNormalized stride (intPtrToPtr offset)
-					glCheckErrors 0 "vertex attrib pointer"
+					glCheckErrors 0 $ show ("vertex attrib pointer", bufferName, i, size, t, isNormalized, stride, offset)
 
 					when capArbInstancedArrays $ do
 						glVertexAttribDivisor i divisor
 						glCheckErrors 0 "vertex attrib divisor"
 
 	-- disable unused attributes
-	newBoundAttributesCount <- fmap glProgramAttributesCount $ readIORef desiredProgramRef
+	newBoundAttributesCount <- glProgramAttributesCount <$> readIORef desiredProgramRef
 	oldBoundAttributesCount <- readIORef boundAttributesCountRef
 	forM_ [newBoundAttributesCount .. (oldBoundAttributesCount - 1)] $ \i -> do
 		glDisableVertexAttribArray (fromIntegral i)
