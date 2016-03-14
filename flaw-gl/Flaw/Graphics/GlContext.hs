@@ -1258,83 +1258,72 @@ glUpdateContext context@GlContext
 			writeIORef actualIndexBufferRef $ GlIndexBufferId (-1) 0
 
 	-- uniform buffers
-	uniformBindings <- fmap glProgramUniforms $ readIORef desiredProgramRef
+	uniformBindings <- glProgramUniforms <$> readIORef desiredProgramRef
+	let uniformBindingsCount = V.length uniformBindings
 	forM_ [0..(VM.length actualUniformBuffersVector - 1)] $ \i -> do
 		actualUniformBuffer <- VM.read actualUniformBuffersVector i
 		desiredUniformBuffer <- VM.read desiredUniformBuffersVector i
+		let updateActual = VM.write actualUniformBuffersVector i desiredUniformBuffer
 		let bindBuffer bufferName = do
 			glBindBufferBase GL_UNIFORM_BUFFER (fromIntegral i) bufferName
 			glCheckErrors 0 "bind uniform buffer"
-		let updateActual = VM.write actualUniformBuffersVector i desiredUniformBuffer
-		let bindMemoryBuffer bytes = do
-			-- get uniforms for this slot
-			let uniforms = uniformBindings V.! i
-			-- setup manually
-			B.unsafeUseAsCString bytes $ \bytesPtr -> forM_ uniforms $ \GlUniform
-				{ glUniformLocation = location
-				, glUniformOffset = offset
-				, glUniformSize = size
-				, glUniformType = t
-				} -> do
-				let ptr = plusPtr bytesPtr offset
-				case t of
-					ScalarValueType ScalarFloat -> glUniform1fv location size $ castPtr ptr
-					ScalarValueType ScalarInt -> glUniform1iv location size $ castPtr ptr
-					ScalarValueType ScalarUint -> glUniform1uiv location size $ castPtr ptr
-					ScalarValueType ScalarBool -> glUniform1iv location size $ castPtr ptr
-					VectorValueType Dimension1 ScalarFloat -> glUniform1fv location size $ castPtr ptr
-					VectorValueType Dimension2 ScalarFloat -> glUniform2fv location size $ castPtr ptr
-					VectorValueType Dimension3 ScalarFloat -> glUniform3fv location size $ castPtr ptr
-					VectorValueType Dimension4 ScalarFloat -> glUniform4fv location size $ castPtr ptr
-					VectorValueType Dimension1 ScalarInt -> glUniform1iv location size $ castPtr ptr
-					VectorValueType Dimension2 ScalarInt -> glUniform2iv location size $ castPtr ptr
-					VectorValueType Dimension3 ScalarInt -> glUniform3iv location size $ castPtr ptr
-					VectorValueType Dimension4 ScalarInt -> glUniform4iv location size $ castPtr ptr
-					VectorValueType Dimension1 ScalarUint -> glUniform1uiv location size $ castPtr ptr
-					VectorValueType Dimension2 ScalarUint -> glUniform2uiv location size $ castPtr ptr
-					VectorValueType Dimension3 ScalarUint -> glUniform3uiv location size $ castPtr ptr
-					VectorValueType Dimension4 ScalarUint -> glUniform4uiv location size $ castPtr ptr
-					VectorValueType Dimension1 ScalarBool -> glUniform1iv location size $ castPtr ptr
-					VectorValueType Dimension2 ScalarBool -> glUniform2iv location size $ castPtr ptr
-					VectorValueType Dimension3 ScalarBool -> glUniform3iv location size $ castPtr ptr
-					VectorValueType Dimension4 ScalarBool -> glUniform4iv location size $ castPtr ptr
-					MatrixValueType Dimension3 Dimension3 ScalarFloat -> glUniformMatrix3fv location size 0 $ castPtr ptr
-					MatrixValueType Dimension4 Dimension4 ScalarFloat -> glUniformMatrix4fv location size 0 $ castPtr ptr
-					_ -> return ()
-				glCheckErrors 0 "set uniform"
+		-- we don't support mix of real uniform buffers and memory buffers
 		case desiredUniformBuffer of
-			GlUniformBufferId bufferName _bufferSize -> case actualUniformBuffer of
-				GlUniformBufferId prevBufferName _prevBufferSize -> do
-					when (bufferName /= prevBufferName) $ do
-						bindBuffer bufferName
-						updateActual
-				GlUniformMemoryBufferId _ -> do
+			GlUniformBufferId bufferName _bufferSize -> do
+				-- skip update if buffer is the same
+				let needUpdate = case actualUniformBuffer of
+					GlUniformBufferId prevBufferName _prevBufferSize -> bufferName /= prevBufferName
+					_ -> True
+				when needUpdate $ do
 					bindBuffer bufferName
 					updateActual
-				GlNullUniformBufferId -> do
-					bindBuffer bufferName
-					updateActual
-			GlUniformMemoryBufferId bytesRef -> case actualUniformBuffer of
-				GlUniformBufferId _ _ -> do
-					bindBuffer 0
-					bytes <- readIORef bytesRef
-					bindMemoryBuffer bytes
-					updateActual
-				GlUniformMemoryBufferId prevBytesRef -> do
-					bytes <- readIORef bytesRef
-					prevBytes <- readIORef prevBytesRef
-					when (bytes /= prevBytes) $ do
-						bindMemoryBuffer bytes
-						updateActual
-				GlNullUniformBufferId -> do
-					bytes <- readIORef bytesRef
-					bindMemoryBuffer bytes
-					updateActual
+			GlUniformMemoryBufferId bytesRef -> do
+				-- update uniforms every time
+				-- we cannot check if nothing has changed currently, as we don't keep
+				-- actual bound immutable data in the context state, but only a ref to the buffer data
+				bytes <- readIORef bytesRef
+				-- get uniforms for this slot
+				let uniforms = if i < uniformBindingsCount then uniformBindings V.! i else V.empty
+				-- setup manually
+				B.unsafeUseAsCString bytes $ \bytesPtr -> forM_ uniforms $ \GlUniform
+					{ glUniformLocation = location
+					, glUniformOffset = offset
+					, glUniformSize = s
+					, glUniformType = t
+					} -> do
+					let ptr = plusPtr bytesPtr offset
+					let size = if s > 0 then s else 1
+					case t of
+						ScalarValueType ScalarFloat -> glUniform1fv location size $ castPtr ptr
+						ScalarValueType ScalarInt -> glUniform1iv location size $ castPtr ptr
+						ScalarValueType ScalarUint -> glUniform1uiv location size $ castPtr ptr
+						ScalarValueType ScalarBool -> glUniform1iv location size $ castPtr ptr
+						VectorValueType Dimension1 ScalarFloat -> glUniform1fv location size $ castPtr ptr
+						VectorValueType Dimension2 ScalarFloat -> glUniform2fv location size $ castPtr ptr
+						VectorValueType Dimension3 ScalarFloat -> glUniform3fv location size $ castPtr ptr
+						VectorValueType Dimension4 ScalarFloat -> glUniform4fv location size $ castPtr ptr
+						VectorValueType Dimension1 ScalarInt -> glUniform1iv location size $ castPtr ptr
+						VectorValueType Dimension2 ScalarInt -> glUniform2iv location size $ castPtr ptr
+						VectorValueType Dimension3 ScalarInt -> glUniform3iv location size $ castPtr ptr
+						VectorValueType Dimension4 ScalarInt -> glUniform4iv location size $ castPtr ptr
+						VectorValueType Dimension1 ScalarUint -> glUniform1uiv location size $ castPtr ptr
+						VectorValueType Dimension2 ScalarUint -> glUniform2uiv location size $ castPtr ptr
+						VectorValueType Dimension3 ScalarUint -> glUniform3uiv location size $ castPtr ptr
+						VectorValueType Dimension4 ScalarUint -> glUniform4uiv location size $ castPtr ptr
+						VectorValueType Dimension1 ScalarBool -> glUniform1iv location size $ castPtr ptr
+						VectorValueType Dimension2 ScalarBool -> glUniform2iv location size $ castPtr ptr
+						VectorValueType Dimension3 ScalarBool -> glUniform3iv location size $ castPtr ptr
+						VectorValueType Dimension4 ScalarBool -> glUniform4iv location size $ castPtr ptr
+						MatrixValueType Dimension3 Dimension3 ScalarFloat -> glUniformMatrix3fv location size 0 $ castPtr ptr
+						MatrixValueType Dimension4 Dimension4 ScalarFloat -> glUniformMatrix4fv location size 0 $ castPtr ptr
+						_ -> return ()
+					glCheckErrors 0 "set uniform"
+				updateActual
 			GlNullUniformBufferId -> case actualUniformBuffer of
-				GlUniformBufferId _prevBufferName _prevBufferSize -> do
+				GlUniformBufferId {} -> do
 					bindBuffer 0
 					updateActual
-				GlUniformMemoryBufferId _ -> do
+				GlUniformMemoryBufferId {} -> do
 					updateActual
 				GlNullUniformBufferId -> return ()
 
