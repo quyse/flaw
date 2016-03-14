@@ -12,7 +12,7 @@ module Flaw.Graphics.GlContext
 	, FrameBufferId(..)
 	, GlCaps(..)
 	, GlContextState(..)
-	, glCreateContextState
+	, newGlContext
 	, glCheckErrors
 	) where
 
@@ -1088,6 +1088,20 @@ glNullProgram = GlProgramId
 	, glProgramAttributesCount = 0
 	, glProgramUniforms = V.empty
 	}
+
+newGlContext :: (forall a. IO a -> IO a) -> GlCaps -> SomeBinaryCache -> IO GlContext
+newGlContext invoke caps programCache = do
+	actualState <- glCreateContextState
+	desiredState <- glCreateContextState
+	boundAttributesCount <- newIORef 0
+	return GlContext
+		{ glContextInvoke = invoke
+		, glContextCaps = caps
+		, glContextActualState = actualState
+		, glContextDesiredState = desiredState
+		, glContextBoundAttributesCount = boundAttributesCount
+		, glContextProgramCache = programCache
+		}
 
 glCreateContextState :: IO GlContextState
 glCreateContextState = do

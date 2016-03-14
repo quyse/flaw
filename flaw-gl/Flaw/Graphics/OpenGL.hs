@@ -151,30 +151,20 @@ createOpenGLPresenter _deviceId window@SdlWindow
 	capArbGetProgramBinary <- isOpenGLExtensionSupported "GL_ARB_get_program_binary"
 
 	-- create context
-	actualContextState <- glCreateContextState
-	desiredContextState <- glCreateContextState
-	boundAttributesCount <- newIORef 0
 	let presenter = OpenGLPresenter
 		{ openglPresenterSdlContext = sdlContext
 		, openglPresenterWindow = window
 		}
-	let context = GlContext
-		{ glContextInvoke = openglInvoke presenter
-		, glContextCaps = GlCaps
-			{ glCapsArbUniformBufferObject = capArbUniformBufferObject
-			, glCapsArbSamplerObjects = capArbSamplerObjects
-			, glCapsArbVertexAttribBinding = capArbVertexAttribBinding
-			, glCapsArbFramebufferObject = capArbFramebufferObject
-			, glCapsArbTextureStorage = capArbTextureStorage
-			, glCapsArbInstancedArrays = capArbInstancedArrays
-			, glCapsArbDebugOutput = capArbDebugOutput
-			, glCapsArbGetProgramBinary = capArbGetProgramBinary
-			}
-		, glContextActualState = actualContextState
-		, glContextDesiredState = desiredContextState
-		, glContextBoundAttributesCount = boundAttributesCount
-		, glContextProgramCache = SomeBinaryCache programCache
-		}
+	context <- newGlContext (openglInvoke presenter) GlCaps
+		{ glCapsArbUniformBufferObject = capArbUniformBufferObject
+		, glCapsArbSamplerObjects = capArbSamplerObjects
+		, glCapsArbVertexAttribBinding = capArbVertexAttribBinding
+		, glCapsArbFramebufferObject = capArbFramebufferObject
+		, glCapsArbTextureStorage = capArbTextureStorage
+		, glCapsArbInstancedArrays = capArbInstancedArrays
+		, glCapsArbDebugOutput = capArbDebugOutput
+		, glCapsArbGetProgramBinary = capArbGetProgramBinary
+		} (SomeBinaryCache programCache)
 
 	-- set swap interval
 	do
