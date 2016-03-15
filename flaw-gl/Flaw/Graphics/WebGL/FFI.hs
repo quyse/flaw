@@ -7,7 +7,12 @@ License: MIT
 {-# LANGUAGE JavaScriptFFI, PatternSynonyms #-}
 
 module Flaw.Graphics.WebGL.FFI
-	( JS_WebGLContext(..)
+	(
+	-- * Introduction
+	-- | This module is written manually using definitions from WebGL specs:
+	-- <https://www.khronos.org/registry/webgl/specs/latest/1.0/webgl.idl WebGL 1.0 WebIDL>
+	-- <https://www.khronos.org/registry/webgl/specs/latest/2.0/webgl2.idl WebGL 2.0 WebIDL>
+	  JS_WebGLContext(..)
 	, JS_WebGLTexture(..)
 	, JS_WebGLRenderbuffer(..)
 	, JS_WebGLFramebuffer(..)
@@ -15,62 +20,190 @@ module Flaw.Graphics.WebGL.FFI
 	, JS_WebGLProgram(..)
 	, JS_WebGLShader(..)
 	, JS_WebGLUniformLocation(..)
+	, UniformLocation
 	, GLenum
 	, GLint
 	, GLuint
 	, GLsizei
+	, GLsizeiptr
 	, GLintptr
 	, GLclampf
 	, GLboolean
 	, GLbitfield
-	, js_getWebGLContext
-	, js_getExtension
-	, js_frontFace
-	, js_cullFace
-	, js_enable
-	, js_disable
-	, js_createTexture
-	, js_activeTexture
-	, js_bindTexture
-	, js_texImage2D
-	, js_texParameterf
-	, js_texParameteri
-	, js_createBuffer
-	, js_bindBuffer
-	, js_bufferData
-	, js_enableVertexAttribArray
-	, js_disableVertexAttribArray
-	, js_vertexAttribPointer
-	, js_createShader
-	, js_shaderSource
-	, js_compileShader
-	, js_getShaderParameter
-	, js_getShaderInfoLog
-	, js_createProgram
-	, js_attachShader
-	, js_bindAttribLocation
-	, js_linkProgram
-	, js_getProgramParameter
-	, js_useProgram
-	, js_getUniformLocation
-	, js_uniform1f
-	, js_uniform1i
-	, js_uniform1fv
-	, js_uniform2fv
-	, js_uniform3fv
-	, js_uniform4fv
-	, js_uniformMatrix4fv
-	, js_uniform1iv
-	, js_clearColor
-	, js_clearDepth
-	, js_clearStencil
-	, js_clear
-	, js_viewport
-	, js_drawArrays
-	, js_drawElements
-	, js_drawArraysInstanced
-	, js_drawElementsInstanced
+	-- * Initialization
+	, js_getCanvasContext
+	, js_setContext
+	, js_requestAnimationFrame
+	-- * WebGL functions
+	, glGetExtension
+	, glFrontFace
+	, glCullFace
+	, glEnable
+	, glDisable
+	, glGetError
+	-- ** Textures
+	, glCreateTexture
+	, glDeleteTexture
+	, glActiveTexture
+	, glBindTexture
+	, glTexImage2D_image
+	, glTexParameterf
+	, glTexParameteri
+	, glTexParameterfv
+	, glPixelStorei
+	, glTexStorage1D
+	, glTexStorage2D
+	, glTexStorage3D
+	-- ** Samplers
+	, glCreateSampler
+	, glDeleteSampler
+	, glBindSampler
+	, glSamplerParameteri
+	, glSamplerParameterf
+	, glSamplerParameterfv_4
+	-- ** Buffers
+	, glCreateBuffer
+	, glDeleteBuffer
+	, glBindBuffer
+	, glBindBufferBase
+	, glEnableVertexAttribArray
+	, glDisableVertexAttribArray
+	, glVertexAttribPointer
+	, glVertexAttribIPointer
+	, glVertexAttribDivisor
+	-- ** Framebuffers
+	, glCreateFramebuffer
+	, glDeleteFramebuffer
+	, glBindFramebuffer
+	, glFramebufferTexture2D
+	-- ** Shaders and programs
+	, glCreateShader
+	, glDeleteShader
+	, glCompileShader
+	, glCreateProgram
+	, glDeleteProgram
+	, glAttachShader
+	, glLinkProgram
+	, glUseProgram
+	, glUniformBlockBinding
+	, glShaderSource_s
+	, glGetShaderiv
+	, glGetShaderInfoLog_s
+	, glGetProgramiv
+	, glGetProgramInfoLog_s
+	, glBindAttribLocation_s
+	, glGetUniformLocation_s
+	, glGetUniformBlockIndex_s
+	-- ** Uniforms
+	, glUniform1i
+	, glUniform1fv
+	, glUniform2fv
+	, glUniform3fv
+	, glUniform4fv
+	, glUniform1iv
+	, glUniform2iv
+	, glUniform3iv
+	, glUniform4iv
+	, glUniform1uiv
+	, glUniform2uiv
+	, glUniform3uiv
+	, glUniform4uiv
+	, glUniformMatrix3fv
+	, glUniformMatrix4fv
+	-- ** Vertex Arrays
+	, glCreateVertexArray
+	, glDeleteVertexArray
+	, glBindVertexArray
+	-- ** Depth output
+	, glDepthFunc
+	, glDepthMask
+	-- ** Blending
+	, glBlendEquationSeparate
+	, glBlendFuncSeparate
+	-- ** Scissor
+	, glScissor
+	-- ** Clearing.
+	, glClearColor
+	, glClearDepth
+	, glClearStencil
+	, glClear
+	, glClearBufferiv_1
+	, glClearBufferfv_1
+	, glClearBufferfv_4
+	, glClearBufferfi
+	-- ** Viewport.
+	, glViewport
+	-- ** Drawing.
+	, glDrawArrays
+	, glDrawElements
+	, glDrawArraysInstanced
+	, glDrawElementsInstanced
+	-- ** Misc.
 	, js_loadImage
+	-- * Name manipulation.
+	, BufferName
+	, TextureName
+	, SamplerName
+	, FramebufferName
+	, VertexArrayName
+	, ProgramName
+	, ShaderName
+	, glAllocBufferName
+	, glDeleteBufferName
+	, glNullBufferName
+	, glUndefinedBufferName
+	, glAllocTextureName
+	, glDeleteTextureName
+	, glNullTextureName
+	, glAllocSamplerName
+	, glDeleteSamplerName
+	, glNullSamplerName
+	, glAllocFramebufferName
+	, glDeleteFramebufferName
+	, glNullFramebufferName
+	, glAllocVertexArrayName
+	, glDeleteVertexArrayName
+	, glNullVertexArrayName
+	, glNullProgramName
+	-- * Offsets
+	, GlOffset
+	, glIntToOffset
+	-- * Stubs
+	, glProgramBinary
+	, glGetProgramBinary
+	, pattern GL_PROGRAM_BINARY_LENGTH
+	, glBindFragDataLocation
+	, glBindFragDataLocationIndexed
+	, glVertexAttribFormat
+	, glVertexAttribIFormat
+	, glVertexAttribBinding
+	, glVertexBindingDivisor
+	, glBindVertexBuffer
+	-- * Shims
+	-- ** Buffer uploading
+	, glBufferData_bs
+	, glBufferData_null
+	-- ** Texture uploading
+	-- | 1D versions don't exist in WebGL 1.0/2.0, but here for completeness.
+	-- 3D versions exist only in WebGL 2.0.
+	, glTexImage1D_bs
+	, glTexImage2D_bs
+	, glTexImage3D_bs
+	, glCompressedTexImage1D_bs
+	, glCompressedTexImage2D_bs
+	, glCompressedTexImage3D_bs
+	, glTexSubImage1D_bs
+	, glTexSubImage2D_bs
+	, glTexSubImage3D_bs
+	, glCompressedTexSubImage1D_bs
+	, glCompressedTexSubImage2D_bs
+	, glCompressedTexSubImage3D_bs
+	, glTexImage2D_null
+	-- * Constants.
+	, pattern GL_COLOR
+	, pattern GL_DEPTH
+	, pattern GL_STENCIL
+	, pattern GL_UNIFORM_BUFFER
 	, pattern GL_DEPTH_BUFFER_BIT
 	, pattern GL_STENCIL_BUFFER_BIT
 	, pattern GL_COLOR_BUFFER_BIT
@@ -89,10 +222,16 @@ module Flaw.Graphics.WebGL.FFI
 	, pattern GL_ONE_MINUS_SRC_ALPHA
 	, pattern GL_DST_ALPHA
 	, pattern GL_ONE_MINUS_DST_ALPHA
+	, pattern GL_SRC1_ALPHA
+	, pattern GL_SRC1_COLOR
+	, pattern GL_ONE_MINUS_SRC1_COLOR
+	, pattern GL_ONE_MINUS_SRC1_ALPHA
 	, pattern GL_DST_COLOR
 	, pattern GL_ONE_MINUS_DST_COLOR
 	, pattern GL_SRC_ALPHA_SATURATE
 	, pattern GL_FUNC_ADD
+	, pattern GL_MIN
+	, pattern GL_MAX
 	, pattern GL_BLEND_EQUATION
 	, pattern GL_BLEND_EQUATION_RGB
 	, pattern GL_BLEND_EQUATION_ALPHA
@@ -120,6 +259,16 @@ module Flaw.Graphics.WebGL.FFI
 	, pattern GL_FRONT
 	, pattern GL_BACK
 	, pattern GL_FRONT_AND_BACK
+	-- ** Comparison functions
+	, pattern GL_NEVER
+	, pattern GL_LESS
+	, pattern GL_EQUAL
+	, pattern GL_LEQUAL
+	, pattern GL_GREATER
+	, pattern GL_NOTEQUAL
+	, pattern GL_GEQUAL
+	, pattern GL_ALWAYS
+	-- ** Features
 	, pattern GL_CULL_FACE
 	, pattern GL_BLEND
 	, pattern GL_DITHER
@@ -129,6 +278,7 @@ module Flaw.Graphics.WebGL.FFI
 	, pattern GL_POLYGON_OFFSET_FILL
 	, pattern GL_SAMPLE_ALPHA_TO_COVERAGE
 	, pattern GL_SAMPLE_COVERAGE
+	-- ** Errors
 	, pattern GL_NO_ERROR
 	, pattern GL_INVALID_ENUM
 	, pattern GL_INVALID_VALUE
@@ -164,7 +314,14 @@ module Flaw.Graphics.WebGL.FFI
 	, pattern GL_SCISSOR_BOX
 	, pattern GL_COLOR_CLEAR_VALUE
 	, pattern GL_COLOR_WRITEMASK
+	, pattern GL_UNPACK_ROW_LENGTH
+	, pattern GL_UNPACK_SKIP_ROWS
+	, pattern GL_UNPACK_SKIP_PIXELS
 	, pattern GL_UNPACK_ALIGNMENT
+	, pattern GL_UNPACK_IMAGE_HEIGHT
+	, pattern GL_PACK_ROW_LENGTH
+	, pattern GL_PACK_SKIP_ROWS
+	, pattern GL_PACK_SKIP_PIXELS
 	, pattern GL_PACK_ALIGNMENT
 	, pattern GL_MAX_TEXTURE_SIZE
 	, pattern GL_MAX_VIEWPORT_DIMS
@@ -194,15 +351,51 @@ module Flaw.Graphics.WebGL.FFI
 	, pattern GL_INT
 	, pattern GL_UNSIGNED_INT
 	, pattern GL_FLOAT
+	, pattern GL_HALF_FLOAT
 	, pattern GL_DEPTH_COMPONENT
+	, pattern GL_RED
 	, pattern GL_ALPHA
 	, pattern GL_RGB
 	, pattern GL_RGBA
 	, pattern GL_LUMINANCE
 	, pattern GL_LUMINANCE_ALPHA
+	, pattern GL_RGB8
+	, pattern GL_RGBA8
+	, pattern GL_RGBA16
+	, pattern GL_RG
+	, pattern GL_R8
+	, pattern GL_R16
+	, pattern GL_RG8
+	, pattern GL_RG16
+	, pattern GL_R16F
+	, pattern GL_R32F
+	, pattern GL_RG16F
+	, pattern GL_RG32F
+	, pattern GL_RGBA32F
+	, pattern GL_RGB32F
+	, pattern GL_RGBA16F
+	, pattern GL_R11F_G11F_B10F
+	, pattern GL_SRGB8_ALPHA8
+	, pattern GL_COMPRESSED_RGB_S3TC_DXT1_EXT
+	, pattern GL_COMPRESSED_RGBA_S3TC_DXT1_EXT
+	, pattern GL_COMPRESSED_RGBA_S3TC_DXT3_EXT
+	, pattern GL_COMPRESSED_RGBA_S3TC_DXT5_EXT
+	, pattern GL_COMPRESSED_RED
+	, pattern GL_COMPRESSED_RG
+	, pattern GL_COMPRESSED_RGB
+	, pattern GL_COMPRESSED_RGBA
+	, pattern GL_COMPRESSED_SRGB_S3TC_DXT1_EXT
+	, pattern GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT
+	, pattern GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT
+	, pattern GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT
+	, pattern GL_COMPRESSED_RED_RGTC1
+	, pattern GL_COMPRESSED_SIGNED_RED_RGTC1
+	, pattern GL_COMPRESSED_RG_RGTC2
+	, pattern GL_COMPRESSED_SIGNED_RG_RGTC2
 	, pattern GL_UNSIGNED_SHORT_4_4_4_4
 	, pattern GL_UNSIGNED_SHORT_5_5_5_1
 	, pattern GL_UNSIGNED_SHORT_5_6_5
+	, pattern GL_UNSIGNED_INT_24_8
 	, pattern GL_FRAGMENT_SHADER
 	, pattern GL_VERTEX_SHADER
 	, pattern GL_MAX_VERTEX_ATTRIBS
@@ -221,14 +414,6 @@ module Flaw.Graphics.WebGL.FFI
 	, pattern GL_ACTIVE_ATTRIBUTES
 	, pattern GL_SHADING_LANGUAGE_VERSION
 	, pattern GL_CURRENT_PROGRAM
-	, pattern GL_NEVER
-	, pattern GL_LESS
-	, pattern GL_EQUAL
-	, pattern GL_LEQUAL
-	, pattern GL_GREATER
-	, pattern GL_NOTEQUAL
-	, pattern GL_GEQUAL
-	, pattern GL_ALWAYS
 	, pattern GL_KEEP
 	, pattern GL_REPLACE
 	, pattern GL_INCR
@@ -245,12 +430,18 @@ module Flaw.Graphics.WebGL.FFI
 	, pattern GL_LINEAR_MIPMAP_NEAREST
 	, pattern GL_NEAREST_MIPMAP_LINEAR
 	, pattern GL_LINEAR_MIPMAP_LINEAR
+	, pattern GL_TEXTURE_BORDER_COLOR
 	, pattern GL_TEXTURE_MAG_FILTER
 	, pattern GL_TEXTURE_MIN_FILTER
 	, pattern GL_TEXTURE_WRAP_S
 	, pattern GL_TEXTURE_WRAP_T
-	, pattern GL_TEXTURE_2D
+	, pattern GL_TEXTURE_WRAP_R
 	, pattern GL_TEXTURE
+	, pattern GL_TEXTURE_1D
+	, pattern GL_TEXTURE_1D_ARRAY
+	, pattern GL_TEXTURE_2D
+	, pattern GL_TEXTURE_2D_ARRAY
+	, pattern GL_TEXTURE_3D
 	, pattern GL_TEXTURE_CUBE_MAP
 	, pattern GL_TEXTURE_BINDING_CUBE_MAP
 	, pattern GL_TEXTURE_CUBE_MAP_POSITIVE_X
@@ -294,8 +485,13 @@ module Flaw.Graphics.WebGL.FFI
 	, pattern GL_TEXTURE31
 	, pattern GL_ACTIVE_TEXTURE
 	, pattern GL_REPEAT
+	, pattern GL_CLAMP_TO_BORDER
 	, pattern GL_CLAMP_TO_EDGE
 	, pattern GL_MIRRORED_REPEAT
+	, pattern GL_TEXTURE_MIN_LOD
+	, pattern GL_TEXTURE_MAX_LOD
+	, pattern GL_TEXTURE_BASE_LEVEL
+	, pattern GL_TEXTURE_MAX_LEVEL
 	, pattern GL_FLOAT_VEC2
 	, pattern GL_FLOAT_VEC3
 	, pattern GL_FLOAT_VEC4
@@ -370,19 +566,63 @@ module Flaw.Graphics.WebGL.FFI
 	, pattern GL_BROWSER_DEFAULT_WEBGL
 	) where
 
+import qualified Data.ByteString as B
+import qualified Data.Text as T
+import Foreign.C.Types
+import Foreign.Ptr
+import Foreign.Storable
+import qualified GHCJS.Buffer
+import GHCJS.Foreign.Callback
 import qualified GHCJS.DOM.Element as DOM
+import GHCJS.Marshal.Pure
 import GHCJS.Types
+
+import Flaw.Math
 
 -- | Placeholders for WebGL javascript types.
 
 newtype JS_WebGLContext = JS_WebGLContext JSVal
 newtype JS_WebGLTexture = JS_WebGLTexture JSVal
+newtype JS_WebGLSampler = JS_WebGLSampler JSVal
 newtype JS_WebGLRenderbuffer = JS_WebGLRenderbuffer JSVal
 newtype JS_WebGLFramebuffer = JS_WebGLFramebuffer JSVal
 newtype JS_WebGLBuffer = JS_WebGLBuffer JSVal
 newtype JS_WebGLProgram = JS_WebGLProgram JSVal
 newtype JS_WebGLShader = JS_WebGLShader JSVal
 newtype JS_WebGLUniformLocation = JS_WebGLUniformLocation JSVal
+newtype JS_WebGLVertexArray = JS_WebGLVertexArray JSVal
+
+type UniformLocation = JS_WebGLUniformLocation
+
+-- 'Eq' instances
+
+instance Eq JS_WebGLTexture where
+	{-# INLINE (==) #-}
+	(JS_WebGLTexture a) == (JS_WebGLTexture b) = a `jseq` b
+
+instance Eq JS_WebGLSampler where
+	{-# INLINE (==) #-}
+	(JS_WebGLSampler a) == (JS_WebGLSampler b) = a `jseq` b
+
+instance Eq JS_WebGLFramebuffer where
+	{-# INLINE (==) #-}
+	(JS_WebGLFramebuffer a) == (JS_WebGLFramebuffer b) = a `jseq` b
+
+instance Eq JS_WebGLBuffer where
+	{-# INLINE (==) #-}
+	(JS_WebGLBuffer a) == (JS_WebGLBuffer b) = a `jseq` b
+
+instance Eq JS_WebGLProgram where
+	{-# INLINE (==) #-}
+	(JS_WebGLProgram a) == (JS_WebGLProgram b) = a `jseq` b
+
+instance Eq JS_WebGLVertexArray where
+	{-# INLINE (==) #-}
+	(JS_WebGLVertexArray a) == (JS_WebGLVertexArray b) = a `jseq` b
+
+foreign import javascript unsafe "$1 === $2" js_eq :: JSVal -> JSVal -> JSVal
+jseq :: JSVal -> JSVal -> Bool
+jseq a b = pFromJSVal $ js_eq a b
 
 -- WebGL API
 
@@ -391,81 +631,470 @@ type GLfloat = Float
 type GLint = Int
 type GLuint = Word
 type GLsizei = Int
+type GLsizeiptr = Int
 type GLintptr = Int
 type GLclampf = Float
-type GLboolean = Bool
+type GLboolean = Int
 type GLbitfield = Word
 
-foreign import javascript unsafe " \
-	\ var settings = \
-	\ { alpha: false \
-	\ , depth: $2 \
-	\ , stencil: false \
-	\ , antialias: true \
-	\ }; \
-	\ $r = $1.getContext('webgl',settings) || $1.getContext('experimental-webgl', settings); \
-	\" js_getWebGLContext :: DOM.Element -> Bool -> IO JS_WebGLContext
+-- | Get WebGL context from canvas DOM element.
+foreign import javascript unsafe "h$flaw_webgl_get_canvas_context($1, $2)" js_getCanvasContext :: DOM.Element -> Bool -> IO JS_WebGLContext
+-- | Set current WebGL context.
+foreign import javascript unsafe "h$flaw_webgl_context = $1" js_setContext :: JS_WebGLContext -> IO ()
+-- | Call callback when browser thinks it's better to render frame.
+foreign import javascript unsafe "h$requestAnimationFrame($1);" js_requestAnimationFrame :: Callback (IO ()) -> IO ()
 
-foreign import javascript unsafe "$1.getExtension($2)" js_getExtension :: JS_WebGLContext -> JSString -> IO JSVal
+foreign import javascript unsafe "h$flaw_webgl_context.getExtension($1)" glGetExtension :: JSString -> IO JSVal
 
-foreign import javascript unsafe "$1.frontFace($2)" js_frontFace :: JS_WebGLContext -> GLenum -> IO ()
-foreign import javascript unsafe "$1.cullFace($2)" js_cullFace :: JS_WebGLContext -> GLenum -> IO ()
-foreign import javascript unsafe "$1.enable($2)" js_enable :: JS_WebGLContext -> GLenum -> IO ()
-foreign import javascript unsafe "$1.disable($2)" js_disable :: JS_WebGLContext -> GLenum -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.frontFace($1)" glFrontFace :: GLenum -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.cullFace($1)" glCullFace :: GLenum -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.enable($1)" glEnable :: GLenum -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.disable($1)" glDisable :: GLenum -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.getError()" glGetError :: IO GLenum
 
-foreign import javascript unsafe "$1.createTexture()" js_createTexture :: JS_WebGLContext -> IO JS_WebGLTexture
-foreign import javascript unsafe "$1.activeTexture($2)" js_activeTexture :: JS_WebGLContext -> GLenum -> IO ()
-foreign import javascript unsafe "$1.bindTexture($2, $3)" js_bindTexture :: JS_WebGLContext -> GLenum -> JS_WebGLTexture -> IO ()
-foreign import javascript unsafe "$1.texImage2D($2, $3, $4, $5, $6, $7)" js_texImage2D :: JS_WebGLContext -> GLenum -> GLint -> GLenum -> GLenum -> GLenum -> JSVal -> IO ()
-foreign import javascript unsafe "$1.texParameterf($2, $3, $4)" js_texParameterf :: JS_WebGLContext -> GLenum -> GLenum -> GLfloat -> IO ()
-foreign import javascript unsafe "$1.texParameteri($2, $3, $4)" js_texParameteri :: JS_WebGLContext -> GLenum -> GLenum -> GLint -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.createTexture()" glCreateTexture :: IO JS_WebGLTexture
+foreign import javascript unsafe "h$flaw_webgl_context.deleteTexture($1)" glDeleteTexture :: JS_WebGLTexture -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.activeTexture($1)" glActiveTexture :: GLenum -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.bindTexture($1, $2)" glBindTexture :: GLenum -> JS_WebGLTexture -> IO ()
 
-foreign import javascript unsafe "$1.createBuffer()" js_createBuffer :: JS_WebGLContext -> IO JS_WebGLBuffer
-foreign import javascript unsafe "$1.bindBuffer($2, $3)" js_bindBuffer :: JS_WebGLContext -> GLenum -> JS_WebGLBuffer -> IO ()
-foreign import javascript unsafe "$1.bufferData($2, $3, $4)" js_bufferData :: JS_WebGLContext -> GLenum -> JSVal -> GLenum -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.texImage2D($1, $2, $3, $4, $5, $6, $7, $8)"
+	glTexImage1D_val :: GLenum -> GLint -> GLint -> GLsizei -> GLint -> GLenum -> GLenum -> JSVal -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.texImage2D($1, $2, $3, $4, $5, $6, $7, $8, $9)"
+	glTexImage2D_val :: GLenum -> GLint -> GLint -> GLsizei -> GLsizei -> GLint -> GLenum -> GLenum -> JSVal -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.texImage2D($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)"
+	glTexImage3D_val :: GLenum -> GLint -> GLint -> GLsizei -> GLsizei -> GLsizei -> GLint -> GLenum -> GLenum -> JSVal -> IO ()
 
-foreign import javascript unsafe "$1.enableVertexAttribArray($2)" js_enableVertexAttribArray :: JS_WebGLContext -> GLuint -> IO ()
-foreign import javascript unsafe "$1.disableVertexAttribArray($2)" js_disableVertexAttribArray :: JS_WebGLContext -> GLuint -> IO ()
-foreign import javascript unsafe "$1.vertexAttribPointer($2, $3, $4, $5, $6, $7)" js_vertexAttribPointer :: JS_WebGLContext -> GLuint -> GLint -> GLenum -> GLboolean -> GLsizei -> GLintptr -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.compressedTexImage1D($1, $2, $3, $4, $5, $6)"
+	glCompressedTexImage1D_val :: GLenum -> GLint -> GLenum -> GLsizei -> GLint -> JSVal -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.compressedTexImage2D($1, $2, $3, $4, $5, $6, $7)"
+	glCompressedTexImage2D_val :: GLenum -> GLint -> GLenum -> GLsizei -> GLsizei -> GLint -> JSVal -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.compressedTexImage3D($1, $2, $3, $4, $5, $6, $7, $8)"
+	glCompressedTexImage3D_val :: GLenum -> GLint -> GLenum -> GLsizei -> GLsizei -> GLsizei -> GLint -> JSVal -> IO ()
 
-foreign import javascript unsafe "$1.createShader($2)" js_createShader :: JS_WebGLContext -> GLenum -> IO JS_WebGLShader
-foreign import javascript unsafe "$1.shaderSource($2, $3)" js_shaderSource :: JS_WebGLContext -> JS_WebGLShader -> JSString -> IO ()
-foreign import javascript unsafe "$1.compileShader($2)" js_compileShader :: JS_WebGLContext -> JS_WebGLShader -> IO ()
-foreign import javascript unsafe "$1.getShaderParameter($2, $3)" js_getShaderParameter :: JS_WebGLContext -> JS_WebGLShader -> GLenum -> IO JSVal
-foreign import javascript unsafe "$1.getShaderInfoLog($2)" js_getShaderInfoLog :: JS_WebGLContext -> JS_WebGLShader -> IO JSString
-foreign import javascript unsafe "$1.createProgram()" js_createProgram :: JS_WebGLContext -> IO JS_WebGLProgram
-foreign import javascript unsafe "$1.attachShader($2, $3)" js_attachShader :: JS_WebGLContext -> JS_WebGLProgram -> JS_WebGLShader -> IO ()
-foreign import javascript unsafe "$1.bindAttribLocation($2, $3, $4)" js_bindAttribLocation :: JS_WebGLContext -> JS_WebGLProgram -> GLuint -> JSString -> IO ()
-foreign import javascript unsafe "$1.linkProgram($2)" js_linkProgram :: JS_WebGLContext -> JS_WebGLProgram -> IO ()
-foreign import javascript unsafe "$1.getProgramParameter($2, $3)" js_getProgramParameter :: JS_WebGLContext -> JS_WebGLProgram -> GLenum -> IO JSVal
-foreign import javascript unsafe "$1.useProgram($2)" js_useProgram :: JS_WebGLContext -> JS_WebGLProgram -> IO ()
-foreign import javascript unsafe "$1.getUniformLocation($2, $3)" js_getUniformLocation :: JS_WebGLContext -> JS_WebGLProgram -> JSString -> IO JS_WebGLUniformLocation
+foreign import javascript unsafe "h$flaw_webgl_context.texSubImage1D($1, $2, $3, $4, $5, $6, $7)"
+	glTexSubImage1D_val :: GLenum -> GLint -> GLint -> GLsizei -> GLenum -> GLenum -> JSVal -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.texSubImage2D($1, $2, $3, $4, $5, $6, $7, $8, $9)"
+	glTexSubImage2D_val :: GLenum -> GLint -> GLint -> GLint -> GLsizei -> GLsizei -> GLenum -> GLenum -> JSVal -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.texSubImage3D($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)"
+	glTexSubImage3D_val :: GLenum -> GLint -> GLint -> GLint -> GLint -> GLsizei -> GLsizei -> GLsizei -> GLenum -> GLenum -> JSVal -> IO ()
 
-foreign import javascript unsafe "$1.uniform1f($2, $3)" js_uniform1f :: JS_WebGLContext -> JS_WebGLUniformLocation -> GLfloat -> IO ()
-foreign import javascript unsafe "$1.uniform1i($2, $3)" js_uniform1i :: JS_WebGLContext -> JS_WebGLUniformLocation -> GLint -> IO ()
-foreign import javascript unsafe "$1.uniform1fv($2, $3)" js_uniform1fv :: JS_WebGLContext -> JS_WebGLUniformLocation -> JSVal -> IO ()
-foreign import javascript unsafe "$1.uniform2fv($2, $3)" js_uniform2fv :: JS_WebGLContext -> JS_WebGLUniformLocation -> JSVal -> IO ()
-foreign import javascript unsafe "$1.uniform3fv($2, $3)" js_uniform3fv :: JS_WebGLContext -> JS_WebGLUniformLocation -> JSVal -> IO ()
-foreign import javascript unsafe "$1.uniform4fv($2, $3)" js_uniform4fv :: JS_WebGLContext -> JS_WebGLUniformLocation -> JSVal -> IO ()
-foreign import javascript unsafe "$1.uniformMatrix4fv($2, false, $3)" js_uniformMatrix4fv :: JS_WebGLContext -> JS_WebGLUniformLocation -> JSVal -> IO ()
-foreign import javascript unsafe "$1.uniform1iv($2, $3)" js_uniform1iv :: JS_WebGLContext -> JS_WebGLUniformLocation -> JSVal -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.compressedTexSubImage1D($1, $2, $3, $4, $5, $6)"
+	glCompressedTexSubImage1D_val :: GLenum -> GLint -> GLint -> GLsizei -> GLenum -> JSVal -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.compressedTexSubImage2D($1, $2, $3, $4, $5, $6, $7, $8)"
+	glCompressedTexSubImage2D_val :: GLenum -> GLint -> GLint -> GLint -> GLsizei -> GLsizei -> GLenum -> JSVal -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.compressedTexSubImage3D($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)"
+	glCompressedTexSubImage3D_val :: GLenum -> GLint -> GLint -> GLint -> GLint -> GLsizei -> GLsizei -> GLsizei -> GLenum -> JSVal -> IO ()
 
-foreign import javascript unsafe "$1.clearColor($2, $3, $4, $5)" js_clearColor :: JS_WebGLContext -> GLclampf -> GLclampf -> GLclampf -> GLclampf -> IO ()
-foreign import javascript unsafe "$1.clearDepth($2)" js_clearDepth :: JS_WebGLContext -> GLclampf -> IO ()
-foreign import javascript unsafe "$1.clearStencil($2)" js_clearStencil :: JS_WebGLContext -> GLint -> IO ()
-foreign import javascript unsafe "$1.clear($2)" js_clear :: JS_WebGLContext -> GLbitfield -> IO ()
 
-foreign import javascript unsafe "$1.viewport($2, $3, $4, $5)" js_viewport :: JS_WebGLContext -> GLint -> GLint -> GLsizei -> GLsizei -> IO ()
-foreign import javascript unsafe "$1.drawArrays($2, $3, $4)" js_drawArrays :: JS_WebGLContext -> GLenum -> GLint -> GLsizei -> IO ()
-foreign import javascript unsafe "$1.drawElements($2, $3, $4, $5)" js_drawElements :: JS_WebGLContext -> GLenum -> GLsizei -> GLenum -> GLintptr -> IO ()
-foreign import javascript unsafe "$1.drawArraysInstanced($2, $3, $4, $5)" js_drawArraysInstanced :: JS_WebGLContext -> GLenum -> GLint -> GLsizei -> GLsizei -> IO ()
-foreign import javascript unsafe "$1.drawElementsInstanced($2, $3, $4, $5, $6)" js_drawElementsInstanced :: JS_WebGLContext -> GLenum -> GLsizei -> GLenum -> GLintptr -> GLsizei -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.texImage2D($1, $2, $3, $4, $5, $6)"
+	glTexImage2D_image :: GLenum -> GLint -> GLint -> GLenum -> GLenum -> JSVal -> IO ()
+
+foreign import javascript unsafe "h$flaw_webgl_context.texParameterf($1, $2, $3)" glTexParameterf :: GLenum -> GLenum -> GLfloat -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.texParameteri($1, $2, $3)" glTexParameteri :: GLenum -> GLenum -> GLint -> IO ()
+-- | 'glTexParameterfv' is not supported by WebGL 1.0/2.0, so here it's a no-op only for completeness.
+{-# INLINE glTexParameterfv #-}
+glTexParameterfv :: GLenum -> GLenum -> Ptr GLfloat -> IO ()
+glTexParameterfv _target _pname _value = return ()
+foreign import javascript unsafe "h$flaw_webgl_context.pixelStorei($1, $2)" glPixelStorei :: GLenum -> GLint -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.texStorage1D($1, $2, $3, $4)" glTexStorage1D :: GLenum -> GLsizei -> GLenum -> GLsizei -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.texStorage2D($1, $2, $3, $4, $5)" glTexStorage2D :: GLenum -> GLsizei -> GLenum -> GLsizei -> GLsizei -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.texStorage3D($1, $2, $3, $4, $5, $6)" glTexStorage3D :: GLenum -> GLsizei -> GLenum -> GLsizei -> GLsizei -> GLsizei -> IO ()
+
+foreign import javascript unsafe "h$flaw_webgl_context.createSampler()" glCreateSampler :: IO JS_WebGLSampler
+foreign import javascript unsafe "h$flaw_webgl_context.deleteSampler($1)" glDeleteSampler :: JS_WebGLSampler -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.bindSampler($1, $2)" glBindSampler :: GLuint -> JS_WebGLSampler -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.samplerParameteri($1, $2, $3)" glSamplerParameteri :: JS_WebGLSampler -> GLenum -> GLint -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.samplerParameterf($1, $2, $3)" glSamplerParameterf :: JS_WebGLSampler -> GLenum -> GLfloat -> IO ()
+
+foreign import javascript unsafe "h$flaw_webgl_context.createBuffer()" glCreateBuffer :: IO JS_WebGLBuffer
+foreign import javascript unsafe "h$flaw_webgl_context.deleteBuffer($1)" glDeleteBuffer :: JS_WebGLBuffer -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.bindBuffer($1, $2)" glBindBuffer :: GLenum -> JS_WebGLBuffer -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.bindBufferBase($1, $2, $3)" glBindBufferBase :: GLenum -> GLuint -> JS_WebGLBuffer -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.bufferData($1, $2, $3)" glBufferData_val :: GLenum -> JSVal -> GLenum -> IO ()
+
+foreign import javascript unsafe "h$flaw_webgl_context.createFramebuffer()" glCreateFramebuffer :: IO JS_WebGLFramebuffer
+foreign import javascript unsafe "h$flaw_webgl_context.deleteFramebuffer($1)" glDeleteFramebuffer :: JS_WebGLFramebuffer -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.bindFramebuffer($1, $2)" glBindFramebuffer :: GLenum -> JS_WebGLFramebuffer -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.framebufferTexture2D($1, $2, $3, $4, $5)" glFramebufferTexture2D :: GLenum -> GLenum -> GLenum -> JS_WebGLTexture -> GLint -> IO ()
+
+foreign import javascript unsafe "h$flaw_webgl_context.enableVertexAttribArray($1)" glEnableVertexAttribArray :: GLuint -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.disableVertexAttribArray($1)" glDisableVertexAttribArray :: GLuint -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.vertexAttribPointer($1, $2, $3, $4, $5, $6)" glVertexAttribPointer :: GLuint -> GLint -> GLenum -> GLboolean -> GLsizei -> GLintptr -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.vertexAttribIPointer($1, $2, $3, $4, $5)" glVertexAttribIPointer :: GLuint -> GLint -> GLenum -> GLsizei -> GLintptr -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.vertexAttribDivisor($1, $2)" glVertexAttribDivisor :: GLuint -> GLuint -> IO ()
+
+foreign import javascript unsafe "h$flaw_webgl_context.createShader($1)" glCreateShader :: GLenum -> IO JS_WebGLShader
+foreign import javascript unsafe "h$flaw_webgl_context.deleteShader($1)" glDeleteShader :: JS_WebGLShader -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.shaderSource($1, $2)" glShaderSource_val :: JS_WebGLShader -> JSVal -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.compileShader($1)" glCompileShader :: JS_WebGLShader -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.getShaderParameter($1, $2)" glGetShaderParameter_val :: JS_WebGLShader -> GLenum -> IO JSVal
+foreign import javascript unsafe "h$flaw_webgl_context.getShaderInfoLog($1)" glGetShaderInfoLog_val :: JS_WebGLShader -> IO JSVal
+foreign import javascript unsafe "h$flaw_webgl_context.createProgram()" glCreateProgram :: IO JS_WebGLProgram
+foreign import javascript unsafe "h$flaw_webgl_context.deleteProgram()" glDeleteProgram :: JS_WebGLProgram -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.getProgramInfoLog($1)" glGetProgramInfoLog_val :: JS_WebGLProgram -> IO JSVal
+foreign import javascript unsafe "h$flaw_webgl_context.attachShader($1, $2)" glAttachShader :: JS_WebGLProgram -> JS_WebGLShader -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.bindAttribLocation($1, $2, $3)" glBindAttribLocation_val :: JS_WebGLProgram -> GLuint -> JSVal -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.linkProgram($1)" glLinkProgram :: JS_WebGLProgram -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.getProgramParameter($1, $2)" glGetProgramParameter_val :: JS_WebGLProgram -> GLenum -> IO JSVal
+foreign import javascript unsafe "h$flaw_webgl_context.useProgram($1)" glUseProgram :: JS_WebGLProgram -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.getUniformLocation($1, $2)" glGetUniformLocation_val :: JS_WebGLProgram -> JSVal -> IO JS_WebGLUniformLocation
+foreign import javascript unsafe "h$flaw_webgl_context.getUniformBlockIndex($1, $2)" glGetUniformBlockIndex_val :: JS_WebGLProgram -> JSVal -> IO GLuint
+foreign import javascript unsafe "h$flaw_webgl_context.uniformBlockBinding($1, $2, $3)" glUniformBlockBinding :: JS_WebGLProgram -> GLuint -> GLuint -> IO ()
+
+glShaderSource_s :: JS_WebGLShader -> T.Text -> IO ()
+glShaderSource_s shader source = glShaderSource_val shader $ pToJSVal source
+
+glGetShaderiv :: JS_WebGLShader -> GLenum -> Ptr GLint -> IO ()
+glGetShaderiv shader param ptr = poke ptr =<< pFromJSVal <$> glGetShaderParameter_val shader param
+
+glGetShaderInfoLog_s :: JS_WebGLShader -> IO T.Text
+glGetShaderInfoLog_s shader = pFromJSVal <$> glGetShaderInfoLog_val shader
+
+glGetProgramiv :: JS_WebGLProgram -> GLenum -> Ptr GLint -> IO ()
+glGetProgramiv program param ptr = poke ptr =<< pFromJSVal <$> glGetProgramParameter_val program param
+
+glGetProgramInfoLog_s :: JS_WebGLProgram -> IO T.Text
+glGetProgramInfoLog_s program = pFromJSVal <$> glGetProgramInfoLog_val program
+
+glBindAttribLocation_s :: JS_WebGLProgram -> GLuint -> T.Text -> IO ()
+glBindAttribLocation_s program index attributeName = glBindAttribLocation_val program index $ pToJSVal attributeName
+
+glGetUniformLocation_s :: JS_WebGLProgram -> T.Text -> IO JS_WebGLUniformLocation
+glGetUniformLocation_s program locationName = glGetUniformLocation_val program $ pToJSVal locationName
+
+glGetUniformBlockIndex_s :: JS_WebGLProgram -> T.Text -> IO GLuint
+glGetUniformBlockIndex_s programName uniformBlockName = glGetUniformBlockIndex_val programName $ pToJSVal uniformBlockName
+
+foreign import javascript unsafe "h$flaw_webgl_context.uniform1i($1, $2)" glUniform1i :: JS_WebGLUniformLocation -> GLint -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.uniform1fv($1, $2)" glUniform1fv_val :: JS_WebGLUniformLocation -> JSVal -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.uniform2fv($1, $2)" glUniform2fv_val :: JS_WebGLUniformLocation -> JSVal -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.uniform3fv($1, $2)" glUniform3fv_val :: JS_WebGLUniformLocation -> JSVal -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.uniform4fv($1, $2)" glUniform4fv_val :: JS_WebGLUniformLocation -> JSVal -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.uniform1iv($1, $2)" glUniform1iv_val :: JS_WebGLUniformLocation -> JSVal -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.uniform2iv($1, $2)" glUniform2iv_val :: JS_WebGLUniformLocation -> JSVal -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.uniform3iv($1, $2)" glUniform3iv_val :: JS_WebGLUniformLocation -> JSVal -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.uniform4iv($1, $2)" glUniform4iv_val :: JS_WebGLUniformLocation -> JSVal -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.uniform1uiv($1, $2)" glUniform1uiv_val :: JS_WebGLUniformLocation -> JSVal -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.uniform2uiv($1, $2)" glUniform2uiv_val :: JS_WebGLUniformLocation -> JSVal -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.uniform3uiv($1, $2)" glUniform3uiv_val :: JS_WebGLUniformLocation -> JSVal -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.uniform4uiv($1, $2)" glUniform4uiv_val :: JS_WebGLUniformLocation -> JSVal -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.uniformMatrix3fv($1, $2, $3)" glUniformMatrix3fv_val :: JS_WebGLUniformLocation -> GLboolean -> JSVal -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.uniformMatrix4fv($1, $2, $3)" glUniformMatrix4fv_val :: JS_WebGLUniformLocation -> GLboolean -> JSVal -> IO ()
+
+{-# INLINE glUniform1fv #-}
+glUniform1fv :: JS_WebGLUniformLocation -> GLsizei -> Ptr GLfloat -> IO ()
+glUniform1fv location size ptr = glUniform1fv_val location $ js_ptrToFloat32Array ptr size
+{-# INLINE glUniform2fv #-}
+glUniform2fv :: JS_WebGLUniformLocation -> GLsizei -> Ptr GLfloat -> IO ()
+glUniform2fv location size ptr = glUniform2fv_val location $ js_ptrToFloat32Array ptr $ size * 2
+{-# INLINE glUniform3fv #-}
+glUniform3fv :: JS_WebGLUniformLocation -> GLsizei -> Ptr GLfloat -> IO ()
+glUniform3fv location size ptr = glUniform3fv_val location $ js_ptrToFloat32Array ptr $ size * 3
+{-# INLINE glUniform4fv #-}
+glUniform4fv :: JS_WebGLUniformLocation -> GLsizei -> Ptr GLfloat -> IO ()
+glUniform4fv location size ptr = glUniform4fv_val location $ js_ptrToFloat32Array ptr $ size * 4
+
+{-# INLINE glUniform1iv #-}
+glUniform1iv :: JS_WebGLUniformLocation -> GLsizei -> Ptr GLint -> IO ()
+glUniform1iv location size ptr = glUniform1iv_val location $ js_ptrToInt32Array ptr size
+{-# INLINE glUniform2iv #-}
+glUniform2iv :: JS_WebGLUniformLocation -> GLsizei -> Ptr GLint -> IO ()
+glUniform2iv location size ptr = glUniform2iv_val location $ js_ptrToInt32Array ptr $ size * 2
+{-# INLINE glUniform3iv #-}
+glUniform3iv :: JS_WebGLUniformLocation -> GLsizei -> Ptr GLint -> IO ()
+glUniform3iv location size ptr = glUniform3iv_val location $ js_ptrToInt32Array ptr $ size * 3
+{-# INLINE glUniform4iv #-}
+glUniform4iv :: JS_WebGLUniformLocation -> GLsizei -> Ptr GLint -> IO ()
+glUniform4iv location size ptr = glUniform4iv_val location $ js_ptrToInt32Array ptr $ size * 4
+
+{-# INLINE glUniform1uiv #-}
+glUniform1uiv :: JS_WebGLUniformLocation -> GLsizei -> Ptr GLuint -> IO ()
+glUniform1uiv location size ptr = glUniform1uiv_val location $ js_ptrToUint32Array ptr size
+{-# INLINE glUniform2uiv #-}
+glUniform2uiv :: JS_WebGLUniformLocation -> GLsizei -> Ptr GLuint -> IO ()
+glUniform2uiv location size ptr = glUniform2uiv_val location $ js_ptrToUint32Array ptr $ size * 2
+{-# INLINE glUniform3uiv #-}
+glUniform3uiv :: JS_WebGLUniformLocation -> GLsizei -> Ptr GLuint -> IO ()
+glUniform3uiv location size ptr = glUniform3uiv_val location $ js_ptrToUint32Array ptr $ size * 3
+{-# INLINE glUniform4uiv #-}
+glUniform4uiv :: JS_WebGLUniformLocation -> GLsizei -> Ptr GLuint -> IO ()
+glUniform4uiv location size ptr = glUniform4uiv_val location $ js_ptrToUint32Array ptr $ size * 4
+
+{-# INLINE glUniformMatrix3fv #-}
+glUniformMatrix3fv :: JS_WebGLUniformLocation -> GLsizei -> GLboolean -> Ptr GLfloat -> IO ()
+glUniformMatrix3fv location size transpose ptr = glUniformMatrix3fv_val location transpose $ js_ptrToFloat32Array ptr $ size * 16
+{-# INLINE glUniformMatrix4fv #-}
+glUniformMatrix4fv :: JS_WebGLUniformLocation -> GLsizei -> GLboolean -> Ptr GLfloat -> IO ()
+glUniformMatrix4fv location size transpose ptr = glUniformMatrix4fv_val location transpose $ js_ptrToFloat32Array ptr $ size * 16
+
+
+foreign import javascript unsafe "h$flaw_webgl_context.createVertexArray()" glCreateVertexArray :: IO JS_WebGLVertexArray
+foreign import javascript unsafe "h$flaw_webgl_context.deleteVertexArray($1)" glDeleteVertexArray :: JS_WebGLVertexArray -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.bindVertexArray($1)" glBindVertexArray :: JS_WebGLVertexArray -> IO ()
+
+
+foreign import javascript unsafe "h$flaw_webgl_context.depthFunc($1)" glDepthFunc :: GLenum -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.depthMask($1)" glDepthMask :: GLboolean -> IO ()
+
+foreign import javascript unsafe "h$flaw_webgl_context.blendEquationSeparate($1, $2)" glBlendEquationSeparate :: GLenum -> GLenum -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.blendFuncSeparate($1, $2, $3, $4)" glBlendFuncSeparate :: GLenum -> GLenum -> GLenum -> GLenum -> IO ()
+
+foreign import javascript unsafe "h$flaw_webgl_context.scissor($1, $2, $3, $4)" glScissor :: GLint -> GLint -> GLsizei -> GLsizei -> IO ()
+
+-- Clearing functions.
+foreign import javascript unsafe "h$flaw_webgl_context.clearColor($1, $2, $3, $4)"
+	glClearColor :: GLclampf -> GLclampf -> GLclampf -> GLclampf -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.clearDepth($1)"
+	glClearDepth :: GLclampf -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.clearStencil($1)"
+	glClearStencil :: GLint -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.clear($1)"
+	glClear :: GLbitfield -> IO ()
+
+{-# INLINE glClearBufferfv_4 #-}
+glClearBufferfv_4 :: GLenum -> GLint -> Float4 -> IO ()
+glClearBufferfv_4 buffer drawBuffer (Float4 r g b a) = glClearBufferfv_4_helper buffer drawBuffer r g b a
+
+-- MRT clearing functions (WebGL 2.0).
+foreign import javascript unsafe "h$flaw_webgl_context.clearBufferiv($1, $2, [$3])"
+	glClearBufferiv_1 :: GLenum -> GLint -> GLint -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.clearBufferfv($1, $2, [$3])"
+	glClearBufferfv_1 :: GLenum -> GLint -> GLfloat -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.clearBufferfv($1, $2, [$3, $4, $5, $6])"
+	glClearBufferfv_4_helper :: GLenum -> GLint -> GLfloat -> GLfloat -> GLfloat -> GLfloat -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.clearBufferfi($1, $2, $3, $4)"
+	glClearBufferfi :: GLenum -> GLint -> GLfloat -> GLint -> IO ()
+
+foreign import javascript unsafe "h$flaw_webgl_context.viewport($1, $2, $3, $4)"
+	glViewport :: GLint -> GLint -> GLsizei -> GLsizei -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.drawArrays($1, $2, $3)"
+	glDrawArrays :: GLenum -> GLint -> GLsizei -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.drawElements($1, $2, $3, $4)"
+	glDrawElements :: GLenum -> GLsizei -> GLenum -> GLintptr -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.drawArraysInstanced($1, $2, $3, $4)"
+	glDrawArraysInstanced :: GLenum -> GLint -> GLsizei -> GLsizei -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.drawElementsInstanced($1, $2, $3, $4, $5)"
+	glDrawElementsInstanced :: GLenum -> GLsizei -> GLenum -> GLintptr -> GLsizei -> IO ()
+
+
+-- Buffer uploading.
+
+{-# INLINABLE glBufferData_bs #-}
+glBufferData_bs :: GLenum -> B.ByteString -> GLenum -> IO ()
+glBufferData_bs target bytes usage = glBufferData_val target (byteStringToJsDataView bytes) usage
+
+{-# INLINABLE glBufferData_null #-}
+glBufferData_null :: GLenum -> GLsizeiptr -> GLenum -> IO ()
+glBufferData_null target size usage = glBufferData_val target (pToJSVal size) usage
+
+
+-- Texture uploading.
+
+{-# INLINABLE glTexImage1D_bs #-}
+glTexImage1D_bs :: GLenum -> GLint -> GLint -> GLsizei -> GLint -> GLenum -> GLenum -> B.ByteString -> IO ()
+glTexImage1D_bs target level internalFormat width border format type_ bytes =
+	glTexImage1D_val target level internalFormat width border format type_ $ byteStringToJsDataView bytes
+
+{-# INLINABLE glTexImage2D_bs #-}
+glTexImage2D_bs :: GLenum -> GLint -> GLint -> GLsizei -> GLsizei -> GLint -> GLenum -> GLenum -> B.ByteString -> IO ()
+glTexImage2D_bs target level internalFormat width height border format type_ bytes =
+	glTexImage2D_val target level internalFormat width height border format type_ $ byteStringToJsDataView bytes
+
+{-# INLINABLE glTexImage3D_bs #-}
+glTexImage3D_bs :: GLenum -> GLint -> GLint -> GLsizei -> GLsizei -> GLsizei -> GLint -> GLenum -> GLenum -> B.ByteString -> IO ()
+glTexImage3D_bs target level internalFormat width height depth border format type_ bytes =
+	glTexImage3D_val target level internalFormat width height depth border format type_ $ byteStringToJsDataView bytes
+
+{-# INLINABLE glCompressedTexImage1D_bs #-}
+glCompressedTexImage1D_bs :: GLenum -> GLint -> GLenum -> GLsizei -> GLint -> B.ByteString -> IO ()
+glCompressedTexImage1D_bs target level internalFormat width border bytes =
+	glCompressedTexImage1D_val target level internalFormat width border $ byteStringToJsDataView bytes
+
+{-# INLINABLE glCompressedTexImage2D_bs #-}
+glCompressedTexImage2D_bs :: GLenum -> GLint -> GLenum -> GLsizei -> GLsizei -> GLint -> B.ByteString -> IO ()
+glCompressedTexImage2D_bs target level internalFormat width height border bytes =
+	glCompressedTexImage2D_val target level internalFormat width height border $ byteStringToJsDataView bytes
+
+{-# INLINABLE glCompressedTexImage3D_bs #-}
+glCompressedTexImage3D_bs :: GLenum -> GLint -> GLenum -> GLsizei -> GLsizei -> GLsizei -> GLint -> B.ByteString -> IO ()
+glCompressedTexImage3D_bs target level internalFormat width height depth border bytes =
+	glCompressedTexImage3D_val target level internalFormat width height depth border $ byteStringToJsDataView bytes
+
+{-# INLINABLE glTexSubImage1D_bs #-}
+glTexSubImage1D_bs :: GLenum -> GLint -> GLint -> GLsizei -> GLenum -> GLenum -> B.ByteString -> IO ()
+glTexSubImage1D_bs target level xoffset width format type_ bytes =
+	glTexSubImage1D_val target level xoffset width format type_ $ byteStringToJsDataView bytes
+
+{-# INLINABLE glTexSubImage2D_bs #-}
+glTexSubImage2D_bs :: GLenum -> GLint -> GLint -> GLint -> GLsizei -> GLsizei -> GLenum -> GLenum -> B.ByteString -> IO ()
+glTexSubImage2D_bs target level xoffset yoffset width height format type_ bytes =
+	glTexSubImage2D_val target level xoffset yoffset width height format type_ $ byteStringToJsDataView bytes
+
+{-# INLINABLE glTexSubImage3D_bs #-}
+glTexSubImage3D_bs :: GLenum -> GLint -> GLint -> GLint -> GLint -> GLsizei -> GLsizei -> GLsizei -> GLenum -> GLenum -> B.ByteString -> IO ()
+glTexSubImage3D_bs target level xoffset yoffset zoffset width height depth format type_ bytes =
+	glTexSubImage3D_val target level xoffset yoffset zoffset width height depth format type_ $ byteStringToJsDataView bytes
+
+{-# INLINABLE glCompressedTexSubImage1D_bs #-}
+glCompressedTexSubImage1D_bs :: GLenum -> GLint -> GLint -> GLsizei -> GLenum -> B.ByteString -> IO ()
+glCompressedTexSubImage1D_bs target level xoffset width format bytes =
+	glCompressedTexSubImage1D_val target level xoffset width format $ byteStringToJsDataView bytes
+
+{-# INLINABLE glCompressedTexSubImage2D_bs #-}
+glCompressedTexSubImage2D_bs :: GLenum -> GLint -> GLint -> GLint -> GLsizei -> GLsizei -> GLenum -> B.ByteString -> IO ()
+glCompressedTexSubImage2D_bs target level xoffset yoffset width height format bytes =
+	glCompressedTexSubImage2D_val target level xoffset yoffset width height format $ byteStringToJsDataView bytes
+
+{-# INLINABLE glCompressedTexSubImage3D_bs #-}
+glCompressedTexSubImage3D_bs :: GLenum -> GLint -> GLint -> GLint -> GLint -> GLsizei -> GLsizei -> GLsizei -> GLenum -> B.ByteString -> IO ()
+glCompressedTexSubImage3D_bs target level xoffset yoffset zoffset width height depth format bytes =
+	glCompressedTexSubImage3D_val target level xoffset yoffset zoffset width height depth format $ byteStringToJsDataView bytes
+
+{-# INLINABLE glTexImage2D_null #-}
+glTexImage2D_null :: GLenum -> GLint -> GLint -> GLsizei -> GLsizei -> GLint -> GLenum -> GLenum -> IO ()
+glTexImage2D_null target level internalFormat width height border format type_ =
+	glTexImage2D_val target level internalFormat width height border format type_ nullRef
+
+
+-- Sampler parameter
+
+{-# INLINABLE glSamplerParameterfv_4 #-}
+glSamplerParameterfv_4 :: JS_WebGLSampler -> GLenum -> Float4 -> IO ()
+glSamplerParameterfv_4 sampler pname (Float4 r g b a) = glSamplerParameterfv_helper sampler pname r g b a
+
+-- doesn't exist in WebGL 1.0/2.0
+foreign import javascript unsafe "h$flaw_webgl_context.samplerParameterfv($1, $2, [$3, $4, $5, $6])" glSamplerParameterfv_helper :: JS_WebGLSampler -> GLenum -> GLfloat -> GLfloat -> GLfloat -> GLfloat -> IO ()
+
+
+-- Name operations
+
+type BufferName = JS_WebGLBuffer
+type TextureName = JS_WebGLTexture
+type SamplerName = JS_WebGLSampler
+type FramebufferName = JS_WebGLFramebuffer
+type VertexArrayName = JS_WebGLVertexArray
+type ProgramName = JS_WebGLProgram
+type ShaderName = JS_WebGLShader
+
+{-# INLINABLE glAllocBufferName #-}
+glAllocBufferName :: IO BufferName
+glAllocBufferName = glCreateBuffer
+
+{-# INLINABLE glDeleteBufferName #-}
+glDeleteBufferName :: BufferName -> IO ()
+glDeleteBufferName = glDeleteBuffer
+
+foreign import javascript unsafe "null" glNullBufferName :: JS_WebGLBuffer
+
+foreign import javascript unsafe "undefined" glUndefinedBufferName :: JS_WebGLBuffer
+
+{-# INLINABLE glAllocTextureName #-}
+glAllocTextureName :: IO TextureName
+glAllocTextureName = glCreateTexture
+
+{-# INLINABLE glDeleteTextureName #-}
+glDeleteTextureName :: TextureName -> IO ()
+glDeleteTextureName = glDeleteTexture
+
+foreign import javascript unsafe "null" glNullTextureName :: JS_WebGLTexture
+
+{-# INLINABLE glAllocSamplerName #-}
+glAllocSamplerName :: IO SamplerName
+glAllocSamplerName = glCreateSampler
+
+{-# INLINABLE glDeleteSamplerName #-}
+glDeleteSamplerName :: SamplerName -> IO ()
+glDeleteSamplerName = glDeleteSampler
+
+foreign import javascript unsafe "null" glNullSamplerName :: JS_WebGLSampler
+
+{-# INLINABLE glAllocFramebufferName #-}
+glAllocFramebufferName :: IO FramebufferName
+glAllocFramebufferName = glCreateFramebuffer
+
+{-# INLINABLE glDeleteFramebufferName #-}
+glDeleteFramebufferName :: FramebufferName -> IO ()
+glDeleteFramebufferName = glDeleteFramebuffer
+
+foreign import javascript unsafe "null" glNullFramebufferName :: JS_WebGLFramebuffer
+
+{-# INLINABLE glAllocVertexArrayName #-}
+glAllocVertexArrayName :: IO VertexArrayName
+glAllocVertexArrayName = glCreateVertexArray
+
+{-# INLINABLE glDeleteVertexArrayName #-}
+glDeleteVertexArrayName :: VertexArrayName -> IO ()
+glDeleteVertexArrayName = glDeleteVertexArray
+
+foreign import javascript unsafe "null" glNullVertexArrayName :: JS_WebGLVertexArray
+
+foreign import javascript unsafe "null" glNullProgramName :: JS_WebGLProgram
+
 
 -- Helpers.
 
 foreign import javascript interruptible "var image=new Image();image.onload=function(){$c(image);};image.src=$1;" js_loadImage :: JSString -> IO JSVal
 
+-- | Convert bytestring to Javascript DataView object.
+-- Looks like there's no official GHCJS (exported) function to get a view for a part of the buffer.
+-- There's only non-exported JavaScript.TypedArray.DataView.dataView' function.
+byteStringToJsDataView :: B.ByteString -> JSVal
+byteStringToJsDataView bytes = js_dataViewFromBuffer buf off len where
+	(buf, off, len) = GHCJS.Buffer.fromByteString bytes
+
+foreign import javascript unsafe "new DataView($1.buf, $2, $3)" js_dataViewFromBuffer :: GHCJS.Buffer.Buffer -> Int -> Int -> JSVal
+
+foreign import javascript unsafe "$1.f3.subarray($1_2, $1_2 + $2)" js_ptrToFloat32Array :: Ptr Float -> Int -> JSVal
+foreign import javascript unsafe "$1.i3.subarray($1_2, $1_2 + $2)" js_ptrToInt32Array :: Ptr Int -> Int -> JSVal
+foreign import javascript unsafe "$1.u3.subarray($1_2, $1_2 + $2)" js_ptrToUint32Array :: Ptr Word -> Int -> JSVal
+
+
+type GlOffset = GLintptr
+
+{-# INLINE glIntToOffset #-}
+glIntToOffset :: Int -> GlOffset
+glIntToOffset = id
+
+
+-- Stubs.
+
+glProgramBinary :: JS_WebGLProgram -> GLenum -> Ptr a -> GLsizei -> IO ()
+glProgramBinary = error "glProgramBinary is not supported in WebGL"
+
+glGetProgramBinary :: JS_WebGLProgram -> GLsizei -> Ptr GLsizei -> Ptr GLenum -> Ptr a -> IO ()
+glGetProgramBinary = error "glGetProgramBinary is not supported in WebGL"
+
+pattern GL_PROGRAM_BINARY_LENGTH = 0x8741
+
+glBindFragDataLocation :: JS_WebGLProgram -> GLuint -> Ptr CChar -> IO ()
+glBindFragDataLocation = error "glBindFragDataLocation is not supported in WebGL"
+
+glBindFragDataLocationIndexed :: JS_WebGLProgram -> GLuint -> GLuint -> Ptr CChar -> IO ()
+glBindFragDataLocationIndexed = error "glBindFragDataLocationIndexed is not supported in WebGL"
+
+glVertexAttribFormat :: GLuint -> GLint -> GLenum -> GLboolean -> GLuint -> IO ()
+glVertexAttribFormat = error "glVertexAttribFormat is not supported in WebGL"
+
+glVertexAttribIFormat :: GLuint -> GLint -> GLenum -> GLuint -> IO ()
+glVertexAttribIFormat = error "glVertexAttribIFormat is not supported in WebGL"
+
+glVertexAttribBinding :: GLuint -> GLuint -> IO ()
+glVertexAttribBinding = error "glVertexAttribBinding is not supported in WebGL"
+
+glVertexBindingDivisor :: GLuint -> GLuint -> IO ()
+glVertexBindingDivisor = error "glVertexBindingDivisor is not supported in WebGL"
+
+glBindVertexBuffer :: GLuint -> JS_WebGLBuffer -> GLintptr -> GLintptr -> IO ()
+glBindVertexBuffer = error "glBindVertexBuffer is not supported in WebGL"
+
+
 -- Constants.
+
+-- Targets
+pattern GL_COLOR = 0x1800
+pattern GL_DEPTH = 0x1801
+pattern GL_STENCIL = 0x1802
+pattern GL_UNIFORM_BUFFER = 0x8A11
 
 -- ClearBufferMask
 pattern GL_DEPTH_BUFFER_BIT = 0x00000100
@@ -481,16 +1110,6 @@ pattern GL_TRIANGLES = 0x0004
 pattern GL_TRIANGLE_STRIP = 0x0005
 pattern GL_TRIANGLE_FAN = 0x0006
 
--- AlphaFunction (not supported in ES20)
---      NEVER
---      LESS
---      EQUAL
---      LEQUAL
---      GREATER
---      NOTEQUAL
---      GEQUAL
---      ALWAYS
-
 -- BlendingFactorDest
 pattern GL_ZERO = 0
 pattern GL_ONE = 1
@@ -500,6 +1119,10 @@ pattern GL_SRC_ALPHA = 0x0302
 pattern GL_ONE_MINUS_SRC_ALPHA = 0x0303
 pattern GL_DST_ALPHA = 0x0304
 pattern GL_ONE_MINUS_DST_ALPHA = 0x0305
+pattern GL_SRC1_ALPHA = 0x8589
+pattern GL_SRC1_COLOR = 0x88F9
+pattern GL_ONE_MINUS_SRC1_COLOR = 0x88FA
+pattern GL_ONE_MINUS_SRC1_ALPHA = 0x88FB
 
 -- BlendingFactorSrc
 --      ZERO
@@ -514,6 +1137,8 @@ pattern GL_SRC_ALPHA_SATURATE = 0x0308
 
 -- BlendEquationSeparate
 pattern GL_FUNC_ADD = 0x8006
+pattern GL_MIN = 0x8007 -- not supported in WebGL 1.0/2.0
+pattern GL_MAX = 0x8008 -- not supported in WebGL 1.0/2.0
 pattern GL_BLEND_EQUATION = 0x8009
 pattern GL_BLEND_EQUATION_RGB = 0x8009
 pattern GL_BLEND_EQUATION_ALPHA = 0x883D
@@ -553,18 +1178,17 @@ pattern GL_FRONT = 0x0404
 pattern GL_BACK = 0x0405
 pattern GL_FRONT_AND_BACK = 0x0408
 
--- DepthFunction
---      NEVER
---      LESS
---      EQUAL
---      LEQUAL
---      GREATER
---      NOTEQUAL
---      GEQUAL
---      ALWAYS
+-- Comparison functions
+pattern GL_NEVER = 0x0200
+pattern GL_LESS = 0x0201
+pattern GL_EQUAL = 0x0202
+pattern GL_LEQUAL = 0x0203
+pattern GL_GREATER = 0x0204
+pattern GL_NOTEQUAL = 0x0205
+pattern GL_GEQUAL = 0x0206
+pattern GL_ALWAYS = 0x0207
 
--- EnableCap
--- TEXTURE_2D
+-- Features
 pattern GL_CULL_FACE = 0x0B44
 pattern GL_BLEND = 0x0BE2
 pattern GL_DITHER = 0x0BD0
@@ -616,7 +1240,14 @@ pattern GL_SCISSOR_BOX = 0x0C10
 --      SCISSOR_TEST
 pattern GL_COLOR_CLEAR_VALUE = 0x0C22
 pattern GL_COLOR_WRITEMASK = 0x0C23
+pattern GL_UNPACK_ROW_LENGTH = 0x0CF2
+pattern GL_UNPACK_SKIP_ROWS = 0x0CF3
+pattern GL_UNPACK_SKIP_PIXELS = 0x0CF4
 pattern GL_UNPACK_ALIGNMENT = 0x0CF5
+pattern GL_UNPACK_IMAGE_HEIGHT = 0x806E
+pattern GL_PACK_ROW_LENGTH = 0x0D02
+pattern GL_PACK_SKIP_ROWS = 0x0D03
+pattern GL_PACK_SKIP_PIXELS = 0x0D04
 pattern GL_PACK_ALIGNMENT = 0x0D05
 pattern GL_MAX_TEXTURE_SIZE = 0x0D33
 pattern GL_MAX_VIEWPORT_DIMS = 0x0D3A
@@ -636,12 +1267,6 @@ pattern GL_SAMPLES = 0x80A9
 pattern GL_SAMPLE_COVERAGE_VALUE = 0x80AA
 pattern GL_SAMPLE_COVERAGE_INVERT = 0x80AB
 
--- GetTextureParameter
---      TEXTURE_MAG_FILTER
---      TEXTURE_MIN_FILTER
---      TEXTURE_WRAP_S
---      TEXTURE_WRAP_T
-
 pattern GL_COMPRESSED_TEXTURE_FORMATS = 0x86A3
 
 -- HintMode
@@ -660,20 +1285,60 @@ pattern GL_UNSIGNED_SHORT = 0x1403
 pattern GL_INT = 0x1404
 pattern GL_UNSIGNED_INT = 0x1405
 pattern GL_FLOAT = 0x1406
+pattern GL_HALF_FLOAT = 0x140B
 
 -- PixelFormat
 pattern GL_DEPTH_COMPONENT = 0x1902
+pattern GL_RED = 0x1903
 pattern GL_ALPHA = 0x1906
 pattern GL_RGB = 0x1907
 pattern GL_RGBA = 0x1908
 pattern GL_LUMINANCE = 0x1909
 pattern GL_LUMINANCE_ALPHA = 0x190A
+pattern GL_RGB8 = 0x8051
+pattern GL_RGBA8 = 0x8058
+pattern GL_RGBA16 = 0x805B
+pattern GL_RG = 0x8227
+pattern GL_R8 = 0x8229
+pattern GL_R16 = 0x822A
+pattern GL_RG8 = 0x822B
+pattern GL_RG16 = 0x822C
+pattern GL_R16F = 0x822D
+pattern GL_R32F = 0x822E
+pattern GL_RG16F = 0x822F
+pattern GL_RG32F = 0x8230
+pattern GL_RGBA32F = 0x8814
+pattern GL_RGB32F = 0x8815
+pattern GL_RGBA16F = 0x881A
+pattern GL_R11F_G11F_B10F = 0x8C3A
+pattern GL_SRGB8_ALPHA8 = 0x8C43
+
+-- Compressed pixel formats
+-- WEBGL_compressed_texture_s3tc extension
+pattern GL_COMPRESSED_RGB_S3TC_DXT1_EXT = 0x83F0
+pattern GL_COMPRESSED_RGBA_S3TC_DXT1_EXT = 0x83F1
+pattern GL_COMPRESSED_RGBA_S3TC_DXT3_EXT = 0x83F2
+pattern GL_COMPRESSED_RGBA_S3TC_DXT5_EXT = 0x83F3
+
+pattern GL_COMPRESSED_RED = 0x8225
+pattern GL_COMPRESSED_RG = 0x8226
+pattern GL_COMPRESSED_RGB = 0x84ED
+pattern GL_COMPRESSED_RGBA = 0x84EE
+pattern GL_COMPRESSED_SRGB_S3TC_DXT1_EXT = 0x8C4C
+pattern GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT = 0x8C4D
+pattern GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT = 0x8C4E
+pattern GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT = 0x8C4F
+pattern GL_COMPRESSED_RED_RGTC1 = 0x8DBB
+pattern GL_COMPRESSED_SIGNED_RED_RGTC1 = 0x8DBC
+pattern GL_COMPRESSED_RG_RGTC2 = 0x8DBD
+pattern GL_COMPRESSED_SIGNED_RG_RGTC2 = 0x8DBE
 
 -- PixelType
 --      UNSIGNED_BYTE
 pattern GL_UNSIGNED_SHORT_4_4_4_4 = 0x8033
 pattern GL_UNSIGNED_SHORT_5_5_5_1 = 0x8034
 pattern GL_UNSIGNED_SHORT_5_6_5 = 0x8363
+pattern GL_UNSIGNED_INT_24_8 = 0x84FA
 
 -- Shaders
 pattern GL_FRAGMENT_SHADER = 0x8B30
@@ -694,16 +1359,6 @@ pattern GL_ACTIVE_UNIFORMS = 0x8B86
 pattern GL_ACTIVE_ATTRIBUTES = 0x8B89
 pattern GL_SHADING_LANGUAGE_VERSION = 0x8B8C
 pattern GL_CURRENT_PROGRAM = 0x8B8D
-
--- StencilFunction
-pattern GL_NEVER = 0x0200
-pattern GL_LESS = 0x0201
-pattern GL_EQUAL = 0x0202
-pattern GL_LEQUAL = 0x0203
-pattern GL_GREATER = 0x0204
-pattern GL_NOTEQUAL = 0x0205
-pattern GL_GEQUAL = 0x0206
-pattern GL_ALWAYS = 0x0207
 
 -- StencilOp
 --      ZERO
@@ -733,14 +1388,20 @@ pattern GL_NEAREST_MIPMAP_LINEAR = 0x2702
 pattern GL_LINEAR_MIPMAP_LINEAR = 0x2703
 
 -- TextureParameterName
+pattern GL_TEXTURE_BORDER_COLOR = 0x1004 -- not supported in WebGL 1.0/2.0
 pattern GL_TEXTURE_MAG_FILTER = 0x2800
 pattern GL_TEXTURE_MIN_FILTER = 0x2801
 pattern GL_TEXTURE_WRAP_S = 0x2802
 pattern GL_TEXTURE_WRAP_T = 0x2803
+pattern GL_TEXTURE_WRAP_R = 0x8072
 
 -- TextureTarget
-pattern GL_TEXTURE_2D = 0x0DE1
 pattern GL_TEXTURE = 0x1702
+pattern GL_TEXTURE_1D = 0x0DE0 -- not supported in WebGL 1.0/2.0
+pattern GL_TEXTURE_1D_ARRAY = 0x8C18 -- not supported in WebGL 1.0/2.0
+pattern GL_TEXTURE_2D = 0x0DE1
+pattern GL_TEXTURE_2D_ARRAY = 0x8C1A
+pattern GL_TEXTURE_3D = 0x806F
 
 pattern GL_TEXTURE_CUBE_MAP = 0x8513
 pattern GL_TEXTURE_BINDING_CUBE_MAP = 0x8514
@@ -789,8 +1450,15 @@ pattern GL_ACTIVE_TEXTURE = 0x84E0
 
 -- TextureWrapMode
 pattern GL_REPEAT = 0x2901
+pattern GL_CLAMP_TO_BORDER = GL_CLAMP_TO_EDGE -- (0x812D) not supported in WebGL 1.0/2.0
 pattern GL_CLAMP_TO_EDGE = 0x812F
 pattern GL_MIRRORED_REPEAT = 0x8370
+
+-- Texture Levels
+pattern GL_TEXTURE_MIN_LOD = 0x813A
+pattern GL_TEXTURE_MAX_LOD = 0x813B
+pattern GL_TEXTURE_BASE_LEVEL = 0x813C
+pattern GL_TEXTURE_MAX_LEVEL = 0x813D
 
 -- Uniform Types
 pattern GL_FLOAT_VEC2 = 0x8B50

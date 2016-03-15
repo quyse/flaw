@@ -10,6 +10,7 @@ module Flaw.Graphics.GlContext
 	( GlDevice
 	, GlContext(..)
 	, FrameBufferId(..)
+	, TextureId(..)
 	, GlCaps(..)
 	, GlContextState(..)
 	, newGlContext
@@ -46,12 +47,6 @@ import Flaw.Graphics.Texture
 import Flaw.Math
 
 #if defined(ghcjs_HOST_OS)
-
-import GHCJS.Foreign
-import GHCJS.Foreign.Callback
-import GHCJS.Marshal
-import GHCJS.Marshal.Pure
-import GHCJS.Types
 
 import Flaw.Graphics.WebGL.FFI
 
@@ -412,14 +407,14 @@ instance Device GlContext where
 
 		glBindTexture GL_TEXTURE_2D textureName
 		glCheckErrors 0 "bind texture"
-		glTexImage2D_null GL_TEXTURE_2D 0 (fromIntegral GL_DEPTH_STENCIL) (fromIntegral width) (fromIntegral height) 0 GL_DEPTH_STENCIL GL_UNSIGNED_INT_24_8
+		glTexImage2D_null GL_TEXTURE_2D 0 (fromIntegral (GL_DEPTH_STENCIL :: GLenum)) (fromIntegral width) (fromIntegral height) 0 GL_DEPTH_STENCIL GL_UNSIGNED_INT_24_8
 		glCheckErrors 0 "tex image"
 
-		glTexParameteri GL_TEXTURE_2D GL_TEXTURE_MIN_FILTER $ fromIntegral GL_NEAREST
-		glTexParameteri GL_TEXTURE_2D GL_TEXTURE_MAG_FILTER $ fromIntegral GL_NEAREST
-		glTexParameteri GL_TEXTURE_2D GL_TEXTURE_WRAP_S $ fromIntegral GL_CLAMP_TO_EDGE
-		glTexParameteri GL_TEXTURE_2D GL_TEXTURE_WRAP_T $ fromIntegral GL_CLAMP_TO_EDGE
-		glTexParameteri GL_TEXTURE_2D GL_TEXTURE_WRAP_R $ fromIntegral GL_CLAMP_TO_EDGE
+		glTexParameteri GL_TEXTURE_2D GL_TEXTURE_MIN_FILTER $ fromIntegral (GL_NEAREST :: GLenum)
+		glTexParameteri GL_TEXTURE_2D GL_TEXTURE_MAG_FILTER $ fromIntegral (GL_NEAREST :: GLenum)
+		glTexParameteri GL_TEXTURE_2D GL_TEXTURE_WRAP_S $ fromIntegral (GL_CLAMP_TO_EDGE :: GLenum)
+		glTexParameteri GL_TEXTURE_2D GL_TEXTURE_WRAP_T $ fromIntegral (GL_CLAMP_TO_EDGE :: GLenum)
+		glTexParameteri GL_TEXTURE_2D GL_TEXTURE_WRAP_R $ fromIntegral (GL_CLAMP_TO_EDGE :: GLenum)
 		glCheckErrors 0 "texture parameters"
 
 		return (GlDepthStencilTargetId
