@@ -8,7 +8,8 @@ module Flaw.Graphics.OpenGL.FFI
 	(
 	-- * Name manipulation
 	-- ** Types
-	  BufferName
+	  UniformLocation
+	, BufferName
 	, TextureName
 	, SamplerName
 	, FramebufferName
@@ -53,6 +54,8 @@ import Foreign.Storable
 import Graphics.GL.Core33
 
 import Flaw.Math
+
+type UniformLocation = GLint
 
 type BufferName = GLuint
 type TextureName = GLuint

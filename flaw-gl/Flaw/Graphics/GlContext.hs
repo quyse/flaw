@@ -133,9 +133,9 @@ data GlAttribute = GlAttribute
 	}
 
 data GlUniform = GlUniform
-	{ glUniformLocation :: !GLint
-	, glUniformOffset :: !Int
-	, glUniformSize :: !GLint
+	{ glUniformLocation :: {-# UNPACK #-} !UniformLocation
+	, glUniformOffset :: {-# UNPACK #-} !Int
+	, glUniformSize :: {-# UNPACK #-} !GLint
 	, glUniformType :: !ValueType
 	}
 
