@@ -19,14 +19,21 @@ module Flaw.Graphics.OpenGL.FFI
 	-- ** Allocation and deletion
 	, glAllocBufferName
 	, glDeleteBufferName
+	, glNullBufferName
+	, glUndefinedBufferName
 	, glAllocTextureName
 	, glDeleteTextureName
+	, glNullTextureName
 	, glAllocSamplerName
 	, glDeleteSamplerName
+	, glNullSamplerName
 	, glAllocFramebufferName
 	, glDeleteFramebufferName
+	, glNullFramebufferName
 	, glAllocVertexArrayName
 	, glDeleteVertexArrayName
+	, glNullVertexArrayName
+	, glNullProgramName
 	-- * Buffer uploading
 	, glBufferData_bs
 	, glBufferData_null
@@ -53,8 +60,6 @@ module Flaw.Graphics.OpenGL.FFI
 	, glBindAttribLocation_s
 	, glGetUniformLocation_s
 	, glGetUniformBlockIndex_s
-	-- * Vertex array
-	, glNullVertexArray
 	-- * Clearing
 	, glClearBufferiv_1
 	, glClearBufferfv_1
@@ -96,6 +101,14 @@ glAllocBufferName = alloca $ \namePtr -> do
 glDeleteBufferName :: BufferName -> IO ()
 glDeleteBufferName name = with name $ glDeleteBuffers 1
 
+{-# INLINE glNullBufferName #-}
+glNullBufferName :: BufferName
+glNullBufferName = 0
+
+{-# INLINE glUndefinedBufferName #-}
+glUndefinedBufferName :: BufferName
+glUndefinedBufferName = -1
+
 {-# INLINABLE glAllocTextureName #-}
 glAllocTextureName :: IO TextureName
 glAllocTextureName = alloca $ \namePtr -> do
@@ -105,6 +118,10 @@ glAllocTextureName = alloca $ \namePtr -> do
 {-# INLINABLE glDeleteTextureName #-}
 glDeleteTextureName :: TextureName -> IO ()
 glDeleteTextureName name = with name $ glDeleteTextures 1
+
+{-# INLINE glNullTextureName #-}
+glNullTextureName :: TextureName
+glNullTextureName = 0
 
 {-# INLINABLE glAllocSamplerName #-}
 glAllocSamplerName :: IO SamplerName
@@ -116,6 +133,10 @@ glAllocSamplerName = alloca $ \namePtr -> do
 glDeleteSamplerName :: SamplerName -> IO ()
 glDeleteSamplerName name = with name $ glDeleteSamplers 1
 
+{-# INLINE glNullSamplerName #-}
+glNullSamplerName :: SamplerName
+glNullSamplerName = 0
+
 {-# INLINABLE glAllocFramebufferName #-}
 glAllocFramebufferName :: IO FramebufferName
 glAllocFramebufferName = alloca $ \namePtr -> do
@@ -126,6 +147,10 @@ glAllocFramebufferName = alloca $ \namePtr -> do
 glDeleteFramebufferName :: FramebufferName -> IO ()
 glDeleteFramebufferName name = with name $ glDeleteFramebuffers 1
 
+{-# INLINE glNullFramebufferName #-}
+glNullFramebufferName :: FramebufferName
+glNullFramebufferName = 0
+
 {-# INLINABLE glAllocVertexArrayName #-}
 glAllocVertexArrayName :: IO VertexArrayName
 glAllocVertexArrayName = alloca $ \vaNamePtr -> do
@@ -135,6 +160,14 @@ glAllocVertexArrayName = alloca $ \vaNamePtr -> do
 {-# INLINABLE glDeleteVertexArrayName #-}
 glDeleteVertexArrayName :: VertexArrayName -> IO ()
 glDeleteVertexArrayName name = with name $ glDeleteVertexArrays 1
+
+{-# INLINE glNullVertexArrayName #-}
+glNullVertexArrayName :: VertexArrayName
+glNullVertexArrayName = 0
+
+{-# INLINE glNullProgramName #-}
+glNullProgramName :: ProgramName
+glNullProgramName = 0
 
 {-# INLINABLE glBufferData_bs #-}
 glBufferData_bs :: GLenum -> B.ByteString -> GLenum -> IO ()
@@ -252,10 +285,6 @@ glGetUniformLocation_s programName locationName = B.useAsCString (T.encodeUtf8 l
 
 glGetUniformBlockIndex_s :: GLuint -> T.Text -> IO GLuint
 glGetUniformBlockIndex_s programName uniformBlockName = B.useAsCString (T.encodeUtf8 uniformBlockName) $ glGetUniformBlockIndex programName
-
-{-# INLINE glNullVertexArray #-}
-glNullVertexArray :: GLuint
-glNullVertexArray = 0
 
 {-# INLINABLE glClearBufferiv_1 #-}
 glClearBufferiv_1 :: GLenum -> GLint -> GLint -> IO ()

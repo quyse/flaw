@@ -181,15 +181,15 @@ instance Device GlContext where
 		-- | Null uniform buffer.
 		| GlNullUniformBufferId
 
-	nullTexture = GlTextureId 0
-	nullSamplerState = GlSamplerStateId 0
+	nullTexture = GlTextureId glNullTextureName
+	nullSamplerState = GlSamplerStateId glNullSamplerName
 	nullBlendState = GlNullBlendStateId
 	nullDepthStencilTarget = GlDepthStencilTargetId
-		{ glDepthStencilTargetName = 0
+		{ glDepthStencilTargetName = glNullTextureName
 		, glDepthStencilWidth = 0
 		, glDepthStencilHeight = 0
 		}
-	nullIndexBuffer = GlIndexBufferId 0 GL_UNSIGNED_SHORT
+	nullIndexBuffer = GlIndexBufferId glNullBufferName GL_UNSIGNED_SHORT
 	nullUniformBuffer = GlNullUniformBufferId
 
 	createDeferredContext = undefined
@@ -464,7 +464,7 @@ instance Device GlContext where
 
 		-- get width and height of framebuffer (and check that they're equal)
 		let foldSize (n, w, h) (rw, rh) = do
-			if n > 0 then do
+			if n /= glNullTextureName then do
 				when ((rw > 0 && w /= rw) || (rh > 0 && h /= rh)) $ throwIO $ DescribeFirstException "sizes are not equal"
 				return (rw .|. w, rh .|. h)
 			else return (rw, rh)
@@ -521,10 +521,10 @@ instance Device GlContext where
 		let indexBufferId = GlIndexBufferId bufferName (if is32Bit then GL_UNSIGNED_INT else GL_UNSIGNED_SHORT)
 
 		-- element array buffer is a part of VAO; unbind it in order to re-bind with actual VAO during drawing
-		glBindBuffer GL_ELEMENT_ARRAY_BUFFER 0
+		glBindBuffer GL_ELEMENT_ARRAY_BUFFER glNullBufferName
 		glCheckErrors 0 "unbind buffer"
 
-		writeIORef actualIndexBufferRef $ GlIndexBufferId 0 GL_UNSIGNED_SHORT
+		writeIORef actualIndexBufferRef $ GlIndexBufferId glNullBufferName GL_UNSIGNED_SHORT
 
 		return (indexBufferId, invoke $ glDeleteBufferName bufferName)
 
@@ -776,7 +776,7 @@ instance Device GlContext where
 				glCheckErrors 0 "vertex binding divisor"
 
 			-- unbind vertex array
-			glBindVertexArray glNullVertexArray
+			glBindVertexArray glNullVertexArrayName
 			glCheckErrors 0 "unbind vertex array"
 
 			return (vaName, V.empty, 0)
@@ -822,7 +822,7 @@ instance Device GlContext where
 						}
 				return slots
 
-			return (glNullVertexArray, attributeSlots, length attributes)
+			return (glNullVertexArrayName, attributeSlots, length attributes)
 
 		return GlProgramId
 			{ glProgramName = programName
@@ -896,7 +896,7 @@ instance Context GlContext GlContext where
 		} instancesCount indicesCount = do
 		glUpdateContext context
 		GlIndexBufferId indexBufferName indicesType <- readIORef indexBufferRef
-		if indexBufferName > 0 then do
+		if indexBufferName /= glNullBufferName then do
 			if instancesCount > 1 then
 				glDrawElementsInstanced GL_TRIANGLES (fromIntegral indicesCount) indicesType (glIntToOffset 0) (fromIntegral instancesCount)
 			else
@@ -1052,8 +1052,8 @@ instance Context GlContext GlContext where
 
 glNullProgram :: ProgramId GlDevice
 glNullProgram = GlProgramId
-	{ glProgramName = 0
-	, glProgramVertexArrayName = 0
+	{ glProgramName = glNullProgramName
+	, glProgramVertexArrayName = glNullVertexArrayName
 	, glProgramAttributeSlots = V.empty
 	, glProgramAttributesCount = 0
 	, glProgramUniforms = V.empty
@@ -1076,16 +1076,16 @@ newGlContext invoke caps programCache = do
 glCreateContextState :: IO GlContextState
 glCreateContextState = do
 	frameBuffer <- newIORef GlFrameBufferId
-		{ glFrameBufferName = 0
+		{ glFrameBufferName = glNullFramebufferName
 		, glFrameBufferWidth = 0
 		, glFrameBufferHeight = 0
 		}
 	viewport <- newIORef $ Vec4 0 0 0 0
 	scissor <- newIORef Nothing
-	vertexBuffers <- VM.replicate 8 $ GlVertexBufferId 0 0
-	indexBuffer <- newIORef $ GlIndexBufferId 0 GL_UNSIGNED_SHORT
+	vertexBuffers <- VM.replicate 8 $ GlVertexBufferId glNullBufferName 0
+	indexBuffer <- newIORef $ GlIndexBufferId glNullBufferName GL_UNSIGNED_SHORT
 	uniformBuffers <- VM.replicate 8 GlNullUniformBufferId
-	samplers <- VM.replicate 8 (GlTextureId 0, GlSamplerStateId 0)
+	samplers <- VM.replicate 8 (GlTextureId glNullTextureName, GlSamplerStateId glNullSamplerName)
 	program <- newIORef glNullProgram
 	depthTestFunc <- newIORef DepthTestFuncLess
 	depthWrite <- newIORef True
@@ -1119,16 +1119,16 @@ glSetDefaultContextState GlContextState
 	, glContextStateBlendState = blendStateRef
 	} = do
 	writeIORef frameBufferRef GlFrameBufferId
-		{ glFrameBufferName = 0
+		{ glFrameBufferName = glNullFramebufferName
 		, glFrameBufferWidth = 0
 		, glFrameBufferHeight = 0
 		}
 	writeIORef viewportRef $ Vec4 0 0 0 0
 	writeIORef scissorRef Nothing
-	VM.set vertexBuffersVector $ GlVertexBufferId 0 0
-	writeIORef indexBufferRef $ GlIndexBufferId 0 GL_UNSIGNED_SHORT
+	VM.set vertexBuffersVector $ GlVertexBufferId glNullBufferName 0
+	writeIORef indexBufferRef $ GlIndexBufferId glNullBufferName GL_UNSIGNED_SHORT
 	VM.set uniformBuffersVector GlNullUniformBufferId
-	VM.set samplersVector (GlTextureId 0, GlSamplerStateId 0)
+	VM.set samplersVector (GlTextureId glNullTextureName, GlSamplerStateId glNullSamplerName)
 	writeIORef programRef glNullProgram
 	writeIORef depthTestFuncRef DepthTestFuncLess
 	writeIORef depthWriteRef True
@@ -1234,12 +1234,12 @@ glUpdateContext context@GlContext
 		glCheckErrors 0 "bind program"
 
 		-- if vertex array is supported
-		when (vertexArrayName > 0) $ do
+		when (vertexArrayName /= glNullVertexArrayName) $ do
 			-- bind vertex array
 			glBindVertexArray vertexArrayName
 			glCheckErrors 0 "bind vertex array"
 			-- reset current index buffer binding in order to refresh (as element array buffer is part of VAO state)
-			writeIORef actualIndexBufferRef $ GlIndexBufferId (-1) 0
+			writeIORef actualIndexBufferRef $ GlIndexBufferId glUndefinedBufferName 0
 
 	-- uniform buffers
 	uniformBindings <- glProgramUniforms <$> readIORef desiredProgramRef
@@ -1305,7 +1305,7 @@ glUpdateContext context@GlContext
 				updateActual
 			GlNullUniformBufferId -> case actualUniformBuffer of
 				GlUniformBufferId {} -> do
-					bindBuffer 0
+					bindBuffer glNullBufferName
 					updateActual
 				GlUniformMemoryBufferId {} -> do
 					updateActual
@@ -1345,7 +1345,7 @@ glUpdateContext context@GlContext
 						glVertexAttribIPointer i size t stride (glIntToOffset offset)
 					else
 						glVertexAttribPointer i size t isNormalized stride (glIntToOffset offset)
-					glCheckErrors 0 $ show ("vertex attrib pointer", bufferName, i, size, t, isNormalized, stride, offset)
+					glCheckErrors 0 "vertex attrib pointer"
 
 					when capArbInstancedArrays $ do
 						glVertexAttribDivisor i divisor
