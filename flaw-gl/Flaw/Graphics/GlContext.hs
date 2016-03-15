@@ -25,7 +25,6 @@ import Data.Foldable
 import Data.List
 import Data.IORef
 import qualified Data.Serialize as S
-import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Data.Vector as V
 import qualified Data.Vector.Mutable as VM
@@ -129,7 +128,7 @@ data GlAttribute = GlAttribute
 	-- | Is attribute integer.
 	, glAttributeIsInteger :: {-# UNPACK #-} !GLboolean
 	-- | Offset within vertex buffer.
-	, glAttributeOffset :: {-# UNPACK #-} !IntPtr
+	, glAttributeOffset :: {-# UNPACK #-} !Int
 	}
 
 data GlUniform = GlUniform
@@ -141,8 +140,8 @@ data GlUniform = GlUniform
 
 instance Device GlContext where
 	type DeferredContext GlContext = GlContext
-	newtype TextureId GlContext = GlTextureId GLuint deriving Eq
-	newtype SamplerStateId GlContext = GlSamplerStateId GLuint deriving Eq
+	newtype TextureId GlContext = GlTextureId TextureName deriving Eq
+	newtype SamplerStateId GlContext = GlSamplerStateId SamplerName deriving Eq
 	data BlendStateId GlContext
 		= GlBlendStateId {-# UNPACK #-} !BlendStateInfo
 		| GlNullBlendStateId
@@ -165,7 +164,7 @@ instance Device GlContext where
 	data VertexBufferId GlContext = GlVertexBufferId {-# UNPACK #-} !BufferName {-# UNPACK #-} !GLsizei deriving Eq
 	data IndexBufferId GlContext = GlIndexBufferId {-# UNPACK #-} !BufferName {-# UNPACK #-} !GLenum
 	data ProgramId GlContext = GlProgramId
-		{ glProgramName :: {-# UNPACK #-} !GLuint
+		{ glProgramName :: {-# UNPACK #-} !ProgramName
 		, glProgramVertexArrayName :: {-# UNPACK #-} !VertexArrayName
 		, glProgramAttributeSlots :: {-# UNPACK #-} !(V.Vector GlAttributeSlot)
 		-- | Number of generic vertex attributes used (i.e. used attributes are from 0 to this number minus 1).
@@ -367,7 +366,7 @@ instance Device GlContext where
 		glCheckErrors 0 "max LOD"
 
 		-- border color
-		with borderColor $ glSamplerParameterfv samplerName GL_TEXTURE_BORDER_COLOR . castPtr
+		glSamplerParameterfv_4 samplerName GL_TEXTURE_BORDER_COLOR borderColor
 		glCheckErrors 0 "border color"
 
 		return (GlSamplerStateId samplerName, invoke $ glDeleteSamplerName samplerName)
@@ -491,8 +490,7 @@ instance Device GlContext where
 		bufferName <- glAllocBufferName
 		glBindBuffer GL_ARRAY_BUFFER bufferName
 		glCheckErrors 0 "bind buffer"
-		B.unsafeUseAsCStringLen bytes $ \(bytesPtr, bytesLen) -> do
-			glBufferData GL_ARRAY_BUFFER (fromIntegral bytesLen) bytesPtr GL_STATIC_DRAW
+		glBufferData_bs GL_ARRAY_BUFFER bytes GL_STATIC_DRAW
 		glCheckErrors 0 "buffer data"
 
 		return (GlVertexBufferId bufferName (fromIntegral stride), invoke $ glDeleteBufferName bufferName)
@@ -503,7 +501,7 @@ instance Device GlContext where
 		bufferName <- glAllocBufferName
 		glBindBuffer GL_ARRAY_BUFFER bufferName
 		glCheckErrors 0 "bind buffer"
-		glBufferData GL_ARRAY_BUFFER (fromIntegral size) nullPtr GL_DYNAMIC_DRAW
+		glBufferData_null GL_ARRAY_BUFFER (fromIntegral size) GL_DYNAMIC_DRAW
 		glCheckErrors 0 "buffer data"
 
 		return (GlVertexBufferId bufferName (fromIntegral stride), invoke $ glDeleteBufferName bufferName)
@@ -517,8 +515,7 @@ instance Device GlContext where
 		bufferName <- glAllocBufferName
 		glBindBuffer GL_ELEMENT_ARRAY_BUFFER bufferName
 		glCheckErrors 0 "bind buffer"
-		B.unsafeUseAsCStringLen bytes $ \(bytesPtr, bytesLen) -> do
-			glBufferData GL_ELEMENT_ARRAY_BUFFER (fromIntegral bytesLen) bytesPtr GL_STATIC_DRAW
+		glBufferData_bs GL_ELEMENT_ARRAY_BUFFER bytes GL_STATIC_DRAW
 		glCheckErrors 0 "buffer data"
 
 		let indexBufferId = GlIndexBufferId bufferName (if is32Bit then GL_UNSIGNED_INT else GL_UNSIGNED_SHORT)
@@ -602,10 +599,7 @@ instance Device GlContext where
 				_ <- book bk $ return (shaderName, glDeleteShader shaderName)
 
 				-- set shader source
-				B.unsafeUseAsCStringLen (T.encodeUtf8 shaderSource) $ \(sourcePtr, sourceLen) -> do
-					with sourcePtr $ \sourcePtrPtr -> do
-						with (fromIntegral sourceLen) $ \sourceLenPtr -> do
-							glShaderSource shaderName 1 sourcePtrPtr sourceLenPtr
+				glShaderSource_s shaderName shaderSource
 				glCheckErrors 0 "set shader source"
 
 				-- compile shader
@@ -621,27 +615,15 @@ instance Device GlContext where
 					glAttachShader programName shaderName
 					glCheckErrors 0 "attach shader"
 				else do
-					-- in case of error, get compilation log
-					logLength <- alloca $ \logLengthPtr -> do
-						poke logLengthPtr 0
-						glGetShaderiv shaderName GL_INFO_LOG_LENGTH logLengthPtr
-						glCheckErrors 0 "get shader log length"
-						peek logLengthPtr
-					logBytes <- allocaBytes (fromIntegral logLength) $ \logPtr -> do
-						realLogLength <- alloca $ \logLengthPtr -> do
-							glGetShaderInfoLog shaderName logLength logLengthPtr logPtr
-							glCheckErrors 0 "get shader log"
-							peek logLengthPtr
-						B.packCStringLen (logPtr, fromIntegral realLogLength)
-					glClearErrors
-					putStrLn $ T.unpack shaderSource -- TEST
-					throwIO $ DescribeFirstException ("failed to compile shader", T.decodeUtf8 logBytes)
+					shaderLog <- glGetShaderInfoLog_s shaderName
+					glCheckErrors 0 "get shader log"
+					throwIO $ DescribeFirstException ("failed to compile shader", shaderLog)
 
 			-- bind attributes
 			forM_ (zip attributes [0..]) $ \(GlslAttribute
 				{ glslAttributeName = attributeName
 				}, i) -> do
-				B.useAsCString (T.encodeUtf8 attributeName) $ glBindAttribLocation programName i
+				glBindAttribLocation_s programName i attributeName
 				glCheckErrors 0 "bind attribute location"
 
 			-- bind fragment targets
@@ -685,19 +667,9 @@ instance Device GlContext where
 							return (bytes, fromIntegral format)
 						setCachedBinary programCache cacheKey $ S.encode (binaryProgram :: BinaryProgram)
 			else do
-				-- in case of error, get linking log
-				logLength <- alloca $ \logLengthPtr -> do
-					glGetProgramiv programName GL_INFO_LOG_LENGTH logLengthPtr
-					glCheckErrors 0 "get program log length"
-					peek logLengthPtr
-				logBytes <- allocaBytes (fromIntegral logLength) $ \logPtr -> do
-					realLogLength <- alloca $ \logLengthPtr -> do
-						glGetProgramInfoLog programName logLength logLengthPtr logPtr
-						glCheckErrors 0 "get program log"
-						peek logLengthPtr
-					B.packCStringLen (logPtr, fromIntegral realLogLength)
-				glClearErrors
-				throwIO $ DescribeFirstException ("failed to link program", T.decodeUtf8 logBytes)
+				programLog <- glGetProgramInfoLog_s programName
+				glCheckErrors 0 "get program log"
+				throwIO $ DescribeFirstException ("failed to link program", programLog)
 
 		-- set as current
 		glUseProgram programName
@@ -708,7 +680,7 @@ instance Device GlContext where
 			{ glslUniformBlockName = uniformBlockName
 			, glslUniformBlockSlot = slot
 			} -> do
-			index <- B.useAsCString (T.encodeUtf8 uniformBlockName) $ glGetUniformBlockIndex programName
+			index <- glGetUniformBlockIndex_s programName uniformBlockName
 			glCheckErrors 0 "get uniform block index"
 			glUniformBlockBinding programName index (fromIntegral slot)
 			glCheckErrors 0 "uniform block binding"
@@ -720,7 +692,7 @@ instance Device GlContext where
 				{ samplerSlot = slot
 				}
 			} -> do
-			location <- B.useAsCString (T.encodeUtf8 samplerName) $ glGetUniformLocation programName
+			location <- glGetUniformLocation_s programName samplerName
 			glCheckErrors 0 "get sampler location"
 			glUniform1i location (fromIntegral slot)
 			glCheckErrors 0 "bind sampler to texture unit"
@@ -751,7 +723,7 @@ instance Device GlContext where
 						}
 					} -> do
 					-- get location
-					location <- B.useAsCString (T.encodeUtf8 uniformName) $ glGetUniformLocation programName
+					location <- glGetUniformLocation_s programName uniformName
 					glCheckErrors 0 "get uniform location"
 
 					return GlUniform
@@ -804,7 +776,7 @@ instance Device GlContext where
 				glCheckErrors 0 "vertex binding divisor"
 
 			-- unbind vertex array
-			glBindVertexArray 0
+			glBindVertexArray glNullVertexArray
 			glCheckErrors 0 "unbind vertex array"
 
 			return (vaName, V.empty, 0)
@@ -842,7 +814,7 @@ instance Device GlContext where
 							, glAttributeType = t
 							, glAttributeIsNormalized = isNormalized
 							, glAttributeIsInteger = isInteger
-							, glAttributeOffset = fromIntegral offset
+							, glAttributeOffset = offset
 							}
 					VM.write slots slot GlAttributeSlot
 						{ glAttributeSlotElements = elements
@@ -850,7 +822,7 @@ instance Device GlContext where
 						}
 				return slots
 
-			return (0, attributeSlots, length attributes)
+			return (glNullVertexArray, attributeSlots, length attributes)
 
 		return GlProgramId
 			{ glProgramName = programName
@@ -871,7 +843,7 @@ instance Device GlContext where
 			bufferName <- glAllocBufferName
 			glBindBuffer GL_UNIFORM_BUFFER bufferName
 			glCheckErrors 0 "bind buffer"
-			glBufferData GL_UNIFORM_BUFFER (fromIntegral size) nullPtr GL_DYNAMIC_DRAW
+			glBufferData_null GL_UNIFORM_BUFFER (fromIntegral size) GL_DYNAMIC_DRAW
 			glCheckErrors 0 "buffer data"
 			
 			return (GlUniformBufferId bufferName size, invoke $ glDeleteBufferName bufferName)
@@ -905,8 +877,7 @@ instance Context GlContext GlContext where
 	contextUploadUniformBuffer _context uniformBuffer bytes = case uniformBuffer of
 		GlUniformBufferId bufferName _bufferSize -> do
 			glBindBuffer GL_UNIFORM_BUFFER bufferName
-			B.unsafeUseAsCStringLen bytes $ \(bytesPtr, bytesLen) -> do
-				glBufferData GL_UNIFORM_BUFFER (fromIntegral bytesLen) bytesPtr GL_DYNAMIC_DRAW
+			glBufferData_bs GL_UNIFORM_BUFFER bytes GL_DYNAMIC_DRAW
 			glCheckErrors 1 "upload uniform buffer"
 		GlUniformMemoryBufferId bufferRef -> do
 			-- remember buffer data
@@ -915,8 +886,7 @@ instance Context GlContext GlContext where
 
 	contextUploadVertexBuffer _context (GlVertexBufferId bufferName _stride) bytes = do
 		glBindBuffer GL_ARRAY_BUFFER bufferName
-		B.unsafeUseAsCStringLen bytes $ \(bytesPtr, bytesLen) -> do
-			glBufferData GL_ARRAY_BUFFER (fromIntegral bytesLen) bytesPtr GL_DYNAMIC_DRAW
+		glBufferData_bs GL_ARRAY_BUFFER bytes GL_DYNAMIC_DRAW
 		glCheckErrors 1 "upload vertex buffer"
 
 	contextDraw context@GlContext
@@ -928,9 +898,9 @@ instance Context GlContext GlContext where
 		GlIndexBufferId indexBufferName indicesType <- readIORef indexBufferRef
 		if indexBufferName > 0 then do
 			if instancesCount > 1 then
-				glDrawElementsInstanced GL_TRIANGLES (fromIntegral indicesCount) indicesType nullPtr (fromIntegral instancesCount)
+				glDrawElementsInstanced GL_TRIANGLES (fromIntegral indicesCount) indicesType (glIntToOffset 0) (fromIntegral instancesCount)
 			else
-				glDrawElements GL_TRIANGLES (fromIntegral indicesCount) indicesType nullPtr
+				glDrawElements GL_TRIANGLES (fromIntegral indicesCount) indicesType (glIntToOffset 0)
 		else do
 			if instancesCount > 1 then
 				glDrawArraysInstanced GL_TRIANGLES 0 (fromIntegral indicesCount) (fromIntegral instancesCount)
@@ -1372,9 +1342,9 @@ glUpdateContext context@GlContext
 					glCheckErrors 0 "enable vertex attrib array"
 
 					if isInteger > 0 then
-						glVertexAttribIPointer i size t stride (intPtrToPtr offset)
+						glVertexAttribIPointer i size t stride (glIntToOffset offset)
 					else
-						glVertexAttribPointer i size t isNormalized stride (intPtrToPtr offset)
+						glVertexAttribPointer i size t isNormalized stride (glIntToOffset offset)
 					glCheckErrors 0 $ show ("vertex attrib pointer", bufferName, i, size, t, isNormalized, stride, offset)
 
 					when capArbInstancedArrays $ do
@@ -1685,12 +1655,6 @@ glCheckErrors level msg = unless (level < GL_ERROR_LEVEL) $ do
 			else f $ nextError : restErrors
 		errors <- f [firstError]
 		throwIO $ DescribeFirstException $ show ("OpenGL error", msg, errors)
-
--- | Clear OpenGL errors.
-glClearErrors :: IO ()
-glClearErrors = do
-	e <- glGetError
-	unless (e == GL_NO_ERROR) glClearErrors
 
 -- | Minimal level of error checking.
 -- Increase this number to do less checks.

@@ -14,6 +14,8 @@ module Flaw.Graphics.OpenGL.FFI
 	, SamplerName
 	, FramebufferName
 	, VertexArrayName
+  , ProgramName
+  , ShaderName
 	-- ** Allocation and deletion
 	, glAllocBufferName
 	, glDeleteBufferName
@@ -25,7 +27,10 @@ module Flaw.Graphics.OpenGL.FFI
 	, glDeleteFramebufferName
 	, glAllocVertexArrayName
 	, glDeleteVertexArrayName
-	-- * Texture uploading.
+	-- * Buffer uploading
+	, glBufferData_bs
+	, glBufferData_null
+	-- * Texture uploading
 	, glTexImage1D_bs
 	, glTexImage2D_bs
 	, glTexImage3D_bs
@@ -39,14 +44,30 @@ module Flaw.Graphics.OpenGL.FFI
 	, glCompressedTexSubImage2D_bs
 	, glCompressedTexSubImage3D_bs
 	, glTexImage2D_null
+	-- * Sampler parameters
+	, glSamplerParameterfv_4
+	-- * Programs and shaders
+	, glShaderSource_s
+	, glGetProgramInfoLog_s
+	, glGetShaderInfoLog_s
+	, glBindAttribLocation_s
+	, glGetUniformLocation_s
+	, glGetUniformBlockIndex_s
+	-- * Vertex array
+	, glNullVertexArray
 	-- * Clearing
 	, glClearBufferiv_1
 	, glClearBufferfv_1
 	, glClearBufferfv_4
+	-- * Offsets
+	, GlOffset
+	, glIntToOffset
 	) where
 
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Unsafe as B
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
 import Foreign.Marshal.Alloc
 import Foreign.Marshal.Utils
 import Foreign.Ptr
@@ -62,6 +83,8 @@ type TextureName = GLuint
 type SamplerName = GLuint
 type FramebufferName = GLuint
 type VertexArrayName = GLuint
+type ProgramName = GLuint
+type ShaderName = GLuint
 
 {-# INLINABLE glAllocBufferName #-}
 glAllocBufferName :: IO BufferName
@@ -112,6 +135,15 @@ glAllocVertexArrayName = alloca $ \vaNamePtr -> do
 {-# INLINABLE glDeleteVertexArrayName #-}
 glDeleteVertexArrayName :: VertexArrayName -> IO ()
 glDeleteVertexArrayName name = with name $ glDeleteVertexArrays 1
+
+{-# INLINABLE glBufferData_bs #-}
+glBufferData_bs :: GLenum -> B.ByteString -> GLenum -> IO ()
+glBufferData_bs target bytes usage = B.unsafeUseAsCStringLen bytes $ \(bytesPtr, bytesLen) ->
+	glBufferData target (fromIntegral bytesLen) bytesPtr usage
+
+{-# INLINABLE glBufferData_null #-}
+glBufferData_null :: GLenum -> GLsizeiptr -> GLenum -> IO ()
+glBufferData_null target size usage = glBufferData target size nullPtr usage
 
 {-# INLINABLE glTexImage1D_bs #-}
 glTexImage1D_bs :: GLenum -> GLint -> GLint -> GLsizei -> GLint -> GLenum -> GLenum -> B.ByteString -> IO ()
@@ -178,6 +210,53 @@ glTexImage2D_null :: GLenum -> GLint -> GLint -> GLsizei -> GLsizei -> GLint -> 
 glTexImage2D_null target level internalFormat width height border format type_ =
 	glTexImage2D target level internalFormat width height border format type_ nullPtr
 
+{-# INLINABLE glSamplerParameterfv_4 #-}
+glSamplerParameterfv_4 :: GLuint -> GLenum -> Float4 -> IO ()
+glSamplerParameterfv_4 sampler pname fval = with fval $ glSamplerParameterfv sampler pname . castPtr
+
+
+glShaderSource_s :: GLuint -> T.Text -> IO ()
+glShaderSource_s shaderName source = B.unsafeUseAsCStringLen (T.encodeUtf8 source) $ \(sourcePtr, sourceLen) ->
+	with sourcePtr $ \sourcePtrPtr ->
+		with (fromIntegral sourceLen) $ \sourceLenPtr ->
+			glShaderSource shaderName 1 sourcePtrPtr sourceLenPtr
+
+glGetProgramInfoLog_s :: GLuint -> IO T.Text
+glGetProgramInfoLog_s programName = do
+	logLength <- alloca $ \logLengthPtr -> do
+		glGetProgramiv programName GL_INFO_LOG_LENGTH logLengthPtr
+		peek logLengthPtr
+	fmap T.decodeUtf8 $ allocaBytes (fromIntegral logLength) $ \logPtr -> do
+		realLogLength <- alloca $ \logLengthPtr -> do
+			glGetProgramInfoLog programName logLength logLengthPtr logPtr
+			peek logLengthPtr
+		B.packCStringLen (logPtr, fromIntegral realLogLength)
+
+glGetShaderInfoLog_s :: GLuint -> IO T.Text
+glGetShaderInfoLog_s shaderName = do
+	logLength <- alloca $ \logLengthPtr -> do
+		poke logLengthPtr 0
+		glGetShaderiv shaderName GL_INFO_LOG_LENGTH logLengthPtr
+		peek logLengthPtr
+	fmap T.decodeUtf8 $ allocaBytes (fromIntegral logLength) $ \logPtr -> do
+		realLogLength <- alloca $ \logLengthPtr -> do
+			glGetShaderInfoLog shaderName logLength logLengthPtr logPtr
+			peek logLengthPtr
+		B.packCStringLen (logPtr, fromIntegral realLogLength)
+
+glBindAttribLocation_s :: GLuint -> GLuint -> T.Text -> IO ()
+glBindAttribLocation_s programName index attributeName = B.useAsCString (T.encodeUtf8 attributeName) $ glBindAttribLocation programName index
+
+glGetUniformLocation_s :: GLuint -> T.Text -> IO GLint
+glGetUniformLocation_s programName locationName = B.useAsCString (T.encodeUtf8 locationName) $ glGetUniformLocation programName
+
+glGetUniformBlockIndex_s :: GLuint -> T.Text -> IO GLuint
+glGetUniformBlockIndex_s programName uniformBlockName = B.useAsCString (T.encodeUtf8 uniformBlockName) $ glGetUniformBlockIndex programName
+
+{-# INLINE glNullVertexArray #-}
+glNullVertexArray :: GLuint
+glNullVertexArray = 0
+
 {-# INLINABLE glClearBufferiv_1 #-}
 glClearBufferiv_1 :: GLenum -> GLint -> GLint -> IO ()
 glClearBufferiv_1 buffer drawBuffer ival = with ival $ glClearBufferiv buffer drawBuffer
@@ -189,3 +268,9 @@ glClearBufferfv_1 buffer drawBuffer fval = with fval $ glClearBufferfv buffer dr
 {-# INLINABLE glClearBufferfv_4 #-}
 glClearBufferfv_4 :: GLenum -> GLint -> Float4 -> IO ()
 glClearBufferfv_4 buffer drawBuffer fval = with fval $ glClearBufferfv buffer drawBuffer . castPtr
+
+type GlOffset = Ptr ()
+
+{-# INLINE glIntToOffset #-}
+glIntToOffset :: Int -> GlOffset
+glIntToOffset = intPtrToPtr . fromIntegral
