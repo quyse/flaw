@@ -1342,17 +1342,19 @@ glUpdateContext context@GlContext
 			glCheckErrors 0 "bind vertex buffer"
 	-- otherwise manually bind attributes
 	else do
-		vectorSetupCond programUpdated actualVertexBuffersVector desiredVertexBuffersVector $ \_ (GlVertexBufferId bufferName stride) -> do
+		attributeSlots <- glProgramAttributeSlots <$> readIORef desiredProgramRef
+		let attributeSlotsCount = V.length attributeSlots
+		vectorSetupCond programUpdated actualVertexBuffersVector desiredVertexBuffersVector $ \slot (GlVertexBufferId bufferName stride) -> do
 			-- bind buffer
 			glBindBuffer GL_ARRAY_BUFFER bufferName
 			glCheckErrors 0 "bind array buffer"
 
 			-- bind attributes
-			attributeSlots <- glProgramAttributeSlots <$> readIORef desiredProgramRef
-			V.forM_ attributeSlots $ \GlAttributeSlot
-				{ glAttributeSlotElements = elements
-				, glAttributeSlotDivisor = divisor
-				} -> do
+			when (slot < attributeSlotsCount) $ do
+				let GlAttributeSlot
+					{ glAttributeSlotElements = elements
+					, glAttributeSlotDivisor = divisor
+					} = attributeSlots V.! slot
 				V.forM_ elements $ \GlAttribute
 					{ glAttributeIndex = i
 					, glAttributeSize = size
