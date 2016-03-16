@@ -30,6 +30,7 @@ import Flaw.BinaryCache
 import Flaw.Exception
 import Flaw.Graphics
 import Flaw.Graphics.GlContext
+import Flaw.Graphics.GLSL
 import Flaw.Graphics.WebGL.FFI
 import Flaw.Math
 
@@ -101,7 +102,7 @@ webglInit jsCanvas needDepth = do
 	jsContext@(JS_WebGLContext jsContextVal) <- js_getCanvasContext jsCanvas needDepth
 	when (isNull jsContextVal) $ throwIO $ DescribeFirstException "cannot get WebGL context"
 	-- create context
-	let caps = GlCaps
+	context <- newGlContext id GlCaps
 		{ glCapsArbUniformBufferObject = False
 		, glCapsArbSamplerObjects = False
 		, glCapsArbVertexAttribBinding = False
@@ -110,8 +111,14 @@ webglInit jsCanvas needDepth = do
 		, glCapsArbInstancedArrays = False
 		, glCapsArbDebugOutput = False
 		, glCapsArbGetProgramBinary = False
-		}
-	context <- newGlContext id caps (SomeBinaryCache NullBinaryCache)
+		} GlslConfig
+		{ glslConfigVersion = Nothing
+		, glslConfigForceFloatAttributes = True
+		, glslConfigUnsignedUnsupported = True
+		, glslConfigUniformBlocks = False
+		, glslConfigInOutSyntax = False
+		, glslConfigTextureSampleDimensionSpecifier = True
+		} (SomeBinaryCache NullBinaryCache)
 	let device = context
 
 	-- set context as current

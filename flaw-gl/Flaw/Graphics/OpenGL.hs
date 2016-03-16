@@ -33,6 +33,7 @@ import Flaw.BinaryCache
 import Flaw.Exception
 import Flaw.Graphics
 import Flaw.Graphics.GlContext
+import Flaw.Graphics.GLSL
 import Flaw.Math
 import Flaw.Sdl
 import Flaw.Window.Sdl
@@ -164,6 +165,13 @@ createOpenGLPresenter _deviceId window@SdlWindow
 		, glCapsArbInstancedArrays = capArbInstancedArrays
 		, glCapsArbDebugOutput = capArbDebugOutput
 		, glCapsArbGetProgramBinary = capArbGetProgramBinary
+		} GlslConfig
+		{ glslConfigVersion = Just 330
+		, glslConfigForceFloatAttributes = False
+		, glslConfigUnsignedUnsupported = False
+		, glslConfigUniformBlocks = capArbUniformBufferObject
+		, glslConfigInOutSyntax = True
+		, glslConfigTextureSampleDimensionSpecifier = False
 		} (SomeBinaryCache programCache)
 
 	-- set swap interval

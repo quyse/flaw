@@ -70,6 +70,7 @@ data GlContext = GlContext
 	-- | Function to do stuff in device mode.
 	  glContextInvoke :: !(forall a. IO a -> IO a)
 	, glContextCaps :: !GlCaps
+	, glContextGlslConfig :: {-# UNPACK #-} !GlslConfig
 	, glContextActualState :: {-# UNPACK #-} !GlContextState
 	, glContextDesiredState :: {-# UNPACK #-} !GlContextState
 	-- | Number of manually bound attributes.
@@ -526,10 +527,10 @@ instance Device GlContext where
 	createProgram GlContext
 		{ glContextInvoke = invoke
 		, glContextCaps = GlCaps
-			{ glCapsArbUniformBufferObject = useUniformBufferObject
-			, glCapsArbVertexAttribBinding = capArbVertexAttribBinding
+			{ glCapsArbVertexAttribBinding = capArbVertexAttribBinding
 			, glCapsArbGetProgramBinary = capArbGetProgramBinary
 			}
+		, glContextGlslConfig = glslConfig
 		, glContextActualState = GlContextState
 			{ glContextStateProgram = actualProgramRef
 			}
@@ -540,14 +541,6 @@ instance Device GlContext where
 		writeIORef actualProgramRef glNullProgram
 
 		-- generate GLSL
-		let glslConfig = GlslConfig
-			{ glslConfigVersion = Just 330
-			, glslConfigForceFloatAttributes = False
-			, glslConfigUnsignedUnsupported = False
-			, glslConfigUniformBlocks = useUniformBufferObject
-			, glslConfigInOutSyntax = True
-			, glslConfigTextureSampleDimensionSpecifier = False
-			}
 		glslProgram@GlslProgram
 			{ glslProgramAttributes = attributes
 			, glslProgramUniformBlocks = uniformBlocks
@@ -1054,14 +1047,15 @@ glNullProgram = GlProgramId
 	, glProgramUniforms = V.empty
 	}
 
-newGlContext :: (forall a. IO a -> IO a) -> GlCaps -> SomeBinaryCache -> IO GlContext
-newGlContext invoke caps programCache = do
+newGlContext :: (forall a. IO a -> IO a) -> GlCaps -> GlslConfig -> SomeBinaryCache -> IO GlContext
+newGlContext invoke caps glslConfig programCache = do
 	actualState <- glCreateContextState
 	desiredState <- glCreateContextState
 	boundAttributesCount <- newIORef 0
 	return GlContext
 		{ glContextInvoke = invoke
 		, glContextCaps = caps
+		, glContextGlslConfig = glslConfig
 		, glContextActualState = actualState
 		, glContextDesiredState = desiredState
 		, glContextBoundAttributesCount = boundAttributesCount
