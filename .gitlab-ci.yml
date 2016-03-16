@@ -111,7 +111,7 @@ windows:
 
 web:
   script:
-  - "stack --no-terminal --compiler ghcjs-0.2.0.20151029_ghc-7.10.2 test $PACKAGES_WEB"
+  - "stack --no-terminal --compiler ghcjs-0.2.0_ghc-7.10.3 test $PACKAGES_WEB"
   tags:
   - haskellstack
   - ghcjs
