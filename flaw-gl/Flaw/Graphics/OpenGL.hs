@@ -163,6 +163,7 @@ createOpenGLPresenter _deviceId window@SdlWindow
 		, glCapsArbFramebufferObject = capArbFramebufferObject
 		, glCapsArbTextureStorage = capArbTextureStorage
 		, glCapsArbInstancedArrays = capArbInstancedArrays
+		, glCapsClearBuffer = True
 		, glCapsArbDebugOutput = capArbDebugOutput
 		, glCapsArbGetProgramBinary = capArbGetProgramBinary
 		} GlslConfig

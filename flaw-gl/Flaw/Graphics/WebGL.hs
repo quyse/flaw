@@ -109,6 +109,7 @@ webglInit jsCanvas needDepth = do
 		, glCapsArbFramebufferObject = True
 		, glCapsArbTextureStorage = False
 		, glCapsArbInstancedArrays = False
+		, glCapsClearBuffer = False
 		, glCapsArbDebugOutput = False
 		, glCapsArbGetProgramBinary = False
 		} GlslConfig

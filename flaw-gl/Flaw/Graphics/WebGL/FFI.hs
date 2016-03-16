@@ -633,7 +633,7 @@ type GLuint = Word
 type GLsizei = Int
 type GLsizeiptr = Int
 type GLintptr = Int
-type GLclampf = Float
+type GLclampf = Double
 type GLboolean = Int
 type GLbitfield = Word
 
@@ -843,7 +843,7 @@ foreign import javascript unsafe "h$flaw_webgl_context.scissor($1, $2, $3, $4)" 
 
 -- Clearing functions.
 foreign import javascript unsafe "h$flaw_webgl_context.clearColor($1, $2, $3, $4)"
-	glClearColor :: GLclampf -> GLclampf -> GLclampf -> GLclampf -> IO ()
+	glClearColor :: GLfloat -> GLfloat -> GLfloat -> GLfloat -> IO ()
 foreign import javascript unsafe "h$flaw_webgl_context.clearDepth($1)"
 	glClearDepth :: GLclampf -> IO ()
 foreign import javascript unsafe "h$flaw_webgl_context.clearStencil($1)"

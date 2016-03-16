@@ -34,6 +34,7 @@ import Foreign.Marshal.Alloc
 import Foreign.Marshal.Utils
 import Foreign.Ptr
 import Foreign.Storable
+import GHC.Float
 
 import Flaw.BinaryCache
 import Flaw.Book
@@ -69,7 +70,7 @@ data GlContext = GlContext
 	{
 	-- | Function to do stuff in device mode.
 	  glContextInvoke :: !(forall a. IO a -> IO a)
-	, glContextCaps :: !GlCaps
+	, glContextCaps :: {-# UNPACK #-} !GlCaps
 	, glContextGlslConfig :: {-# UNPACK #-} !GlslConfig
 	, glContextActualState :: {-# UNPACK #-} !GlContextState
 	, glContextDesiredState :: {-# UNPACK #-} !GlContextState
@@ -88,6 +89,7 @@ data GlCaps = GlCaps
 	, glCapsArbFramebufferObject :: !Bool
 	, glCapsArbTextureStorage :: !Bool
 	, glCapsArbInstancedArrays :: !Bool
+	, glCapsClearBuffer :: !Bool
 	, glCapsArbDebugOutput :: !Bool
 	, glCapsArbGetProgramBinary :: !Bool
 	} deriving Show
@@ -840,26 +842,59 @@ instance Device GlContext where
 			return (GlUniformMemoryBufferId bufferRef, return ())
 
 instance Context GlContext GlContext where
-	contextClearColor context targetIndex color = do
+	contextClearColor context@GlContext
+		{ glContextCaps = GlCaps
+			{ glCapsClearBuffer = useClearBuffer
+			}
+		} targetIndex color@(Float4 r g b a) = do
 		glUpdateFrameBufferViewportScissor context
-		glClearBufferfv_4 GL_COLOR (fromIntegral targetIndex) color
+		if useClearBuffer then
+			glClearBufferfv_4 GL_COLOR (fromIntegral targetIndex) color
+		else do
+			glClearColor r g b a
+			glClear GL_COLOR_BUFFER_BIT
 		glCheckErrors 1 "clear color"
 
-	contextClearDepth context depth = do
+	contextClearDepth context@GlContext
+		{ glContextCaps = GlCaps
+			{ glCapsClearBuffer = useClearBuffer
+			}
+		} depth = do
 		glUpdateFrameBufferViewportScissor context
 		glEnableDepthWriteForClearing context
-		glClearBufferfv_1 GL_DEPTH 0 depth
+		if useClearBuffer then
+			glClearBufferfv_1 GL_DEPTH 0 depth
+		else do
+			glClearDepth (float2Double depth)
+			glClear GL_DEPTH_BUFFER_BIT
 		glCheckErrors 1 "clear depth"
 
-	contextClearStencil context stencil = do
+	contextClearStencil context@GlContext
+		{ glContextCaps = GlCaps
+			{ glCapsClearBuffer = useClearBuffer
+			}
+		} stencil = do
 		glUpdateFrameBufferViewportScissor context
-		glClearBufferiv_1 GL_STENCIL 0 (fromIntegral stencil)
+		if useClearBuffer then
+			glClearBufferiv_1 GL_STENCIL 0 (fromIntegral stencil)
+		else do
+			glClearStencil (fromIntegral stencil)
+			glClear GL_STENCIL_BUFFER_BIT
 		glCheckErrors 1 "clear stencil"
 
-	contextClearDepthStencil context depth stencil = do
+	contextClearDepthStencil context@GlContext
+		{ glContextCaps = GlCaps
+			{ glCapsClearBuffer = useClearBuffer
+			}
+		} depth stencil = do
 		glUpdateFrameBufferViewportScissor context
 		glEnableDepthWriteForClearing context
-		glClearBufferfi GL_DEPTH_STENCIL 0 depth (fromIntegral stencil)
+		if useClearBuffer then
+			glClearBufferfi GL_DEPTH_STENCIL 0 depth (fromIntegral stencil)
+		else do
+			glClearDepth (float2Double depth)
+			glClearStencil (fromIntegral stencil)
+			glClear $ GL_DEPTH_BUFFER_BIT .|. GL_STENCIL_BUFFER_BIT
 		glCheckErrors 1 "clear depth stencil"
 
 	contextUploadUniformBuffer _context uniformBuffer bytes = case uniformBuffer of
