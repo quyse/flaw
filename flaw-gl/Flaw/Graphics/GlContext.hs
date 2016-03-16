@@ -1213,7 +1213,8 @@ data TextureType
 glUpdateContext :: GlContext -> IO ()
 glUpdateContext context@GlContext
 	{ glContextCaps = GlCaps
-		{ glCapsArbVertexAttribBinding = capArbVertexAttribBinding
+		{ glCapsArbSamplerObjects = capArbSamplerObjects
+		, glCapsArbVertexAttribBinding = capArbVertexAttribBinding
 		, glCapsArbInstancedArrays = capArbInstancedArrays
 		}
 	, glContextActualState = GlContextState
@@ -1245,7 +1246,7 @@ glUpdateContext context@GlContext
 	vectorSetup actualSamplersVector desiredSamplersVector $ \i (GlTextureId textureName, GlSamplerStateId samplerName) -> do
 		glActiveTexture $ GL_TEXTURE0 + fromIntegral i
 		glBindTexture GL_TEXTURE_2D textureName
-		glBindSampler (fromIntegral i) samplerName
+		when capArbSamplerObjects $ glBindSampler (fromIntegral i) samplerName
 		glCheckErrors 0 "bind sampler"
 
 	-- program
