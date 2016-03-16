@@ -9,9 +9,8 @@ function h$flaw_webgl_get_canvas_context(canvas, needDepth) {
 		, stencil: false
 		, antialias: true
 		};
-	return
-		canvas.getContext('webgl', settings) ||
-		canvas.getContext('experimental-webgl', settings);
+	return canvas.getContext('webgl', settings)
+		|| canvas.getContext('experimental-webgl', settings);
 }
 
 var h$requestAnimationFrame

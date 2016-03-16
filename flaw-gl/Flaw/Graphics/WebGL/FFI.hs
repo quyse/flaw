@@ -730,7 +730,7 @@ foreign import javascript unsafe "h$flaw_webgl_context.compileShader($1)" glComp
 foreign import javascript unsafe "h$flaw_webgl_context.getShaderParameter($1, $2)" glGetShaderParameter_val :: JS_WebGLShader -> GLenum -> IO JSVal
 foreign import javascript unsafe "h$flaw_webgl_context.getShaderInfoLog($1)" glGetShaderInfoLog_val :: JS_WebGLShader -> IO JSVal
 foreign import javascript unsafe "h$flaw_webgl_context.createProgram()" glCreateProgram :: IO JS_WebGLProgram
-foreign import javascript unsafe "h$flaw_webgl_context.deleteProgram()" glDeleteProgram :: JS_WebGLProgram -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_context.deleteProgram($1)" glDeleteProgram :: JS_WebGLProgram -> IO ()
 foreign import javascript unsafe "h$flaw_webgl_context.getProgramInfoLog($1)" glGetProgramInfoLog_val :: JS_WebGLProgram -> IO JSVal
 foreign import javascript unsafe "h$flaw_webgl_context.attachShader($1, $2)" glAttachShader :: JS_WebGLProgram -> JS_WebGLShader -> IO ()
 foreign import javascript unsafe "h$flaw_webgl_context.bindAttribLocation($1, $2, $3)" glBindAttribLocation_val :: JS_WebGLProgram -> GLuint -> JSVal -> IO ()
@@ -984,9 +984,9 @@ glAllocBufferName = glCreateBuffer
 glDeleteBufferName :: BufferName -> IO ()
 glDeleteBufferName = glDeleteBuffer
 
-foreign import javascript unsafe "null" glNullBufferName :: JS_WebGLBuffer
+foreign import javascript unsafe "$r = null" glNullBufferName :: JS_WebGLBuffer
 
-foreign import javascript unsafe "undefined" glUndefinedBufferName :: JS_WebGLBuffer
+foreign import javascript unsafe "$r = undefined" glUndefinedBufferName :: JS_WebGLBuffer
 
 {-# INLINABLE glAllocTextureName #-}
 glAllocTextureName :: IO TextureName
@@ -996,7 +996,7 @@ glAllocTextureName = glCreateTexture
 glDeleteTextureName :: TextureName -> IO ()
 glDeleteTextureName = glDeleteTexture
 
-foreign import javascript unsafe "null" glNullTextureName :: JS_WebGLTexture
+foreign import javascript unsafe "$r = null" glNullTextureName :: JS_WebGLTexture
 
 {-# INLINABLE glAllocSamplerName #-}
 glAllocSamplerName :: IO SamplerName
@@ -1006,7 +1006,7 @@ glAllocSamplerName = glCreateSampler
 glDeleteSamplerName :: SamplerName -> IO ()
 glDeleteSamplerName = glDeleteSampler
 
-foreign import javascript unsafe "null" glNullSamplerName :: JS_WebGLSampler
+foreign import javascript unsafe "$r = null" glNullSamplerName :: JS_WebGLSampler
 
 {-# INLINABLE glAllocFramebufferName #-}
 glAllocFramebufferName :: IO FramebufferName
@@ -1016,7 +1016,7 @@ glAllocFramebufferName = glCreateFramebuffer
 glDeleteFramebufferName :: FramebufferName -> IO ()
 glDeleteFramebufferName = glDeleteFramebuffer
 
-foreign import javascript unsafe "null" glNullFramebufferName :: JS_WebGLFramebuffer
+foreign import javascript unsafe "$r = null" glNullFramebufferName :: JS_WebGLFramebuffer
 
 {-# INLINABLE glAllocVertexArrayName #-}
 glAllocVertexArrayName :: IO VertexArrayName
@@ -1026,9 +1026,9 @@ glAllocVertexArrayName = glCreateVertexArray
 glDeleteVertexArrayName :: VertexArrayName -> IO ()
 glDeleteVertexArrayName = glDeleteVertexArray
 
-foreign import javascript unsafe "null" glNullVertexArrayName :: JS_WebGLVertexArray
+foreign import javascript unsafe "$r = null" glNullVertexArrayName :: JS_WebGLVertexArray
 
-foreign import javascript unsafe "null" glNullProgramName :: JS_WebGLProgram
+foreign import javascript unsafe "$r = null" glNullProgramName :: JS_WebGLProgram
 
 
 -- Helpers.
