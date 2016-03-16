@@ -190,7 +190,7 @@ createOpenGLPresenter _deviceId window@SdlWindow
 	glCullFace GL_BACK
 	-- enable SRGB framebuffer
 	glEnable GL_FRAMEBUFFER_SRGB
-	glCheckErrors 1 "init state"
+	glCheckErrors1 "init state"
 	-- enable depth test
 	glEnable GL_DEPTH_TEST
 
@@ -237,7 +237,7 @@ createOpenGLPresenter _deviceId window@SdlWindow
 		glDisable GL_DEBUG_OUTPUT_SYNCHRONOUS_ARB
 		-- enable all debug messages
 		glDebugMessageControlARB GL_DONT_CARE GL_DONT_CARE GL_DONT_CARE 0 nullPtr 1
-		glCheckErrors 1 "setup debug output"
+		glCheckErrors1 "setup debug output"
 
 	return ((context, presenter), openglInvoke presenter $ SDL.glDeleteContext sdlContext)
 

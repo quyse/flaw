@@ -17,11 +17,20 @@ source-repository head
   location: https://github.com/quyse/flaw.git
   subdir: flaw-gl
 
+flag gldebug
+  description:       verbose opengl runtime error checks
+  default:           False
+  manual:            True
+
 library
   exposed-modules:
   other-modules:
     Flaw.Graphics.GlContext
   build-depends:       base, bytestring, cereal, flaw-base, flaw-glsl, flaw-graphics, flaw-math, flaw-window, text, vector
+  if flag(gldebug)
+    cpp-options:         -DGL_ERROR_LEVEL=0
+  else
+    cpp-options:         -DGL_ERROR_LEVEL=1
   if impl(ghcjs)
     exposed-modules:
       Flaw.Graphics.WebGL
