@@ -31,7 +31,7 @@ library
     exposed-modules:
       Flaw.Window.Web.Canvas
     build-depends:       ghcjs-base
-    js-sources:        js/flaw-canvas.js
+    js-sources:          js/flaw-canvas.js
   else
     if os(windows)
       exposed-modules:

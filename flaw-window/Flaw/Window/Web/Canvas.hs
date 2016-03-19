@@ -12,9 +12,7 @@ module Flaw.Window.Web.Canvas
 	) where
 
 import Control.Concurrent.STM
-import Data.Maybe
 import qualified Data.Text as T
-import GHCJS.Marshal
 import GHCJS.Marshal.Pure
 import GHCJS.Types
 
