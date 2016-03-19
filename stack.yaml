@@ -33,12 +33,8 @@ packages:
 - flaw-visual
 - flaw-window
 - location:
-    git: https://github.com/ghcjs/ghcjs-base
-    commit: 23b1311a98c7981c7b98ac7d37a6fa9456c893d5
-  extra-dep: true
-- location:
     git: https://github.com/ghcjs/ghcjs-dom
-    commit: bbd0e70f7dae6d8d9b89b7307f2d0acf613836a7
+    commit: b94aa57a9cd64d04689fdce32f68da35b75c1d28
   extra-dep: true
 
 extra-deps:

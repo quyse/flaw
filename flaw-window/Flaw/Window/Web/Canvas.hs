@@ -22,17 +22,16 @@ import qualified GHCJS.DOM.Element as DOM
 import Flaw.Window
 
 data Canvas = Canvas
-	{ canvasElement :: DOM.Element
-	, canvasEventsChan :: TChan WindowEvent
+	{ canvasElement :: !DOM.Element
+	, canvasEventsChan :: !(TChan WindowEvent)
 	}
 
 initCanvas :: T.Text -> IO Canvas
 initCanvas title = do
 	jsCanvas <- js_initCanvas
-	maybeDomCanvas <- fromJSVal jsCanvas
 	eventsChan <- newBroadcastTChanIO
 	let canvas = Canvas
-		{ canvasElement = fromJust maybeDomCanvas
+		{ canvasElement = pFromJSVal jsCanvas
 		, canvasEventsChan = eventsChan
 		}
 	setWindowTitle canvas title
@@ -50,19 +49,6 @@ instance Window Canvas where
 		{ canvasEventsChan = eventsChan
 		} = dupTChan eventsChan
 
-foreign import javascript unsafe " \
-	\ var c = document.createElement('canvas'); \
-	\ c.style.position = 'absolute'; \
-	\ c.style.left = 0; \
-	\ c.style.top = 0; \
-	\ c.width = window.innerWidth; \
-	\ c.height = window.innerHeight; \
-	\ document.body.appendChild(c); \
-	\ document.body.style.overflow = 'hidden'; \
-	\ window.addEventListener('resize', function() { \
-	\ c.width = window.innerWidth; \
-	\ c.height = window.innerHeight; \
-	\ }, false); \
-	\ $r=c" js_initCanvas :: IO JSVal
+foreign import javascript unsafe "h$flaw_window_init_canvas" js_initCanvas :: IO JSVal
 
 foreign import javascript unsafe "document.title=$1" js_setTitle :: JSVal -> IO ()
