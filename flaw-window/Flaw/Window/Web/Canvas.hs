@@ -4,7 +4,7 @@ Description: Web canvas as a window.
 License: MIT
 -}
 
-{-# LANGUAGE JavaScriptFFI #-}
+{-# LANGUAGE JavaScriptFFI, OverloadedStrings #-}
 
 module Flaw.Window.Web.Canvas
 	( Canvas(..)
@@ -49,9 +49,25 @@ instance Window Canvas where
 		{ canvasEventsChan = eventsChan
 		} = dupTChan eventsChan
 
+	setWindowMouseCursor Canvas
+		{ canvasElement = jsCanvas
+		} cursor = js_setCursor jsCanvas $ case cursor of
+		MouseCursorArrow -> "arrow"
+		MouseCursorWait -> "wait"
+		MouseCursorWaitArrow -> "progress"
+		MouseCursorIBeam -> "text"
+		MouseCursorSizeNWSE -> "nwse-resize"
+		MouseCursorSizeNESW -> "nesw-resize"
+		MouseCursorSizeWE -> "ew-resize"
+		MouseCursorSizeNS -> "ns-resize"
+		MouseCursorSizeAll -> "grab"
+		MouseCursorHand -> "pointer"
+
 foreign import javascript unsafe "h$flaw_window_init_canvas" js_initCanvas :: IO JSVal
 
 foreign import javascript unsafe "document.title=$1" js_setTitle :: JSVal -> IO ()
 
 foreign import javascript unsafe "$1.clientWidth" js_clientWidth :: JSVal -> IO Int
 foreign import javascript unsafe "$1.clientHeight" js_clientHeight :: JSVal -> IO Int
+
+foreign import javascript unsafe "$1.style.cursor = $2" js_setCursor :: JSVal -> JSString -> IO ()
