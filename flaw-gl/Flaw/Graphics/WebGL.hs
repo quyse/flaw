@@ -22,7 +22,6 @@ import Data.JSString.Text
 import Data.IORef
 import Data.String
 import qualified Data.Text as T
-import qualified GHCJS.DOM.Element as DOM
 import GHCJS.Foreign
 import GHCJS.Foreign.Callback
 
@@ -33,6 +32,8 @@ import Flaw.Graphics.GlContext
 import Flaw.Graphics.GLSL
 import Flaw.Graphics.WebGL.FFI
 import Flaw.Math
+import Flaw.Window
+import Flaw.Window.Web.Canvas
 
 -- | Graphics system.
 data WebGLSystem
@@ -48,7 +49,7 @@ type WebGLDevice = GlContext
 type WebGLContext = GlContext
 
 data WebGLPresenter = WebGLPresenter
-	{ webglPresenterCanvas :: !DOM.Element
+	{ webglPresenterCanvas :: !Canvas
 	, webglPresenterContext :: !JS_WebGLContext
 	}
 
@@ -70,8 +71,7 @@ instance Presenter WebGLPresenter WebGLSystem GlContext GlContext where
 		-- create sync callback
 		callback <- syncCallback ThrowWouldBlock $ do
 			-- get client size
-			width <- floor <$> DOM.getClientWidth canvas
-			height <- floor <$> DOM.getClientHeight canvas
+			(width, height) <- getWindowClientSize canvas
 			-- set current context
 			js_setContext context
 			-- setup state
@@ -96,8 +96,10 @@ instance Presenter WebGLPresenter WebGLSystem GlContext GlContext where
 
 		return r
 
-webglInit :: DOM.Element -> Bool -> IO ((WebGLDevice, WebGLContext, WebGLPresenter), IO ())
-webglInit jsCanvas needDepth = do
+webglInit :: Canvas -> Bool -> IO ((WebGLDevice, WebGLContext, WebGLPresenter), IO ())
+webglInit canvas@Canvas
+	{ canvasElement = jsCanvas
+	} needDepth = do
 	-- get context
 	jsContext@(JS_WebGLContext jsContextVal) <- js_getCanvasContext jsCanvas needDepth
 	when (isNull jsContextVal) $ throwIO $ DescribeFirstException "cannot get WebGL context"
@@ -161,7 +163,7 @@ webglInit jsCanvas needDepth = do
 
 	-- create presenter
 	let presenter = WebGLPresenter
-		{ webglPresenterCanvas = jsCanvas
+		{ webglPresenterCanvas = canvas
 		, webglPresenterContext = jsContext
 		}
 

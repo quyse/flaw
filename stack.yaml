@@ -32,10 +32,6 @@ packages:
 - flaw-ui-default-style
 - flaw-visual
 - flaw-window
-- location:
-    git: https://github.com/ghcjs/ghcjs-dom
-    commit: b94aa57a9cd64d04689fdce32f68da35b75c1d28
-  extra-dep: true
 
 extra-deps:
 - cereal-text-0.1.0.1

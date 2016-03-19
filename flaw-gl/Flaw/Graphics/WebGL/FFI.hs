@@ -573,7 +573,6 @@ import Foreign.Ptr
 import Foreign.Storable
 import qualified GHCJS.Buffer
 import GHCJS.Foreign.Callback
-import qualified GHCJS.DOM.Element as DOM
 import GHCJS.Marshal.Pure
 import GHCJS.Types
 
@@ -638,7 +637,7 @@ type GLboolean = Int
 type GLbitfield = Word
 
 -- | Get WebGL context from canvas DOM element.
-foreign import javascript unsafe "h$flaw_webgl_get_canvas_context($1, $2)" js_getCanvasContext :: DOM.Element -> Bool -> IO JS_WebGLContext
+foreign import javascript unsafe "h$flaw_webgl_get_canvas_context($1, $2)" js_getCanvasContext :: JSVal -> Bool -> IO JS_WebGLContext
 -- | Set current WebGL context.
 foreign import javascript unsafe "h$flaw_webgl_context = $1" js_setContext :: JS_WebGLContext -> IO ()
 -- | Call callback when browser thinks it's better to render frame.

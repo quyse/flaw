@@ -17,13 +17,12 @@ import qualified Data.Text as T
 import GHCJS.Marshal
 import GHCJS.Marshal.Pure
 import GHCJS.Types
-import qualified GHCJS.DOM.Element as DOM
 
 import Flaw.Window
 
 data Canvas = Canvas
-	{ canvasElement :: !DOM.Element
-	, canvasEventsChan :: !(TChan WindowEvent)
+	{ canvasElement :: {-# UNPACK #-} !JSVal
+	, canvasEventsChan :: {-# UNPACK #-} !(TChan WindowEvent)
 	}
 
 initCanvas :: T.Text -> IO Canvas
@@ -31,7 +30,7 @@ initCanvas title = do
 	jsCanvas <- js_initCanvas
 	eventsChan <- newBroadcastTChanIO
 	let canvas = Canvas
-		{ canvasElement = pFromJSVal jsCanvas
+		{ canvasElement = jsCanvas
 		, canvasEventsChan = eventsChan
 		}
 	setWindowTitle canvas title
@@ -39,11 +38,12 @@ initCanvas title = do
 
 instance Window Canvas where
 	setWindowTitle _canvas title = js_setTitle $ pToJSVal title
+	{-# INLINABLE getWindowClientSize #-}
 	getWindowClientSize Canvas
-		{ canvasElement = domCanvas
+		{ canvasElement = jsCanvas
 		} = do
-		width <- fmap floor $ DOM.getClientWidth domCanvas
-		height <- fmap floor $ DOM.getClientHeight domCanvas
+		width <- js_clientWidth jsCanvas
+		height <- js_clientHeight jsCanvas
 		return (width, height)
 	chanWindowEvents Canvas
 		{ canvasEventsChan = eventsChan
@@ -52,3 +52,6 @@ instance Window Canvas where
 foreign import javascript unsafe "h$flaw_window_init_canvas" js_initCanvas :: IO JSVal
 
 foreign import javascript unsafe "document.title=$1" js_setTitle :: JSVal -> IO ()
+
+foreign import javascript unsafe "$1.clientWidth" js_clientWidth :: JSVal -> IO Int
+foreign import javascript unsafe "$1.clientHeight" js_clientHeight :: JSVal -> IO Int

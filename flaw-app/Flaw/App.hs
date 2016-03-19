@@ -111,13 +111,11 @@ initApp AppConfig
 
 #if defined(ghcjs_HOST_OS)
 
-	window@Web.Canvas
-		{ Web.canvasElement = domCanvas
-		} <- Web.initCanvas title
+	window <- Web.initCanvas title
 
 	inputManager <- initWebInput window
 
-	(graphicsDevice, graphicsContext, presenter) <- book bk $ webglInit domCanvas needDepthBuffer
+	(graphicsDevice, graphicsContext, presenter) <- book bk $ webglInit window needDepthBuffer
 
 #else
 
