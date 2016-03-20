@@ -1,3 +1,8 @@
+function h$flaw_js_init(callback) {
+	// asyncronously pass control to callback, so document's body can be loaded
+	setTimeout(callback, 0);
+}
+
 // read field using vendor prefix if needed
 function h$flaw_js_vendor_fixup_read(object, field) {
 	var r = object[field];
