@@ -9,6 +9,7 @@ License: MIT
 module Flaw.Window.Web.Canvas
 	( Canvas(..)
 	, initCanvas
+	, setCanvasFullscreen
 	) where
 
 import Control.Concurrent.STM
@@ -65,6 +66,11 @@ instance Window Canvas where
 		{ canvasElement = jsCanvas
 		} mouseLock = js_setMouseLock jsCanvas mouseLock
 
+setCanvasFullscreen :: Canvas -> Bool -> IO ()
+setCanvasFullscreen Canvas
+	{ canvasElement = jsCanvas
+	} fullscreen = js_setFullscreen jsCanvas fullscreen
+
 foreign import javascript unsafe "h$flaw_window_init_canvas" js_initCanvas :: IO JSVal
 
 foreign import javascript unsafe "document.title=$1" js_setTitle :: JSVal -> IO ()
@@ -75,3 +81,4 @@ foreign import javascript unsafe "$1.clientHeight" js_clientHeight :: JSVal -> I
 foreign import javascript unsafe "$1.style.cursor = $2" js_setCursor :: JSVal -> JSString -> IO ()
 
 foreign import javascript unsafe "$1.flaw_window_set_mouse_lock($2)" js_setMouseLock :: JSVal -> Bool -> IO ()
+foreign import javascript unsafe "$1.flaw_window_set_fullscreen($2)" js_setFullscreen :: JSVal -> Bool -> IO ()
