@@ -18,6 +18,7 @@ packages:
 - flaw-glsl
 - flaw-graphics
 - flaw-input
+- flaw-js
 - flaw-lua
 - flaw-lua-refimpl
 - flaw-math

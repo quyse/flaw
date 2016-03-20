@@ -30,7 +30,7 @@ library
   if impl(ghcjs)
     exposed-modules:
       Flaw.Window.Web.Canvas
-    build-depends:       ghcjs-base
+    build-depends:       flaw-js, ghcjs-base
     js-sources:          js/flaw-window.js
   else
     if os(windows)

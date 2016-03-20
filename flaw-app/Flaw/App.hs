@@ -31,9 +31,10 @@ import Flaw.Book
 
 #if defined(ghcjs_HOST_OS)
 
-import qualified Flaw.Window.Web.Canvas as Web
 import Flaw.Graphics.WebGL
 import Flaw.Input.Web
+import Flaw.Js
+import qualified Flaw.Window.Web.Canvas as Web
 
 type AppWindow = Web.Canvas
 type AppGraphicsDevice = WebGLDevice
@@ -110,6 +111,8 @@ initApp AppConfig
 	} = withSpecialBook $ \bk -> do
 
 #if defined(ghcjs_HOST_OS)
+
+	initJs
 
 	window <- Web.initCanvas title
 

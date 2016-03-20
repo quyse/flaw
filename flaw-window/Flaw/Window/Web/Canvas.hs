@@ -61,6 +61,10 @@ instance Window Canvas where
 		MouseCursorSizeAll -> "grab"
 		MouseCursorHand -> "pointer"
 
+	setWindowMouseLock Canvas
+		{ canvasElement = jsCanvas
+		} mouseLock = js_setMouseLock jsCanvas mouseLock
+
 foreign import javascript unsafe "h$flaw_window_init_canvas" js_initCanvas :: IO JSVal
 
 foreign import javascript unsafe "document.title=$1" js_setTitle :: JSVal -> IO ()
@@ -69,3 +73,5 @@ foreign import javascript unsafe "$1.clientWidth" js_clientWidth :: JSVal -> IO 
 foreign import javascript unsafe "$1.clientHeight" js_clientHeight :: JSVal -> IO Int
 
 foreign import javascript unsafe "$1.style.cursor = $2" js_setCursor :: JSVal -> JSString -> IO ()
+
+foreign import javascript unsafe "$1.flaw_window_set_mouse_lock($2)" js_setMouseLock :: JSVal -> Bool -> IO ()

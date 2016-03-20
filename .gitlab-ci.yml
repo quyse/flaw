@@ -74,6 +74,7 @@ variables:
     flaw-glsl
     flaw-graphics
     flaw-input
+    flaw-js
     flaw-math
     flaw-physics
     flaw-sl
