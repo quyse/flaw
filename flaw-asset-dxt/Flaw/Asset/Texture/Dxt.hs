@@ -109,11 +109,11 @@ dxtCompressTexture textureInfo@TextureInfo
 					-- loop for lines of 4x4 blocks
 					forM_ [0,4..(mipHeight - 1)] $ \i -> do
 						let lineSrcPtr = sliceSrcPtr `plusPtr` (i * mipLinePitch)
-						let lineDestPtr = sliceDestPtr `plusPtr` ((i `div` 4) * newMipLinePitch)
+						let lineDestPtr = sliceDestPtr `plusPtr` ((i `quot` 4) * newMipLinePitch)
 						-- loop for 4x4 blocks
 						forM_ [0,4..(mipWidth - 1)] $ \j -> do
 							let blockSrcPtr = lineSrcPtr `plusPtr` (j * pixelByteSize)
-							let blockDestPtr = lineDestPtr `plusPtr` ((j `div` 4) * blockByteSize)
+							let blockDestPtr = lineDestPtr `plusPtr` ((j `quot` 4) * blockByteSize)
 							-- compress block
 							-- TODO: handle source final (partial) blocks
 							compressBlock blockSrcPtr cMipLinePitch blockDestPtr

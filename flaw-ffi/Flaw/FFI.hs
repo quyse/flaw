@@ -100,7 +100,7 @@ processField typeName ft fn fc prevEndExp = do
 		, sigD alignmentName [t| Int |]
 		, valD (varP alignmentName) (normalB [| alignment (undefined :: $(ft)) |]) []
 		, sigD offsetName [t| Int |]
-		, valD (varP offsetName) (normalB [| (($(prevEndExp) + $(varE alignmentName) - 1) `div` $(varE alignmentName)) * $(varE alignmentName) |]) []
+		, valD (varP offsetName) (normalB [| (($(prevEndExp) + $(varE alignmentName) - 1) `quot` $(varE alignmentName)) * $(varE alignmentName) |]) []
 		, sigD addrName [t| Ptr $(conT $ mkName typeName) -> Ptr $(ft) |]
 		, funD addrName [clause [varP addrParam] (normalB [| plusPtr (castPtr $(varE addrParam)) $(varE offsetName) |]) []]
 		, sigD peekName [t| Ptr $(conT $ mkName typeName) -> IO $(rft) |]

@@ -314,7 +314,7 @@ parseTriangles element = do
 	inputs <- mapM parseInput =<< getChildrenWithTag "input" element
 	-- calculate stride and count
 	let stride = 1 + maximum (map citOffset inputs)
-	let count = VU.length indices `div` stride
+	let count = VU.length indices `quot` stride
 
 	-- check
 	when (trianglesCount * 3 /= count) $ throwError "wrong number of triangles or indices"
@@ -584,7 +584,7 @@ instance Vectorized a => Stridable Mat4x4 a where
 stridableStream :: (Stridable s a, VG.Vector v a) => v a -> V.Vector (s a)
 stridableStream q = f undefined q where
 	f :: (Stridable s a, VG.Vector v a) => s a -> v a -> V.Vector (s a)
-	f u v = V.generate (VG.length v `div` stride) $ \i -> constructStridable v $ i * stride where
+	f u v = V.generate (VG.length v `quot` stride) $ \i -> constructStridable v $ i * stride where
 		stride = stridableStride u
 
 parseStridables :: (Stridable s a, VG.Vector v a) => (v a, Int) -> ColladaM (V.Vector (s a))
@@ -624,7 +624,7 @@ animateSampler element = do
 	((inputs, 1), (outputs, outputStride)) <- parseSampler element
 	let len = VG.length inputs
 	let search time left right = if left + 1 < right then let
-		mid = (left + right) `div` 2
+		mid = (left + right) `quot` 2
 		midTime = inputs VG.! mid
 		in if time >= midTime then search time mid right else search time left mid
 		else left

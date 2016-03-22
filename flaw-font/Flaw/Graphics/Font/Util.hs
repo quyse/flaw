@@ -110,7 +110,7 @@ unite images GlyphUnionConfig
 		, stateCurrentRowHeight = 0
 		}) sortedImages
 	rawResultHeight = if lastRowHeight > 0 then lastCurrentY + lastRowHeight + border else lastCurrentY
-	resultHeight = if heightIsPowerOfTwo then powerOfTwo rawResultHeight 1 else ((rawResultHeight + 3) `div` 4) * 4
+	resultHeight = if heightIsPowerOfTwo then powerOfTwo rawResultHeight 1 else ((rawResultHeight + 3) `quot` 4) * 4
 	powerOfTwo n p = if n <= p then p else powerOfTwo n $ p * 2
 	result = do
 		-- create united image and reorder positions to initial (unsorted) order

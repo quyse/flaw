@@ -265,7 +265,7 @@ instance Element Frame where
 			-- render text
 			renderGlyphs glyphRenderer renderableFont $ do
 				renderTexts fontShaper [(text, styleTextColor outerStyle)] textScript
-					(Vec2 (fromIntegral $ px + (sx - clientLeft - clientRight) `div` 2) (fromIntegral $ py + topBorder + (clientTop - topBorder) `div` 2))
+					(Vec2 (fromIntegral $ px + (sx - clientLeft - clientRight) `quot` 2) (fromIntegral $ py + topBorder + (clientTop - topBorder) `quot` 2))
 					RenderTextCursorCenter RenderTextCursorMiddle
 
 			-- draw inner frame

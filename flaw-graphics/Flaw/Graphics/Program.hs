@@ -139,7 +139,7 @@ uniform UniformBufferSlot
 	} = withUndefinedM $ \u -> do
 	bufferSize <- readIORef sizeRef
 	let align = alignment u
-	let alignedBufferSize = ((bufferSize + align - 1) `div` align) * align
+	let alignedBufferSize = ((bufferSize + align - 1) `quot` align) * align
 	writeIORef sizeRef $ alignedBufferSize + sizeOf u
 	return $ UniformNode Uniform
 		{ uniformSlot = slot
@@ -158,7 +158,7 @@ uniformArray size UniformBufferSlot
 	func u = do
 		bufferSize <- readIORef sizeRef
 		let align = alignment u
-		let alignedBufferSize = ((bufferSize + align - 1) `div` align) * align
+		let alignedBufferSize = ((bufferSize + align - 1) `quot` align) * align
 		writeIORef sizeRef $ alignedBufferSize + (sizeOf u) * size
 		return $ UniformNode Uniform
 			{ uniformSlot = slot
@@ -174,7 +174,7 @@ createUniformStorage device UniformBufferSlot
 	} = do
 	size <- readIORef sizeRef
 	-- align just in case
-	let alignedSize = ((size + 15) `div` 16) * 16
+	let alignedSize = ((size + 15) `quot` 16) * 16
 	(uniformBuffer, release) <- createUniformBuffer device alignedSize
 	bytes <- mallocForeignPtrBytes alignedSize
 	return (UniformStorage

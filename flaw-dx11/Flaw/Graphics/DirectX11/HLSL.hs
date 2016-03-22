@@ -136,8 +136,8 @@ hlslGenerateProgram state = program where
 				, uniformType = t
 				} = "\t" <> valueTypeSource t <> " " <> uniformName slot offset
 				<> (if size > 0 then "[" <> fromString (show size) <> "]" else mempty)
-				<> " : packoffset(c" <> fromString (show $ offset `div` 16)
-				<> (if registerOffset > 0 then "." <> singleton ("xyzw" !! (registerOffset `div` 4)) else mempty)
+				<> " : packoffset(c" <> fromString (show $ offset `quot` 16)
+				<> (if registerOffset > 0 then "." <> singleton ("xyzw" !! (registerOffset `quot` 4)) else mempty)
 				<> ");\n"
 				where registerOffset = offset `mod` 16
 			slot = uniformSlot $ head bufferUniforms
@@ -281,7 +281,7 @@ hlslGenerateProgram state = program where
 		semanticString = fromString . str 8 where
 			str :: Int -> Int -> String
 			str 0 _ = ""
-			str n i = chr (ord 'A' + i `rem` 26) : str (n - 1) (i `div` 26)
+			str n i = chr (ord 'A' + i `rem` 26) : str (n - 1) (i `quot` 26)
 
 		interpolantName :: Int -> Builder
 		interpolantName i = "i" <> fromString (show i)

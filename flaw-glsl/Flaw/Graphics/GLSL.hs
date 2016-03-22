@@ -263,7 +263,7 @@ glslGenerateProgram GlslConfig
 					{ uniformSlot = uniformSlot u
 					, uniformOffset = offset
 					, uniformSize = 0
-					, uniformType = case cappedAdvance `div` 4 of
+					, uniformType = case cappedAdvance `quot` 4 of
 						1 -> ScalarValueType ScalarFloat
 						2 -> VectorValueType Dimension2 ScalarFloat
 						3 -> VectorValueType Dimension3 ScalarFloat

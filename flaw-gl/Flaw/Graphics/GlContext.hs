@@ -271,12 +271,12 @@ instance Device GlContext where
 
 			-- set unpack image height if needed
 			when (textureType == Texture3D || textureType == Texture2DArray) $ do
-				glPixelStorei GL_UNPACK_IMAGE_HEIGHT $ if compressed then 0 else mipSlicePitch `div` pixelSize
+				glPixelStorei GL_UNPACK_IMAGE_HEIGHT $ if compressed then 0 else mipSlicePitch `quot` pixelSize
 				glCheckErrors0 "set unpack image height"
 
 			-- set unpack row length if needed
 			when (textureType == Texture3D || textureType == Texture2DArray || textureType == Texture2D || textureType == Texture1DArray) $ do
-				glPixelStorei GL_UNPACK_ROW_LENGTH $ if compressed then 0 else mipLinePitch `div` pixelSize
+				glPixelStorei GL_UNPACK_ROW_LENGTH $ if compressed then 0 else mipLinePitch `quot` pixelSize
 				glCheckErrors0 "set unpack row length"
 
 			-- get mip data
