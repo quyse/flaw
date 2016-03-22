@@ -4,6 +4,8 @@ Description: FreeType fonts.
 License: MIT
 -}
 
+{-# LANGUAGE BangPatterns #-}
+
 module Flaw.Graphics.Font.FreeType
 	( ftErrorCheck
 	, FreeTypeLibrary(..)
@@ -84,6 +86,19 @@ createFreeTypeGlyphs FreeTypeFont
 	, ftFontFaceSize = size
 	} halfScaleX halfScaleY = do
 
+	-- helper functions
+	-- forM_ [0..(n - 1)] q
+	let forn_ n q = let
+		forin_ i = if i < n then q i >> forin_ (i + 1) else return ()
+		in forin_ 0
+	-- foldl f z <$> forM [a..(b - 1)] q
+	let foldab f a b z q = let
+		foldiab i !s = if i < b then do
+			r <- f s <$> q i
+			foldiab (i + 1) r
+			else return s
+		in foldiab a z
+
 	-- set pixel size with scale
 	when (halfScaleX > 0 || halfScaleY > 0) $
 		ftErrorCheck "FT_Set_Pixel_Sizes" =<< ft_Set_Pixel_Sizes ftFace
@@ -116,8 +131,8 @@ createFreeTypeGlyphs FreeTypeFont
 
 		-- make copy of pixels
 		pixels <- VSM.new $ bitmapWidth * bitmapRows :: IO (VSM.IOVector Word8)
-		VSM.unsafeWith pixels $ \pixelsPtr -> do
-			forM_ [0..(bitmapRows - 1)] $ \i -> do
+		VSM.unsafeWith pixels $ \pixelsPtr ->
+			forn_ bitmapRows $ \i ->
 				copyArray
 					(advancePtr pixelsPtr (i * bitmapWidth)) -- destination
 					(plusPtr bitmapBuffer ((if bitmapPitch >= 0 then i else i + 1 - bitmapRows) * bitmapPitch)) -- source
@@ -126,20 +141,21 @@ createFreeTypeGlyphs FreeTypeFont
 		-- perform blur if needed
 		let width = bitmapWidth + halfScaleX * 2
 		let height = bitmapRows + halfScaleY * 2
+
 		blurredPixels <- do
 			if halfScaleX > 0 || halfScaleY > 0 then do
 				blurredPixels <- VSM.new $ width * height
 				let fullScale = (halfScaleX * 2 + 1) * (halfScaleY * 2 + 1)
-				forM_ [0..(height - 1)] $ \i -> do
-					forM_ [0..(width - 1)] $ \j -> do
-						let mini = max (i - halfScaleY * 2) 0
-						let maxi = min (i + 1) bitmapRows
+				forn_ height $ \i -> do
+					let mini = max (i - halfScaleY * 2) 0
+					let maxi = min (i + 1) bitmapRows
+					forn_ width $ \j -> do
 						let minj = max (j - halfScaleX * 2) 0
 						let maxj = min (j + 1) bitmapWidth
-						pixelSum <- fmap sum $ forM [mini..(maxi - 1)] $ \ii -> do
-							fmap sum $ forM [minj..(maxj - 1)] $ \jj -> do
-								fmap fromIntegral $ VSM.read pixels $ ii * bitmapWidth + jj
-						VSM.write blurredPixels (i * width + j) $ fromIntegral $ pixelSum `div` fullScale;
+						pixelSum <- foldab (+) mini maxi 0 $ \ii ->
+							foldab (+) minj maxj 0 $ \jj ->
+								fmap fromIntegral $ VSM.unsafeRead pixels $ ii * bitmapWidth + jj
+						VSM.unsafeWrite blurredPixels (i * width + j) $ fromIntegral $ pixelSum `quot` fullScale;
 				return blurredPixels
 			else return pixels
 		freezedPixels <- VS.unsafeFreeze blurredPixels
