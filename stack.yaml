@@ -15,7 +15,6 @@ packages:
 - flaw-font-fthb
 - flaw-game
 - flaw-gl
-- flaw-glsl
 - flaw-graphics
 - flaw-input
 - flaw-js

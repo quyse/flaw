@@ -17,7 +17,6 @@ variables:
     flaw-font-fthb
     flaw-game
     flaw-gl
-    flaw-glsl
     flaw-graphics
     flaw-input
     flaw-lua
@@ -71,7 +70,6 @@ variables:
     flaw-canvas
     flaw-ffi
     flaw-gl
-    flaw-glsl
     flaw-graphics
     flaw-input
     flaw-js
