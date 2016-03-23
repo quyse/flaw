@@ -43,6 +43,7 @@ module Flaw.Graphics.Program
 	, equal_ , less_, lessEqual_, if_
 	, ddx, ddy
 	, instanceId
+	, invSqrt
 	) where
 
 import Control.Monad.Reader
@@ -459,3 +460,6 @@ ddy a = DdyNode (nodeValueType a) a
 
 instanceId :: Node Word32
 instanceId = InstanceIdNode
+
+invSqrt :: (OfValueType a, Floating a) => Node a -> Node a
+invSqrt a = InvSqrtNode (nodeValueType a) a

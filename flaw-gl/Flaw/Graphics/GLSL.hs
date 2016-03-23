@@ -487,6 +487,7 @@ glslGenerateProgram GlslConfig
 				in nodeSource $ ConstNode t $ typedPi node
 			ExpNode _ a -> func1Source "exp" a
 			SqrtNode _ a -> func1Source "sqrt" a
+			InvSqrtNode _ a -> func1Source "inversesqrt" a
 			LogNode _ a -> func1Source "log" a
 			PowNode _ a b -> func2Source "pow" a b
 			LogBaseNode t a b -> nodeSource $ DivideNode t (LogNode t a) (LogNode t b)

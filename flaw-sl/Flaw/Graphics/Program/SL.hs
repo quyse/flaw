@@ -46,6 +46,7 @@ nodeInfo node = case node of
 	PiNode _ -> emptyNodeInfo
 	ExpNode _ a -> nodeInfo a
 	SqrtNode _ a -> nodeInfo a
+	InvSqrtNode _ a -> nodeInfo a
 	LogNode _ a -> nodeInfo a
 	PowNode _ a b -> mergeNodeInfo (nodeInfo a) (nodeInfo b)
 	LogBaseNode _ a b -> mergeNodeInfo (nodeInfo a) (nodeInfo b)

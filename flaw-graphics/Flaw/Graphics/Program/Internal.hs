@@ -339,6 +339,7 @@ data Node a where
 	PiNode :: (OfValueType a, Floating a) => ValueType -> Node a
 	ExpNode :: (OfValueType a, Floating a) => ValueType -> Node a -> Node a
 	SqrtNode :: (OfValueType a, Floating a) => ValueType -> Node a -> Node a
+	InvSqrtNode :: (OfValueType a, Floating a) => ValueType -> Node a -> Node a
 	LogNode :: (OfValueType a, Floating a) => ValueType -> Node a -> Node a
 	PowNode :: (OfValueType a, Floating a) => ValueType -> Node a -> Node a -> Node a
 	LogBaseNode :: (OfValueType a, Floating a) => ValueType -> Node a -> Node a -> Node a
