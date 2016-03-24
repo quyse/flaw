@@ -8,6 +8,7 @@ License: MIT
 
 module Flaw.Graphics.Program
 	( Program
+	, OfAttributeType(..)
 	, AttributeFormat(..)
 	, Normalization(..)
 	, Node
