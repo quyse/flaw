@@ -11,6 +11,7 @@ module Flaw.Graphics.Program
 	, OfScalarType(..)
 	, OfAttributeType(..)
 	, AttributeFormat(..)
+	, AttributeType(..)
 	, Normalization(..)
 	, Node
 	, cnst
@@ -18,6 +19,7 @@ module Flaw.Graphics.Program
 	, cvec11, cvec111, cvec12, cvec21, cvec1111, cvec112, cvec121, cvec211, cvec13, cvec31
 	, cast
 	, attribute
+	, attributeWithType
 	, UniformBufferSlot
 	, UniformStorage
 	, uniformBufferSlot
@@ -102,7 +104,10 @@ cast :: (OfValueType a, OfValueType b) => Node a -> Node b
 cast a = withUndefined $ \u -> CastNode (nodeValueType a) (valueType u) a
 
 attribute :: OfAttributeType a => Int -> Int -> Int -> AttributeFormat a -> Program (Node a)
-attribute slot offset divisor format = withUndefinedM $ \u -> withState $ \state@State
+attribute slot offset divisor format = attributeWithType slot offset divisor $ attributeFormatToType format
+
+attributeWithType :: OfAttributeType a => Int -> Int -> Int -> AttributeType -> Program (Node a)
+attributeWithType slot offset divisor at = withUndefinedM $ \u -> withState $ \state@State
 	{ stateStage = stage
 	} -> do
 	if stage /= VertexStage then fail "attribute can only be defined in vertex program"
@@ -111,7 +116,7 @@ attribute slot offset divisor format = withUndefinedM $ \u -> withState $ \state
 		{ attributeSlot = slot
 		, attributeOffset = offset
 		, attributeDivisor = divisor
-		, attributeType = attributeFormatToType format
+		, attributeType = at
 		, attributeValueType = valueType u
 		}) state
 
