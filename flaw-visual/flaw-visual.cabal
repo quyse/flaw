@@ -25,6 +25,7 @@ library
     Flaw.Visual.Geometry.Basic
     Flaw.Visual.Geometry.Skinned
     Flaw.Visual.Geometry.Vertex
+    Flaw.Visual.ScreenQuad
     Flaw.Visual.Skydome
     Flaw.Visual.Texture
   -- other-extensions:    

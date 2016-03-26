@@ -14,7 +14,9 @@ module Flaw.Visual.Geometry.Vertex
 	, HasTexcoordAttribute(..)
 	, HasWeightsBonesAttributes(..)
 	, vertexAttribute
-	-- * Predefined Collada vertices
+	-- * Predefined vertices
+	, QuadVertex(..)
+	-- ** Predefined Collada vertices
 	, ColladaVertex(..)
 	, VertexPT(..)
 	, VertexPNT(..)
@@ -50,6 +52,11 @@ class HasWeightsBonesAttributes v where
 -- | Create attribute from pair (offset, format) provided with slot and divisor.
 vertexAttribute :: OfAttributeType a => Int -> Int -> (Int, AttributeFormat a) -> Program (Node a)
 vertexAttribute slot divisor (offset, format) = attribute slot offset divisor format
+
+genStruct "QuadVertex"
+	[ ([t| Int8_4 |], "position")
+	, ([t| Int8_2 |], "texcoord")
+	]
 
 class ColladaVertex q where
 	createColladaVertices :: ColladaVerticesData -> ColladaM (V.Vector q)
