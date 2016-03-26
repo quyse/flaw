@@ -8,6 +8,7 @@ module Flaw.Book
 	( Book
 	, newBook
 	, freeBook
+	, newDynamicBook
 	, book
 	, withBook
 	, withSpecialBook
@@ -27,6 +28,13 @@ freeBook :: Book -> IO ()
 freeBook (Book ref) = do
 	sequence_ =<< readIORef ref
 	writeIORef ref []
+
+-- | Create a dynamic book which could be safely freed multiple times.
+{-# INLINE newDynamicBook #-}
+newDynamicBook :: IO (Book, IO ())
+newDynamicBook = do
+	bk <- newBook
+	return (bk, freeBook bk)
 
 {-# INLINE book #-}
 book :: Book -> IO (a, IO ()) -> IO a
