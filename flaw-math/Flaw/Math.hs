@@ -45,12 +45,14 @@ module Flaw.Math
 	, Int32_1, Int32_2, Int32_3, Int32_4
 	, Word32_1, Word32_2, Word32_3, Word32_4
 	, Int1, Int2, Int3, Int4
+	, Int8_1, Int8_2, Int8_3, Int8_4
 	, Word8_1, Word8_2, Word8_3, Word8_4
 	, Float3x3, Float3x4, Float4x4
 	, Double3x3, Double3x4, Double4x4
 	, Int32_3x3, Int32_3x4, Int32_4x4
 	, Word32_3x3, Word32_3x4, Word32_4x4
 	, Int3x3, Int3x4, Int4x4
+	, Int8_3x3, Int8_3x4, Int8_4x4
 	, Word8_3x3, Word8_3x4, Word8_4x4
 	, FloatQ, DoubleQ
 	-- * Base definitions
