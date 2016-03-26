@@ -8,6 +8,8 @@ module Flaw.Visual
 	( applyQuat
 	, applyQuatOffset
 	, tangentFrame
+	, lambertReflectance
+	, schulerSpecularReflectance
 	) where
 
 import Flaw.Graphics.Program
@@ -40,3 +42,27 @@ tangentFrame position normal texcoord = do
 	bb <- temp $ b * vecFromScalar s
 
 	return (tt, bb, normal)
+
+-- | Standard diffuse (Lambertian) reflectance.
+-- Need to be multiplied by light irrandiance and material's diffuse color.
+lambertReflectance
+	:: Node Float3 -- ^ Normal.
+	-> Node Float3 -- ^ Normalized direction to light.
+	-> Program (Node Float)
+lambertReflectance normal toLightDirection = temp $ dot normal toLightDirection
+
+-- | Shading model from "An Efficient and Physically Plausible Real-Time Shading Model"
+-- , ShaderX 7, by Christian Schüler.
+-- As in original paper, result need to be multiplied by lambertian reflectance
+-- (and then by light irrandiance and material's specular color).
+schulerSpecularReflectance
+	:: Node Float3 -- ^ Normal.
+	-> Node Float3 -- ^ Normalized half-vector between directions to eye and to light.
+	-> Node Float3 -- ^ Normalized direction to light.
+	-> Node Float -- ^ Material glossiness, from 0 (rough) to 1 (smooth).
+	-> Program (Node Float)
+schulerSpecularReflectance normal toEyeLightHalfDirection toLightDirection glossiness = do
+	-- e = pow 2 (12 * g) = exp (12 * g * log 2)
+	e <- temp $ exp (glossiness * constf (12 * log 2))
+	lh <- temp $ dot toLightDirection toEyeLightHalfDirection
+	temp $ (1 + e) / (8 * (lh * lh * lh)) * exp (e * log (dot normal toEyeLightHalfDirection))
