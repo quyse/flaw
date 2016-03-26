@@ -379,6 +379,7 @@ data Node a where
 		=> ValueType -> ValueType -> ValueType -> ValueType -> Node a -> Node b -> Node c -> Node r
 	Combine4VecNode :: (OfValueType a, OfValueType b, OfValueType c, OfValueType d, OfValueType r)
 		=> ValueType -> ValueType -> ValueType -> ValueType -> ValueType -> Node a -> Node b -> Node c -> Node d -> Node r
+	ScreenToTextureNode :: OfValueType a => ValueType -> Node a -> Node a
 
 deriving instance Show (Node a)
 

@@ -46,6 +46,7 @@ module Flaw.Graphics.Program
 	, ddx, ddy
 	, instanceId
 	, invSqrt
+	, screenToTexture
 	) where
 
 import Control.Monad.Reader
@@ -465,3 +466,6 @@ instanceId = InstanceIdNode
 
 invSqrt :: (OfValueType a, Floating a) => Node a -> Node a
 invSqrt a = InvSqrtNode (nodeValueType a) a
+
+screenToTexture :: OfValueType a => Node a -> Node a
+screenToTexture a = ScreenToTextureNode (nodeValueType a) a
