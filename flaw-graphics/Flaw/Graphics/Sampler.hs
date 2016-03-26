@@ -35,9 +35,9 @@ data SamplerStateInfo = SamplerStateInfo
 	, samplerWrapU :: !SamplerWrap
 	, samplerWrapV :: !SamplerWrap
 	, samplerWrapW :: !SamplerWrap
-	, samplerMinLod :: !Float
-	, samplerMaxLod :: !Float
-	, samplerBorderColor :: !Float4
+	, samplerMinLod :: {-# UNPACK #-} !Float
+	, samplerMaxLod :: {-# UNPACK #-} !Float
+	, samplerBorderColor :: {-# UNPACK #-} !Float4
 	} deriving Show
 
 defaultSamplerStateInfo :: SamplerStateInfo

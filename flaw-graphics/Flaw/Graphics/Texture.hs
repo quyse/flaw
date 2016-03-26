@@ -28,14 +28,14 @@ import GHC.Generics(Generic)
 -- | Texture formats.
 data TextureFormat
 	= UncompressedTextureFormat
-		{ textureFormatComponents :: PixelComponents
-		, textureFormatValueType :: PixelValueType
-		, textureFormatPixelSize :: PixelSize
-		, textureFormatColorSpace :: ColorSpace
+		{ textureFormatComponents :: !PixelComponents
+		, textureFormatValueType :: !PixelValueType
+		, textureFormatPixelSize :: !PixelSize
+		, textureFormatColorSpace :: !ColorSpace
 		}
 	| CompressedTextureFormat
-		{ textureFormatCompression :: TextureCompression
-		, textureFormatColorSpace :: ColorSpace
+		{ textureFormatCompression :: !TextureCompression
+		, textureFormatColorSpace :: !ColorSpace
 		}
 	deriving (Generic, Show)
 
@@ -119,15 +119,15 @@ W     H      1      3D texture WxHx1
 W     H      L      3D texture WxHxL
 -}
 data TextureInfo = TextureInfo
-	{ textureWidth :: Int
-	, textureHeight :: Int
-	, textureDepth :: Int
+	{ textureWidth :: {-# UNPACK #-} !Int
+	, textureHeight :: {-# UNPACK #-} !Int
+	, textureDepth :: {-# UNPACK #-} !Int
 	-- | Number of MIP levels, should be >= 1.
-	, textureMips :: Int
-	, textureFormat :: TextureFormat
+	, textureMips :: {-# UNPACK #-} !Int
+	, textureFormat :: !TextureFormat
 	-- | Number of textures in array.
 	-- Zero means non-array.
-	, textureCount :: Int
+	, textureCount :: {-# UNPACK #-} !Int
 	} deriving (Generic, Show)
 
 instance S.Serialize TextureInfo
@@ -136,7 +136,7 @@ instance S.Serialize TextureInfo
 data TextureMetrics = TextureMetrics
 	{
 	-- | Size of one image in array.
-	  textureImageSize :: Int
+	  textureImageSize :: {-# UNPACK #-} !Int
 	-- | Byte offsets from the beginning of image to mip levels.
 	, textureMipsMetrics :: [TextureMipMetrics]
 	}
@@ -147,21 +147,21 @@ data TextureMetrics = TextureMetrics
 data TextureMipMetrics = TextureMipMetrics
 	{
 	-- | Number of pixels in a row.
-	  textureMipWidth :: Int
+	  textureMipWidth :: {-# UNPACK #-} !Int
 	-- | Number of lines. >= 1.
-	, textureMipHeight :: Int
+	, textureMipHeight :: {-# UNPACK #-} !Int
 	-- | Number of slices. >= 1.
-	, textureMipDepth :: Int
+	, textureMipDepth :: {-# UNPACK #-} !Int
 	-- | Byte length of one line.
 	-- In case of compressed textures (4x4 blocks coded),
 	-- it's a size of one line of 4x4 blocks.
-	, textureMipLinePitch :: Int
+	, textureMipLinePitch :: {-# UNPACK #-} !Int
 	-- | Byte length of 2D slice.
-	, textureMipSlicePitch :: Int
+	, textureMipSlicePitch :: {-# UNPACK #-} !Int
 	-- | Byte offset to mip data from the beginning of an image.
-	, textureMipOffset :: Int
+	, textureMipOffset :: {-# UNPACK #-} !Int
 	-- | Byte size of mip.
-	, textureMipSize :: Int
+	, textureMipSize :: {-# UNPACK #-} !Int
 	}
 
 -- | Calculate byte metrics for texture.
