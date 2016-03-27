@@ -35,6 +35,7 @@ import Foreign.Storable
 import qualified SDL.Raw.Basic as SDL
 import qualified SDL.Raw.Enum as SDL
 import qualified SDL.Raw.Event as SDL
+import qualified SDL.Raw.Thread as SDL
 import qualified SDL.Raw.Types as SDL
 import qualified SDL.Raw.Video as SDL
 
@@ -43,17 +44,18 @@ import Flaw.Sdl
 import Flaw.Window
 
 data SdlWindowSystem = SdlWindowSystem
-	{ swsWindows :: TVar (HashMap.HashMap Word32 SdlWindow)
-	, swsInvokeUserEventCode :: !Int32
-	, swsMouseCursors :: V.Vector SDL.Cursor
+	{ swsThreadId :: {-# UNPACK #-} !SDL.ThreadID
+	, swsWindows :: {-# UNPACK #-} !(TVar (HashMap.HashMap Word32 SdlWindow))
+	, swsInvokeUserEventCode :: {-# UNPACK #-} !Int32
+	, swsMouseCursors :: {-# UNPACK #-} !(V.Vector SDL.Cursor)
 	}
 
 data SdlWindow = SdlWindow
-	{ swSystem :: SdlWindowSystem
-	, swHandle :: SDL.Window
-	, swEventsChan :: TChan WindowEvent
-	, swClientSizeVar :: TVar (Int, Int)
-	, swUserCallbacksRef :: IORef [SDL.Event -> IO ()]
+	{ swSystem :: !SdlWindowSystem
+	, swHandle :: {-# UNPACK #-} !SDL.Window
+	, swEventsChan :: {-# UNPACK #-} !(TChan WindowEvent)
+	, swClientSizeVar :: {-# UNPACK #-} !(TVar (Int, Int))
+	, swUserCallbacksRef :: {-# UNPACK #-} !(IORef [SDL.Event -> IO ()])
 	}
 
 instance Window SdlWindow where
@@ -131,8 +133,10 @@ initSdlWindowSystem debug = withSpecialBook $ \bk -> do
 			book bk $ return (sdlCursor, SDL.freeCursor sdlCursor)
 
 		-- return result into initial thread
+		threadId <- SDL.threadID
 		putMVar initResultVar SdlWindowSystem
-			{ swsWindows = windowsVar
+			{ swsThreadId = threadId
+			, swsWindows = windowsVar
 			, swsInvokeUserEventCode = invokeUserEventCode
 			, swsMouseCursors = mouseCursors
 			}
@@ -286,21 +290,27 @@ addSdlWindowCallback SdlWindow
 
 invokeWithMaybeResultVar :: Maybe (MVar (Either SomeException a)) -> SdlWindowSystem -> IO a -> IO ()
 invokeWithMaybeResultVar maybeResultVar SdlWindowSystem
-	{ swsInvokeUserEventCode = eventCode
+	{ swsThreadId = threadId
+	, swsInvokeUserEventCode = eventCode
 	} io = do
-	invokeCallback <- wrapInvokeCallback $ do
+	sync <- if isNothing maybeResultVar then return False else do
+		currentThreadId <- SDL.threadID
+		return $ threadId == currentThreadId
+	let callback = do
 		result <- try io
 		case maybeResultVar of
 			Just resultVar -> putMVar resultVar result
 			Nothing -> return ()
-	with SDL.UserEvent
-		{ SDL.eventType = SDL.SDL_USEREVENT
-		, SDL.eventTimestamp = 0
-		, SDL.userEventWindowID = 0
-		, SDL.userEventCode = eventCode
-		, SDL.userEventData1 = castFunPtrToPtr invokeCallback
-		, SDL.userEventData2 = nullPtr
-		} $ checkSdlError (== 1) . SDL.pushEvent
+	if sync then callback else do
+		invokeCallback <- wrapInvokeCallback callback
+		with SDL.UserEvent
+			{ SDL.eventType = SDL.SDL_USEREVENT
+			, SDL.eventTimestamp = 0
+			, SDL.userEventWindowID = 0
+			, SDL.userEventCode = eventCode
+			, SDL.userEventData1 = castFunPtrToPtr invokeCallback
+			, SDL.userEventData2 = nullPtr
+			} $ checkSdlError (== 1) . SDL.pushEvent
 
 invokeSdlWindowSystem_ :: SdlWindowSystem -> IO () -> IO ()
 invokeSdlWindowSystem_ = invokeWithMaybeResultVar Nothing
