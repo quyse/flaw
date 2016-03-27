@@ -30,10 +30,10 @@ data ScreenQuadRenderer d = ScreenQuadRenderer
 newScreenQuadRenderer :: Device d => d -> IO (ScreenQuadRenderer d, IO ())
 newScreenQuadRenderer device = withSpecialBook $ \bk -> do
 	let
-		v0 = QuadVertex (Vec4 (-1) (-1) 0 1) (Vec2 0 1)
-		v1 = QuadVertex (Vec4   1  (-1) 0 1) (Vec2 1 1)
-		v2 = QuadVertex (Vec4   1    1  0 1) (Vec2 1 0)
-		v3 = QuadVertex (Vec4 (-1)   1  0 1) (Vec2 0 0)
+		v0 = QuadVertex (Vec4 (-1) (-1) 0 1)
+		v1 = QuadVertex (Vec4   1  (-1) 0 1)
+		v2 = QuadVertex (Vec4   1    1  0 1)
+		v3 = QuadVertex (Vec4 (-1)   1  0 1)
 	bytes <- packVector $ V.fromList [v0, v2, v1, v0, v3, v2]
 	vb <- book bk $ createStaticVertexBuffer device bytes (sizeOf (undefined :: QuadVertex))
 	return ScreenQuadRenderer
@@ -46,12 +46,12 @@ renderScreenQuad ScreenQuadRenderer
 	} = renderScope $ do
 	renderVertexBuffer 0 vb
 	renderIndexBuffer nullIndexBuffer
+	renderClearColor 0 $ Vec4 1 0 0 1
 	renderDraw 6
 
 -- | Works with geometry from 'screenQuadVertices'.
 screenQuadProgram :: (Node Float2 -> Program ()) -> Program ()
 screenQuadProgram f = do
-	aPosition <- attributeWithType 0 0 0 $ ATVec4 $ ATInt8 NonNormalized
-	aTexcoord <- attributeWithType 0 16 0 $ ATVec2 $ ATInt8 NonNormalized
-	texcoord <- temp $ screenToTexture aTexcoord
+	aPosition <- attribute 0 0 0 $ AttributeVec4 AttributeFloat32
+	texcoord <- temp $ screenToTexture $ xy__ aPosition
 	rasterize aPosition $ f texcoord

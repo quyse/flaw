@@ -54,8 +54,7 @@ vertexAttribute :: OfAttributeType a => Int -> Int -> (Int, AttributeFormat a) -
 vertexAttribute slot divisor (offset, format) = attribute slot offset divisor format
 
 genStruct "QuadVertex"
-	[ ([t| Int8_4 |], "position")
-	, ([t| Int8_2 |], "texcoord")
+	[ ([t| Float4 |], "position")
 	]
 
 class ColladaVertex q where
