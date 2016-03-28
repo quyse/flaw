@@ -46,7 +46,9 @@ renderScreenQuad ScreenQuadRenderer
 	} = renderScope $ do
 	renderVertexBuffer 0 vb
 	renderIndexBuffer nullIndexBuffer
-	renderClearColor 0 $ Vec4 1 0 0 1
+	renderBlendState nullBlendState
+	renderDepthTestFunc DepthTestFuncAlways
+	renderDepthWrite False
 	renderDraw 6
 
 -- | Works with geometry from 'screenQuadVertices'.
