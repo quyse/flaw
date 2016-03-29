@@ -107,6 +107,7 @@ linux:
   tags:
   - haskellstack
   - linux
+  - x64
 
 windows:
   script:
@@ -116,6 +117,7 @@ windows:
   tags:
   - haskellstack
   - windows
+  - x64
 
 web:
   script:
@@ -123,6 +125,16 @@ web:
   tags:
   - haskellstack
   - ghcjs
+  - linux
+  - x64
+
+linux-arm:
+  script:
+  - "stack --no-terminal build --test $PACKAGES_LINUX"
+  tags:
+  - haskellstack
+  - linux
+  - arm
 
 pages:
   stage: deploy
@@ -132,6 +144,7 @@ pages:
   - "echo Deploying..."
   tags:
   - linux
+  - x64
   artifacts:
     paths:
     - public
