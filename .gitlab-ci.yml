@@ -94,7 +94,16 @@ variables:
 
 linux:
   script:
-  - "stack --no-terminal test $PACKAGES_LINUX"
+  - "stack --no-terminal build --test --haddock --coverage $PACKAGES_LINUX"
+  - "mkdir public"
+  - "hlint . --cross --no-exit-code --quiet --report=public/hlint.html"
+  - "mv $(stack path --local-doc-root) public/docs"
+  - "mv $(stack path --local-hpc-root) public/hpc"
+  - "curl -o public/docs/badge.svg https://img.shields.io/badge/haddock-$(date +%Y/%m/%d)-blue.svg"
+  - "curl -o public/hpc/badge.svg https://img.shields.io/badge/test%20coverage-$(date +%Y/%m/%d)-orange.svg"
+  artifacts:
+    paths:
+    - public
   tags:
   - haskellstack
   - linux
@@ -103,33 +112,28 @@ windows:
   script:
   - "%FIX_TH_WINDOWS%"
   - "%INTEGERSIMPLE_CONFIG_FIX%"
-  - "stack --no-terminal test %INTEGERSIMPLE_FLAGS_WINDOWS% %PACKAGES_WINDOWS%"
+  - "stack --no-terminal build --test %INTEGERSIMPLE_FLAGS_WINDOWS% %PACKAGES_WINDOWS%"
   tags:
   - haskellstack
   - windows
 
 web:
   script:
-  - "stack --no-terminal --compiler ghcjs-0.2.0_ghc-7.10.3 test $PACKAGES_WEB"
+  - "stack --no-terminal --compiler ghcjs-0.2.0_ghc-7.10.3 build --test $PACKAGES_WEB"
   tags:
   - haskellstack
   - ghcjs
 
 pages:
   stage: deploy
+  dependencies:
+  - linux
   script:
-  - "stack --no-terminal build --test --haddock --coverage $PACKAGES_LINUX"
-  - "mkdir public"
-  - "hlint . --cross --no-exit-code --quiet --report=public/hlint.html"
-  - "mv $(stack path --local-doc-root) public/docs"
-  - "mv $(stack path --local-hpc-root) public/hpc"
-  - "curl -o public/docs/badge.svg https://img.shields.io/badge/haddock-$(date +%Y/%m/%d)-blue.svg"
-  - "curl -o public/hpc/badge.svg https://img.shields.io/badge/test%20coverage-$(date +%Y/%m/%d)-orange.svg"
+  - "echo Deploying..."
   tags:
-  - haskellstack
   - linux
   artifacts:
     paths:
     - public
-  only:
-  - master
+#  only:
+#  - master
