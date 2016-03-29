@@ -23,10 +23,10 @@ end)
 
 test("random", function()
 	local a = 1
-	for i = 1, 100000000 do
+	for i = 1, 1000000 do
 		a = (a * 1103515245 + 12345) & 0x7fffffff
 	end
-	assert(a == 660469505)
+	assert(a == 345801665)
 end)
 
 test("table", function()
