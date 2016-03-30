@@ -16,7 +16,7 @@ module Flaw.Graphics.Program
 	, Node
 	, cnst
 	, constf, const2f, const3f, const4f
-	, cvec11, cvec111, cvec12, cvec21, cvec1111, cvec112, cvec121, cvec211, cvec13, cvec31
+	, cvec11, cvec111, cvec12, cvec21, cvec1111, cvec112, cvec121, cvec211, cvec22, cvec13, cvec31
 	, cast
 	, attribute
 	, attributeWithType
@@ -82,7 +82,7 @@ withUndefinedM q = q undefined
 fmap concat $ forM
 	[ [1, 1]
 	, [1, 1, 1], [1, 2], [2, 1]
-	, [1, 1, 1, 1], [1, 1, 2], [1, 2, 1], [2, 1, 1], [1, 3], [3, 1]]
+	, [1, 1, 1, 1], [1, 1, 2], [1, 2, 1], [2, 1, 1], [2, 2], [1, 3], [3, 1]]
 	$ \cs -> do
 	ps <- forM (zip cs [1..]) $ \(_c, i) -> newName ['p', intToDigit i]
 	let funName = mkName $ "cvec" ++ map intToDigit cs
