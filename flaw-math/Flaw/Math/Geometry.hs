@@ -53,7 +53,7 @@ affineLookAt eye target up = r where
 		xx xy xz (-ox)
 		yx yy yz (-oy)
 		zx zy zz (-oz)
-		0 0 0 1
+		0  0  0  1
 
 {-# INLINE affineAxisRotation #-}
 affineAxisRotation :: Quaternionized a => Vec3 a -> a -> Quat a
@@ -77,10 +77,10 @@ affineFromQuat (Quat (Vec4 x y z w)) = r where
 	xz2 = x * z * 2
 	yz2 = y * z * 2
 	r = Mat4x4
-		(ww + xx - yy - zz) (xy2 - wz2) (xz2 + wy2) 0
-		(xy2 + wz2) (ww - xx + yy - zz) (yz2 - wx2) 0
-		(xz2 - wy2) (yz2 + wx2) (ww - xx - yy + zz) 0
-		0 0 0 1
+		(ww + xx - yy - zz) (xy2 - wz2)         (xz2 + wy2)         0
+		(xy2 + wz2)         (ww - xx + yy - zz) (yz2 - wx2)         0
+		(xz2 - wy2)         (yz2 + wx2)         (ww - xx - yy + zz) 0
+		0                   0                   0                   1
 
 {-# INLINE projectionPerspectiveFov #-}
 projectionPerspectiveFov :: (Vectorized a, Floating a) => a -> a -> a -> a -> Mat4x4 a
@@ -88,7 +88,7 @@ projectionPerspectiveFov fovY aspect zn zf = r where
 	ys = 1 / tan (fovY * 0.5)
 	xs = ys / aspect
 	r = Mat4x4
-		xs 0 0 0
-		0 ys 0 0
-		0 0 (zf / (zn - zf)) (zn * zf / (zn - zf))
-		0 0 (-1) 0
+		xs 0  0                0
+		0  ys 0                0
+		0  0  (zf / (zn - zf)) (zn * zf / (zn - zf))
+		0  0  (-1)             0
