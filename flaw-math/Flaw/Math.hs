@@ -20,6 +20,7 @@ module Flaw.Math
 	, Normalize(..)
 	, Mat(..)
 	, Mul(..)
+	, MatInverse(..)
 	-- * Data types
 	-- ** Vectors and matrices
 	, VecX(..), VecY(..), VecZ(..), VecW(..)
@@ -61,7 +62,10 @@ module Flaw.Math
 	) where
 
 import Control.Monad
+import Data.Bits
 import Data.Char
+import Data.List
+import Data.Maybe
 import Foreign.Ptr
 import Foreign.Storable
 import GHC.Generics(Generic)
@@ -165,6 +169,10 @@ class Mat m where
 class Mul a b where
 	type MulResult a b :: *
 	mul :: a -> b -> MulResult a b
+
+-- | Class for matrix inversion.
+class MatInverse a where
+	matInverse :: a -> a
 
 -- | Generates classes SwizzleVec{X..W}{1..4}.
 {- Letter component should be presented in methods.
@@ -617,7 +625,53 @@ do
 		
 		return $ concat [vecMatMuls, matVecMuls, matMatMuls]
 
-	return $ crossInstance : vecDecs ++ matDecs ++ mulInstances
+	-- matrix inversions
+	matInverseInstances <- forM (map fst $ filter (uncurry (==)) matDimensions) $ \dim -> do
+		mNames <- mapM newName ["m" ++ show i ++ "_" ++ show j | i <- [1..dim], j <- [1..dim]]
+		let
+			dataName = mkName $ "Mat" ++ show dim ++ "x" ++ show dim
+			-- full mask
+			dimMask = (1 `shiftL` dim) - 1
+			-- name for value of minor
+			detName imask jmask = case (maskBits imask, maskBits jmask) of
+				([i], [j]) -> mNames !! (i * dim + j)
+				_ -> mkName $ "det" ++ (show (imask :: Int)) ++ "_" ++ (show (jmask :: Int))
+			-- get list of bits from mask
+			maskBits mask = if mask == 0 then [] else let smask = (mask - 1) .&. mask in maskIndex (smask `xor` mask) : maskBits smask
+			-- get index of one-bit mask
+			maskIndex mask = fromJust $ elemIndex mask [1 `shiftL` a | a <- [0..(dim - 1)]]
+			-- determinant expression
+			detExp imask jmask = let
+				(i : ribits) = maskBits imask
+				jbits@(j : rjbits) = maskBits jmask
+				subDets = detName (imask `xor` (1 `shiftL` i)) <$> map ((jmask `xor`) . (1 `shiftL`)) jbits
+				alternateSign = map (uncurry ($)) . zip (cycle [id, \e -> [| negate $e |] ])
+				subElems = alternateSign $ map (\jj -> varE $ mNames !! (i * dim + jj)) jbits
+				subDetsElems = map (\(a, b) -> [| $(varE a) * $b |]) $ zip subDets subElems
+				in if ribits == [] && rjbits == [] then varE $ mNames !! (i * dim + j) else foldl1 (\a b -> [| $a + $b |]) subDetsElems
+			-- adjugate matrix expression
+			adjExp = foldl appE (conE dataName)
+				[ if (i + j) `rem` 2 == 0 then e else [| negate $e |]
+				| i <- [0..(dim - 1)]
+				, j <- [0..(dim - 1)]
+				, let e = varE $ detName (dimMask `xor` (1 `shiftL` j)) (dimMask `xor` (1 `shiftL` i))
+				]
+			-- inverse matrix expression
+			invMatExp = [| $adjExp * matFromScalar (1 / $(varE $ detName dimMask dimMask)) |]
+			-- decls for all determinants
+			detDecls =
+				[ valD (varP (detName imask jmask)) (normalB $ detExp imask jmask) []
+				| imask <- [1..dimMask]
+				, jmask <- [1..dimMask]
+				, let l = length (maskBits imask)
+				, l > 1 && ((1 `shiftL` (max 0 (dim - l - 1))) - 1) .&. imask == 0 && l == length (maskBits jmask)
+				]
+
+		instanceD (sequence [ [t| Vectorized $elemType |], [t| Fractional $elemType |] ]) [t| MatInverse ($(conT dataName) $elemType) |] =<< addInlines
+			[ funD 'matInverse [clause [conP dataName $ map varP mNames] (normalB invMatExp) detDecls]
+			]
+
+	return $ crossInstance : vecDecs ++ matDecs ++ mulInstances ++ matInverseInstances
 
 -- | Class of things which has quaternions.
 class (Vectorized a, Floating a) => Quaternionized a where
