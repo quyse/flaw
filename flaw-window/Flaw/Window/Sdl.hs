@@ -54,7 +54,6 @@ data SdlWindow = SdlWindow
 	{ swSystem :: !SdlWindowSystem
 	, swHandle :: {-# UNPACK #-} !SDL.Window
 	, swEventsChan :: {-# UNPACK #-} !(TChan WindowEvent)
-	, swClientSizeVar :: {-# UNPACK #-} !(TVar (Int, Int))
 	, swUserCallbacksRef :: {-# UNPACK #-} !(IORef [SDL.Event -> IO ()])
 	}
 
@@ -65,8 +64,12 @@ instance Window SdlWindow where
 		B.useAsCString (T.encodeUtf8 title) $ \titlePtr -> do
 			SDL.setWindowTitle h titlePtr
 	getWindowClientSize SdlWindow
-		{ swClientSizeVar = sizeVar
-		} = atomically $ readTVar sizeVar
+		{ swHandle = h
+		} = alloca $ \widthPtr -> alloca $ \heightPtr -> do
+		SDL.glGetDrawableSize h widthPtr heightPtr
+		width <- peek widthPtr
+		height <- peek heightPtr
+		return (fromIntegral width, fromIntegral height)
 	chanWindowEvents SdlWindow
 		{ swEventsChan = chan
 		} = dupTChan chan
@@ -209,12 +212,10 @@ initSdlWindowSystem debug = withSpecialBook $ \bk -> do
 					case maybeWindow of
 						Just SdlWindow
 							{ swEventsChan = eventsChan
-							, swClientSizeVar = clientSizeVar
 							} -> case eventType of
 							SDL.SDL_WINDOWEVENT_RESIZED -> atomically $ do
 								let width = fromIntegral data1
 								let height = fromIntegral data2
-								writeTVar clientSizeVar (width, height)
 								writeTChan eventsChan $ ResizeWindowEvent width height
 							SDL.SDL_WINDOWEVENT_CLOSE -> atomically $ writeTChan eventsChan CloseWindowEvent
 							_ -> return ()
@@ -266,14 +267,12 @@ createSdlWindow ws@SdlWindowSystem
 	windowID <- SDL.getWindowID windowHandle
 
 	eventsChan <- newBroadcastTChanIO
-	clientSizeVar <- newTVarIO (0, 0)
 	userCallbacksRef <- newIORef []
 
 	let window = SdlWindow
 		{ swSystem = ws
 		, swHandle = windowHandle
 		, swEventsChan = eventsChan
-		, swClientSizeVar = clientSizeVar
 		, swUserCallbacksRef = userCallbacksRef
 		}
 
