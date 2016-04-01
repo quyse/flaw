@@ -19,7 +19,7 @@ module Flaw.Asset.Collada
 	, resolveElement
 	, getAllElementsByTag
 	, ColladaVerticesData(..)
-	, parseTriangles
+	, parseTrianglesOrPolyList
 	, parseMesh
 	, parseGeometry
 	, parseNode
@@ -304,10 +304,20 @@ data ColladaVerticesData = ColladaVerticesData
 	, cvdBones :: ColladaM (V.Vector (Vec4 Word8))
 	}
 
-parseTriangles :: XML.Element -> ColladaM ColladaVerticesData
-parseTriangles element = do
+parseTrianglesOrPolyList :: XML.Element -> ColladaM ColladaVerticesData
+parseTrianglesOrPolyList element = do
 	-- get count
 	trianglesCount <- fmap parse $ getElementAttr "count" element
+	-- if it's polylist, it has "vcount" element with numbers of vertices in each polygon
+	-- check that there're only triangles
+	vcountElements <- getChildrenWithTag "vcount" element
+	case vcountElements of
+		[vcountElement] -> do
+			vcounts <- parseArray vcountElement
+			if VU.length vcounts /= trianglesCount then throwError "wrong number of vcounts"
+			else unless (VU.all (== (3 :: Int)) vcounts) $ throwError "only triangles are supported"
+		[] -> return ()
+		_ -> throwError "must be 0 or 1 vcount element"
 	-- parse indices
 	indices <- parseArray =<< getSingleChildWithTag "p" element
 	-- parse inputs
@@ -338,7 +348,7 @@ parseTriangles element = do
 			values <- parseStridables =<< parseSource sourceElement
 			return $ VG.generate count $ \i -> values VG.! (flippedIndices VU.! (i * stride + offset))
 		[] -> return VG.empty
-		_ -> throwError $ "parseTriangles: wrong semantic: " <> semantic
+		_ -> throwError $ "parseTrianglesOrPolyList: wrong semantic: " <> semantic
 
 	let positionIndices = case filter (\i -> citSemantic i == "VERTEX") inputs of
 		[ColladaInputTag
@@ -359,7 +369,13 @@ parseTriangles element = do
 		}
 
 parseMesh :: XML.Element -> ColladaM ColladaVerticesData
-parseMesh element = parseTriangles =<< getSingleChildWithTag "triangles" element
+parseMesh element = parseTrianglesOrPolyList =<< do
+	-- get triangles or polylist tag
+	trianglesElements <- getChildrenWithTag "triangles" element
+	case trianglesElements of
+		[trianglesElement] -> return trianglesElement
+		[] -> getSingleChildWithTag "polylist" element
+		_ -> throwError "must be 0 or 1 triangles element"
 
 parseGeometry :: XML.Element -> ColladaM ColladaVerticesData
 parseGeometry element = parseMesh =<< getSingleChildWithTag "mesh" element
