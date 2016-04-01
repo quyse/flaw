@@ -149,7 +149,10 @@ initSdlWindowSystem debug = withSpecialBook $ \bk -> do
 			[ (SDL.SDL_GL_CONTEXT_MAJOR_VERSION, 3)
 			, (SDL.SDL_GL_CONTEXT_MINOR_VERSION, 3)
 			, (SDL.SDL_GL_DOUBLEBUFFER, 1)
-			, (SDL.SDL_GL_FRAMEBUFFER_SRGB_CAPABLE, 1)
+			-- SDL_GL_FRAMEBUFFER_SRGB_CAPABLE really should be set, but it's reported to cause problems
+			-- ("cannot find matching GLX visual", in particular with proprietary NVIDIA drivers)
+			-- seems like SRGB-capable framebuffer is created anyway, so skip it
+			--, (SDL.SDL_GL_FRAMEBUFFER_SRGB_CAPABLE, 1)
 			, (SDL.SDL_GL_CONTEXT_FLAGS, if debug then SDL.SDL_GL_CONTEXT_DEBUG_FLAG else 0)
 			]
 
@@ -249,6 +252,8 @@ createSdlWindow ws@SdlWindowSystem
 	checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_RED_SIZE 8
 	checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_GREEN_SIZE 8
 	checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_BLUE_SIZE 8
+	-- setting alpha size to 0 disables SRGB-capable framebuffer with MESA and Intel driver
+	-- so we always force it to 8 bits
 	checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_ALPHA_SIZE 8
 	checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_DEPTH_SIZE (if needDepth then 16 else 0)
 	checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_STENCIL_SIZE (if needDepth then 8 else 0)
