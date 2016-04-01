@@ -60,6 +60,10 @@ genStruct "QuadVertex"
 class ColladaVertex q where
 	createColladaVertices :: ColladaVerticesData -> ColladaM (V.Vector q)
 
+-- | Replace empty vector with sequence of fallback values.
+fallbackVertexData :: Int -> a -> V.Vector a -> V.Vector a
+fallbackVertexData count fallbackValue inputVector = if V.null inputVector then V.replicate count fallbackValue else inputVector
+
 genStruct "VertexPT"
 	[ ([t| Float3 |], "position")
 	, ([t| Float2 |], "texcoord")
@@ -75,10 +79,12 @@ instance HasTexcoordAttribute VertexPT where
 	vertexTexcoordAttribute _ = (12, AttributeVec2 AttributeFloat32)
 
 instance ColladaVertex VertexPT where
-	createColladaVertices verticesData = do
+	createColladaVertices verticesData@ColladaVerticesData
+		{ cvdCount = count
+		} = do
 		positions <- cvdPositions verticesData
-		texcoords <- cvdTexcoords verticesData
-		return $ V.generate (cvdCount verticesData) $ \i -> VertexPT
+		texcoords <- fallbackVertexData count (Vec3 0 0 0) <$> cvdTexcoords verticesData
+		return $ V.generate count $ \i -> VertexPT
 			{ f_VertexPT_position = positions V.! i
 			, f_VertexPT_texcoord = let Vec3 tx ty _tz = texcoords V.! i in Vec2 tx (1 - ty)
 			}
@@ -102,11 +108,13 @@ instance HasTexcoordAttribute VertexPNT where
 	vertexTexcoordAttribute _ = (24, AttributeVec2 AttributeFloat32)
 
 instance ColladaVertex VertexPNT where
-	createColladaVertices verticesData = do
+	createColladaVertices verticesData@ColladaVerticesData
+		{ cvdCount = count
+		} = do
 		positions <- cvdPositions verticesData
 		normals <- cvdNormals verticesData
-		texcoords <- cvdTexcoords verticesData
-		return $ V.generate (cvdCount verticesData) $ \i -> VertexPNT
+		texcoords <- fallbackVertexData count (Vec3 0 0 0) <$> cvdTexcoords verticesData
+		return $ V.generate count $ \i -> VertexPNT
 			{ f_VertexPNT_position = positions V.! i
 			, f_VertexPNT_normal = normals V.! i
 			, f_VertexPNT_texcoord = let Vec3 tx ty _tz = texcoords V.! i in Vec2 tx (1 - ty)
@@ -137,13 +145,15 @@ instance HasWeightsBonesAttributes VertexPNTWB where
 	vertexBonesAttribute _ = (48, AttributeVec4 (AttributeUint8 NonNormalized))
 
 instance ColladaVertex VertexPNTWB where
-	createColladaVertices verticesData = do
+	createColladaVertices verticesData@ColladaVerticesData
+		{ cvdCount = count
+		} = do
 		positions <- cvdPositions verticesData
 		normals <- cvdNormals verticesData
-		texcoords <- cvdTexcoords verticesData
+		texcoords <- fallbackVertexData count (Vec3 0 0 0) <$> cvdTexcoords verticesData
 		bones <- cvdBones verticesData
 		weights <- cvdWeights verticesData
-		return $ V.generate (cvdCount verticesData) $ \i -> VertexPNTWB
+		return $ V.generate count $ \i -> VertexPNTWB
 			{ f_VertexPNTWB_position = positions V.! i
 			, f_VertexPNTWB_normal = normals V.! i
 			, f_VertexPNTWB_texcoord = let Vec3 tx ty _tz = texcoords V.! i in Vec2 tx (1 - ty)
