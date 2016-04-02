@@ -465,6 +465,11 @@ instance Device GlContext where
 			}) -> do
 			glFramebufferTexture2D GL_FRAMEBUFFER (GL_COLOR_ATTACHMENT0 + i) GL_TEXTURE_2D renderTargetName 0
 			glCheckErrors0 "bind framebuffer color buffer"
+		-- setup draw buffer mapping
+		let colorBuffersCount = length renderTargets
+		when (colorBuffersCount > 1) $ do
+			glDrawBuffers_n colorBuffersCount
+			glCheckErrors0 "set framebuffer draw buffers"
 
 		-- bind depth-stencil target
 		glFramebufferTexture2D GL_FRAMEBUFFER GL_DEPTH_STENCIL_ATTACHMENT GL_TEXTURE_2D depthStencilName 0
@@ -700,6 +705,8 @@ instance Device GlContext where
 				{ samplerSlot = slot
 				}
 			} -> do
+			-- returned location may be -1 here in case the shader doesn't actually use the sampler
+			-- and it's not a gl error
 			location <- glGetUniformLocation_s programName samplerName
 			glCheckErrors0 "get sampler location"
 			glUniform1i location (fromIntegral slot)

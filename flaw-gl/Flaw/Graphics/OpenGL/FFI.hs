@@ -60,6 +60,8 @@ module Flaw.Graphics.OpenGL.FFI
 	, glBindAttribLocation_s
 	, glGetUniformLocation_s
 	, glGetUniformBlockIndex_s
+	-- * Framebuffer
+	, glDrawBuffers_n
 	-- * Clearing
 	, glClearBufferiv_1
 	, glClearBufferfv_1
@@ -74,6 +76,7 @@ import qualified Data.ByteString.Unsafe as B
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import Foreign.Marshal.Alloc
+import Foreign.Marshal.Array
 import Foreign.Marshal.Utils
 import Foreign.Ptr
 import Foreign.Storable
@@ -285,6 +288,11 @@ glGetUniformLocation_s programName locationName = B.useAsCString (T.encodeUtf8 l
 
 glGetUniformBlockIndex_s :: GLuint -> T.Text -> IO GLuint
 glGetUniformBlockIndex_s programName uniformBlockName = B.useAsCString (T.encodeUtf8 uniformBlockName) $ glGetUniformBlockIndex programName
+
+glDrawBuffers_n :: Int -> IO ()
+glDrawBuffers_n colorBuffersCount =
+	withArray [GL_COLOR_ATTACHMENT0 + fromIntegral i | i <- [0..(colorBuffersCount - 1)]] $
+	glDrawBuffers $ fromIntegral colorBuffersCount
 
 {-# INLINABLE glClearBufferiv_1 #-}
 glClearBufferiv_1 :: GLenum -> GLint -> GLint -> IO ()

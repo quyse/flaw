@@ -76,6 +76,7 @@ module Flaw.Graphics.WebGL.FFI
 	, glDeleteFramebuffer
 	, glBindFramebuffer
 	, glFramebufferTexture2D
+	, glDrawBuffers_n
 	-- ** Shaders and programs
 	, glCreateShader
 	, glDeleteShader
@@ -715,6 +716,7 @@ foreign import javascript unsafe "h$flaw_webgl_context.createFramebuffer()" glCr
 foreign import javascript unsafe "h$flaw_webgl_context.deleteFramebuffer($1)" glDeleteFramebuffer :: JS_WebGLFramebuffer -> IO ()
 foreign import javascript unsafe "h$flaw_webgl_context.bindFramebuffer($1, $2)" glBindFramebuffer :: GLenum -> JS_WebGLFramebuffer -> IO ()
 foreign import javascript unsafe "h$flaw_webgl_context.framebufferTexture2D($1, $2, $3, $4, $5)" glFramebufferTexture2D :: GLenum -> GLenum -> GLenum -> JS_WebGLTexture -> GLint -> IO ()
+foreign import javascript unsafe "h$flaw_webgl_glDrawBuffers_n($1)" glDrawBuffers_n :: Int -> IO ()
 
 foreign import javascript unsafe "h$flaw_webgl_context.enableVertexAttribArray($1)" glEnableVertexAttribArray :: GLuint -> IO ()
 foreign import javascript unsafe "h$flaw_webgl_context.disableVertexAttribArray($1)" glDisableVertexAttribArray :: GLuint -> IO ()
