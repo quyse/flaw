@@ -367,7 +367,7 @@ colorTarget i colorNode = withState $ \state@State
 	else return ()
 	let target = ColorTarget i colorNode
 	return (state
-		{ stateTargets = target : targets
+		{ stateTargets = targets ++ [target]
 		}, ())
 
 dualColorTarget :: Node Float4 -> Node Float4 -> Program ()
