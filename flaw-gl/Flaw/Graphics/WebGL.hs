@@ -60,7 +60,7 @@ instance Presenter WebGLPresenter WebGLSystem GlContext GlContext where
 		{ webglPresenterCanvas = canvas
 		, webglPresenterContext = context
 		} GlContext
-		{ glContextDesiredState = GlContextState
+		{ glContextDesiredState = desiredContextState@GlContextState
 			{ glContextStateFrameBuffer = frameBufferRef
 			, glContextStateViewport = viewportRef
 			}
@@ -70,6 +70,9 @@ instance Presenter WebGLPresenter WebGLSystem GlContext GlContext where
 
 		-- create sync callback
 		callback <- syncCallback ThrowWouldBlock $ do
+			-- clear state
+			glSetDefaultContextState desiredContextState
+
 			-- get client size
 			(width, height) <- getWindowClientSize canvas
 			-- set current context

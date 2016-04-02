@@ -100,11 +100,14 @@ instance Presenter OpenGLPresenter OpenGLSystem GlContext GlContext where
 			{ swHandle = windowHandle
 			}
 		} GlContext
-		{ glContextDesiredState = GlContextState
+		{ glContextDesiredState = desiredContextState@GlContextState
 			{ glContextStateFrameBuffer = frameBufferRef
 			, glContextStateViewport = viewportRef
 			}
 		} f = openglInvoke presenter $ do
+		-- clear state
+		glSetDefaultContextState desiredContextState
+
 		-- get viewport size
 		(width, height) <- alloca $ \widthPtr -> alloca $ \heightPtr -> do
 			SDL.glGetDrawableSize windowHandle widthPtr heightPtr

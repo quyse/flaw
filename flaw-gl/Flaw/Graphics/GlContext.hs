@@ -14,6 +14,7 @@ module Flaw.Graphics.GlContext
 	, GlCaps(..)
 	, GlContextState(..)
 	, newGlContext
+	, glSetDefaultContextState
 	, glCheckErrors0
 	, glCheckErrors1
 	) where
