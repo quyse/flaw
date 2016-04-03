@@ -4,7 +4,7 @@ Description: Bindings for WebGL API.
 License: MIT
 -}
 
-{-# LANGUAGE JavaScriptFFI, PatternSynonyms #-}
+{-# LANGUAGE JavaScriptFFI, PatternSynonyms, ScopedTypeVariables #-}
 
 module Flaw.Graphics.WebGL.FFI
 	(
@@ -533,6 +533,7 @@ module Flaw.Graphics.WebGL.FFI
 	, pattern GL_STENCIL_INDEX
 	, pattern GL_STENCIL_INDEX8
 	, pattern GL_DEPTH_STENCIL
+	, pattern GL_DEPTH24_STENCIL8
 	, pattern GL_RENDERBUFFER_WIDTH
 	, pattern GL_RENDERBUFFER_HEIGHT
 	, pattern GL_RENDERBUFFER_INTERNAL_FORMAT
@@ -1377,7 +1378,7 @@ pattern GL_RENDERER = 0x1F01
 pattern GL_VERSION = 0x1F02
 
 -- TextureMagFilter
-pattern GL_NEAREST = 0x2600
+pattern GL_NEAREST = 0x2600 :: GLenum
 pattern GL_LINEAR = 0x2601
 
 -- TextureMinFilter
@@ -1452,7 +1453,7 @@ pattern GL_ACTIVE_TEXTURE = 0x84E0
 -- TextureWrapMode
 pattern GL_REPEAT = 0x2901
 pattern GL_CLAMP_TO_BORDER = GL_CLAMP_TO_EDGE -- (0x812D) not supported in WebGL 1.0/2.0
-pattern GL_CLAMP_TO_EDGE = 0x812F
+pattern GL_CLAMP_TO_EDGE = 0x812F :: GLenum
 pattern GL_MIRRORED_REPEAT = 0x8370
 
 -- Texture Levels
@@ -1513,6 +1514,7 @@ pattern GL_DEPTH_COMPONENT16 = 0x81A5
 pattern GL_STENCIL_INDEX = 0x1901
 pattern GL_STENCIL_INDEX8 = 0x8D48
 pattern GL_DEPTH_STENCIL = 0x84F9
+pattern GL_DEPTH24_STENCIL8 = 0x88F0 :: GLenum
 
 pattern GL_RENDERBUFFER_WIDTH = 0x8D42
 pattern GL_RENDERBUFFER_HEIGHT = 0x8D43
