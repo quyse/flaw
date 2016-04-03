@@ -1508,6 +1508,10 @@ glUpdateContext context@GlContext
 			-- disable blending
 			glDisable GL_BLEND
 			glCheckErrors0 "disable blending"
+			-- we need to set non-dual-source color blending, as even when blending (GL_BLEND) is disabled,
+			-- it fails in draw call with GL_INVALID_OPERATION if framebuffer doesn't contain exactly two color buffers
+			glBlendFuncSeparate GL_ONE GL_ZERO GL_ONE GL_ZERO
+			glCheckErrors0 "set blend func"
 
 glUpdateFrameBufferViewportScissor :: GlContext -> IO ()
 glUpdateFrameBufferViewportScissor GlContext
