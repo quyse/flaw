@@ -26,6 +26,7 @@ library
     Flaw.Visual.Geometry.Skinned
     Flaw.Visual.Geometry.Vertex
     Flaw.Visual.Pipeline
+    Flaw.Visual.Pipeline.Deferred
     Flaw.Visual.ScreenQuad
     Flaw.Visual.Skydome
     Flaw.Visual.Texture
