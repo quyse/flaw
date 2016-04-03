@@ -255,7 +255,7 @@ createSdlWindow ws@SdlWindowSystem
 	-- setting alpha size to 0 disables SRGB-capable framebuffer with MESA and Intel driver
 	-- so we always force it to 8 bits
 	checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_ALPHA_SIZE 8
-	checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_DEPTH_SIZE (if needDepth then 16 else 0)
+	checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_DEPTH_SIZE (if needDepth then 24 else 0)
 	checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_STENCIL_SIZE (if needDepth then 8 else 0)
 	-- position and size
 	let (x, y) = fromMaybe (SDL.SDL_WINDOWPOS_UNDEFINED, SDL.SDL_WINDOWPOS_UNDEFINED) maybePosition
