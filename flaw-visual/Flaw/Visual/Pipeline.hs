@@ -19,8 +19,8 @@ import Flaw.Math
 newPipelineWrapper :: Context c d => (Int -> Int -> IO (p, IO ())) -> IO (Render c p, IO ())
 newPipelineWrapper newPipeline = withSpecialBook $ \sbk -> do
 	bk <- book sbk newDynamicBook
-	initialPipeline <- book bk $ newPipeline 0 0
-	ref <- newIORef (initialPipeline, 0, 0)
+	initialPipeline <- book bk $ newPipeline 4 4
+	ref <- newIORef (initialPipeline, 4, 4)
 	return $ do
 		(currentPipeline, width, height) <- liftIO $ readIORef ref
 
