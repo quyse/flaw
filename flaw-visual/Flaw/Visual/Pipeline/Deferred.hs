@@ -11,9 +11,11 @@ module Flaw.Visual.Pipeline.Deferred
 {-|
 Opaque pass renders opaque geometry into couple of RTs and depth target:
 
-* diffuse color (RT0.RGB)
+* albedo (RT0.RGB)
 * occlusion factor (RT0.A)
-* specular color (RT1.RGB)
+* diffuse factor (RT1.R)
+* specular factor (RT1.G)
+* metalness factor (RT1.B)
 * glossiness (RT1.A)
 * world normal (RT2.RGB)
 * depth
@@ -45,8 +47,8 @@ import Flaw.Visual.ScreenQuad
 data DeferredPipeline d = DeferredPipeline
 	{ deferredPipelineOpaquePassFrameBuffer :: !(FrameBufferId d)
 	, deferredPipelineLightPassFrameBuffer :: !(FrameBufferId d)
-	, deferredPipelineDiffuseOcclusionRTT :: !(TextureId d)
-	, deferredPipelineSpecularGlossinessRTT :: !(TextureId d)
+	, deferredPipelineAlbedoOcclusionRTT :: !(TextureId d)
+	, deferredPipelineMaterialRTT :: !(TextureId d)
 	, deferredPipelineNormalsRTT :: !(TextureId d)
 	, deferredPipelineOpaqueDSTT :: !(TextureId d)
 	, deferredPipelineColorRTT :: !(TextureId d)
@@ -55,16 +57,16 @@ data DeferredPipeline d = DeferredPipeline
 
 newDeferredPipeline :: Device d => d -> Int -> Int -> IO (DeferredPipeline d, IO ())
 newDeferredPipeline device width height = withSpecialBook $ \bk -> do
-	-- diffuse-occlusion RT
-	(diffuseOcclusionRT, diffuseOcclusionRTT) <- book bk $ createReadableRenderTarget device width height UncompressedTextureFormat
+	-- albedo-occlusion RT
+	(albedoOcclusionRT, albedoOcclusionRTT) <- book bk $ createReadableRenderTarget device width height UncompressedTextureFormat
 		{ textureFormatComponents = PixelRGBA
 		, textureFormatValueType = PixelUint
 		, textureFormatPixelSize = Pixel32bit
-		, textureFormatColorSpace = LinearColorSpace
+		, textureFormatColorSpace = StandardColorSpace
 		} defaultSamplerStateInfo
 
-	-- specular-glossiness RT
-	(specularGlossinessRT, specularGlossinessRTT) <- book bk $ createReadableRenderTarget device width height UncompressedTextureFormat
+	-- material RT
+	(materialRT, materialRTT) <- book bk $ createReadableRenderTarget device width height UncompressedTextureFormat
 		{ textureFormatComponents = PixelRGBA
 		, textureFormatValueType = PixelUint
 		, textureFormatPixelSize = Pixel32bit
@@ -91,7 +93,7 @@ newDeferredPipeline device width height = withSpecialBook $ \bk -> do
 		} defaultSamplerStateInfo
 
 	-- framebuffer for opaque pass
-	opaquePassFrameBuffer <- book bk $ createFrameBuffer device [diffuseOcclusionRT, specularGlossinessRT, normalsRT] opaqueDST
+	opaquePassFrameBuffer <- book bk $ createFrameBuffer device [albedoOcclusionRT, materialRT, normalsRT] opaqueDST
 	-- framebuffer for lighting pass
 	lightPassFrameBuffer <- book bk $ createFrameBuffer device [colorRT] nullDepthStencilTarget
 
@@ -108,8 +110,8 @@ newDeferredPipeline device width height = withSpecialBook $ \bk -> do
 	return DeferredPipeline
 		{ deferredPipelineOpaquePassFrameBuffer = opaquePassFrameBuffer
 		, deferredPipelineLightPassFrameBuffer = lightPassFrameBuffer
-		, deferredPipelineDiffuseOcclusionRTT = diffuseOcclusionRTT
-		, deferredPipelineSpecularGlossinessRTT = specularGlossinessRTT
+		, deferredPipelineAlbedoOcclusionRTT = albedoOcclusionRTT
+		, deferredPipelineMaterialRTT = materialRTT
 		, deferredPipelineNormalsRTT = normalsRTT
 		, deferredPipelineOpaqueDSTT = opaqueDSTT
 		, deferredPipelineColorRTT = colorRTT
@@ -118,13 +120,13 @@ newDeferredPipeline device width height = withSpecialBook $ \bk -> do
 
 -- | Output result for opaque pass.
 outputDeferredPipelineOpaquePass
-	:: Node Float4 -- ^ Diffuse + occlusion.
-	-> Node Float4 -- ^ Specular + glossiness.
+	:: Node Float4 -- ^ Albedo + occlusion
+	-> Node Float4 -- ^ Material
 	-> Node Float3 -- ^ World normal
 	-> Program ()
-outputDeferredPipelineOpaquePass diffuseOcclusion specularGlossiness normal = do
-	colorTarget 0 diffuseOcclusion
-	colorTarget 1 specularGlossiness
+outputDeferredPipelineOpaquePass albedoOcclusion material normal = do
+	colorTarget 0 albedoOcclusion
+	colorTarget 1 material
 	colorTarget 2 $ cvec31 normal 1 * vecFromScalar 0.5 + vecFromScalar 0.5
 
 -- | Set up resources for opaque pass.
@@ -140,15 +142,15 @@ renderDeferredPipelineOpaquePass DeferredPipeline
 renderDeferredPipelineLightPass :: Context c d => DeferredPipeline d -> Render c ()
 renderDeferredPipelineLightPass DeferredPipeline
 	{ deferredPipelineLightPassFrameBuffer = lightPassFrameBuffer
-	, deferredPipelineDiffuseOcclusionRTT = diffuseOcclusionRTT
-	, deferredPipelineSpecularGlossinessRTT = specularGlossinessRTT
+	, deferredPipelineAlbedoOcclusionRTT = albedoOcclusionRTT
+	, deferredPipelineMaterialRTT = materialRTT
 	, deferredPipelineNormalsRTT = normalsRTT
 	, deferredPipelineOpaqueDSTT = opaqueDSTT
 	, deferredPipelineLightPassBlendState = lightPassBlendState
 	} = do
 	renderFrameBuffer lightPassFrameBuffer
-	renderSampler 4 diffuseOcclusionRTT nullSamplerState
-	renderSampler 5 specularGlossinessRTT nullSamplerState
+	renderSampler 4 albedoOcclusionRTT nullSamplerState
+	renderSampler 5 materialRTT nullSamplerState
 	renderSampler 6 normalsRTT nullSamplerState
 	renderSampler 7 opaqueDSTT nullSamplerState
 	renderDepthWrite False
@@ -157,11 +159,11 @@ renderDeferredPipelineLightPass DeferredPipeline
 -- | Shader resources for light pass.
 deferredPipelineLightPassInput :: Node Float2 -> Program (Node Float4, Node Float4, Node Float3, Node Float)
 deferredPipelineLightPassInput texcoord = do
-	diffuseOcclusion <- temp $ sample (sampler2D4f 4) texcoord
-	specularGlossiness <- temp $ sample (sampler2D4f 5) texcoord
+	albedoOcclusion <- temp $ sample (sampler2D4f 4) texcoord
+	material <- temp $ sample (sampler2D4f 5) texcoord
 	normal <- temp $ sample (sampler2D3f 6) texcoord * vecFromScalar 2 - vecFromScalar 1
 	depth <- temp $ sample (sampler2Df 7) texcoord * 2 - 1
-	return (diffuseOcclusion, specularGlossiness, normal, depth)
+	return (albedoOcclusion, material, normal, depth)
 
 -- | Light pass program.
 deferredPipelineLightPassProgram
@@ -171,10 +173,12 @@ deferredPipelineLightPassProgram
 	-> Program ()
 deferredPipelineLightPassProgram eyePosition invViewProj lightProgram = screenQuadProgram $ \screenPositionTexcoord -> do
 	-- fetch data from opaque pass
-	(diffuseOcclusion, specularGlossiness, worldNormal, depth) <- deferredPipelineLightPassInput $ zw__ screenPositionTexcoord
-	let diffuse = xyz__ diffuseOcclusion
-	let specular = xyz__ specularGlossiness
-	let glossiness = w_ specularGlossiness
+	(albedoOcclusion, material, worldNormal, depth) <- deferredPipelineLightPassInput $ zw__ screenPositionTexcoord
+	let albedo = xyz__ albedoOcclusion
+	let diffuse = x_ material
+	let specular = y_ material
+	let metalness = z_ material
+	let glossiness = w_ material
 
 	-- restore world position
 	worldPositionH <- temp $ invViewProj `mul` (cvec211 (xy__ screenPositionTexcoord) depth 1)
@@ -192,6 +196,6 @@ deferredPipelineLightPassProgram eyePosition invViewProj lightProgram = screenQu
 	specularReflectance <- temp =<< (diffuseReflectance *) <$> schulerSpecularReflectance worldNormal toEyeLightHalfDirection toLightDirection glossiness
 
 	-- resulting color
-	color <- temp $ lightColor * (diffuse * vecFromScalar diffuseReflectance + specular * vecFromScalar specularReflectance)
+	color <- temp $ lightColor * (albedo * vecFromScalar (diffuse * diffuseReflectance) + (lerp (vecFromScalar 1) albedo (vecFromScalar metalness)) * vecFromScalar (specular * specularReflectance))
 
 	colorTarget 0 $ cvec31 color 0
