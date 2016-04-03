@@ -418,14 +418,14 @@ instance Device GlContext where
 
 		glBindTexture GL_TEXTURE_2D textureName
 		glCheckErrors0 "bind texture"
-		glTexImage2D_null GL_TEXTURE_2D 0 (fromIntegral (GL_DEPTH_STENCIL :: GLenum)) (fromIntegral width) (fromIntegral height) 0 GL_DEPTH_STENCIL GL_UNSIGNED_INT_24_8
+		glTexImage2D_null GL_TEXTURE_2D 0 (fromIntegral GL_DEPTH24_STENCIL8) (fromIntegral width) (fromIntegral height) 0 GL_DEPTH_STENCIL GL_UNSIGNED_INT_24_8
 		glCheckErrors0 "tex image"
 
-		glTexParameteri GL_TEXTURE_2D GL_TEXTURE_MIN_FILTER $ fromIntegral (GL_NEAREST :: GLenum)
-		glTexParameteri GL_TEXTURE_2D GL_TEXTURE_MAG_FILTER $ fromIntegral (GL_NEAREST :: GLenum)
-		glTexParameteri GL_TEXTURE_2D GL_TEXTURE_WRAP_S $ fromIntegral (GL_CLAMP_TO_EDGE :: GLenum)
-		glTexParameteri GL_TEXTURE_2D GL_TEXTURE_WRAP_T $ fromIntegral (GL_CLAMP_TO_EDGE :: GLenum)
-		glTexParameteri GL_TEXTURE_2D GL_TEXTURE_WRAP_R $ fromIntegral (GL_CLAMP_TO_EDGE :: GLenum)
+		glTexParameteri GL_TEXTURE_2D GL_TEXTURE_MIN_FILTER $ fromIntegral GL_NEAREST
+		glTexParameteri GL_TEXTURE_2D GL_TEXTURE_MAG_FILTER $ fromIntegral GL_NEAREST
+		glTexParameteri GL_TEXTURE_2D GL_TEXTURE_WRAP_S $ fromIntegral GL_CLAMP_TO_EDGE
+		glTexParameteri GL_TEXTURE_2D GL_TEXTURE_WRAP_T $ fromIntegral GL_CLAMP_TO_EDGE
+		glTexParameteri GL_TEXTURE_2D GL_TEXTURE_WRAP_R $ fromIntegral GL_CLAMP_TO_EDGE
 		glCheckErrors0 "texture parameters"
 
 		glCheckErrors1 "create depth stencil target"
