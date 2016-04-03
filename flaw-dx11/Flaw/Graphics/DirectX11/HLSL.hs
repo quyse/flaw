@@ -327,6 +327,8 @@ hlslGenerateProgram state = program where
 			SignumNode _ a -> func1Source "sign" a
 			MinNode _ a b -> func2Source "min" a b
 			MaxNode _ a b -> func2Source "max" a b
+			ClampNode _ a b c -> func3Source "clamp" a b c
+			LerpNode _ a b c -> func3Source "lerp" a b c
 			EqualNode _ a b -> binaryOpSource "==" a b
 			LessNode _ a b -> binaryOpSource "<" a b
 			LessEqualNode _ a b -> binaryOpSource "<=" a b

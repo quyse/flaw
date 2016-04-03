@@ -44,6 +44,7 @@ module Flaw.Graphics.Program
 	, depthTarget
 	, (!)
 	, min_, max_
+	, clamp, lerp
 	, equal_ , less_, lessEqual_, if_
 	, ddx, ddy
 	, instanceId
@@ -447,6 +448,12 @@ min_ a b = MinNode (nodeValueType a) a b
 
 max_ :: OfValueType a => Node a -> Node a -> Node a
 max_ a b = MaxNode (nodeValueType a) a b
+
+clamp :: OfValueType a => Node a -> Node a -> Node a -> Node a
+clamp a b c = ClampNode (nodeValueType a) a b c
+
+lerp :: OfValueType a => Node a -> Node a -> Node a -> Node a
+lerp a b c = LerpNode (nodeValueType a) a b c
 
 equal_ :: OfValueType a => Node a -> Node a -> Node Bool
 equal_ a b = EqualNode (nodeValueType a) a b

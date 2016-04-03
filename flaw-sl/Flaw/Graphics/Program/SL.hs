@@ -39,6 +39,8 @@ nodeInfo node = case node of
 	SignumNode _ a -> nodeInfo a
 	MinNode _ a b -> mergeNodeInfo (nodeInfo a) (nodeInfo b)
 	MaxNode _ a b -> mergeNodeInfo (nodeInfo a) (nodeInfo b)
+	ClampNode _ a b c -> mergeNodeInfo (nodeInfo a) $ mergeNodeInfo (nodeInfo b) (nodeInfo c)
+	LerpNode _ a b c -> mergeNodeInfo (nodeInfo a) $ mergeNodeInfo (nodeInfo b) (nodeInfo c)
 	EqualNode _ a b -> mergeNodeInfo (nodeInfo a) (nodeInfo b)
 	LessNode _ a b -> mergeNodeInfo (nodeInfo a) (nodeInfo b)
 	LessEqualNode _ a b -> mergeNodeInfo (nodeInfo a) (nodeInfo b)
