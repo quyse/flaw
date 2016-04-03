@@ -46,14 +46,11 @@ renderScreenQuad ScreenQuadRenderer
 	} = renderScope $ do
 	renderVertexBuffer 0 vb
 	renderIndexBuffer nullIndexBuffer
-	renderBlendState nullBlendState
-	renderDepthTestFunc DepthTestFuncAlways
-	renderDepthWrite False
 	renderDraw 6
 
 -- | Works with geometry from 'screenQuadVertices'.
-screenQuadProgram :: (Node Float2 -> Program ()) -> Program ()
+screenQuadProgram :: (Node Float4 -> Program ()) -> Program ()
 screenQuadProgram f = do
 	aPosition <- attribute 0 0 0 $ AttributeVec4 AttributeFloat32
-	texcoord <- temp $ screenToTexture $ xy__ aPosition
-	rasterize aPosition $ f texcoord
+	screenPositionTexcoord <- temp $ cvec22 (xy__ aPosition) $ screenToTexture $ xy__ aPosition
+	rasterize aPosition $ f screenPositionTexcoord
