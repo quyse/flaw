@@ -42,4 +42,8 @@ data Metrics = Metrics
 	, metricsLabelHeight :: {-# UNPACK #-} !Metric
 	-- | Height of title.
 	, metricsTitleHeight :: {-# UNPACK #-} !Metric
+	-- | Width of the slider piece.
+	, metricsSliderPieceWidth :: {-# UNPACK #-} !Metric
+	-- | Height of the slider.
+	, metricsSliderHeight :: {-# UNPACK #-} !Metric
 	}

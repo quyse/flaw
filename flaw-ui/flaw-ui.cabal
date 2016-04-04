@@ -27,6 +27,7 @@ library
     Flaw.UI.Label
     Flaw.UI.Metrics
     Flaw.UI.Panel
+    Flaw.UI.Slider
     Flaw.UI.VisualElement
     Flaw.UI.Window
   other-modules:

@@ -22,7 +22,9 @@ module Flaw.UI
 	, HasAlignment(..)
 	, HasPassword(..)
 	, HasClickHandler(..)
+	, HasChangeHandler(..)
 	, HasChecked(..)
+	, HasFloatValue(..)
 	, HasProgress(..)
 	, Progress(..)
 	, FreeContainer(..)
@@ -128,8 +130,15 @@ class HasAlignment a where
 class HasClickHandler a where
 	setClickHandler :: a -> STM () -> STM ()
 
+class HasChangeHandler a where
+	setChangeHandler :: a -> STM () -> STM ()
+
 class HasChecked a where
 	setChecked :: a -> Bool -> STM ()
+
+class HasFloatValue a where
+	setFloatValue :: a -> Float -> STM ()
+	getFloatValue :: a -> STM Float
 
 class HasProgress a where
 	setProgress :: a -> Progress -> STM ()

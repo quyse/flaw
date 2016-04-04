@@ -37,6 +37,8 @@ defaultStyleMetrics = Metrics
 	, metricsEditBoxHeight = 24
 	, metricsLabelHeight = 20
 	, metricsTitleHeight = 25
+	, metricsSliderPieceWidth = 10
+	, metricsSliderHeight = 20
 	}
 
 initDefaultStyleDrawer :: Device d => d -> IO (Drawer d, IO ())
