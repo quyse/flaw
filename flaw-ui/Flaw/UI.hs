@@ -117,6 +117,7 @@ data SomeElement where
 class HasText a where
 	setText :: a -> T.Text -> STM ()
 	setTextScript :: a -> FontScript -> STM ()
+	getText :: a -> STM T.Text
 
 class HasText a => HasPassword a where
 	setPasswordMode :: a -> Bool -> STM ()

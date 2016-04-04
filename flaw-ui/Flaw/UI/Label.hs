@@ -87,3 +87,6 @@ instance HasText Label where
 	setTextScript Label
 		{ labelTextScriptVar = textScriptVar
 		} textScript = writeTVar textScriptVar textScript
+	getText Label
+		{ labelTextVar = textVar
+		} = readTVar textVar

@@ -309,6 +309,9 @@ instance HasText Frame where
 	setTextScript Frame
 		{ frameTextScriptVar = textScriptVar
 		} textScript = writeTVar textScriptVar textScript
+	getText Frame
+		{ frameTextVar = textVar
+		} = readTVar textVar
 
 instance DraggableInFreeContainer Frame where
 	setSelfFreeChild Frame

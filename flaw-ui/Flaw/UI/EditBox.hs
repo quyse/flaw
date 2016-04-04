@@ -369,6 +369,9 @@ instance HasText EditBox where
 	setTextScript EditBox
 		{ editBoxTextScriptVar = textScriptVar
 		} textScript = writeTVar textScriptVar textScript
+	getText EditBox
+		{ editBoxTextVar = textVar
+		} = readTVar textVar
 
 instance HasPassword EditBox where
 	setPasswordMode EditBox
