@@ -96,4 +96,4 @@ schulerSpecularReflectance normal toEyeLightHalfDirection toLightDirection gloss
 	-- e = pow 2 (12 * g) = exp (12 * g * log 2)
 	e <- temp $ exp (glossiness * constf (12 * log 2))
 	lh <- temp $ dot toLightDirection toEyeLightHalfDirection
-	temp $ (1 + e) / (8 * (lh * lh * lh)) * exp (e * log (dot normal toEyeLightHalfDirection))
+	temp $ (1 + e) / (8 * (lh * lh * lh)) * exp (e * log (max_ 1e-8 $ dot normal toEyeLightHalfDirection))
