@@ -28,6 +28,7 @@ module Flaw.UI
 	, HasProgress(..)
 	, Progress(..)
 	, FreeContainer(..)
+	, SomeFreeContainer(..)
 	, DraggableInFreeContainer(..)
 	, SomeFreeChild(..)
 	, DefaultActionRedirector(..)
@@ -163,6 +164,9 @@ class Element a => FreeContainer a where
 	placeFreeChildRelatively :: a -> FreeContainerChild a -> Int2 -> STM ()
 	-- | Bring element to the end of render list (in order to render on top of everything).
 	bringFreeChildOnTop :: a -> FreeContainerChild a -> STM ()
+
+data SomeFreeContainer where
+	SomeFreeContainer :: FreeContainer fc => fc -> SomeFreeContainer
 
 -- | Class of element which could be moved by mouse.
 class Element a => DraggableInFreeContainer a where

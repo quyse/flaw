@@ -26,6 +26,7 @@ library
     Flaw.UI.Elements
     Flaw.UI.Frame
     Flaw.UI.Label
+    Flaw.UI.Layout
     Flaw.UI.Metrics
     Flaw.UI.Panel
     Flaw.UI.Slider
@@ -33,6 +34,6 @@ library
     Flaw.UI.Window
   other-modules:
   -- other-extensions:    
-  build-depends:       base, containers, flaw-canvas, flaw-graphics, flaw-font, flaw-input, flaw-math, flaw-window, stm, text, transformers
+  build-depends:       base, containers, flaw-canvas, flaw-graphics, flaw-font, flaw-input, flaw-math, flaw-window, mtl, stm, text, transformers
   -- hs-source-dirs:      
   default-language:    Haskell2010
