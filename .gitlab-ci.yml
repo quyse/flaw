@@ -94,8 +94,8 @@ variables:
 
 linux:
   script:
-  - "stack --no-terminal build --test $PACKAGES_LINUX"
-  - "mv $(stack path --local-install-root)/bin bin"
+  - "mkdir bin"
+  - "stack --no-terminal build --test --copy-bins --local-bin-path bin $PACKAGES_LINUX"
   artifacts:
     name: "flaw-linux_x64-$CI_BUILD_ID"
     paths:
@@ -109,8 +109,8 @@ windows:
   script:
   - "%FIX_TH_WINDOWS%"
   - "%INTEGERSIMPLE_CONFIG_FIX%"
-  - "stack --no-terminal build --test %INTEGERSIMPLE_FLAGS_WINDOWS% %PACKAGES_WINDOWS%"
-  - "powershell \"$p = stack path --local-install-root %INTEGERSIMPLE_FLAGS_WINDOWS%; move $p/bin bin\""
+  - "mkdir bin"
+  - "stack --no-terminal build --test --copy-bins --local-bin-path bin %INTEGERSIMPLE_FLAGS_WINDOWS% %PACKAGES_WINDOWS%"
   artifacts:
     name: "flaw-windows_x64-$CI_BUILD_ID"
     paths:
@@ -131,8 +131,8 @@ web:
 
 linux-arm:
   script:
-  - "stack --no-terminal build --test $PACKAGES_LINUX"
-  - "mv $(stack path --local-install-root)/bin bin"
+  - "mkdir bin"
+  - "stack --no-terminal build --test --copy-bins --local-bin-path bin $PACKAGES_LINUX"
   artifacts:
     name: "flaw-linux_arm-$CI_BUILD_ID"
     paths:
