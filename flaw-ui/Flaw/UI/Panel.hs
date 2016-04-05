@@ -30,6 +30,7 @@ data Panel = Panel
 	, panelChildrenRenderOrderVar :: !(TVar [PanelChild])
 	, panelLayoutHandlerVar :: !(TVar (Size -> STM ()))
 	, panelSizeVar :: !(TVar Size)
+	, panelStickyFocus :: !Bool
 	, panelFocusedChildVar :: !(TVar (Maybe PanelChild))
 	, panelLastMousedChildVar :: !(TVar (Maybe PanelChild))
 	, panelDefaultElementVar :: !(TVar (Maybe SomeElement))
@@ -42,8 +43,8 @@ data PanelChild = PanelChild
 	, panelChildPositionVar :: !(TVar Position)
 	}
 
-newPanel :: STM Panel
-newPanel = do
+newPanel :: Bool -> STM Panel
+newPanel stickyFocus = do
 	childrenVar <- newTVar S.empty
 	childIndexVar <- newTVar 0
 	childrenRenderOrderVar <- newTVar []
@@ -59,6 +60,7 @@ newPanel = do
 		, panelChildrenRenderOrderVar = childrenRenderOrderVar
 		, panelLayoutHandlerVar = layoutHandlerVar
 		, panelSizeVar = sizeVar
+		, panelStickyFocus = stickyFocus
 		, panelFocusedChildVar = focusedChildVar
 		, panelLastMousedChildVar = lastMousedChildVar
 		, panelDefaultElementVar = defaultElementVar
@@ -134,6 +136,7 @@ instance Element Panel where
 	processInputEvent panel@Panel
 		{ panelChildrenVar = childrenVar
 		, panelChildrenRenderOrderVar = childrenRenderOrderVar
+		, panelStickyFocus = stickyFocus
 		, panelFocusedChildVar = focusedChildVar
 		, panelLastMousedChildVar = lastMousedChildVar
 		, panelDefaultElementVar = defaultElementVar
@@ -167,7 +170,11 @@ instance Element Panel where
 							{ panelChildElement = SomeElement focusedElement
 							} -> do
 							let (before, after) = S.split child children
-							focusedNewChild <- focusSomeChild panel $ if keyShiftPressed then S.toDescList before ++ S.toDescList after else S.toAscList after ++ S.toAscList before
+							focusedNewChild <- focusSomeChild panel $
+								if keyShiftPressed then
+									S.toDescList before ++ (if stickyFocus then S.toDescList after else [])
+								else
+									S.toAscList after ++ (if stickyFocus then S.toAscList before else [])
 							when focusedNewChild $ unfocusElement focusedElement
 							return focusedNewChild
 						Nothing -> focusSomeChild panel $ (if keyShiftPressed then S.toDescList else S.toAscList) children

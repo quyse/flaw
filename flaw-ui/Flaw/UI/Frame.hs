@@ -45,7 +45,7 @@ newFrame element Metrics
 	-- create panel
 	panel@Panel
 		{ panelSizeVar = pnlSizeVar
-		} <- newPanel
+		} <- newPanel True
 
 	-- create vars
 	textVar <- newTVar T.empty
