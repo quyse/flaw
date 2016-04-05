@@ -10,6 +10,7 @@ module Flaw.UI.Metrics
 	, Size
 	, Rect
 	, Metrics(..)
+	, HasPreferredSize(..)
 	) where
 
 import Flaw.Math
@@ -34,12 +35,14 @@ data Metrics = Metrics
 	, metricsFrameClient :: {-# UNPACK #-} !Rect
 	-- | Frame top border height.
 	, metricsFrameTopBorder :: {-# UNPACK #-} !Metric
+	-- | Typical width of "main" control in a dialog.
+	, metricsMainWidth :: {-# UNPACK #-} !Metric
 	-- | Size of button.
 	, metricsButtonSize :: {-# UNPACK #-} !Size
 	-- | Height of edit box.
 	, metricsEditBoxHeight :: {-# UNPACK #-} !Metric
-	-- | Height of label.
-	, metricsLabelHeight :: {-# UNPACK #-} !Metric
+	-- | Size of label.
+	, metricsLabelSize :: {-# UNPACK #-} !Size
 	-- | Height of title.
 	, metricsTitleHeight :: {-# UNPACK #-} !Metric
 	-- | Width of the slider piece.
@@ -47,3 +50,7 @@ data Metrics = Metrics
 	-- | Height of the slider.
 	, metricsSliderHeight :: {-# UNPACK #-} !Metric
 	}
+
+-- | Class of something which has preferred size in metrics.
+class HasPreferredSize a where
+	preferredSize :: Metrics -> a -> Size

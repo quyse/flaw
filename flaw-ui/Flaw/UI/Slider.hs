@@ -186,3 +186,9 @@ instance HasChangeHandler Slider where
 	setChangeHandler Slider
 		{ sliderChangeHandlerVar = changeHandlerVar
 		} changeHandler = writeTVar changeHandlerVar changeHandler
+
+instance HasPreferredSize Slider where
+	preferredSize Metrics
+		{ metricsMainWidth = width
+		, metricsSliderHeight = height
+		} _ = Vec2 width height

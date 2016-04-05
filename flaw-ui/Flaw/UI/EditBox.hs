@@ -23,6 +23,7 @@ import Flaw.Input.Mouse
 import Flaw.Math
 import Flaw.UI
 import Flaw.UI.Drawer
+import Flaw.UI.Metrics
 
 -- | Edit box.
 data EditBox = EditBox
@@ -377,6 +378,12 @@ instance HasPassword EditBox where
 	setPasswordMode EditBox
 		{ editBoxPasswordModeVar = passwordModeVar
 		} passwordMode = writeTVar passwordModeVar passwordMode
+
+instance HasPreferredSize EditBox where
+	preferredSize Metrics
+		{ metricsMainWidth = width
+		, metricsEditBoxHeight = height
+		} _ = Vec2 width height
 
 splitTextBySelection :: T.Text -> Int -> Int -> (T.Text, T.Text, T.Text)
 splitTextBySelection text start end = (before, selected, after) where
