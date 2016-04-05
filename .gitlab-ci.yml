@@ -12,6 +12,7 @@ variables:
     flaw-bullet
     flaw-canvas
     flaw-collada
+    flaw-editor
     flaw-ffi
     flaw-font
     flaw-font-fthb
@@ -43,6 +44,7 @@ variables:
     flaw-canvas
     flaw-collada
     flaw-dx11
+    flaw-editor
     flaw-ffi
     flaw-font
     flaw-font-fthb

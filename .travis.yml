@@ -54,6 +54,7 @@ script: >-
   flaw-bullet
   flaw-canvas
   flaw-collada
+  flaw-editor
   flaw-ffi
   flaw-font
   flaw-font-fthb

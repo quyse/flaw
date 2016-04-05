@@ -10,6 +10,7 @@ packages:
 - flaw-canvas
 - flaw-collada
 - flaw-dx11
+- flaw-editor
 - flaw-ffi
 - flaw-font
 - flaw-font-fthb
