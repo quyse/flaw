@@ -94,16 +94,12 @@ variables:
 
 linux:
   script:
-  - "stack --no-terminal build --test --haddock --coverage $PACKAGES_LINUX"
-  - "mkdir public"
-  - "hlint . --cross --no-exit-code --quiet --report=public/hlint.html"
-  - "mv $(stack path --local-doc-root) public/docs"
-  - "mv $(stack path --local-hpc-root) public/hpc"
-  - "curl -o public/docs/badge.svg https://img.shields.io/badge/haddock-$(date +%Y/%m/%d)-blue.svg"
-  - "curl -o public/hpc/badge.svg https://img.shields.io/badge/test%20coverage-$(date +%Y/%m/%d)-orange.svg"
+  - "stack --no-terminal build --test $PACKAGES_LINUX"
+  - "mv $(stack path --local-install-root)/bin bin"
   artifacts:
+    name: "flaw-linux_x64-$CI_BUILD_ID"
     paths:
-    - public
+    - bin
   tags:
   - haskellstack
   - linux
@@ -114,6 +110,11 @@ windows:
   - "%FIX_TH_WINDOWS%"
   - "%INTEGERSIMPLE_CONFIG_FIX%"
   - "stack --no-terminal build --test %INTEGERSIMPLE_FLAGS_WINDOWS% %PACKAGES_WINDOWS%"
+  - "powershell \"$p = stack path --local-install-root %INTEGERSIMPLE_FLAGS_WINDOWS%; move $p/bin bin\""
+  artifacts:
+    name: "flaw-windows_x64-$CI_BUILD_ID"
+    paths:
+    - bin
   tags:
   - haskellstack
   - windows
@@ -131,6 +132,11 @@ web:
 linux-arm:
   script:
   - "stack --no-terminal build --test $PACKAGES_LINUX"
+  - "mv $(stack path --local-install-root)/bin bin"
+  artifacts:
+    name: "flaw-linux_arm-$CI_BUILD_ID"
+    paths:
+    - bin
   tags:
   - haskellstack
   - linux
@@ -138,11 +144,17 @@ linux-arm:
 
 pages:
   stage: deploy
-  dependencies:
-  - linux
+  dependencies: []
   script:
-  - "echo Deploying..."
+  - "stack --no-terminal build --test --haddock --coverage $PACKAGES_LINUX"
+  - "mkdir public"
+  - "hlint . --cross --no-exit-code --quiet --report=public/hlint.html"
+  - "mv $(stack path --local-doc-root) public/docs"
+  - "mv $(stack path --local-hpc-root) public/hpc"
+  - "curl -o public/docs/badge.svg https://img.shields.io/badge/haddock-$(date +%Y/%m/%d)-blue.svg"
+  - "curl -o public/hpc/badge.svg https://img.shields.io/badge/test%20coverage-$(date +%Y/%m/%d)-orange.svg"
   tags:
+  - haskellstack
   - linux
   - x64
   artifacts:
