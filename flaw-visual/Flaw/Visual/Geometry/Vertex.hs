@@ -83,10 +83,10 @@ instance ColladaVertex VertexPT where
 		{ cvdCount = count
 		} = do
 		positions <- cvdPositions verticesData
-		texcoords <- fallbackVertexData count (Vec3 0 0 0) <$> cvdTexcoords verticesData
+		texcoords <- fallbackVertexData count (Vec2 0 0) <$> cvdTexcoords verticesData
 		return $ V.generate count $ \i -> VertexPT
 			{ f_VertexPT_position = positions V.! i
-			, f_VertexPT_texcoord = let Vec3 tx ty _tz = texcoords V.! i in Vec2 tx (1 - ty)
+			, f_VertexPT_texcoord = let Vec2 tx ty = texcoords V.! i in Vec2 tx (1 - ty)
 			}
 
 genStruct "VertexPNT"
@@ -113,11 +113,11 @@ instance ColladaVertex VertexPNT where
 		} = do
 		positions <- cvdPositions verticesData
 		normals <- cvdNormals verticesData
-		texcoords <- fallbackVertexData count (Vec3 0 0 0) <$> cvdTexcoords verticesData
+		texcoords <- fallbackVertexData count (Vec2 0 0) <$> cvdTexcoords verticesData
 		return $ V.generate count $ \i -> VertexPNT
 			{ f_VertexPNT_position = positions V.! i
 			, f_VertexPNT_normal = normals V.! i
-			, f_VertexPNT_texcoord = let Vec3 tx ty _tz = texcoords V.! i in Vec2 tx (1 - ty)
+			, f_VertexPNT_texcoord = let Vec2 tx ty = texcoords V.! i in Vec2 tx (1 - ty)
 			}
 
 genStruct "VertexPNTWB"
@@ -150,13 +150,13 @@ instance ColladaVertex VertexPNTWB where
 		} = do
 		positions <- cvdPositions verticesData
 		normals <- cvdNormals verticesData
-		texcoords <- fallbackVertexData count (Vec3 0 0 0) <$> cvdTexcoords verticesData
+		texcoords <- fallbackVertexData count (Vec2 0 0) <$> cvdTexcoords verticesData
 		bones <- cvdBones verticesData
 		weights <- cvdWeights verticesData
 		return $ V.generate count $ \i -> VertexPNTWB
 			{ f_VertexPNTWB_position = positions V.! i
 			, f_VertexPNTWB_normal = normals V.! i
-			, f_VertexPNTWB_texcoord = let Vec3 tx ty _tz = texcoords V.! i in Vec2 tx (1 - ty)
+			, f_VertexPNTWB_texcoord = let Vec2 tx ty = texcoords V.! i in Vec2 tx (1 - ty)
 			, f_VertexPNTWB_bones = bones V.! i
 			, f_VertexPNTWB_weights = weights V.! i
 			}

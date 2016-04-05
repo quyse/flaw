@@ -299,7 +299,7 @@ data ColladaVerticesData = ColladaVerticesData
 	, cvdPositionIndices :: ColladaM (VU.Vector Int)
 	, cvdPositions :: ColladaM (V.Vector Float3)
 	, cvdNormals :: ColladaM (V.Vector Float3)
-	, cvdTexcoords :: ColladaM (V.Vector Float3)
+	, cvdTexcoords :: ColladaM (V.Vector Float2)
 	, cvdWeights :: ColladaM (V.Vector Float4)
 	, cvdBones :: ColladaM (V.Vector (Vec4 Word8))
 	}
@@ -358,12 +358,15 @@ parseTrianglesOrPolyList element = do
 
 	unit <- fmap (csUnit . ccSettings) get
 
+	-- special handling of texcoord streams: allow both 2-coord and 3-coord streams
+	let texcoords = catchError (stream "TEXCOORD") $ \_e -> VG.map (\(Vec3 x y _z) -> Vec2 x y) <$> stream "TEXCOORD"
+
 	return ColladaVerticesData
 		{ cvdCount = count
 		, cvdPositionIndices = positionIndices
 		, cvdPositions = fmap (V.map (* vecFromScalar unit)) $ stream "VERTEX"
 		, cvdNormals = stream "NORMAL"
-		, cvdTexcoords = stream "TEXCOORD"
+		, cvdTexcoords = texcoords
 		, cvdWeights = return V.empty
 		, cvdBones = return V.empty
 		}
