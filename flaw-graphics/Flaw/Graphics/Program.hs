@@ -142,13 +142,23 @@ uniformBufferSlot slot = do
 		, uniformBufferSlotSizeRef = sizeRef
 		}
 
+-- | Modified alignment calculation for shaders.
+-- Standard math types return alignment only for their inner components, so:
+-- > alignment (undefined :: Float3) = alignment (undefined :: Float)
+-- This function calculates more realistic alignment for shader programs.
+shaderAlignment :: Storable a => a -> Int
+shaderAlignment u = f (sizeOf u) (sizeOf (undefined :: Float)) where
+	f n s
+		| n <= s || s >= (sizeOf (undefined :: Float4)) = s
+		| otherwise = f n (s * 2)
+
 uniform :: (OfValueType a, Storable a) => UniformBufferSlot -> IO (Node a)
 uniform UniformBufferSlot
 	{ uniformBufferSlotIndex = slot
 	, uniformBufferSlotSizeRef = sizeRef
 	} = withUndefinedM $ \u -> do
 	bufferSize <- readIORef sizeRef
-	let align = alignment u
+	let align = shaderAlignment u
 	let alignedBufferSize = ((bufferSize + align - 1) `quot` align) * align
 	writeIORef sizeRef $ alignedBufferSize + sizeOf u
 	return $ UniformNode Uniform
@@ -167,7 +177,7 @@ uniformArray size UniformBufferSlot
 	wu f = f undefined
 	func u = do
 		bufferSize <- readIORef sizeRef
-		let align = alignment u
+		let align = shaderAlignment u
 		let alignedBufferSize = ((bufferSize + align - 1) `quot` align) * align
 		writeIORef sizeRef $ alignedBufferSize + (sizeOf u) * size
 		return $ UniformNode Uniform
