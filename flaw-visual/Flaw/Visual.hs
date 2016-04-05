@@ -14,6 +14,7 @@ module Flaw.Visual
 	, tangentFrame
 	, lambertReflectance
 	, schulerSpecularReflectance
+	, schulerAmbientReflectance
 	) where
 
 import Flaw.Graphics.Program
@@ -97,3 +98,17 @@ schulerSpecularReflectance normal toEyeLightHalfDirection toLightDirection gloss
 	e <- temp $ exp (glossiness * constf (12 * log 2))
 	lh <- temp $ dot toLightDirection toEyeLightHalfDirection
 	temp $ (1 + e) / (8 * (lh * lh * lh)) * exp (e * log (max_ 1e-8 $ dot normal toEyeLightHalfDirection))
+
+-- | Shading model from "An Efficient and Physically Plausible Real-Time Shading Model"
+-- , ShaderX 7, by Christian Schüler, ambient lighting.
+schulerAmbientReflectance
+	:: Node Float3 -- ^ Normal.
+	-> Node Float3 -- ^ Normalized direction to eye.
+	-> Node Float -- ^ Specular coef, from 0 to 1.
+	-> Node Float -- ^ Material glossiness, from 0 (rough) to 1 (smooth).
+	-> Program (Node Float)
+schulerAmbientReflectance normal toEyeDirection specular glossiness = do
+	t <- temp $ 1 - glossiness * (max_ 0 $ dot normal toEyeDirection)
+	t2 <- temp $ t * t
+	t4 <- temp $ t2 * t2
+	temp $ lerp specular (min_ (specular * 60) 1) t4

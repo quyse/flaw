@@ -32,6 +32,7 @@ Light pass renders light volumes (or fullscreen quads), calculate lighting and o
 	, renderDeferredPipelineLightPass
 	, deferredPipelineLightPassInput
 	, deferredPipelineLightPassProgram
+	, deferredPipelineAmbientLightPassProgram
 	) where
 
 import Flaw.Book
@@ -167,7 +168,7 @@ deferredPipelineLightPassInput texcoord = do
 
 -- | Light pass program.
 deferredPipelineLightPassProgram
-	:: Node Float3
+	:: Node Float3 -- ^ Eye position.
 	-> Node Float4x4 -- ^ Inverse view-projection matrix.
 	-> (Node Float3 -> Program (Node Float3, Node Float3)) -- ^ Light program, getting world position and returning direction to light and light color
 	-> Program ()
@@ -177,7 +178,7 @@ deferredPipelineLightPassProgram eyePosition invViewProj lightProgram = screenQu
 	let albedo = xyz__ albedoOcclusion
 	let diffuse = x_ material
 	let specular = y_ material
-	let metalness = z_ material
+	let metalness = zzz__ material
 	let glossiness = w_ material
 
 	-- restore world position
@@ -196,6 +197,36 @@ deferredPipelineLightPassProgram eyePosition invViewProj lightProgram = screenQu
 	specularReflectance <- temp =<< (diffuseReflectance *) <$> schulerSpecularReflectance worldNormal toEyeLightHalfDirection toLightDirection glossiness
 
 	-- resulting color
-	color <- temp $ lightColor * (albedo * vecFromScalar (diffuse * diffuseReflectance) + (lerp (vecFromScalar 1) albedo (vecFromScalar metalness)) * vecFromScalar (specular * specularReflectance))
+	color <- temp $ lightColor * (albedo * vecFromScalar (diffuse * diffuseReflectance) + (lerp (vecFromScalar 1) albedo metalness) * vecFromScalar (specular * specularReflectance))
+
+	colorTarget 0 $ cvec31 color 0
+
+-- | Ambient light pass program.
+deferredPipelineAmbientLightPassProgram
+	:: Node Float3 -- ^ Eye position.
+	-> Node Float4x4 -- ^ Inverse view-projection matrix.
+	-> Node Float3 -- ^ Ambient light color.
+	-> Program ()
+deferredPipelineAmbientLightPassProgram eyePosition invViewProj ambientColor = screenQuadProgram $ \screenPositionTexcoord -> do
+	-- fetch data from opaque pass
+	(albedoOcclusion, material, worldNormal, depth) <- deferredPipelineLightPassInput $ zw__ screenPositionTexcoord
+	let albedo = xyz__ albedoOcclusion
+	let diffuse = x_ material
+	let specular = y_ material
+	let metalness = zzz__ material
+	let glossiness = w_ material
+
+	-- restore world position
+	worldPositionH <- temp $ invViewProj `mul` (cvec211 (xy__ screenPositionTexcoord) depth 1)
+	worldPosition <- temp $ xyz__ worldPositionH / www__ worldPositionH
+
+	-- get direction to eye
+	toEyeDirection <- temp $ normalize $ eyePosition - worldPosition
+
+	-- reflectance
+	specularReflectance <- schulerAmbientReflectance worldNormal toEyeDirection specular glossiness
+
+	-- resulting color
+	color <- temp $ ambientColor * (albedo * vecFromScalar diffuse + (lerp (vecFromScalar 1) albedo metalness) * vecFromScalar (specular * specularReflectance))
 
 	colorTarget 0 $ cvec31 color 0
