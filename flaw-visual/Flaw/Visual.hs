@@ -12,6 +12,8 @@ module Flaw.Visual
 	, xyz2xyY
 	, xyY2xyz
 	, tangentFrame
+	, encodeLambertAzimuthalEqualArea
+	, decodeLambertAzimuthalEqualArea
 	, lambertReflectance
 	, schulerSpecularReflectance
 	, schulerAmbientReflectance
@@ -74,6 +76,15 @@ tangentFrame position normal texcoord = do
 	bb <- temp $ b * vecFromScalar s
 
 	return (tt, bb, normal)
+
+encodeLambertAzimuthalEqualArea :: Node Float3 -> Program (Node Float2)
+encodeLambertAzimuthalEqualArea v = temp $ xy__ v / vecFromScalar (sqrt (z_ v * 8 + 8)) + vecFromScalar 0.5
+
+decodeLambertAzimuthalEqualArea :: Node Float2 -> Program (Node Float3)
+decodeLambertAzimuthalEqualArea v = do
+	fenc <- temp $ v * vecFromScalar 4 - vecFromScalar 2
+	f <- temp $ dot fenc fenc
+	temp $ cvec21 (fenc * vecFromScalar (sqrt $ 1 - f * 0.25)) (1 - f * 0.5)
 
 -- | Standard diffuse (Lambertian) reflectance.
 -- Need to be multiplied by light irrandiance and material's diffuse color.

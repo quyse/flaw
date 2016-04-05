@@ -17,7 +17,7 @@ Opaque pass renders opaque geometry into couple of RTs and depth target:
 * specular factor (RT1.G)
 * metalness factor (RT1.B)
 * glossiness (RT1.A)
-* world normal (RT2.RGB)
+* view-space normal (RT2.RGB)
 * depth
 
 Emission pass re-renders opaque geometry with non-zero emission into light RT.
@@ -76,9 +76,9 @@ newDeferredPipeline device width height = withSpecialBook $ \bk -> do
 
 	-- normals RT
 	(normalsRT, normalsRTT) <- book bk $ createReadableRenderTarget device width height UncompressedTextureFormat
-		{ textureFormatComponents = PixelRGB
-		, textureFormatValueType = PixelFloat
-		, textureFormatPixelSize = Pixel96bit
+		{ textureFormatComponents = PixelRG
+		, textureFormatValueType = PixelUint
+		, textureFormatPixelSize = Pixel32bit
 		, textureFormatColorSpace = LinearColorSpace
 		} defaultSamplerStateInfo
 
@@ -123,12 +123,13 @@ newDeferredPipeline device width height = withSpecialBook $ \bk -> do
 outputDeferredPipelineOpaquePass
 	:: Node Float4 -- ^ Albedo + occlusion
 	-> Node Float4 -- ^ Material
-	-> Node Float3 -- ^ World normal
+	-> Node Float3 -- ^ View-space normal
 	-> Program ()
 outputDeferredPipelineOpaquePass albedoOcclusion material normal = do
 	colorTarget 0 albedoOcclusion
 	colorTarget 1 material
-	colorTarget 2 $ cvec31 normal 1 * vecFromScalar 0.5 + vecFromScalar 0.5
+	encodedNormal <- encodeLambertAzimuthalEqualArea normal
+	colorTarget 2 $ cvec211 encodedNormal 0 0
 
 -- | Set up resources for opaque pass.
 renderDeferredPipelineOpaquePass :: Context c d => DeferredPipeline d -> Render c ()
@@ -162,39 +163,37 @@ deferredPipelineLightPassInput :: Node Float2 -> Program (Node Float4, Node Floa
 deferredPipelineLightPassInput texcoord = do
 	albedoOcclusion <- temp $ sample (sampler2D4f 4) texcoord
 	material <- temp $ sample (sampler2D4f 5) texcoord
-	normal <- temp $ sample (sampler2D3f 6) texcoord * vecFromScalar 2 - vecFromScalar 1
+	normal <- decodeLambertAzimuthalEqualArea =<< temp (sample (sampler2D2f 6) texcoord)
 	depth <- temp $ sample (sampler2Df 7) texcoord * 2 - 1
 	return (albedoOcclusion, material, normal, depth)
 
 -- | Light pass program.
 deferredPipelineLightPassProgram
-	:: Node Float3 -- ^ Eye position.
-	-> Node Float4x4 -- ^ Inverse view-projection matrix.
-	-> (Node Float3 -> Program (Node Float3, Node Float3)) -- ^ Light program, getting world position and returning direction to light and light color
+	:: Node Float4x4 -- ^ Inverse projection matrix.
+	-> (Node Float3 -> Program (Node Float3, Node Float3)) -- ^ Light program, getting view-space position and returning direction to light and light color
 	-> Program ()
-deferredPipelineLightPassProgram eyePosition invViewProj lightProgram = screenQuadProgram $ \screenPositionTexcoord -> do
+deferredPipelineLightPassProgram invProj lightProgram = screenQuadProgram $ \screenPositionTexcoord -> do
 	-- fetch data from opaque pass
-	(albedoOcclusion, material, worldNormal, depth) <- deferredPipelineLightPassInput $ zw__ screenPositionTexcoord
+	(albedoOcclusion, material, viewNormal, depth) <- deferredPipelineLightPassInput $ zw__ screenPositionTexcoord
 	let albedo = xyz__ albedoOcclusion
 	let diffuse = x_ material
 	let specular = y_ material
 	let metalness = zzz__ material
 	let glossiness = w_ material
 
-	-- restore world position
-	worldPositionH <- temp $ invViewProj `mul` (cvec211 (xy__ screenPositionTexcoord) depth 1)
-	worldPosition <- temp $ xyz__ worldPositionH / www__ worldPositionH
+	-- restore view-space position
+	viewPositionH <- temp $ invProj `mul` (cvec211 (xy__ screenPositionTexcoord) depth 1)
+	viewPosition <- temp $ xyz__ viewPositionH / www__ viewPositionH
 
 	-- get direction to light and color
-	(toLightDirection, lightColor) <- lightProgram worldPosition
+	(toLightDirection, lightColor) <- lightProgram viewPosition
 
-	-- to eye direction and half vector
-	toEyeDirection <- temp $ normalize $ eyePosition - worldPosition
-	toEyeLightHalfDirection <- temp $ normalize $ toLightDirection + toEyeDirection
+	-- half vector
+	toEyeLightHalfDirection <- temp $ normalize $ toLightDirection - normalize viewPosition
 
 	-- reflectance
-	diffuseReflectance <- temp =<< (max_ 0) <$> lambertReflectance worldNormal toLightDirection
-	specularReflectance <- temp =<< (diffuseReflectance *) <$> schulerSpecularReflectance worldNormal toEyeLightHalfDirection toLightDirection glossiness
+	diffuseReflectance <- temp =<< (max_ 0) <$> lambertReflectance viewNormal toLightDirection
+	specularReflectance <- temp =<< (diffuseReflectance *) <$> schulerSpecularReflectance viewNormal toEyeLightHalfDirection toLightDirection glossiness
 
 	-- resulting color
 	color <- temp $ lightColor * (albedo * vecFromScalar (diffuse * diffuseReflectance) + (lerp (vecFromScalar 1) albedo metalness) * vecFromScalar (specular * specularReflectance))
@@ -203,28 +202,24 @@ deferredPipelineLightPassProgram eyePosition invViewProj lightProgram = screenQu
 
 -- | Ambient light pass program.
 deferredPipelineAmbientLightPassProgram
-	:: Node Float3 -- ^ Eye position.
-	-> Node Float4x4 -- ^ Inverse view-projection matrix.
+	:: Node Float4x4 -- ^ Inverse projection matrix.
 	-> Node Float3 -- ^ Ambient light color.
 	-> Program ()
-deferredPipelineAmbientLightPassProgram eyePosition invViewProj ambientColor = screenQuadProgram $ \screenPositionTexcoord -> do
+deferredPipelineAmbientLightPassProgram invProj ambientColor = screenQuadProgram $ \screenPositionTexcoord -> do
 	-- fetch data from opaque pass
-	(albedoOcclusion, material, worldNormal, depth) <- deferredPipelineLightPassInput $ zw__ screenPositionTexcoord
+	(albedoOcclusion, material, viewNormal, depth) <- deferredPipelineLightPassInput $ zw__ screenPositionTexcoord
 	let albedo = xyz__ albedoOcclusion
 	let diffuse = x_ material
 	let specular = y_ material
 	let metalness = zzz__ material
 	let glossiness = w_ material
 
-	-- restore world position
-	worldPositionH <- temp $ invViewProj `mul` (cvec211 (xy__ screenPositionTexcoord) depth 1)
-	worldPosition <- temp $ xyz__ worldPositionH / www__ worldPositionH
-
-	-- get direction to eye
-	toEyeDirection <- temp $ normalize $ eyePosition - worldPosition
+	-- restore view-space position
+	viewPositionH <- temp $ invProj `mul` (cvec211 (xy__ screenPositionTexcoord) depth 1)
+	viewPosition <- temp $ xyz__ viewPositionH / www__ viewPositionH
 
 	-- reflectance
-	specularReflectance <- schulerAmbientReflectance worldNormal toEyeDirection specular glossiness
+	specularReflectance <- schulerAmbientReflectance viewNormal (negate $ normalize $ viewPosition) specular glossiness
 
 	-- resulting color
 	color <- temp $ ambientColor * (albedo * vecFromScalar diffuse + (lerp (vecFromScalar 1) albedo metalness) * vecFromScalar (specular * specularReflectance))
