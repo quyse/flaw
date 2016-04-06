@@ -104,7 +104,7 @@ instance EmbedIO B.ByteString where
 instance EmbedIO BL.ByteString where
 	embedIOExp bytes = do
 		let len = BL.length bytes
-		[| fmap BL.fromStrict $ B.unsafePackAddressLen len $(litE $ stringPrimL $ BL.unpack bytes) |]
+		[| BL.fromStrict <$> B.unsafePackAddressLen len $(litE $ stringPrimL $ BL.unpack bytes) |]
 
 instance EmbedIO a => EmbedIO [a] where
 	embedIOExp a = [| sequence $(listE $ map embedIOExp a) |]

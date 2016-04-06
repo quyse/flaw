@@ -164,7 +164,7 @@ syncServerRepo repo@ServerRepo
 		sqliteBind query 1 lastKnownClientRevision
 		sqliteBind query 2 clientUpperRevision
 		r <- sqliteStep query
-		if r then fmap (+ (-1)) $ sqliteColumn query 0
+		if r then (+ (-1)) <$> sqliteColumn query 0
 		else return clientUpperRevision
 
 	-- commit transaction

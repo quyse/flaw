@@ -122,7 +122,7 @@ newFrame element Metrics
 			{ freProcessInput = processInput
 			, freMouseCursor = mouseCursor
 			, freSizeVar = sizeVar
-			, freShowCursorExp = if kw == 0 && kh == 0 then fmap isJust $ readTVar freeChildVar else readTVar resizableVar
+			, freShowCursorExp = if kw == 0 && kh == 0 then isJust <$> readTVar freeChildVar else readTVar resizableVar
 			}
 		freeChild <- addFreeChild panel fre
 		return (fre, freeChild)

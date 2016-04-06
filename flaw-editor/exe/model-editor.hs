@@ -396,7 +396,7 @@ main = handle errorHandler $ withBook $ \bk -> do
 			Vec4 viewportLeft viewportTop viewportRight viewportBottom <- renderGetViewport
 			let viewportWidth = viewportRight - viewportLeft
 			let viewportHeight = viewportBottom - viewportTop
-			let aspect = (fromIntegral viewportWidth) / (fromIntegral viewportHeight)
+			let aspect = fromIntegral viewportWidth / fromIntegral viewportHeight
 
 			let view = affineLookAt eyePosition (eyePosition + eyeDirection) (Vec3 0 0 1) :: Float4x4
 			let proj = projectionPerspectiveFov (pi / 4) aspect cameraFarPlane cameraNearPlane :: Float4x4
@@ -471,4 +471,4 @@ main = handle errorHandler $ withBook $ \bk -> do
 		when exit exitApp
 
 errorHandler :: SomeException -> IO ()
-errorHandler = putStrLn . show
+errorHandler = print

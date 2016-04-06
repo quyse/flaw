@@ -46,7 +46,7 @@ newHashMapAssetPackBuilder = do
 	return $ HashMapAssetPackBuilder assetsRef
 
 finalizeHashMapAssetPack :: AssetPackBuilder (HashMapAssetPack k) -> IO (HashMapAssetPack k)
-finalizeHashMapAssetPack (HashMapAssetPackBuilder assetsRef) = fmap HashMapAssetPack $ readIORef assetsRef
+finalizeHashMapAssetPack (HashMapAssetPackBuilder assetsRef) = HashMapAssetPack <$> readIORef assetsRef
 
 instance Embed k => Embed (HashMapAssetPack k) where
 	embedExp (HashMapAssetPack assets) = [| HashMapAssetPack $ HM.fromList $(listE $ flip map (HM.toList assets) $ \(assetId, asset) -> tupE [embedExp assetId, embedExp asset]) |]

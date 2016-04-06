@@ -146,7 +146,7 @@ initColladaCache fileData = do
 			when (tag == "COLLADA") $ ignoreErrors $ do
 				assetElement <- getSingleChildWithTag "asset" element
 				unitElement <- getSingleChildWithTag "unit" assetElement
-				unit <- fmap (read . T.unpack) $ getElementAttr "meter" unitElement
+				unit <- (read . T.unpack) <$> getElementAttr "meter" unitElement
 				let invUnit = 1 / unit
 				state $ \cache@ColladaCache
 					{ ccSettings = settings
@@ -216,21 +216,21 @@ class VG.Vector v a => Parse a v | a -> v where
 
 instance Parse Int VU.Vector where
 	parse = read . T.unpack
-	getParsedArrays = fmap ccIntArrays get
+	getParsedArrays = ccIntArrays <$> get
 	putParsedArrays f = do
 		cache <- get
 		put cache { ccIntArrays = f $ ccIntArrays cache }
 
 instance Parse Float VU.Vector where
 	parse = read . T.unpack
-	getParsedArrays = fmap ccFloatArrays get
+	getParsedArrays = ccFloatArrays <$> get
 	putParsedArrays f = do
 		cache <- get
 		put cache { ccFloatArrays = f $ ccFloatArrays cache }
 
 instance Parse T.Text V.Vector where
 	parse = id
-	getParsedArrays = fmap ccNameArrays get
+	getParsedArrays = ccNameArrays <$> get
 	putParsedArrays f = do
 		cache <- get
 		put cache { ccNameArrays = f $ ccNameArrays cache }
@@ -269,8 +269,8 @@ parseSource element@XML.Element
 	else do
 		techniqueElement <- getSingleChildWithTag "technique_common" element
 		accessorElement <- getSingleChildWithTag "accessor" techniqueElement
-		count <- fmap parse $ getElementAttr "count" accessorElement
-		stride <- fmap parse $ getElementAttr "stride" accessorElement
+		count <- parse <$> getElementAttr "count" accessorElement
+		stride <- parse <$> getElementAttr "stride" accessorElement
 		arrayElement <- resolveElement =<< getElementAttr "source" accessorElement
 		values <- parseArray arrayElement
 		return (VG.take (count * stride) values, stride)
@@ -307,7 +307,7 @@ data ColladaVerticesData = ColladaVerticesData
 parseTrianglesOrPolyList :: XML.Element -> ColladaM ColladaVerticesData
 parseTrianglesOrPolyList element = do
 	-- get count
-	trianglesCount <- fmap parse $ getElementAttr "count" element
+	trianglesCount <- parse <$> getElementAttr "count" element
 	-- if it's polylist, it has "vcount" element with numbers of vertices in each polygon
 	-- check that there're only triangles
 	vcountElements <- getChildrenWithTag "vcount" element
@@ -356,7 +356,7 @@ parseTrianglesOrPolyList element = do
 			}] -> return $ VU.generate count $ \i -> flippedIndices VU.! (i * stride + offset)
 		_ -> throwError "no position indices"
 
-	unit <- fmap (csUnit . ccSettings) get
+	unit <- (csUnit . ccSettings) <$> get
 
 	-- special handling of texcoord streams: allow both 2-coord and 3-coord streams
 	let texcoords = catchError (stream "TEXCOORD") $ \_e -> VG.map (\(Vec3 x y _z) -> Vec2 x y) <$> stream "TEXCOORD"
@@ -364,7 +364,7 @@ parseTrianglesOrPolyList element = do
 	return ColladaVerticesData
 		{ cvdCount = count
 		, cvdPositionIndices = positionIndices
-		, cvdPositions = fmap (V.map (* vecFromScalar unit)) $ stream "VERTEX"
+		, cvdPositions = (V.map (* vecFromScalar unit)) <$> stream "VERTEX"
 		, cvdNormals = stream "NORMAL"
 		, cvdTexcoords = texcoords
 		, cvdWeights = return V.empty
@@ -405,7 +405,7 @@ parseNode element@XML.Element
 	let nodeId = fromMaybe "" $ tryGetElementAttr "id" element
 	let sid = fromMaybe "" $ tryGetElementAttr "sid" element
 
-	settings <- fmap ccSettings get
+	settings <- ccSettings <$> get
 	let unit = csUnit settings
 	let unitMat = csUnitMat settings
 	let invUnitMat = csInvUnitMat settings
@@ -427,19 +427,19 @@ parseNode element@XML.Element
 					}
 			"translate" -> do
 				let maybeTransformSID = tryGetElementAttr "sid" subElement
-				Vec3 x y z <- fmap (`constructStridable` 0) $ parseArray subElement
+				Vec3 x y z <- (`constructStridable` 0) <$> parseArray subElement
 				return node
 					{ cntTransforms = transforms ++ [(maybeTransformSID, ColladaTranslateTag $ Vec3 x y z * vecFromScalar unit)]
 					}
 			"rotate" -> do
 				let maybeTransformSID = tryGetElementAttr "sid" subElement
-				Vec4 x y z a <- fmap (`constructStridable` 0) $ parseArray subElement
+				Vec4 x y z a <- (`constructStridable` 0) <$> parseArray subElement
 				return node
 					{ cntTransforms = transforms ++ [(maybeTransformSID, ColladaRotateTag (Vec3 x y z) (a * pi / 180 :: Float))]
 					}
 			"matrix" -> do
 				let maybeTransformSID = tryGetElementAttr "sid" subElement
-				mat <- fmap (`constructStridable` 0) $ parseArray subElement
+				mat <- (`constructStridable` 0) <$> parseArray subElement
 				return node
 					{ cntTransforms = transforms ++ [(maybeTransformSID, ColladaMatrixTag (unitMat `mul` (mat :: Float4x4) `mul` invUnitMat))]
 					}
@@ -764,7 +764,7 @@ parseSkin (ColladaSkeleton nodes) skinElement = do
 	vertexWeightsWeights <- fmap fst $ parseSource $ citSourceElement vertexWeightsWeightInput
 	let vertexWeightsWeightOffset = citOffset vertexWeightsWeightInput
 
-	count <- fmap parse $ getElementAttr "count" vertexWeightsElement
+	count <- parse <$> getElementAttr "count" vertexWeightsElement
 	vcount <- parseArray =<< getSingleChildWithTag "vcount" vertexWeightsElement
 	v <- parseArray =<< getSingleChildWithTag "v" vertexWeightsElement
 

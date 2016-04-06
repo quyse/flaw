@@ -4,8 +4,6 @@ Description: Rendering full-screen quads.
 License: MIT
 -}
 
-{-# LANGUAGE TemplateHaskell #-}
-
 module Flaw.Visual.ScreenQuad
 	( ScreenQuadRenderer(..)
 	, newScreenQuadRenderer

@@ -744,7 +744,7 @@ instance Device Dx11Device where
 										else do
 											blobInterface <- peekCOMObject blobPtr
 											dataPtr <- m_ID3DBlob_GetBufferPointer blobInterface
-											dataSize <- fmap fromIntegral $ m_ID3DBlob_GetBufferSize blobInterface
+											dataSize <- fromIntegral <$> m_ID3DBlob_GetBufferSize blobInterface
 											dataCopyPtr <- mallocBytes dataSize
 											copyArray dataCopyPtr (castPtr dataPtr) dataSize
 											_ <- m_IUnknown_Release blobInterface
@@ -774,7 +774,7 @@ instance Device Dx11Device where
 		HlslProgram
 			{ hlslProgramAttributes = attributes
 			, hlslProgramShaders = shaders
-			} <- fmap hlslGenerateProgram $ runProgram program
+			} <- hlslGenerateProgram <$> runProgram program
 
 		bk <- newBook
 
@@ -836,7 +836,7 @@ dx11CreateDevice (DXGIDeviceId system adapter) shaderCache debug = describeExcep
 		return ((deviceInterface, contextInterface), destroy)
 
 	-- load shader compiler and get compile function
-	d3dCompileProc <- fmap mkD3DCompile $ loadLibraryAndGetProcAddress "D3DCompiler_43.dll" "D3DCompile"
+	d3dCompileProc <- mkD3DCompile <$> loadLibraryAndGetProcAddress "D3DCompiler_43.dll" "D3DCompile"
 
 	-- create rasterizer states (just two for now - with and without scissor)
 	(normalRasterizerStateInterface, scissorRasterizerStateInterface) <- do

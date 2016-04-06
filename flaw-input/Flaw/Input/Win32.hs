@@ -237,7 +237,7 @@ initWin32Input window@Win32Window
 					when (r > 0) $ do
 						let eventHeaderPtr = castPtr blockPtr
 						let eventDataPtr = plusPtr blockPtr $ sizeOf (undefined :: RAWINPUTHEADER)
-						eventType <- fmap f_RAWINPUTHEADER_dwType $ peek eventHeaderPtr
+						eventType <- f_RAWINPUTHEADER_dwType <$> peek eventHeaderPtr
 						case eventType of
 							RIM_TYPEKEYBOARD -> do
 								keyboardData <- peek $ castPtr eventDataPtr

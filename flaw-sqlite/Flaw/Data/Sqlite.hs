@@ -221,7 +221,7 @@ instance SqliteData T.Text where
 		}) column = do
 		ptr <- sqlite3_column_text stmtPtr column
 		len <- sqlite3_column_bytes stmtPtr column
-		fmap T.decodeUtf8 $ B.packCStringLen (ptr, fromIntegral len)
+		T.decodeUtf8 <$> B.packCStringLen (ptr, fromIntegral len)
 
 sqliteLastInsertRowId :: SqliteDb -> IO Int64
 sqliteLastInsertRowId SqliteDb

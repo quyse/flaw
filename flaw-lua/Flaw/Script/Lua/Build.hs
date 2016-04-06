@@ -33,7 +33,7 @@ luaCompile bytes name = do
 
 luaCompileFile :: FilePath -> ExpQ
 luaCompileFile fileName = do
-	bytes <- fmap BL.toStrict $ loadFile fileName
+	bytes <- BL.toStrict <$> loadFile fileName
 	luaCompile bytes $ T.pack fileName
 
 lua :: QuasiQuoter

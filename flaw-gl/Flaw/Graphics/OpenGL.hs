@@ -111,8 +111,8 @@ instance Presenter OpenGLPresenter OpenGLSystem GlContext GlContext where
 		-- get viewport size
 		(width, height) <- alloca $ \widthPtr -> alloca $ \heightPtr -> do
 			SDL.glGetDrawableSize windowHandle widthPtr heightPtr
-			width <- fmap fromIntegral $ peek widthPtr
-			height <- fmap fromIntegral $ peek heightPtr
+			width <- fromIntegral <$> peek widthPtr
+			height <- fromIntegral <$> peek heightPtr
 			return (width, height)
 
 		-- setup state
@@ -227,7 +227,7 @@ createOpenGLPresenter _deviceId window@SdlWindow
 				0x9148 -> "GL_DEBUG_SEVERITY_LOW"
 				0x826B -> "GL_DEBUG_SEVERITY_NOTIFICATION"
 				_ -> show messageSeverity
-			message <- fmap T.decodeUtf8 $ B.unsafePackCStringLen (messagePtr, fromIntegral messageLength)
+			message <- T.decodeUtf8 <$> B.unsafePackCStringLen (messagePtr, fromIntegral messageLength)
 			putStrLn $ "*** OpenGL debug message ***" ++
 				"\n  source:    " ++ messageSourceStr ++
 				"\n  type:      " ++ messageTypeStr ++

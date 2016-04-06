@@ -182,7 +182,7 @@ deferredPipelineLightPassProgram invProj lightProgram = screenQuadProgram $ \scr
 	let glossiness = w_ material
 
 	-- restore view-space position
-	viewPositionH <- temp $ invProj `mul` (cvec211 (xy__ screenPositionTexcoord) depth 1)
+	viewPositionH <- temp $ invProj `mul` cvec211 (xy__ screenPositionTexcoord) depth 1
 	viewPosition <- temp $ xyz__ viewPositionH / www__ viewPositionH
 
 	-- get direction to light and color
@@ -192,11 +192,11 @@ deferredPipelineLightPassProgram invProj lightProgram = screenQuadProgram $ \scr
 	toEyeLightHalfDirection <- temp $ normalize $ toLightDirection - normalize viewPosition
 
 	-- reflectance
-	diffuseReflectance <- temp =<< (max_ 0) <$> lambertReflectance viewNormal toLightDirection
+	diffuseReflectance <- temp =<< max_ 0 <$> lambertReflectance viewNormal toLightDirection
 	specularReflectance <- temp =<< (diffuseReflectance *) <$> schulerSpecularReflectance viewNormal toEyeLightHalfDirection toLightDirection glossiness
 
 	-- resulting color
-	color <- temp $ lightColor * (albedo * vecFromScalar (diffuse * diffuseReflectance) + (lerp (vecFromScalar 1) albedo metalness) * vecFromScalar (specular * specularReflectance))
+	color <- temp $ lightColor * (albedo * vecFromScalar (diffuse * diffuseReflectance) + lerp (vecFromScalar 1) albedo metalness * vecFromScalar (specular * specularReflectance))
 
 	colorTarget 0 $ cvec31 color 0
 
@@ -215,13 +215,13 @@ deferredPipelineAmbientLightPassProgram invProj ambientColor = screenQuadProgram
 	let glossiness = w_ material
 
 	-- restore view-space position
-	viewPositionH <- temp $ invProj `mul` (cvec211 (xy__ screenPositionTexcoord) depth 1)
+	viewPositionH <- temp $ invProj `mul` cvec211 (xy__ screenPositionTexcoord) depth 1
 	viewPosition <- temp $ xyz__ viewPositionH / www__ viewPositionH
 
 	-- reflectance
-	specularReflectance <- schulerAmbientReflectance viewNormal (negate $ normalize $ viewPosition) specular glossiness
+	specularReflectance <- schulerAmbientReflectance viewNormal (negate $ normalize viewPosition) specular glossiness
 
 	-- resulting color
-	color <- temp $ ambientColor * (albedo * vecFromScalar diffuse + (lerp (vecFromScalar 1) albedo metalness) * vecFromScalar (specular * specularReflectance))
+	color <- temp $ ambientColor * (albedo * vecFromScalar diffuse + lerp (vecFromScalar 1) albedo metalness * vecFromScalar (specular * specularReflectance))
 
 	colorTarget 0 $ cvec31 color 0

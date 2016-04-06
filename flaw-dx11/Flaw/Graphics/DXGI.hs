@@ -78,7 +78,7 @@ instance System DXGISystem where
 				-- enumerate modes
 				modeDescs <- alloca $ \modesCountPtr -> do
 					hresultCheck =<< m_IDXGIOutput_GetDisplayModeList output (wrapEnum DXGI_FORMAT_R8G8B8A8_UNORM) 0 modesCountPtr nullPtr
-					modesCount <- fmap fromIntegral $ peek modesCountPtr
+					modesCount <- fromIntegral <$> peek modesCountPtr
 					allocaArray modesCount $ \modeDescsPtr -> do
 						hresultCheck =<< m_IDXGIOutput_GetDisplayModeList output (wrapEnum DXGI_FORMAT_R8G8B8A8_UNORM) 0 modesCountPtr modeDescsPtr
 						peekArray modesCount modeDescsPtr

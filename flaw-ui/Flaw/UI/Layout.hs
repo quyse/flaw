@@ -82,7 +82,7 @@ labeledFlowLayout text subLayout = do
 		, flsPreSize = Vec2 psx psy
 		} <- get
 	-- create label
-	label <- lift $ newTextLabel
+	label <- lift newTextLabel
 	lift $ setText label text
 	labelVE <- lift $ newVisualElement label
 	labelVEChild <- lift $ addFreeChild parentElement labelVE

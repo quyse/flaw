@@ -109,7 +109,7 @@ instance Element EditBox where
 			}
 		} (Vec2 px py) = do
 		passwordMode <- readTVar passwordModeVar
-		text <- fmap (\text -> if passwordMode then T.map (const '●') text else text) $ readTVar textVar
+		text <- (\text -> if passwordMode then T.map (const '●') text else text) <$> readTVar textVar
 		textScript <- readTVar textScriptVar
 		Vec2 sx sy <- readTVar sizeVar
 		moused <- readTVar mousedVar

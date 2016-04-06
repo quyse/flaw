@@ -157,7 +157,7 @@ genStructWithArrays :: String -> [(TypeQ, String, Int)] -> Q [Dec]
 genStructWithArrays typeName fs = do
 	(fields, endExp) <- processFields typeName fs
 	dataDec <- dataD (return []) (mkName typeName) [] [recC (mkName typeName) $ map dataFieldDec fields] [''Show]
-	fieldsDecs <- fmap concat $ mapM (sequence . fieldDecs) fields
+	fieldsDecs <- concat <$> mapM (sequence . fieldDecs) fields
 	let sizeOfName = mkName $ "struct_sizeOf_" ++ typeName
 	let alignmentName = mkName $ "struct_alignment_" ++ typeName
 	structDecs <- sequence
@@ -189,8 +189,8 @@ genStructWithEndUnion typeName hfs selectorIndex ufs = do
 	(headerFields, headerEndExp) <- processFields typeName hfs
 	unionFields <- mapM (\(_ufe, uft, ufn) -> processField typeName uft ufn 0 headerEndExp) ufs
 	dataDec <- dataD (return []) (mkName typeName) [] [recC (mkName $ typeName ++ "_" ++ fieldNameStr unionField) $ map dataFieldDec $ headerFields ++ [unionField] | unionField <- unionFields] [''Show]
-	headerFieldsDecs <- fmap concat $ mapM (sequence . fieldDecs) headerFields
-	unionFieldsDecs <- fmap concat $ mapM (sequence . fieldDecs) unionFields
+	headerFieldsDecs <- concat <$> mapM (sequence . fieldDecs) headerFields
+	unionFieldsDecs <- concat <$> mapM (sequence . fieldDecs) unionFields
 	let sizeOfName = mkName $ "struct_sizeOf_" ++ typeName
 	let alignmentName = mkName $ "struct_alignment_" ++ typeName
 	structDecs <- sequence

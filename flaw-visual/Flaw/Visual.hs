@@ -53,7 +53,7 @@ xyY2xyz :: (OfScalarType a, Vectorized a, Fractional a) => Node (Vec3 a) -> Prog
 xyY2xyz xyY = temp $ cvec111
 	(z_ xyY * x_ xyY / y_ xyY)
 	(z_ xyY)
-	(z_ xyY * (1 - x_ xyY - y_ xyY) / (y_ xyY))
+	(z_ xyY * (1 - x_ xyY - y_ xyY) / y_ xyY)
 
 -- | Calculate tangent frame for bump mapping from position, normal and texcoord.
 -- Position and normal must be in whatever space we need a frame, presumably world space.
@@ -120,7 +120,7 @@ schulerAmbientReflectance
 	-> Node Float -- ^ Material glossiness, from 0 (rough) to 1 (smooth).
 	-> Program (Node Float)
 schulerAmbientReflectance normal toEyeDirection specular glossiness = do
-	t <- temp $ 1 - glossiness * (max_ 0 $ dot normal toEyeDirection)
+	t <- temp $ 1 - glossiness * max_ 0 (dot normal toEyeDirection)
 	t2 <- temp $ t * t
 	t4 <- temp $ t2 * t2
 	temp $ lerp specular (min_ (specular * 60) 1) t4

@@ -262,7 +262,7 @@ luaValueLen a = case a of
 	_ -> tryUnaryMetaMethodOr "__len" a $ case a of
 		LuaTable
 			{ luaTableLength = lenVar
-			} -> fmap LuaInteger $ readMutVar lenVar
+			} -> LuaInteger <$> readMutVar lenVar
 		_ -> throwLuaError $ LuaBadOperation "__len"
 
 {-# INLINABLE luaValueConcat #-}
@@ -283,7 +283,7 @@ luaValueLt a b = case (a, b) of
 	(LuaString na, LuaString nb) -> return $ LuaBoolean $ na < nb
 	_ -> case (luaCoerceToNumber a, luaCoerceToNumber b) of
 		(Just na, Just nb) -> return $ LuaBoolean $ na < nb
-		_ -> fmap (LuaBoolean . luaCoerceToBool) $ tryBinaryMetaMethod "__lt" a b
+		_ -> (LuaBoolean . luaCoerceToBool) <$> tryBinaryMetaMethod "__lt" a b
 
 {-# INLINABLE luaValueLe #-}
 luaValueLe :: LuaMonad m => LuaValue m -> LuaValue m -> m (LuaValue m)
@@ -293,7 +293,7 @@ luaValueLe a b = case (a, b) of
 	_ -> case (luaCoerceToNumber a, luaCoerceToNumber b) of
 		(Just na, Just nb) -> return $ LuaBoolean $ na <= nb
 		_ -> fmap (LuaBoolean . luaCoerceToBool) $ tryBinaryMetaMethodOr "__le" a b $
-			fmap (LuaBoolean . not . luaCoerceToBool) $ tryBinaryMetaMethod "__lt" b a
+			(LuaBoolean . not . luaCoerceToBool) <$> tryBinaryMetaMethod "__lt" b a
 
 {-# INLINABLE luaValueGet #-}
 luaValueGet :: LuaMonad m => LuaValue m -> LuaValue m -> m (LuaValue m)
@@ -316,7 +316,7 @@ luaValueGet t i = case t of
 							Just mm -> case mm of
 								LuaClosure
 									{ luaClosure = c
-									} -> fmap head $ c [t, i]
+									} -> head <$> c [t, i]
 								nt@LuaTable {} -> luaValueGet nt i
 								_ -> throwLuaError $ LuaBadOperation "__index"
 							Nothing -> return LuaNil

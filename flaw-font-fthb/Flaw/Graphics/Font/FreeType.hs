@@ -89,7 +89,7 @@ createFreeTypeGlyphs FreeTypeFont
 	-- helper functions
 	-- forM_ [0..(n - 1)] q
 	let forn_ n q = let
-		forin_ i = if i < n then q i >> forin_ (i + 1) else return ()
+		forin_ i = when (i < n) $ q i >> forin_ (i + 1)
 		in forin_ 0
 	-- foldl f z <$> forM [a..(b - 1)] q
 	let foldab f a b z q = let

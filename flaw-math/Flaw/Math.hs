@@ -635,7 +635,7 @@ do
 			-- name for value of minor
 			detName imask jmask = case (maskBits imask, maskBits jmask) of
 				([i], [j]) -> mNames !! (i * dim + j)
-				_ -> mkName $ "det" ++ (show (imask :: Int)) ++ "_" ++ (show (jmask :: Int))
+				_ -> mkName $ "det" ++ show (imask :: Int) ++ "_" ++ show (jmask :: Int)
 			-- get list of bits from mask
 			maskBits mask = if mask == 0 then [] else let smask = (mask - 1) .&. mask in maskIndex (smask `xor` mask) : maskBits smask
 			-- get index of one-bit mask
@@ -645,10 +645,10 @@ do
 				(i : ribits) = maskBits imask
 				jbits@(j : rjbits) = maskBits jmask
 				subDets = detName (imask `xor` (1 `shiftL` i)) <$> map ((jmask `xor`) . (1 `shiftL`)) jbits
-				alternateSign = map (uncurry ($)) . zip (cycle [id, \e -> [| negate $e |] ])
+				alternateSign = zipWith ($) (cycle [id, \e -> [| negate $e |] ])
 				subElems = alternateSign $ map (\jj -> varE $ mNames !! (i * dim + jj)) jbits
 				subDetsElems = map (\(a, b) -> [| $(varE a) * $b |]) $ zip subDets subElems
-				in if ribits == [] && rjbits == [] then varE $ mNames !! (i * dim + j) else foldl1 (\a b -> [| $a + $b |]) subDetsElems
+				in if null ribits && null rjbits then varE $ mNames !! (i * dim + j) else foldl1 (\a b -> [| $a + $b |]) subDetsElems
 			-- adjugate matrix expression
 			adjExp = foldl appE (conE dataName)
 				[ if (i + j) `rem` 2 == 0 then e else [| negate $e |]
@@ -664,7 +664,7 @@ do
 				| imask <- [1..dimMask]
 				, jmask <- [1..dimMask]
 				, let l = length (maskBits imask)
-				, l > 1 && ((1 `shiftL` (max 0 (dim - l - 1))) - 1) .&. imask == 0 && l == length (maskBits jmask)
+				, l > 1 && ((1 `shiftL` max 0 (dim - l - 1)) - 1) .&. imask == 0 && l == length (maskBits jmask)
 				]
 
 		instanceD (sequence [ [t| Vectorized $elemType |], [t| Fractional $elemType |] ]) [t| MatInverse ($(conT dataName) $elemType) |] =<< addInlines

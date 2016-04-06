@@ -22,7 +22,7 @@ newtype Book = Book (IORef [IO ()])
 
 {-# INLINE newBook #-}
 newBook :: IO Book
-newBook = fmap Book $ newIORef []
+newBook = Book <$> newIORef []
 
 -- | Free the book.
 {-# INLINE freeBook #-}

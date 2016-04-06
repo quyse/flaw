@@ -107,7 +107,7 @@ run Options
 
 			[("sync", Nothing)] -> do
 				-- read request
-				body <- fmap (BL.take $ fromIntegral $ syncRequestBodyLimit + 1) $ W.lazyRequestBody request
+				body <- (BL.take $ fromIntegral $ syncRequestBodyLimit + 1) <$> W.lazyRequestBody request
 				if BL.length body <= fromIntegral syncRequestBodyLimit then do
 					-- deserialize push
 					case S.decodeLazy body of
@@ -130,7 +130,7 @@ run Options
 				else respondFail H.status400 "too big sync request"
 
 			[("watch", Nothing)] -> do
-				body <- fmap (BL.take $ watchRequestBodyLimit + 1) $ W.lazyRequestBody request
+				body <- (BL.take $ watchRequestBodyLimit + 1) <$> W.lazyRequestBody request
 				if BL.length body <= watchRequestBodyLimit then do
 					-- deserialize revision
 					case S.decodeLazy body of

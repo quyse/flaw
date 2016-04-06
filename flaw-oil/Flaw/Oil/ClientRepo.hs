@@ -270,7 +270,7 @@ fillKeyItems query = do
 			VUM.write v (fromIntegral (itemStatus :: CInt)) itemId
 			step
 	step
-	fmap KeyItems $ VU.unsafeFreeze v
+	KeyItems <$> VU.unsafeFreeze v
 
 getKeyItems :: ClientRepo -> B.ByteString -> IO KeyItems
 getKeyItems ClientRepo
