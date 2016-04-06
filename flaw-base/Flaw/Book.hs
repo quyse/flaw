@@ -8,6 +8,7 @@ module Flaw.Book
 	( Book
 	, newBook
 	, freeBook
+	, releaseBook
 	, newDynamicBook
 	, book
 	, withBook
@@ -23,11 +24,22 @@ newtype Book = Book (IORef [IO ()])
 newBook :: IO Book
 newBook = fmap Book $ newIORef []
 
+-- | Free the book.
 {-# INLINE freeBook #-}
 freeBook :: Book -> IO ()
 freeBook (Book ref) = do
 	sequence_ =<< readIORef ref
 	writeIORef ref []
+
+-- | Return IO action freeing everything, and clear the book.
+-- Returned action captures state of the book at the moment of call,
+-- so it won't free resources added after.
+{-# INLINE releaseBook #-}
+releaseBook :: Book -> IO (IO ())
+releaseBook (Book ref) = do
+	finalizers <- readIORef ref
+	writeIORef ref []
+	return $ sequence_ finalizers
 
 -- | Create a dynamic book which could be safely freed multiple times.
 {-# INLINE newDynamicBook #-}
