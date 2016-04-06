@@ -8,6 +8,7 @@ module Flaw.Visual.Geometry.Basic
 	( patchTopology
 	, sphereVertices
 	, twoHemispheresVertices
+	, openCylinderVertices
 	) where
 
 import qualified Data.Vector as V
@@ -33,7 +34,7 @@ patchTopology vertices width height = V.backpermute vertices indices where
 -- For 0th meridian it produces double vertices (with longitude = 0 and pi * 2), giving a chance for different vertices
 -- (for example, to use different texture coordinates).
 sphereVertices
-	:: (Float -> Float -> v) -- ^ Function producing vertex for specified longitude and latitude.
+	:: (Float -> Float -> v) -- ^ Function producing vertex for specified longitude (from 0 to pi * 2) and latitude (from -pi / 2 to pi / 2).
 	-> Int -- ^ Meridians count.
 	-> Int -- ^ Parallels half-count.
 	-> V.Vector v
@@ -69,3 +70,20 @@ twoHemispheresVertices f meridiansCount topParallelsCount bottomParallelsCount =
 		, parallel <- parallels
 		]
 	vertices = V.map (uncurry f) angles
+
+-- | Raw vertices for an open cylinder.
+openCylinderVertices
+	:: (Float -> Float -> v) -- ^ Function producing vertex for specified longitude (from 0 to pi * 2) and parallel (from 0 to 1).
+	-> Int -- ^ Meridians count.
+	-> Int -- ^ Parallels count.
+	-> V.Vector v
+openCylinderVertices f meridiansCount parallelsCount = patchTopology vertices parallelsCount (meridiansCount + 1) where
+	meridianCoef = pi * 2 / fromIntegral meridiansCount
+	parallelCoef = 1 / fromIntegral (parallelsCount - 1)
+	vertices = V.map (uncurry f) $ V.fromList
+		[ ( fromIntegral i * meridianCoef
+			, fromIntegral j * parallelCoef
+			)
+		| i <- [0 .. meridiansCount]
+		, j <- [0 .. (parallelsCount - 1)]
+		]
