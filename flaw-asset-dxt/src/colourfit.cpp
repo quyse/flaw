@@ -34,10 +34,6 @@ ColourFit::ColourFit( ColourSet const* colours, int flags )
 {
 }
 
-ColourFit::~ColourFit()
-{
-}
-
 void ColourFit::Compress( void* block )
 {
 	bool isDxt1 = ( ( m_flags & kDxt1 ) != 0 );
@@ -50,5 +46,8 @@ void ColourFit::Compress( void* block )
 	else
 		Compress4( block );
 }
+
+void ColourFit::Compress3( void* block ) {}
+void ColourFit::Compress4( void* block ) {}
 
 } // namespace squish
