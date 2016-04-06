@@ -137,6 +137,7 @@ class HasChangeHandler a where
 
 class HasChecked a where
 	setChecked :: a -> Bool -> STM ()
+	getChecked :: a -> STM Bool
 
 class HasFloatValue a where
 	setFloatValue :: a -> Float -> STM ()

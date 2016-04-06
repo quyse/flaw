@@ -9,6 +9,7 @@ module Flaw.UI.Elements
 	) where
 
 import Flaw.UI.Button as X
+import Flaw.UI.CheckBox as X
 import Flaw.UI.EditBox as X
 import Flaw.UI.Frame as X
 import Flaw.UI.Label as X

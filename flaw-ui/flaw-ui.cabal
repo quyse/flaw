@@ -21,6 +21,7 @@ library
   exposed-modules:
     Flaw.UI
     Flaw.UI.Button
+    Flaw.UI.CheckBox
     Flaw.UI.Drawer
     Flaw.UI.EditBox
     Flaw.UI.Elements
