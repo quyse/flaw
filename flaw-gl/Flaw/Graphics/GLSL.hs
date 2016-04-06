@@ -560,6 +560,7 @@ glslGenerateProgram GlslConfig
 			Combine3VecNode _ _ _ t a b c -> func3Source (valueTypeSource t) a b c
 			Combine4VecNode _ _ _ _ t a b c d -> func4Source (valueTypeSource t) a b c d
 			ScreenToTextureNode _ a -> "(" <> nodeSource a <> ") * vec2(0.5, 0.5) + vec2(0.5, 0.5)"
+			FragCoordNode -> "gl_FragCoord"
 
 		binaryOpSource :: Builder -> Node a -> Node b -> Builder
 		binaryOpSource op a b = "(" <> nodeSource a <> ") " <> op <> " (" <> nodeSource b <> ")"

@@ -96,6 +96,7 @@ nodeInfo node = case node of
 	Combine3VecNode _ _ _ _ a b c -> mergeNodeInfo (nodeInfo a) $ mergeNodeInfo (nodeInfo b) (nodeInfo c)
 	Combine4VecNode _ _ _ _ _ a b c d -> mergeNodeInfo (nodeInfo a) $ mergeNodeInfo (nodeInfo b) $ mergeNodeInfo (nodeInfo c) (nodeInfo d)
 	ScreenToTextureNode _ a -> nodeInfo a
+	FragCoordNode -> ([], [], [], [])
 
 targetNodeInfo :: Target -> NodeInfo
 targetNodeInfo target = case target of

@@ -160,7 +160,7 @@ hlslGenerateProgram state = program where
 				SamplerCube -> "TextureCube"
 
 		-- code source
-		codeSource = "Output " <> entryPoint <> "(Input input, uint sI : SV_InstanceID)\n{\n\tOutput output;\n"
+		codeSource = "Output " <> entryPoint <> "(Input input, uint sI : SV_InstanceID" <> (if stage == PixelStage then ", float4 sP : SV_Position" else mempty) <> ")\n{\n\tOutput output;\n"
 			<> tempsSource <> targetsSource <> outInterpolantsAssignmentsSource <> "\treturn output;\n}\n"
 
 		-- definitions of temp variables
@@ -388,6 +388,7 @@ hlslGenerateProgram state = program where
 			Combine3VecNode _ _ _ t a b c -> func3Source (valueTypeSource t) a b c
 			Combine4VecNode _ _ _ _ t a b c d -> func4Source (valueTypeSource t) a b c d
 			ScreenToTextureNode _ a -> "(" <> nodeSource a <> ") * float2(0.5f, -0.5f) + float2(0.5f, 0.5f)"
+			FragCoordNode -> "sP"
 
 		binaryOpSource :: Builder -> Node a -> Node b -> Builder
 		binaryOpSource op a b = "(" <> nodeSource a <> ") " <> op <> " (" <> nodeSource b <> ")"
