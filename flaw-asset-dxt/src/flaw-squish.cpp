@@ -46,3 +46,18 @@ extern "C" void flaw_squish_compress_bc4(u8 const* input, int inputLinePitch, u8
 	// compress
 	CompressAlphaDxt5(rgbaInput, 0xffff, output);
 }
+
+// Compress 32-byte RG block to 16 bytes using BC5 format.
+// BC5 format is simply two BC4 blocks.
+extern "C" void flaw_squish_compress_bc5(u8 const* input, int inputLinePitch, u8* output)
+{
+	u8 rgbaInput[64];
+	// compress first block
+	for(int i = 0; i < 16; ++i)
+		rgbaInput[i * 4 + 3] = input[(i / 4) * inputLinePitch + (i % 4) * 2 + 0];
+	CompressAlphaDxt5(rgbaInput, 0xffff, output);
+	// compress second block
+	for(int i = 0; i < 16; ++i)
+		rgbaInput[i * 4 + 3] = input[(i / 4) * inputLinePitch + (i % 4) * 2 + 1];
+	CompressAlphaDxt5(rgbaInput, 0xffff, output + 8);
+}

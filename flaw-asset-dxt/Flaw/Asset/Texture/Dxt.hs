@@ -49,6 +49,15 @@ dxtCompressTexture textureInfo@TextureInfo
 			{ textureFormatCompression = TextureCompressionBC4
 			, textureFormatColorSpace = colorSpace
 			})
+		UncompressedTextureFormat
+			{ textureFormatComponents = PixelRG
+			, textureFormatValueType = PixelUint
+			, textureFormatPixelSize = Pixel16bit
+			, textureFormatColorSpace = colorSpace
+			} -> return (compressBC5Block, CompressedTextureFormat
+			{ textureFormatCompression = TextureCompressionBC5
+			, textureFormatColorSpace = colorSpace
+			})
 		_ -> throwIO $ DescribeFirstException $ "unsupported format for DXT compression: " ++ show format
 
 	-- new texture info
@@ -124,3 +133,4 @@ dxtCompressTexture textureInfo@TextureInfo
 
 foreign import ccall unsafe "flaw_squish_compress_bc1" compressBC1Block :: Ptr () -> CInt -> Ptr () -> IO ()
 foreign import ccall unsafe "flaw_squish_compress_bc4" compressBC4Block :: Ptr () -> CInt -> Ptr () -> IO ()
+foreign import ccall unsafe "flaw_squish_compress_bc5" compressBC5Block :: Ptr () -> CInt -> Ptr () -> IO ()
