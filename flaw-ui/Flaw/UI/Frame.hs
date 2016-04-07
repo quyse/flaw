@@ -255,7 +255,7 @@ instance Element Frame where
 		Vec2 sx sy <- readTVar sizeVar
 		let outerStyle = if focused then outerFocusedStyle else outerNormalStyle
 		panelRender <- renderElement panel drawer $ Vec2 px py
-		return $ renderScope $ do
+		return $ do
 			-- draw outer frame
 			drawBorderedRectangle canvas
 				(Vec4 px (px + 1) (px + sx - 1) (px + sx))
@@ -275,7 +275,7 @@ instance Element Frame where
 				(styleFillColor innerStyle) (styleFillColor innerStyle)
 
 			-- render panel
-			panelRender
+			renderScope panelRender
 
 	processInputEvent Frame
 		{ framePanel = panel

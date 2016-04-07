@@ -126,10 +126,10 @@ instance Element Panel where
 			, panelChildPositionVar = childPositionVar
 			} = do
 			childPosition <- readTVar childPositionVar
-			renderElement element drawer $ position + childPosition
+			renderScope <$> renderElement element drawer (position + childPosition)
 		renderChildren <- foldrM (\a b -> fmap (>> b) a) (return ()) $ map drawChild childrenRenderOrder
 		-- return
-		return $ renderScope $ do
+		return $ do
 			renderIntersectScissor $ Vec4 px py (px + sx) (py + sy)
 			renderChildren
 

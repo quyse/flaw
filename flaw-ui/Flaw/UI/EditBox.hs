@@ -135,7 +135,7 @@ instance Element EditBox where
 				return blink
 			else return 0
 
-		return $ renderScope $ do
+		return $ do
 
 			-- draw edit box
 			drawBorderedRectangle canvas

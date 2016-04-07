@@ -114,13 +114,13 @@ instance Element Button where
 		-- calculate visual rendering
 		visualRender <- renderVisual visual drawer (Vec2 (px + 1) (py + 1)) size style
 		-- return rendering monad
-		return $ renderScope $ do
+		return $ do
 			drawBorderedRectangle canvas
 				(Vec4 px (px + 1) (px + sx - 1) (px + sx))
 				(Vec4 py (py + 1) (py + sy - 1) (py + sy))
 				(styleFillColor style) (styleBorderColor style)
 			renderIntersectScissor $ Vec4 (px + 1) (py + 1) (px + sx - 1) (py + sy - 1)
-			visualRender
+			renderScope visualRender
 			when focused $ drawBorderedRectangle canvas
 				(Vec4 (px + 3) (px + 4) (px + sx - 4) (px + sx - 3))
 				(Vec4 (py + 3) (py + 4) (py + sy - 4) (py + sy - 3))
