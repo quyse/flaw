@@ -94,7 +94,7 @@ newDeferredPipeline device width height = withSpecialBook $ \bk -> do
 		} defaultSamplerStateInfo
 
 	-- framebuffer for opaque pass
-	opaquePassFrameBuffer <- book bk $ createFrameBuffer device [albedoOcclusionRT, materialRT, normalsRT] opaqueDST
+	opaquePassFrameBuffer <- book bk $ createFrameBuffer device [colorRT, albedoOcclusionRT, materialRT, normalsRT] opaqueDST
 	-- framebuffer for lighting pass
 	lightPassFrameBuffer <- book bk $ createFrameBuffer device [colorRT] nullDepthStencilTarget
 
@@ -121,15 +121,17 @@ newDeferredPipeline device width height = withSpecialBook $ \bk -> do
 
 -- | Output result for opaque pass.
 outputDeferredPipelineOpaquePass
-	:: Node Float4 -- ^ Albedo + occlusion
+	:: Node Float3 -- ^ Result color
+	-> Node Float4 -- ^ Albedo + occlusion
 	-> Node Float4 -- ^ Material
 	-> Node Float3 -- ^ View-space normal
 	-> Program ()
-outputDeferredPipelineOpaquePass albedoOcclusion material normal = do
-	colorTarget 0 albedoOcclusion
-	colorTarget 1 material
+outputDeferredPipelineOpaquePass color albedoOcclusion material normal = do
+	colorTarget 0 $ cvec31 color 0
+	colorTarget 1 albedoOcclusion
+	colorTarget 2 material
 	encodedNormal <- encodeLambertAzimuthalEqualArea normal
-	colorTarget 2 $ cvec211 encodedNormal 0 0
+	colorTarget 3 $ cvec211 encodedNormal 0 0
 
 -- | Set up resources for opaque pass.
 renderDeferredPipelineOpaquePass :: Context c d => DeferredPipeline d -> Render c ()

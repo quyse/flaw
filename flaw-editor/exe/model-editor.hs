@@ -157,8 +157,9 @@ main = handle errorHandler $ withBook $ \bk -> do
 		viewNormal <- temp $ xyz__ $ mul uView $ cvec31 aNormal (constf 0)
 		rasterize (mul uViewProj worldPosition) $ do
 			albedo <- temp $ sample (sampler2D3f 0) aTexcoord
+			let emission = 0
 			let occlusion = 1
-			outputDeferredPipelineOpaquePass (cvec31 albedo occlusion) uMaterial viewNormal
+			outputDeferredPipelineOpaquePass (albedo * vecFromScalar emission) (cvec31 albedo occlusion) uMaterial viewNormal
 	-- light program
 	screenQuadRenderer <- book bk $ newScreenQuadRenderer device
 	lightProgram <- book bk $ createProgram device $ deferredPipelineLightPassProgram uInvProj $ \viewPosition -> do
@@ -416,6 +417,7 @@ main = handle errorHandler $ withBook $ \bk -> do
 				renderClearColor 0 $ Float4 0 0 0 0
 				renderClearColor 1 $ Float4 0 0 0 0
 				renderClearColor 2 $ Float4 0 0 0 0
+				renderClearColor 3 $ Float4 0 0 0 0
 				renderClearDepth 0
 				renderDepthTestFunc DepthTestFuncGreater
 
@@ -433,8 +435,6 @@ main = handle errorHandler $ withBook $ \bk -> do
 			-- lighting pass
 			renderScope $ do
 				renderDeferredPipelineLightPass deferredPipeline
-
-				renderClearColor 0 $ Vec4 0 0 0 0
 
 				let
 					Vec3 x y z = lightPosition
