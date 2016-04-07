@@ -100,16 +100,22 @@ main = handle errorHandler $ withBook $ \bk -> do
 
 	exitVar <- newTVarIO False
 
+	-- create sphere geometry
+	sphereGeometry <- book bk $ do
+		let f alpha beta = VertexPNT
+			{ f_VertexPNT_position = p
+			--, f_VertexPNT_normal = Vec3 (cos alpha) (sin alpha) 0
+			--, f_VertexPNT_texcoord = Vec2 alpha beta
+			, f_VertexPNT_normal = p
+			, f_VertexPNT_texcoord = Vec2 (alpha / (pi * 2)) (beta / pi + 0.5)
+			}
+			where p = Vec3 (cos alpha * cos beta) (sin alpha * cos beta) (sin beta)
+		loadPackedGeometry device =<< packGeometry (sphereVertices f 16 16)
+		--	where p = Vec3 (cos alpha) (sin alpha) beta
+		--loadPackedGeometry device =<< packGeometry (openCylinderVertices f 64 64)
+
 	-- editor state
 	editorStateVar <- do
-		initialGeometry <- book bk $ do
-			let f alpha beta = VertexPNT
-				{ f_VertexPNT_position = p
-				, f_VertexPNT_normal = p
-				, f_VertexPNT_texcoord = Vec2 (alpha / (pi * 2)) (beta / pi + 0.5)
-				}
-				where p = Vec3 (cos alpha * cos beta) (sin alpha * cos beta) (sin beta)
-			loadPackedGeometry device =<< packGeometry (sphereVertices f 16 16)
 		initialAlbedoTextureCell <- book bk $ newTextureCell $ do
 			let
 				width = 256
@@ -178,7 +184,7 @@ main = handle errorHandler $ withBook $ \bk -> do
 			, editorStateLightPosition = Vec3 (-2) 2 2
 			, editorStateLightColor = vecFromScalar 10
 			, editorStateAmbientLightColor = vecFromScalar 0.01
-			, editorStateGeometry = initialGeometry
+			, editorStateGeometry = sphereGeometry
 			, editorStateAlbedoTextureCell = initialAlbedoTextureCell
 			, editorStateNormalTextureCell = initialNormalTextureCell
 			, editorStateLinearFiltering = False
@@ -221,6 +227,16 @@ main = handle errorHandler $ withBook $ \bk -> do
 			let emission = 0
 			let occlusion = 1
 			outputDeferredPipelineOpaquePass (albedo * vecFromScalar emission) (cvec31 albedo occlusion) uMaterial resultViewNormal
+	-- lightbulb opaque program
+	lightbulbOpaqueProgram <- book bk $ createProgram device $ do
+		let v = undefined :: VertexPNT
+		aPosition <- vertexAttribute 0 0 $ vertexPositionAttribute v
+		aNormal <- vertexAttribute 0 0 $ vertexNormalAttribute v
+		worldPosition <- temp $ mul uWorld $ cvec31 aPosition (constf 1)
+		vertexViewNormal <- temp $ xyz__ $ mul uView $ cvec31 aNormal (constf 0)
+		rasterize (uViewProj `mul` worldPosition) $ do
+			viewNormal <- temp $ normalize vertexViewNormal
+			outputDeferredPipelineOpaquePass uLightColor (const4f $ Vec4 0 0 0 0) (const4f $ Vec4 0 0 0 0) viewNormal
 	-- light program
 	screenQuadRenderer <- book bk $ newScreenQuadRenderer device
 	lightProgram <- book bk $ createProgram device $ deferredPipelineLightPassProgram uInvProj $ \viewPosition -> do
@@ -523,6 +539,24 @@ main = handle errorHandler $ withBook $ \bk -> do
 				renderUploadUniformStorage usObject
 				renderUniformStorage usObject
 				renderDraw icObject
+
+				-- render lightbulb
+				do
+					let Geometry
+						{ geometryVertexBuffer = vb
+						, geometryIndexBuffer = ib
+						, geometryIndicesCount = ic
+						} = sphereGeometry
+					renderProgram lightbulbOpaqueProgram
+					renderVertexBuffer 0 vb
+					renderIndexBuffer ib
+					renderUniform usObject uWorld (affineTranslation lightPosition `mul` affineScaling (vecFromScalar 0.05 :: Float3))
+					renderUploadUniformStorage usObject
+					renderUniformStorage usObject
+					renderUniform usLight uLightColor lightColor
+					renderUploadUniformStorage usLight
+					renderUniformStorage usLight
+					renderDraw ic
 
 			-- lighting pass
 			renderScope $ do
