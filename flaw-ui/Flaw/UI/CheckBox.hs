@@ -14,6 +14,7 @@ import Control.Concurrent.STM
 import Control.Monad
 import qualified Data.Text as T
 
+import Flaw.Graphics
 import Flaw.Graphics.Canvas
 import Flaw.Input.Keyboard
 import Flaw.Input.Mouse
@@ -99,6 +100,7 @@ instance Element CheckBox where
 				(Vec4 (px + gap) (px + gap + 1) (px + s - gap - 1) (px + s - gap))
 				(Vec4 (py + gap) (py + gap + 1) (py + s - gap - 1) (py + s - gap))
 				(styleTextColor raisedStyle) (styleBorderColor raisedStyle)
+			renderIntersectScissor $ Vec4 (px + s + gap) py (px + sx) (py + sy)
 			visualRender
 
 	processInputEvent CheckBox
