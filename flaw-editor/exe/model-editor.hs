@@ -47,6 +47,20 @@ import Flaw.Visual.ScreenQuad
 import Flaw.Visual.Texture
 import Flaw.Window
 
+data TextureCell = TextureCell
+	{ textureCellBook :: !Book
+	, textureCellTexture :: !(TextureId AppGraphicsDevice)
+	}
+
+newTextureCell :: IO (TextureId AppGraphicsDevice, IO ()) -> IO (TextureCell, IO ())
+newTextureCell createTexture = withSpecialBook $ \bk -> do
+	cellBook <- book bk newDynamicBook
+	cellTexture <- book cellBook createTexture
+	return TextureCell
+		{ textureCellBook = cellBook
+		, textureCellTexture = cellTexture
+		}
+
 data EditorState = EditorState
 	{ editorStateEyePosition :: !Float3
 	, editorStateEyeSpeed :: !Float3
@@ -57,7 +71,9 @@ data EditorState = EditorState
 	, editorStateLightColor :: !Float3
 	, editorStateAmbientLightColor :: !Float3
 	, editorStateGeometry :: !(Geometry AppGraphicsDevice)
-	, editorStateTexture :: !(TextureId AppGraphicsDevice)
+	, editorStateAlbedoTextureCell :: !TextureCell
+	, editorStateNormalTextureCell :: !TextureCell
+	, editorStateLinearFiltering :: !Bool
 	}
 
 getEyeDirection :: EditorState -> Float3
@@ -94,7 +110,7 @@ main = handle errorHandler $ withBook $ \bk -> do
 				}
 				where p = Vec3 (cos alpha * cos beta) (sin alpha * cos beta) (sin beta)
 			loadPackedGeometry device =<< packGeometry (sphereVertices f 16 16)
-		initialTexture <- book bk $ do
+		initialAlbedoTextureCell <- book bk $ newTextureCell $ do
 			let
 				width = 256
 				height = 256
@@ -111,11 +127,48 @@ main = handle errorHandler $ withBook $ \bk -> do
 					, textureFormatColorSpace = StandardColorSpace
 					}
 				, textureCount = 0
-				} defaultSamplerStateInfo $ B.pack $ do
+				} defaultSamplerStateInfo
+				{ samplerMinFilter = SamplerLinearFilter
+				, samplerMipFilter = SamplerLinearFilter
+				, samplerMagFilter = SamplerLinearFilter
+				} $ B.pack $ do
 				i <- [0..(height - 1)]
 				j <- [0..(width - 1)]
-				let c = if (i `quot` step + j `quot` step) `rem` 2 == 0 then 255 else 0
-				[c, c, c, 255]
+				--let c = if (i `quot` step + j `quot` step) `rem` 2 == 0 then 255 else 0
+				--[c, c, c, 255]
+				[127, 127, 127, 255]
+		initialNormalTextureCell <- book bk $ newTextureCell $ do
+			let
+				width = 256
+				height = 256
+			(compressedTextureInfo, compressedTextureBytes) <- dxtCompressTexture TextureInfo
+				{ textureWidth = width
+				, textureHeight = height
+				, textureDepth = 0
+				, textureMips = 1
+				, textureFormat = UncompressedTextureFormat
+					{ textureFormatComponents = PixelRG
+					, textureFormatValueType = PixelUint
+					, textureFormatPixelSize = Pixel16bit
+					, textureFormatColorSpace = LinearColorSpace
+					}
+				, textureCount = 0
+				} $ B.pack $ do
+				i <- [0..(height - 1)]
+				j <- [0..(width - 1)]
+				let Float3 x y _z = normalize $
+					if i < j then
+						if height - i < j then Vec3 1 0 1
+						else Vec3 0 (-1) 1
+					else
+						if height - i < j then Vec3 0 1 1
+						else Vec3 (-1) 0 1
+				[fromIntegral (floor (x * 127) + 127 :: Int), fromIntegral (floor (y * 127) + 127 :: Int)]
+			createStaticTexture device compressedTextureInfo defaultSamplerStateInfo
+				{- samplerMinFilter = SamplerLinearFilter
+				, samplerMipFilter = SamplerLinearFilter
+				, samplerMagFilter = SamplerLinearFilter
+				-} compressedTextureBytes
 		newTVarIO EditorState
 			{ editorStateEyePosition = Vec3 (-2) 0 1
 			, editorStateEyeSpeed = Vec3 0 0 0
@@ -126,7 +179,9 @@ main = handle errorHandler $ withBook $ \bk -> do
 			, editorStateLightColor = vecFromScalar 10
 			, editorStateAmbientLightColor = vecFromScalar 0.01
 			, editorStateGeometry = initialGeometry
-			, editorStateTexture = initialTexture
+			, editorStateAlbedoTextureCell = initialAlbedoTextureCell
+			, editorStateNormalTextureCell = initialNormalTextureCell
+			, editorStateLinearFiltering = False
 			}
 
 	-- render pipeline
@@ -154,12 +209,18 @@ main = handle errorHandler $ withBook $ \bk -> do
 		aNormal <- vertexAttribute 0 0 $ vertexNormalAttribute v
 		aTexcoord <- vertexAttribute 0 0 $ vertexTexcoordAttribute v
 		worldPosition <- temp $ mul uWorld $ cvec31 aPosition (constf 1)
-		viewNormal <- temp $ xyz__ $ mul uView $ cvec31 aNormal (constf 0)
-		rasterize (mul uViewProj worldPosition) $ do
+		viewPosition <- temp $ uView `mul` worldPosition
+		vertexViewNormal <- temp $ xyz__ $ mul uView $ cvec31 aNormal (constf 0)
+		rasterize (uViewProj `mul` worldPosition) $ do
 			albedo <- temp $ sample (sampler2D3f 0) aTexcoord
+			normalTexcoord <- temp $ aTexcoord * vecFromScalar 50
+			(viewTangent, viewBinormal, viewNormal) <- tangentFrame (xyz__ viewPosition) vertexViewNormal normalTexcoord
+			bentNormalXY <- temp $ sample (sampler2D2f 1) normalTexcoord * vecFromScalar 2 - vecFromScalar 1
+			bentNormal <- temp $ cvec21 bentNormalXY $ sqrt $ 1 - dot bentNormalXY bentNormalXY
+			resultViewNormal <- temp $ normalize $ viewTangent * xxx__ bentNormal + viewBinormal * yyy__ bentNormal + viewNormal * zzz__ bentNormal
 			let emission = 0
 			let occlusion = 1
-			outputDeferredPipelineOpaquePass (albedo * vecFromScalar emission) (cvec31 albedo occlusion) uMaterial viewNormal
+			outputDeferredPipelineOpaquePass (albedo * vecFromScalar emission) (cvec31 albedo occlusion) uMaterial resultViewNormal
 	-- light program
 	screenQuadRenderer <- book bk $ newScreenQuadRenderer device
 	lightProgram <- book bk $ createProgram device $ deferredPipelineLightPassProgram uInvProj $ \viewPosition -> do
@@ -174,6 +235,12 @@ main = handle errorHandler $ withBook $ \bk -> do
 		xyY <- xyz2xyY =<< rgb2xyz (sample (sampler2D3f 0) $ zw__ screenPositionTexcoord)
 		rgb <- xyz2rgb =<< xyY2xyz (cvec111 (x_ xyY) (y_ xyY) (z_ xyY / (1 + z_ xyY)))
 		colorTarget 0 $ cvec31 rgb 1
+
+	linearSamplerState <- book bk $ createSamplerState device defaultSamplerStateInfo
+		{ samplerMinFilter = SamplerLinearFilter
+		, samplerMipFilter = SamplerLinearFilter
+		, samplerMagFilter = SamplerLinearFilter
+		}
 
 	let cameraNearPlane = 0.01
 	let cameraFarPlane = 1000
@@ -195,17 +262,14 @@ main = handle errorHandler $ withBook $ \bk -> do
 			Left err -> do
 				putStrLn $ T.unpack err
 
-	let loadTextureFile fileName = handle errorHandler $ do
+	let loadTextureFile fileName = do
 		bytes <- B.readFile $ T.unpack fileName
 		PackedTexture
 			{ packedTextureBytes = textureBytes
 			, packedTextureInfo = textureInfo
 			} <- loadTexture bytes
 		(compressedTextureInfo, compressedTextureBytes) <- dxtCompressTexture textureInfo textureBytes
-		texture <- book bk $ createStaticTexture device compressedTextureInfo defaultSamplerStateInfo compressedTextureBytes
-		atomically $ modifyTVar' editorStateVar $ \state -> state
-			{ editorStateTexture = texture
-			}
+		createStaticTexture device compressedTextureInfo defaultSamplerStateInfo compressedTextureBytes
 
 	-- input callback
 	let inputCallback inputEvent InputState
@@ -258,7 +322,21 @@ main = handle errorHandler $ withBook $ \bk -> do
 		textureFileElement <- newFileElement metrics
 		setClickHandler textureFileElement $ do
 			fileName <- getText textureFileElement
-			asyncRunInFlow flow $ loadTextureFile fileName
+			asyncRunInFlow flow $ handle errorHandler $ do
+				EditorState
+					{ editorStateAlbedoTextureCell = TextureCell
+						{ textureCellBook = cellBook
+						}
+					} <- readTVarIO editorStateVar
+				freePreviousTexture <- releaseBook cellBook
+				albedoTexture <- book cellBook $ loadTextureFile fileName
+				atomically $ modifyTVar' editorStateVar $ \s -> s
+					{ editorStateAlbedoTextureCell = TextureCell
+						{ textureCellBook = cellBook
+						, textureCellTexture = albedoTexture
+						}
+					}
+				freePreviousTexture
 		lightIntensitySlider <- newSlider metrics 0.01
 		setFloatValue lightIntensitySlider 0.5
 		setChangeHandler lightIntensitySlider $ do
@@ -302,6 +380,12 @@ main = handle errorHandler $ withBook $ \bk -> do
 			modifyTVar' editorStateVar $ \s -> s
 				{ editorStateMaterial = editorStateMaterial s * Vec4 1 1 1 0 + Vec4 0 0 0 value
 				}
+		linearFilteringCheckBox <- newLabeledCheckBox "enable"
+		setChangeHandler linearFilteringCheckBox $ do
+			checked <- getChecked linearFilteringCheckBox
+			modifyTVar' editorStateVar $ \s -> s
+				{ editorStateLinearFiltering = checked
+				}
 		propertiesFrame <- frameFlowLayout metrics $ do
 			labeledFlowLayout "collada file" $ elementInFlowLayout colladaFileElement
 			labeledFlowLayout "collada node" $ elementInFlowLayout colladaNodeEditBox
@@ -312,6 +396,7 @@ main = handle errorHandler $ withBook $ \bk -> do
 			labeledFlowLayout "specular" $ elementInFlowLayout specularSlider
 			labeledFlowLayout "metalness" $ elementInFlowLayout metalnessSlider
 			labeledFlowLayout "glossiness" $ elementInFlowLayout glossinessSlider
+			labeledFlowLayout "linear filtering" $ elementInFlowLayout linearFilteringCheckBox
 		setText propertiesFrame "properties"
 		propertiesFrameChild <- addFreeChild windowPanel propertiesFrame
 		setSelfFreeChild propertiesFrame windowPanel propertiesFrameChild True
@@ -385,7 +470,13 @@ main = handle errorHandler $ withBook $ \bk -> do
 					, geometryIndexBuffer = ibObject
 					, geometryIndicesCount = icObject
 					}
-				, editorStateTexture = tObject
+				, editorStateAlbedoTextureCell = TextureCell
+					{ textureCellTexture = tAlbedo
+					}
+				, editorStateNormalTextureCell = TextureCell
+					{ textureCellTexture = tNormal
+					}
+				, editorStateLinearFiltering = linearFiltering
 				} <- liftIO $ readTVarIO editorStateVar
 
 			deferredPipeline@DeferredPipeline
@@ -425,7 +516,8 @@ main = handle errorHandler $ withBook $ \bk -> do
 				renderUniformStorage usObject
 				renderVertexBuffer 0 vbObject
 				renderIndexBuffer ibObject
-				renderSampler 0 tObject nullSamplerState
+				renderSampler 0 tAlbedo (if linearFiltering then linearSamplerState else nullSamplerState)
+				renderSampler 1 tNormal (if linearFiltering then linearSamplerState else nullSamplerState)
 				renderUniform usObject uWorld (affineIdentity :: Float4x4)
 				renderUniform usObject uMaterial material
 				renderUploadUniformStorage usObject
