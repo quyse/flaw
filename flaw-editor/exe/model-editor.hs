@@ -104,15 +104,11 @@ main = handle errorHandler $ withBook $ \bk -> do
 	sphereGeometry <- book bk $ do
 		let f alpha beta = VertexPNT
 			{ f_VertexPNT_position = p
-			--, f_VertexPNT_normal = Vec3 (cos alpha) (sin alpha) 0
-			--, f_VertexPNT_texcoord = Vec2 alpha beta
 			, f_VertexPNT_normal = p
 			, f_VertexPNT_texcoord = Vec2 (alpha / (pi * 2)) (beta / pi + 0.5)
 			}
 			where p = Vec3 (cos alpha * cos beta) (sin alpha * cos beta) (sin beta)
 		loadPackedGeometry device =<< packGeometry (sphereVertices f 16 16)
-		--	where p = Vec3 (cos alpha) (sin alpha) beta
-		--loadPackedGeometry device =<< packGeometry (openCylinderVertices f 64 64)
 
 	-- editor state
 	editorStateVar <- do
@@ -133,16 +129,11 @@ main = handle errorHandler $ withBook $ \bk -> do
 					, textureFormatColorSpace = StandardColorSpace
 					}
 				, textureCount = 0
-				} defaultSamplerStateInfo
-				{ samplerMinFilter = SamplerLinearFilter
-				, samplerMipFilter = SamplerLinearFilter
-				, samplerMagFilter = SamplerLinearFilter
-				} $ B.pack $ do
+				} defaultSamplerStateInfo $ B.pack $ do
 				i <- [0..(height - 1)]
 				j <- [0..(width - 1)]
-				--let c = if (i `quot` step + j `quot` step) `rem` 2 == 0 then 255 else 0
-				--[c, c, c, 255]
-				[127, 127, 127, 255]
+				let c = if (i `quot` step + j `quot` step) `rem` 2 == 0 then 255 else 0
+				[c, c, c, 255]
 		initialNormalTextureCell <- book bk $ newTextureCell $ do
 			let
 				width = 256
@@ -170,11 +161,7 @@ main = handle errorHandler $ withBook $ \bk -> do
 						if height - i < j then Vec3 0 1 1
 						else Vec3 (-1) 0 1
 				[fromIntegral (floor (x * 127) + 127 :: Int), fromIntegral (floor (y * 127) + 127 :: Int)]
-			createStaticTexture device compressedTextureInfo defaultSamplerStateInfo
-				{- samplerMinFilter = SamplerLinearFilter
-				, samplerMipFilter = SamplerLinearFilter
-				, samplerMagFilter = SamplerLinearFilter
-				-} compressedTextureBytes
+			createStaticTexture device compressedTextureInfo defaultSamplerStateInfo compressedTextureBytes
 		newTVarIO EditorState
 			{ editorStateEyePosition = Vec3 (-2) 0 1
 			, editorStateEyeSpeed = Vec3 0 0 0
