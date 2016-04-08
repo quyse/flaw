@@ -388,6 +388,7 @@ hlslGenerateProgram state = program where
 			Combine3VecNode _ _ _ t a b c -> func3Source (valueTypeSource t) a b c
 			Combine4VecNode _ _ _ _ t a b c d -> func4Source (valueTypeSource t) a b c d
 			ScreenToTextureNode _ a -> "(" <> nodeSource a <> ") * float2(0.5f, -0.5f) + float2(0.5f, 0.5f)"
+			NormalizeSampledDepthNode a -> nodeSource a
 			FragCoordNode -> "sP"
 
 		binaryOpSource :: Builder -> Node a -> Node b -> Builder

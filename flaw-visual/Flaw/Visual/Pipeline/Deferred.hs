@@ -166,7 +166,7 @@ deferredPipelineLightPassInput texcoord = do
 	albedoOcclusion <- temp $ sample (sampler2D4f 4) texcoord
 	material <- temp $ sample (sampler2D4f 5) texcoord
 	normal <- decodeLambertAzimuthalEqualArea =<< temp (sample (sampler2D2f 6) texcoord)
-	depth <- temp $ sample (sampler2Df 7) texcoord * 2 - 1
+	depth <- temp $ normalizeSampledDepth $ sample (sampler2Df 7) texcoord
 	return (albedoOcclusion, material, normal, depth)
 
 -- | Light pass program.

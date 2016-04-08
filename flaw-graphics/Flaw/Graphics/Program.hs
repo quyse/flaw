@@ -50,6 +50,7 @@ module Flaw.Graphics.Program
 	, instanceId
 	, invSqrt
 	, screenToTexture
+	, normalizeSampledDepth
 	, fragCoord
 	) where
 
@@ -492,6 +493,9 @@ invSqrt a = InvSqrtNode (nodeValueType a) a
 
 screenToTexture :: OfValueType a => Node a -> Node a
 screenToTexture a = ScreenToTextureNode (nodeValueType a) a
+
+normalizeSampledDepth :: Node Float -> Node Float
+normalizeSampledDepth = NormalizeSampledDepthNode
 
 fragCoord :: Node Float4
 fragCoord = FragCoordNode
