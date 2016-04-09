@@ -58,13 +58,19 @@ data DeferredPipeline d = DeferredPipeline
 
 newDeferredPipeline :: Device d => d -> Int -> Int -> IO (DeferredPipeline d, IO ())
 newDeferredPipeline device width height = withSpecialBook $ \bk -> do
+	let samplerStateInfo = defaultSamplerStateInfo
+		{ samplerWrapU = SamplerWrapClamp
+		, samplerWrapV = SamplerWrapClamp
+		, samplerWrapW = SamplerWrapClamp
+		}
+
 	-- albedo-occlusion RT
 	(albedoOcclusionRT, albedoOcclusionRTT) <- book bk $ createReadableRenderTarget device width height UncompressedTextureFormat
 		{ textureFormatComponents = PixelRGBA
 		, textureFormatValueType = PixelUint
 		, textureFormatPixelSize = Pixel32bit
 		, textureFormatColorSpace = StandardColorSpace
-		} defaultSamplerStateInfo
+		} samplerStateInfo
 
 	-- material RT
 	(materialRT, materialRTT) <- book bk $ createReadableRenderTarget device width height UncompressedTextureFormat
@@ -72,7 +78,7 @@ newDeferredPipeline device width height = withSpecialBook $ \bk -> do
 		, textureFormatValueType = PixelUint
 		, textureFormatPixelSize = Pixel32bit
 		, textureFormatColorSpace = LinearColorSpace
-		} defaultSamplerStateInfo
+		} samplerStateInfo
 
 	-- normals RT
 	(normalsRT, normalsRTT) <- book bk $ createReadableRenderTarget device width height UncompressedTextureFormat
@@ -80,7 +86,7 @@ newDeferredPipeline device width height = withSpecialBook $ \bk -> do
 		, textureFormatValueType = PixelUint
 		, textureFormatPixelSize = Pixel32bit
 		, textureFormatColorSpace = LinearColorSpace
-		} defaultSamplerStateInfo
+		} samplerStateInfo
 
 	-- depth-stencil target
 	(opaqueDST, opaqueDSTT) <- book bk $ createReadableDepthStencilTarget device width height
@@ -91,7 +97,7 @@ newDeferredPipeline device width height = withSpecialBook $ \bk -> do
 		, textureFormatValueType = PixelFloat
 		, textureFormatPixelSize = Pixel32bit
 		, textureFormatColorSpace = LinearColorSpace
-		} defaultSamplerStateInfo
+		} samplerStateInfo
 
 	-- framebuffer for opaque pass
 	opaquePassFrameBuffer <- book bk $ createFrameBuffer device [colorRT, albedoOcclusionRT, materialRT, normalsRT] opaqueDST
