@@ -17,6 +17,7 @@ module Flaw.Visual
 	, lambertReflectance
 	, schulerSpecularReflectance
 	, schulerAmbientReflectance
+	, gaussianWeights
 	) where
 
 import Flaw.Graphics.Program
@@ -124,3 +125,14 @@ schulerAmbientReflectance normal toEyeDirection specular glossiness = do
 	t2 <- temp $ t * t
 	t4 <- temp $ t2 * t2
 	temp $ lerp specular (min_ (specular * 60) 1) t4
+
+-- | Calculate gaussian weights.
+-- Accepts half-number of taps, so with n = 3 it will be 7 weights.
+gaussianWeights :: Int -> [Float]
+gaussianWeights tapsHalfCount = weights where
+	-- 3-sigma rule
+	sigma = fromIntegral tapsHalfCount / 3
+	a = 1 / (sqrt (2 * pi) * sigma)
+	b = (-1) / (2 * sigma * sigma)
+	gauss x = a * exp (b * x * x)
+	weights = map (gauss . fromIntegral) $ [(-tapsHalfCount) .. tapsHalfCount]
