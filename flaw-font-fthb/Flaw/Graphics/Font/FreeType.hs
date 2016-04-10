@@ -16,6 +16,7 @@ module Flaw.Graphics.Font.FreeType
 	) where
 
 import Codec.Picture
+import Control.Exception
 import Control.Monad
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Unsafe as B
@@ -108,8 +109,27 @@ createFreeTypeGlyphs FreeTypeFont
 	-- get number of glyphs
 	glyphsCount <- flaw_ft_get_num_glyphs ftFace
 
+	-- some glyphs fail to load; skip them for the moment
+	let
+		handleError :: SomeException -> IO (Image Pixel8, GlyphInfo)
+		handleError _ = return
+			( Image
+				{ imageWidth = 1
+				, imageHeight = 1
+				, imageData = VS.singleton 0
+				}
+			, GlyphInfo
+				{ glyphWidth = 1
+				, glyphHeight = 1
+				, glyphLeftTopX = 0
+				, glyphLeftTopY = 0
+				, glyphOffsetX = 0
+				, glyphOffsetY = 0
+				}
+			)
+
 	-- create glyph images and infos
-	imagesAndInfos <- V.generateM (fromIntegral glyphsCount) $ \glyphIndex -> do
+	imagesAndInfos <- V.generateM (fromIntegral glyphsCount) $ \glyphIndex -> handle handleError $ do
 
 		-- load and render glyph
 		do
