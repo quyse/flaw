@@ -103,6 +103,25 @@ extern "C" void flaw_bullet_getRigidBodyTransform(BulletRigidBody* rigidBody, fl
 	position[2] = p.z();
 }
 
+extern "C" btGhostObject* flaw_bullet_newGhost(BulletWorld* world, btCollisionShape* shape, float* position, float* orientation)
+{
+	btGhostObject* ghostObject = new btGhostObject();
+	ghostObject->setCollisionShape(shape);
+	ghostObject->setWorldTransform(btTransform(btQuaternion(orientation[0], orientation[1], orientation[2], orientation[3]), btVector3(position[0], position[1], position[2])));
+	world->dynamicsWorld->addCollisionObject(ghostObject);
+	return ghostObject;
+}
+
+extern "C" void flaw_bullet_freeGhost(BulletWorld* world, btGhostObject* ghostObject)
+{
+	delete ghostObject;
+}
+
+extern "C" void flaw_bullet_setGhostTransform(BulletWorld* world, btGhostObject* ghostObject, float* position, float* orientation)
+{
+	ghostObject->setWorldTransform(btTransform(btQuaternion(orientation[0], orientation[1], orientation[2], orientation[3]), btVector3(position[0], position[1], position[2])));
+}
+
 extern "C" void flaw_bullet_stepWorld(BulletWorld* world, float step, int stepCount)
 {
 	world->dynamicsWorld->stepSimulation(step * stepCount, stepCount, step);

@@ -29,6 +29,7 @@ instance World BulletWorld where
 
 	newtype Shape BulletWorld = BulletShape (Ptr C_btCollisionShape)
 	newtype Body BulletWorld = BulletBody (Ptr C_BulletRigidBody)
+	newtype Ghost BulletWorld = BulletGhost (Ptr C_BulletGhost)
 
 	createBoxShape (BulletWorld pWorld) halfSize = do
 		pShape <- with halfSize $ \halfSizePtr -> flaw_bullet_newBoxShape pWorld (castPtr halfSizePtr)
@@ -58,6 +59,13 @@ instance World BulletWorld where
 		orientation <- peek $ castPtr orientationPtr
 		return (position, FloatQ orientation)
 
+	createGhost (BulletWorld pWorld) (BulletShape pShape) position (FloatQ orientation) = do
+		pGhost <- with position $ \positionPtr -> with orientation $ \orientationPtr -> flaw_bullet_newGhost pWorld pShape (castPtr positionPtr) (castPtr orientationPtr)
+		return (BulletGhost pGhost, flaw_bullet_freeGhost pWorld pGhost)
+
+	setGhostTransform (BulletWorld pWorld) (BulletGhost pGhost) position (FloatQ orientation) =
+		with position $ \positionPtr -> with orientation $ \orientationPtr -> flaw_bullet_setGhostTransform pWorld pGhost (castPtr positionPtr) (castPtr orientationPtr)
+
 	simulate (BulletWorld pWorld) step stepCount = flaw_bullet_stepWorld pWorld (coerce step) (fromIntegral stepCount)
 
 initBulletWorld :: IO (BulletWorld, IO ())
@@ -68,6 +76,7 @@ initBulletWorld = do
 data C_BulletWorld
 data C_btCollisionShape
 data C_BulletRigidBody
+data C_BulletGhost
 
 foreign import ccall safe flaw_bullet_newWorld :: IO (Ptr C_BulletWorld)
 foreign import ccall safe flaw_bullet_freeWorld :: Ptr C_BulletWorld -> IO ()
@@ -78,4 +87,7 @@ foreign import ccall safe flaw_bullet_freeShape :: Ptr C_btCollisionShape -> IO 
 foreign import ccall safe flaw_bullet_newRigidBody :: Ptr C_BulletWorld -> Ptr C_btCollisionShape -> Ptr CFloat -> Ptr CFloat -> CFloat -> IO (Ptr C_BulletRigidBody)
 foreign import ccall safe flaw_bullet_freeRigidBody :: Ptr C_BulletWorld -> Ptr C_BulletRigidBody -> IO ()
 foreign import ccall unsafe flaw_bullet_getRigidBodyTransform :: Ptr C_BulletRigidBody -> Ptr CFloat -> Ptr CFloat -> IO ()
+foreign import ccall safe flaw_bullet_newGhost :: Ptr C_BulletWorld -> Ptr C_btCollisionShape -> Ptr CFloat -> Ptr CFloat -> IO (Ptr C_BulletGhost)
+foreign import ccall safe flaw_bullet_freeGhost :: Ptr C_BulletWorld -> Ptr C_BulletGhost -> IO ()
+foreign import ccall unsafe flaw_bullet_setGhostTransform :: Ptr C_BulletWorld -> Ptr C_BulletGhost -> Ptr CFloat -> Ptr CFloat -> IO ()
 foreign import ccall safe flaw_bullet_stepWorld :: Ptr C_BulletWorld -> CFloat -> CInt -> IO ()

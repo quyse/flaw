@@ -25,6 +25,7 @@ data Motion
 class World w where
 	data Shape w :: *
 	data Body w :: *
+	data Ghost w :: *
 	createBoxShape :: w -> Float3 -> IO (Shape w, IO ())
 	createSphereShape :: w -> Float -> IO (Shape w, IO ())
 	createConvexHullShape :: w -> V.Vector Float3 -> IO (Shape w, IO ())
@@ -37,6 +38,10 @@ class World w where
 		-> FloatQ -- ^ Initial orientation.
 		-> IO (Body w, IO ())
 	getBodyTransform :: w -> Body w -> IO (Float3, FloatQ)
+	-- | Create ghost object.
+	createGhost :: w -> Shape w -> Float3 -> FloatQ -> IO (Ghost w, IO ())
+	-- | Set ghost transform.
+	setGhostTransform :: w -> Ghost w -> Float3 -> FloatQ -> IO ()
 	-- | Advance simulation.
 	simulate
 		:: w
