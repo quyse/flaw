@@ -6,8 +6,10 @@ License: MIT
 
 module Flaw.Flow
 	( forkFlow
+	, forkFlowOS
 	, Flow()
 	, newFlow
+	, newFlowOS
 	, asyncRunInFlow
 	, runInFlow
 	, exitFlow
@@ -21,9 +23,17 @@ import Control.Monad
 -- | Fork a thread.
 {-# INLINE forkFlow #-}
 forkFlow :: IO () -> IO ((), IO ())
-forkFlow work = do
+forkFlow = forkFlowInternal forkFinally
+
+-- | Fork an OS thread.
+{-# INLINE forkFlowOS #-}
+forkFlowOS :: IO () -> IO ((), IO ())
+forkFlowOS = forkFlowInternal $ \action andThen -> mask $ \restore -> forkOS $ try (restore action) >>= andThen
+
+forkFlowInternal :: (IO () -> (Either SomeException () -> IO ()) -> IO ThreadId) -> IO () -> IO ((), IO ())
+forkFlowInternal f work = do
 	stoppedVar <- newEmptyMVar
-	threadId <- forkFinally work $ \_ -> putMVar stoppedVar ()
+	threadId <- f work $ \_ -> putMVar stoppedVar ()
 	let stop = do
 		killThread threadId
 		takeMVar stoppedVar
@@ -36,9 +46,17 @@ newtype Flow = Flow (TQueue (IO ()))
 -- thread, and booked into Flaw.Book.
 {-# INLINE newFlow #-}
 newFlow :: IO (Flow, IO ())
-newFlow = do
+newFlow = newFlowInternal forkFlow
+
+-- | Create operation flow in a bound thread.
+{-# INLINE newFlowOS #-}
+newFlowOS :: IO (Flow, IO ())
+newFlowOS = newFlowInternal forkFlowOS
+
+newFlowInternal :: (IO () -> IO ((), IO ())) -> IO (Flow, IO ())
+newFlowInternal f = do
 	queue <- newTQueueIO
-	((), stop) <- forkFlow $ runOperations queue
+	((), stop) <- f $ runOperations queue
 	return (Flow queue, stop)
 
 {-# INLINE asyncRunInFlow #-}
@@ -51,7 +69,7 @@ asyncRunInFlow (Flow queue) operation = writeTQueue queue $ do
 runInFlow :: Flow -> IO a -> IO a
 runInFlow flow operation = do
 	resultVar <- newEmptyMVar
-	atomically $ asyncRunInFlow flow $ putMVar resultVar =<< handle (return . Left) (fmap Right operation)
+	atomically $ asyncRunInFlow flow $ putMVar resultVar =<< try operation
 	r <- takeMVar resultVar
 	case r of
 		Right a -> return a
