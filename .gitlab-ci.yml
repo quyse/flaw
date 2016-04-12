@@ -7,6 +7,7 @@ variables:
     flaw-app
     flaw-asset
     flaw-asset-dxt
+    flaw-audio
     flaw-base
     flaw-build
     flaw-bullet
@@ -38,6 +39,7 @@ variables:
     flaw-app
     flaw-asset
     flaw-asset-dxt
+    flaw-audio
     flaw-base
     flaw-build
     flaw-bullet
@@ -67,6 +69,7 @@ variables:
   PACKAGES_WEB: >-
     flaw-app
     flaw-asset
+    flaw-audio
     flaw-base
     flaw-build
     flaw-canvas

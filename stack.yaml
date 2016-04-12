@@ -4,6 +4,7 @@ packages:
 - flaw-app
 - flaw-asset
 - flaw-asset-dxt
+- flaw-audio
 - flaw-base
 - flaw-build
 - flaw-bullet
