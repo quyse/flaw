@@ -4,6 +4,7 @@ before_script:
 
 variables:
   PACKAGES_LINUX: >-
+    flaw-al
     flaw-app
     flaw-asset
     flaw-asset-dxt
@@ -36,6 +37,7 @@ variables:
     flaw-visual
     flaw-window
   PACKAGES_WINDOWS: >-
+    flaw-al
     flaw-app
     flaw-asset
     flaw-asset-dxt

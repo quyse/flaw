@@ -1,6 +1,7 @@
 resolver: lts-5.9
 
 packages:
+- flaw-al
 - flaw-app
 - flaw-asset
 - flaw-asset-dxt

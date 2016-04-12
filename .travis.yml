@@ -12,6 +12,7 @@ matrix:
       apt:
         packages:
         - ghc-7.10.3
+        - libopenal-dev
         sources:
         - hvr-ghc
   - os: linux
@@ -20,6 +21,7 @@ matrix:
       apt:
         packages:
         - ghc-head
+        - libopenal-dev
         sources:
         - hvr-ghc
   - os: osx
@@ -40,12 +42,13 @@ before_install:
     ;;
   osx)
     brew update && \
-    brew install haskell-stack sdl2
+    brew install haskell-stack openal-soft sdl2
     ;;
   esac
 
 script: >-
   stack --no-terminal --install-ghc test
+  flaw-al
   flaw-app
   flaw-asset
   flaw-asset-dxt
