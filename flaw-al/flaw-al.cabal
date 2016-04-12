@@ -37,4 +37,7 @@ library
   if os(windows)
     extra-libraries:     OpenAL32
   else
-    extra-libraries:     openal
+    if os(darwin) || os(ios)
+      frameworks:          OpenAL
+    else
+      extra-libraries:     openal
