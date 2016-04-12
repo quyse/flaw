@@ -34,4 +34,7 @@ library
     cpp-options:         -DAL_ERROR_LEVEL=1
   -- hs-source-dirs:      
   default-language:    Haskell2010
-  extra-libraries:     openal
+  if os(windows)
+    extra-libraries:     OpenAL32
+  else
+    extra-libraries:     openal
