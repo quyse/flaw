@@ -42,7 +42,7 @@ before_install:
     ;;
   osx)
     brew update && \
-    brew install haskell-stack openal-soft sdl2
+    brew install haskell-stack sdl2
     ;;
   esac
 
