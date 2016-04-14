@@ -14,9 +14,12 @@ module Flaw.Audio.OpenAL
 import Control.Concurrent.STM
 import Control.Exception
 import Control.Monad
+import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Unsafe as B
 import Data.Foldable
+import Data.IORef
 import Foreign.Marshal.Alloc
+import Foreign.Marshal.Array
 import Foreign.Marshal.Utils
 import Foreign.Ptr
 import Foreign.Storable
@@ -30,13 +33,29 @@ import Flaw.Math
 
 data AlDevice = AlDevice
 	{ alDeviceFlow :: {-# UNPACK #-} !Flow
+	-- | Operations to be executed during next tick.
 	, alDeviceDeferredOperationsVar :: {-# UNPACK #-} !(TVar [IO ()])
+	-- | Operations repeatedly executed during ticks.
+	, alDeviceRepeatOperationsRef :: {-# UNPACK #-} !(IORef [(ALuint, IO ())])
+	}
+
+data AlSoundSource
+	= AlBufferedSoundSource
+		{ alSoundSourceBufferName :: {-# UNPACK #-} !ALuint
+		}
+	| AlStreamingSoundSource
+		{ alSoundSourceStream :: !(IO ((SoundFormat, TVar BL.ByteString), IO ()))
+		}
+
+data AlStreamingState = AlStreamingState
+	{ alStreamingStateBusyBuffers :: [ALuint]
+	, alStreamingStateFreeBuffers :: [ALuint]
 	}
 
 instance Device AlDevice where
 	data SoundId AlDevice = AlSoundId
 		{ alSoundDevice :: !AlDevice
-		, alSoundBufferName :: {-# UNPACK #-} !ALuint
+		, alSoundSource :: !AlSoundSource
 		}
 	data SoundPlayerId AlDevice = AlSoundPlayerId
 		{ alSoundPlayerDevice :: !AlDevice
@@ -63,25 +82,129 @@ instance Device AlDevice where
 		alCheckErrors1 "create sound"
 		return AlSoundId
 			{ alSoundDevice = device
-			, alSoundBufferName = bufferName
+			, alSoundSource = AlBufferedSoundSource
+				{ alSoundSourceBufferName = bufferName
+				}
 			}
+
+	createStreamingSound device stream = return (AlSoundId
+		{ alSoundDevice = device
+		, alSoundSource = AlStreamingSoundSource
+			{ alSoundSourceStream = stream
+			}
+		}, return ())
 
 	createSoundPlayer AlSoundId
 		{ alSoundDevice = device@AlDevice
 			{ alDeviceFlow = flow
+			, alDeviceRepeatOperationsRef = repeatOperationsRef
 			}
-		, alSoundBufferName = bufferName
+		, alSoundSource = soundSource
 		} = describeException "failed to create OpenAL sound player" $ runInFlow flow $ withSpecialBook $ \bk -> do
 		-- allocate source name
 		sourceName <- alloca $ \sourceNamePtr -> do
 			alGenSources 1 sourceNamePtr
 			peek sourceNamePtr
 		alCheckErrors0 "gen source"
-		book bk $ return ((), atomically $ alDeferredOperation device $ with sourceName $ alDeleteSources 1)
+		book bk $ return ((), atomically $ alDeferredOperation device $ do
+			alSourceStop sourceName
+			with sourceName $ alDeleteSources 1
+			)
 
-		-- set source
-		alSourcei sourceName AL_BUFFER (fromIntegral bufferName)
-		alCheckErrors0 "set source buffer"
+		-- setup sound source
+		case soundSource of
+			AlBufferedSoundSource
+				{ alSoundSourceBufferName = bufferName
+				} -> do
+				-- for buffered sound just set buffer for the source
+				alSourcei sourceName AL_BUFFER (fromIntegral bufferName)
+				alCheckErrors0 "set source buffer"
+			AlStreamingSoundSource
+				{ alSoundSourceStream = stream
+				} -> do
+				-- create a few buffers for streaming
+				buffers <- forM [1..2 :: Int] $ \_i -> do
+					-- allocate buffer name
+					bufferName <- alloca $ \bufferNamePtr -> do
+						alGenBuffers 1 bufferNamePtr
+						peek bufferNamePtr
+					alCheckErrors0 "gen buffer"
+					book bk $ return (bufferName, atomically $ alDeferredOperation device $ with bufferName $ alDeleteBuffers 1)
+				-- start streaming
+				(format@SoundFormat
+					{ soundFormatSamplesPerSecond = samplesPerSecond
+					, soundFormatSampleType = sampleType
+					, soundFormatChannelsCount = channelsCount
+					}, bytesVar) <- book bk stream
+				-- create state ref
+				stateRef <- newIORef AlStreamingState
+					{ alStreamingStateFreeBuffers = buffers
+					, alStreamingStateBusyBuffers = []
+					}
+				-- some arbitrary size of a single streaming buffer
+				let bufferTime = 1 -- second
+				let bufferSize = bufferTime * channelsCount * samplesPerSecond * soundSampleSize sampleType
+				-- repeat operation for feeding buffers
+				let feed = do
+					-- get number of processed buffers
+					processedCount <- alloca $ \processedCountPtr -> do
+						alGetSourcei sourceName AL_BUFFERS_PROCESSED processedCountPtr
+						fromIntegral <$> peek processedCountPtr
+					-- if there're some, unqueue them
+					when (processedCount > 0) $ do
+						state@AlStreamingState
+							{ alStreamingStateFreeBuffers = freeBuffers
+							, alStreamingStateBusyBuffers = busyBuffers
+							} <- readIORef stateRef
+						let (buffersToUnqueue, restBusyBuffers) = splitAt processedCount busyBuffers
+						withArray buffersToUnqueue $ alSourceUnqueueBuffers sourceName (fromIntegral processedCount)
+						alCheckErrors0 "unqueue buffers"
+						writeIORef stateRef state
+							{ alStreamingStateFreeBuffers = freeBuffers ++ buffersToUnqueue
+							, alStreamingStateBusyBuffers = restBusyBuffers
+							}
+					-- get number of free buffers
+					state@AlStreamingState
+						{ alStreamingStateFreeBuffers = freeBuffers
+						, alStreamingStateBusyBuffers = busyBuffers
+						} <- readIORef stateRef
+					let freeBuffersCount = length freeBuffers
+					-- if there're at least one free buffer, try to pull data from stream and enqueue it
+					when (freeBuffersCount > 0) $ do
+						-- get bytes
+						(feedBytes, buffersToFeedCount) <- atomically $ do
+							bytes <- readTVar bytesVar
+							let bytesLength = fromIntegral $ BL.length bytes
+							let buffersToFeedCount = bytesLength `quot` bufferSize
+							if buffersToFeedCount > 0 then do
+								let (feedBytes, restBytes) = BL.splitAt (fromIntegral $ buffersToFeedCount * bufferSize) bytes
+								writeTVar bytesVar restBytes
+								return (feedBytes, buffersToFeedCount)
+							else return (BL.empty, 0)
+						-- if there're some data
+						when (buffersToFeedCount > 0) $ do
+							-- put data into buffers
+							let
+								(freeBuffersToFeed, restFreeBuffers) = splitAt buffersToFeedCount freeBuffers
+								feedBuffer (bufferName : restBufferNames) tailFeedBytes = do
+									let (chunkBytes, restTailFeedBytes) = BL.splitAt (fromIntegral bufferSize) tailFeedBytes
+									B.unsafeUseAsCString (BL.toStrict chunkBytes) $ \feedBytesPtr ->
+										alBufferData bufferName (alConvertFormat format) (castPtr feedBytesPtr) (fromIntegral bufferSize) (fromIntegral samplesPerSecond)
+									alCheckErrors0 "feed buffer"
+									feedBuffer restBufferNames restTailFeedBytes
+								feedBuffer [] _ = return ()
+							feedBuffer freeBuffersToFeed feedBytes
+							-- enqueue them
+							withArray freeBuffersToFeed $ alSourceQueueBuffers sourceName (fromIntegral buffersToFeedCount)
+							alCheckErrors0 "queue buffers"
+							-- change state
+							writeIORef stateRef state
+								{ alStreamingStateFreeBuffers = restFreeBuffers
+								, alStreamingStateBusyBuffers = busyBuffers ++ freeBuffersToFeed
+								}
+				-- register operation
+				modifyIORef' repeatOperationsRef ((sourceName, feed) :)
+				book bk $ return ((), atomically $ alDeferredOperation device $ modifyIORef' repeatOperationsRef $ filter ((/= sourceName) . fst))
 
 		alCheckErrors1 "create sound player"
 		return AlSoundPlayerId
@@ -91,7 +214,10 @@ instance Device AlDevice where
 
 	tickAudio device@AlDevice
 		{ alDeviceFlow = flow
-		} = runInFlow flow $ alRunDeferredOperations device
+		, alDeviceRepeatOperationsRef = repeatOperationsRef
+		} = runInFlow flow $ do
+		alRunDeferredOperations device
+		join $ sequence_ . map snd <$> readIORef repeatOperationsRef
 
 	playSound AlSoundPlayerId
 		{ alSoundPlayerDevice = device
@@ -142,11 +268,14 @@ createAlDevice = describeException "failed to create OpenAL device" $ withSpecia
 	flow <- book bk newFlowOS
 	-- create var for deferred operations
 	deferredOperationsVar <- newTVarIO []
+	-- create ref for repeat operations
+	repeatOperationsRef <- newIORef []
 
 	-- device struct
 	let device = AlDevice
 		{ alDeviceFlow = flow
 		, alDeviceDeferredOperationsVar = deferredOperationsVar
+		, alDeviceRepeatOperationsRef = repeatOperationsRef
 		}
 
 	-- open audio device
@@ -205,7 +334,9 @@ alRunDeferredOperations AlDevice
 	} = join $ atomically $ do
 	deferredOperations <- readTVar deferredOperationsVar
 	writeTVar deferredOperationsVar []
-	return $ foldrM const () deferredOperations
+	return $ do
+		foldrM const () deferredOperations
+		alCheckErrors1 "deferred operations"
 
 -- | Check for OpenAL errors, throw an exception if there's some.
 alCheckErrors :: String -> IO ()

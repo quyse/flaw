@@ -39,9 +39,12 @@ module Flaw.Audio.OpenAL.FFI
 	, alDeleteSources
 	, alSourcei
 	, alSource3f
+	, alGetSourcei
 	, alSourcePlay
 	, alSourcePause
 	, alSourceStop
+	, alSourceQueueBuffers
+	, alSourceUnqueueBuffers
 	-- * AL enums
 	, pattern AL_NO_ERROR
 	, pattern AL_FORMAT_MONO8
@@ -52,6 +55,7 @@ module Flaw.Audio.OpenAL.FFI
 	, pattern AL_POSITION
 	, pattern AL_DIRECTION
 	, pattern AL_VELOCITY
+	, pattern AL_BUFFERS_PROCESSED
 	) where
 
 import Foreign.C.Types
@@ -90,9 +94,12 @@ foreign import ccall unsafe alGenSources :: ALsizei -> Ptr ALuint -> IO ()
 foreign import ccall unsafe alDeleteSources :: ALsizei -> Ptr ALuint -> IO ()
 foreign import ccall unsafe alSourcei :: ALuint -> ALenum -> ALint -> IO ()
 foreign import ccall unsafe alSource3f :: ALuint -> ALenum -> ALfloat -> ALfloat -> ALfloat -> IO ()
+foreign import ccall unsafe alGetSourcei :: ALuint -> ALenum -> Ptr ALint -> IO ()
 foreign import ccall unsafe alSourcePlay :: ALuint -> IO ()
 foreign import ccall unsafe alSourcePause :: ALuint -> IO ()
 foreign import ccall unsafe alSourceStop :: ALuint -> IO ()
+foreign import ccall unsafe alSourceQueueBuffers :: ALuint -> ALsizei -> Ptr ALuint -> IO ()
+foreign import ccall unsafe alSourceUnqueueBuffers :: ALuint -> ALsizei -> Ptr ALuint -> IO ()
 
 pattern AL_NO_ERROR = 0
 
@@ -105,3 +112,5 @@ pattern AL_BUFFER = 0x1009
 pattern AL_POSITION = 0x1004
 pattern AL_DIRECTION = 0x1005
 pattern AL_VELOCITY = 0x1006
+
+pattern AL_BUFFERS_PROCESSED = 0x1016
