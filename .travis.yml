@@ -12,7 +12,6 @@ matrix:
       apt:
         packages:
         - ghc-7.10.3
-        - libavformat
         - libopenal-dev
         sources:
         - hvr-ghc
@@ -22,7 +21,6 @@ matrix:
       apt:
         packages:
         - ghc-head
-        - libavformat
         - libopenal-dev
         sources:
         - hvr-ghc
@@ -44,7 +42,7 @@ before_install:
     ;;
   osx)
     brew update && \
-    brew install ffmpeg haskell-stack sdl2
+    brew install haskell-stack sdl2
     ;;
   esac
 
@@ -62,7 +60,6 @@ script: >-
   flaw-collada
   flaw-editor
   flaw-ffi
-  flaw-ffmpeg
   flaw-font
   flaw-font-fthb
   flaw-game
