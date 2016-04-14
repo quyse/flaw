@@ -62,8 +62,14 @@ int flaw_ffmpeg_prepareStreamDecoding(AVStream* stream)
 	return 0;
 }
 
-int flaw_ffmpeg_decodeAudio(AVFormatContext* ctx, AVStream* stream, void (*output)(const void*, int),
-	int* outSamplesPerSecond, int* outFormat, int* outChannelsCount)
+void flaw_ffmpeg_getAudioStreamFormat(AVStream* stream, int* outSamplesPerSecond, int* outFormat, int* outChannelsCount)
+{
+	*outSamplesPerSecond = stream->codec->sample_rate;
+	*outFormat = av_get_packed_sample_fmt(stream->codec->sample_fmt);
+	*outChannelsCount = stream->codec->channels;
+}
+
+int flaw_ffmpeg_decodeAudio(AVFormatContext* ctx, AVStream* stream, void (*output)(const void*, int))
 {
 	// some calculations
 	int channelsCount = stream->codec->channels;
@@ -150,11 +156,6 @@ int flaw_ffmpeg_decodeAudio(AVFormatContext* ctx, AVStream* stream, void (*outpu
 
 	avcodec_close(stream->codec);
 	av_frame_free(&frame);
-
-	// output characteristics
-	*outSamplesPerSecond = stream->codec->sample_rate;
-	*outFormat = av_get_packed_sample_fmt(stream->codec->sample_fmt);
-	*outChannelsCount = channelsCount;
 
 	return err;
 }

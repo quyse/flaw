@@ -56,21 +56,20 @@ ffmpegDecodeAudio (FFmpegAVFormatContext formatContextPtr) = describeException "
 	-- get audio stream
 	streamPtr <- flaw_ffmpeg_getSingleAudioStream formatContextPtr
 	when (streamPtr == nullPtr) $ throwIO $ DescribeFirstException "no single audio stream"
-	-- find codec
+	-- prepare to decode
 	checkAVError "prepare decoding" $ flaw_ffmpeg_prepareStreamDecoding streamPtr
-	-- decode
-	chunksRef <- newIORef []
-	outputCallback <- wrapOutputCallback $ \chunkPtr chunkLen ->
-		modifyIORef' chunksRef =<< (:) <$> B.packCStringLen (chunkPtr, fromIntegral chunkLen)
+	-- get format
 	format <- alloca $ \samplesPerSecondPtr -> alloca $ \sampleFormatPtr -> alloca $ \channelsCountPtr -> do
-		checkAVError "decode audio" $
-			flaw_ffmpeg_decodeAudio formatContextPtr streamPtr outputCallback
-				samplesPerSecondPtr sampleFormatPtr channelsCountPtr
-		-- get sound format
+		flaw_ffmpeg_getAudioStreamFormat streamPtr samplesPerSecondPtr sampleFormatPtr channelsCountPtr
 		SoundFormat
 			<$> (fromIntegral <$> peek samplesPerSecondPtr)
 			<*> (convertSampleFormat <$> peek sampleFormatPtr)
 			<*> (fromIntegral <$> peek channelsCountPtr)
+	-- decode
+	chunksRef <- newIORef []
+	outputCallback <- wrapOutputCallback $ \chunkPtr chunkLen ->
+		modifyIORef' chunksRef =<< (:) <$> B.packCStringLen (chunkPtr, fromIntegral chunkLen)
+	checkAVError "decode audio" $ flaw_ffmpeg_decodeAudio formatContextPtr streamPtr outputCallback
 	-- get samples data
 	bytes <- BL.fromChunks . reverse <$> readIORef chunksRef
 	return (format, bytes)
@@ -96,8 +95,9 @@ foreign import ccall safe flaw_ffmpeg_openInput :: Ptr CChar -> IO (Ptr C_AVForm
 foreign import ccall safe flaw_ffmpeg_getSingleVideoStream :: Ptr C_AVFormatContext -> IO (Ptr C_AVStream)
 foreign import ccall safe flaw_ffmpeg_getSingleAudioStream :: Ptr C_AVFormatContext -> IO (Ptr C_AVStream)
 foreign import ccall safe flaw_ffmpeg_prepareStreamDecoding :: Ptr C_AVStream -> IO CInt
+foreign import ccall unsafe flaw_ffmpeg_getAudioStreamFormat :: Ptr C_AVStream -> Ptr CInt -> Ptr CInt -> Ptr CInt -> IO ()
 foreign import ccall safe flaw_ffmpeg_decodeAudio
-	:: Ptr C_AVFormatContext -> Ptr C_AVStream -> FunPtr OutputCallback -> Ptr CInt -> Ptr CInt -> Ptr CInt -> IO CInt
+	:: Ptr C_AVFormatContext -> Ptr C_AVStream -> FunPtr OutputCallback -> IO CInt
 
 -- wrappers
 
