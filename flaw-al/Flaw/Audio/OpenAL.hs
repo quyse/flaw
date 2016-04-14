@@ -44,7 +44,7 @@ data AlSoundSource
 		{ alSoundSourceBufferName :: {-# UNPACK #-} !ALuint
 		}
 	| AlStreamingSoundSource
-		{ alSoundSourceStream :: !(IO ((SoundFormat, TVar BL.ByteString), IO ()))
+		{ alSoundSourceStream :: !(IO ((SoundFormat, Stream), IO ()))
 		}
 
 data AlStreamingState = AlStreamingState
@@ -60,6 +60,7 @@ instance Device AlDevice where
 	data SoundPlayerId AlDevice = AlSoundPlayerId
 		{ alSoundPlayerDevice :: !AlDevice
 		, alSoundPlayerSourceName :: {-# UNPACK #-} !ALuint
+		, alSoundPlayerPlayingRef :: {-# UNPACK #-} !(IORef Bool)
 		}
 
 	createSound device@AlDevice
@@ -111,6 +112,9 @@ instance Device AlDevice where
 			with sourceName $ alDeleteSources 1
 			)
 
+		-- flag that player is playing
+		playingRef <- newIORef False
+
 		-- setup sound source
 		case soundSource of
 			AlBufferedSoundSource
@@ -135,7 +139,10 @@ instance Device AlDevice where
 					{ soundFormatSamplesPerSecond = samplesPerSecond
 					, soundFormatSampleType = sampleType
 					, soundFormatChannelsCount = channelsCount
-					}, bytesVar) <- book bk stream
+					}, Stream
+					{ streamBytesVar = bytesVar
+					, streamFinishedVar = finishedVar
+					}) <- book bk stream
 				-- create state ref
 				stateRef <- newIORef AlStreamingState
 					{ alStreamingStateFreeBuffers = buffers
@@ -174,8 +181,10 @@ instance Device AlDevice where
 						-- get bytes
 						(feedBytes, buffersToFeedCount) <- atomically $ do
 							bytes <- readTVar bytesVar
+							finished <- readTVar finishedVar
 							let bytesLength = fromIntegral $ BL.length bytes
-							let buffersToFeedCount = bytesLength `quot` bufferSize
+							-- allow feeding last buffer partially if stream is finished
+							let buffersToFeedCount = min freeBuffersCount $ if finished then (bytesLength + bufferSize - 1) `quot` bufferSize else bytesLength `quot` bufferSize
 							if buffersToFeedCount > 0 then do
 								let (feedBytes, restBytes) = BL.splitAt (fromIntegral $ buffersToFeedCount * bufferSize) bytes
 								writeTVar bytesVar restBytes
@@ -188,8 +197,8 @@ instance Device AlDevice where
 								(freeBuffersToFeed, restFreeBuffers) = splitAt buffersToFeedCount freeBuffers
 								feedBuffer (bufferName : restBufferNames) tailFeedBytes = do
 									let (chunkBytes, restTailFeedBytes) = BL.splitAt (fromIntegral bufferSize) tailFeedBytes
-									B.unsafeUseAsCString (BL.toStrict chunkBytes) $ \feedBytesPtr ->
-										alBufferData bufferName (alConvertFormat format) (castPtr feedBytesPtr) (fromIntegral bufferSize) (fromIntegral samplesPerSecond)
+									B.unsafeUseAsCStringLen (BL.toStrict chunkBytes) $ \(feedBytesPtr, feedBytesLen) ->
+										alBufferData bufferName (alConvertFormat format) (castPtr feedBytesPtr) (fromIntegral feedBytesLen) (fromIntegral samplesPerSecond)
 									alCheckErrors0 "feed buffer"
 									feedBuffer restBufferNames restTailFeedBytes
 								feedBuffer [] _ = return ()
@@ -202,6 +211,17 @@ instance Device AlDevice where
 								{ alStreamingStateFreeBuffers = restFreeBuffers
 								, alStreamingStateBusyBuffers = busyBuffers ++ freeBuffersToFeed
 								}
+							-- ensure it's playing if needed (it might stop playing if streaming has been interrupted)
+							playing <- readIORef playingRef
+							when playing $ do
+								sourceState <- alloca $ \sourceStatePtr -> do
+									alGetSourcei sourceName AL_SOURCE_STATE sourceStatePtr
+									alCheckErrors0 "get source state"
+									peek sourceStatePtr
+								unless (sourceState == AL_PLAYING) $ do
+									alSourcePlay sourceName
+									alCheckErrors0 "restart playing"
+
 				-- register operation
 				modifyIORef' repeatOperationsRef ((sourceName, feed) :)
 				book bk $ return ((), atomically $ alDeferredOperation device $ modifyIORef' repeatOperationsRef $ filter ((/= sourceName) . fst))
@@ -210,6 +230,7 @@ instance Device AlDevice where
 		return AlSoundPlayerId
 			{ alSoundPlayerDevice = device
 			, alSoundPlayerSourceName = sourceName
+			, alSoundPlayerPlayingRef = playingRef
 			}
 
 	tickAudio device@AlDevice
@@ -222,23 +243,29 @@ instance Device AlDevice where
 	playSound AlSoundPlayerId
 		{ alSoundPlayerDevice = device
 		, alSoundPlayerSourceName = sourceName
+		, alSoundPlayerPlayingRef = playingRef
 		} = alDeferredOperation device $ do
 		alSourcePlay sourceName
 		alCheckErrors0 "play source"
+		writeIORef playingRef True
 
 	pauseSound AlSoundPlayerId
 		{ alSoundPlayerDevice = device
 		, alSoundPlayerSourceName = sourceName
+		, alSoundPlayerPlayingRef = playingRef
 		} = alDeferredOperation device $ do
 		alSourcePause sourceName
 		alCheckErrors0 "pause source"
+		writeIORef playingRef False
 
 	stopSound AlSoundPlayerId
 		{ alSoundPlayerDevice = device
 		, alSoundPlayerSourceName = sourceName
+		, alSoundPlayerPlayingRef = playingRef
 		} = alDeferredOperation device $ do
 		alSourceStop sourceName
 		alCheckErrors0 "stop source"
+		writeIORef playingRef False
 
 	setSoundPosition AlSoundPlayerId
 		{ alSoundPlayerDevice = device

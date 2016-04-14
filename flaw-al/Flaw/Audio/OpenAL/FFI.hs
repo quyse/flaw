@@ -55,6 +55,11 @@ module Flaw.Audio.OpenAL.FFI
 	, pattern AL_POSITION
 	, pattern AL_DIRECTION
 	, pattern AL_VELOCITY
+	, pattern AL_SOURCE_STATE
+	, pattern AL_INITIAL
+	, pattern AL_PLAYING
+	, pattern AL_PAUSED
+	, pattern AL_STOPPED
 	, pattern AL_BUFFERS_PROCESSED
 	) where
 
@@ -112,5 +117,12 @@ pattern AL_BUFFER = 0x1009
 pattern AL_POSITION = 0x1004
 pattern AL_DIRECTION = 0x1005
 pattern AL_VELOCITY = 0x1006
+
+pattern AL_SOURCE_STATE = 0x1010
+
+pattern AL_INITIAL = 0x1011
+pattern AL_PLAYING = 0x1012
+pattern AL_PAUSED = 0x1013
+pattern AL_STOPPED = 0x1014
 
 pattern AL_BUFFERS_PROCESSED = 0x1016
