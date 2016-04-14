@@ -16,6 +16,7 @@ variables:
     flaw-collada
     flaw-editor
     flaw-ffi
+    flaw-ffmpeg
     flaw-font
     flaw-font-fthb
     flaw-game

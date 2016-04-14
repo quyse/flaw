@@ -11,6 +11,7 @@ matrix:
     addons:
       apt:
         packages:
+        - ffmpeg
         - ghc-7.10.3
         - libopenal-dev
         sources:
@@ -20,6 +21,7 @@ matrix:
     addons:
       apt:
         packages:
+        - ffmpeg
         - ghc-head
         - libopenal-dev
         sources:
@@ -42,7 +44,7 @@ before_install:
     ;;
   osx)
     brew update && \
-    brew install haskell-stack sdl2
+    brew install ffmpeg haskell-stack sdl2
     ;;
   esac
 
@@ -60,6 +62,7 @@ script: >-
   flaw-collada
   flaw-editor
   flaw-ffi
+  flaw-ffmpeg
   flaw-font
   flaw-font-fthb
   flaw-game
