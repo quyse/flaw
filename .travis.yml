@@ -11,8 +11,8 @@ matrix:
     addons:
       apt:
         packages:
-        - ffmpeg
         - ghc-7.10.3
+        - libavformat
         - libopenal-dev
         sources:
         - hvr-ghc
@@ -21,8 +21,8 @@ matrix:
     addons:
       apt:
         packages:
-        - ffmpeg
         - ghc-head
+        - libavformat
         - libopenal-dev
         sources:
         - hvr-ghc
