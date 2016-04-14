@@ -12,6 +12,7 @@ module Flaw.Audio
 	, SoundSampleType(..)
 	) where
 
+import Control.Concurrent.STM
 import qualified Data.ByteString as B
 
 import Flaw.Math
@@ -25,18 +26,20 @@ class Device d where
 	createSound :: d -> SoundFormat -> B.ByteString -> IO (SoundId d, IO ())
 	-- | Create player for a sound.
 	createSoundPlayer :: SoundId d -> IO (SoundPlayerId d, IO ())
+	-- | Apply deferred updates to all sound objects simultaneously.
+	tickAudio :: d -> IO ()
 	-- | Start playing.
-	playSound :: SoundPlayerId d -> IO ()
+	playSound :: SoundPlayerId d -> STM ()
 	-- | Pause playing.
-	pauseSound :: SoundPlayerId d -> IO ()
+	pauseSound :: SoundPlayerId d -> STM ()
 	-- | Stop playing.
-	stopSound :: SoundPlayerId d -> IO ()
+	stopSound :: SoundPlayerId d -> STM ()
 	-- | Set position of sound player.
-	setSoundPosition :: SoundPlayerId d -> Float3 -> IO ()
+	setSoundPosition :: SoundPlayerId d -> Float3 -> STM ()
 	-- | Set direction of sound player.
-	setSoundDirection :: SoundPlayerId d -> Float3 -> IO ()
+	setSoundDirection :: SoundPlayerId d -> Float3 -> STM ()
 	-- | Set velocity of sound player.
-	setSoundVelocity :: SoundPlayerId d -> Float3 -> IO ()
+	setSoundVelocity :: SoundPlayerId d -> Float3 -> STM ()
 
 -- | Sound format type.
 data SoundFormat = SoundFormat

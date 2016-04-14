@@ -15,6 +15,7 @@ import Control.Concurrent.STM
 import Control.Exception
 import Control.Monad
 import qualified Data.ByteString.Unsafe as B
+import Data.Foldable
 import Foreign.Marshal.Alloc
 import Foreign.Marshal.Utils
 import Foreign.Ptr
@@ -29,6 +30,7 @@ import Flaw.Math
 
 data AlDevice = AlDevice
 	{ alDeviceFlow :: {-# UNPACK #-} !Flow
+	, alDeviceDeferredOperationsVar :: {-# UNPACK #-} !(TVar [IO ()])
 	}
 
 instance Device AlDevice where
@@ -51,7 +53,7 @@ instance Device AlDevice where
 			alGenBuffers 1 bufferNamePtr
 			peek bufferNamePtr
 		alCheckErrors0 "gen buffer"
-		book bk $ return ((), runInFlow flow $ with bufferName $ alDeleteBuffers 1)
+		book bk $ return ((), atomically $ alDeferredOperation device $ with bufferName $ alDeleteBuffers 1)
 
 		-- upload data
 		B.unsafeUseAsCStringLen bytes $ \(bytesPtr, bytesLen) ->
@@ -75,7 +77,7 @@ instance Device AlDevice where
 			alGenSources 1 sourceNamePtr
 			peek sourceNamePtr
 		alCheckErrors0 "gen source"
-		book bk $ return ((), runInFlow flow $ with sourceName $ alDeleteSources 1)
+		book bk $ return ((), atomically $ alDeferredOperation device $ with sourceName $ alDeleteSources 1)
 
 		-- set source
 		alSourcei sourceName AL_BUFFER (fromIntegral bufferName)
@@ -87,70 +89,75 @@ instance Device AlDevice where
 			, alSoundPlayerSourceName = sourceName
 			}
 
+	tickAudio device@AlDevice
+		{ alDeviceFlow = flow
+		} = runInFlow flow $ alRunDeferredOperations device
+
 	playSound AlSoundPlayerId
-		{ alSoundPlayerDevice = AlDevice
-			{ alDeviceFlow = flow
-			}
+		{ alSoundPlayerDevice = device
 		, alSoundPlayerSourceName = sourceName
-		} = atomically $ asyncRunInFlow flow $ do
+		} = alDeferredOperation device $ do
 		alSourcePlay sourceName
 		alCheckErrors0 "play source"
 
 	pauseSound AlSoundPlayerId
-		{ alSoundPlayerDevice = AlDevice
-			{ alDeviceFlow = flow
-			}
+		{ alSoundPlayerDevice = device
 		, alSoundPlayerSourceName = sourceName
-		} = atomically $ asyncRunInFlow flow $ do
+		} = alDeferredOperation device $ do
 		alSourcePause sourceName
 		alCheckErrors0 "pause source"
 
 	stopSound AlSoundPlayerId
-		{ alSoundPlayerDevice = AlDevice
-			{ alDeviceFlow = flow
-			}
+		{ alSoundPlayerDevice = device
 		, alSoundPlayerSourceName = sourceName
-		} = atomically $ asyncRunInFlow flow $ do
+		} = alDeferredOperation device $ do
 		alSourceStop sourceName
 		alCheckErrors0 "stop source"
 
 	setSoundPosition AlSoundPlayerId
-		{ alSoundPlayerDevice = AlDevice
-			{ alDeviceFlow = flow
-			}
+		{ alSoundPlayerDevice = device
 		, alSoundPlayerSourceName = sourceName
-		} (Vec3 x y z) = atomically $ asyncRunInFlow flow $ do
+		} (Vec3 x y z) = alDeferredOperation device $ do
 		alSource3f sourceName AL_POSITION (realToFrac x) (realToFrac y) (realToFrac z)
 		alCheckErrors0 "set sound position"
 
 	setSoundDirection AlSoundPlayerId
-		{ alSoundPlayerDevice = AlDevice
-			{ alDeviceFlow = flow
-			}
+		{ alSoundPlayerDevice = device
 		, alSoundPlayerSourceName = sourceName
-		} (Vec3 x y z) = atomically $ asyncRunInFlow flow $ do
+		} (Vec3 x y z) = alDeferredOperation device $ do
 		alSource3f sourceName AL_DIRECTION (realToFrac x) (realToFrac y) (realToFrac z)
 		alCheckErrors0 "set sound direction"
 
 	setSoundVelocity AlSoundPlayerId
-		{ alSoundPlayerDevice = AlDevice
-			{ alDeviceFlow = flow
-			}
+		{ alSoundPlayerDevice = device
 		, alSoundPlayerSourceName = sourceName
-		} (Vec3 x y z) = atomically $ asyncRunInFlow flow $ do
+		} (Vec3 x y z) = alDeferredOperation device $ do
 		alSource3f sourceName AL_VELOCITY (realToFrac x) (realToFrac y) (realToFrac z)
 		alCheckErrors0 "set sound velocity"
 
 createAlDevice :: IO (AlDevice, IO ())
 createAlDevice = describeException "failed to create OpenAL device" $ withSpecialBook $ \bk -> do
 
+	-- create flow for operations
+	flow <- book bk newFlowOS
+	-- create var for deferred operations
+	deferredOperationsVar <- newTVarIO []
+
+	-- device struct
+	let device = AlDevice
+		{ alDeviceFlow = flow
+		, alDeviceDeferredOperationsVar = deferredOperationsVar
+		}
+
 	-- open audio device
 	devicePtr <- alcOpenDevice nullPtr
 	when (devicePtr == nullPtr) $ throwIO $ DescribeFirstException "failed to open device"
-	book bk $ return ((), void $ alcCloseDevice devicePtr)
-
-	-- create flow for operations
-	flow <- book bk newFlowOS
+	book bk $ return ((), do
+		-- run deferred operations, as freeing of some objects might be deferred
+		alRunDeferredOperations device
+		-- close OpenAL device
+		void $ alcCloseDevice devicePtr
+		)
 
 	runInFlow flow $ do
 		-- create context
@@ -165,9 +172,7 @@ createAlDevice = describeException "failed to create OpenAL device" $ withSpecia
 		void $ alcMakeContextCurrent contextPtr
 		alCheckErrors1 "make context current"
 
-	return AlDevice
-		{ alDeviceFlow = flow
-		}
+	return device
 
 alConvertFormat :: SoundFormat -> ALenum
 alConvertFormat format = case format of
@@ -188,6 +193,19 @@ alConvertFormat format = case format of
 		, soundFormatChannelsCount = 2
 		} -> AL_FORMAT_STEREO16
 	_ -> error "unsupported sound format"
+
+alDeferredOperation :: AlDevice -> IO () -> STM ()
+alDeferredOperation AlDevice
+	{ alDeviceDeferredOperationsVar = deferredOperationsVar
+	} operation = modifyTVar' deferredOperationsVar (operation :)
+
+alRunDeferredOperations :: AlDevice -> IO ()
+alRunDeferredOperations AlDevice
+	{ alDeviceDeferredOperationsVar = deferredOperationsVar
+	} = join $ atomically $ do
+	deferredOperations <- readTVar deferredOperationsVar
+	writeTVar deferredOperationsVar []
+	return $ foldrM const () deferredOperations
 
 -- | Check for OpenAL errors, throw an exception if there's some.
 alCheckErrors :: String -> IO ()
