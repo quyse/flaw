@@ -172,19 +172,19 @@ createAlDevice = describeException "failed to create OpenAL device" $ withSpecia
 alConvertFormat :: SoundFormat -> ALenum
 alConvertFormat format = case format of
 	SoundFormat
-		{ soundFormatBitsPerSample = 8
+		{ soundFormatSampleType = SoundSampleByte
 		, soundFormatChannelsCount = 1
 		} -> AL_FORMAT_MONO8
 	SoundFormat
-		{ soundFormatBitsPerSample = 16
+		{ soundFormatSampleType = SoundSampleShort
 		, soundFormatChannelsCount = 1
 		} -> AL_FORMAT_MONO16
 	SoundFormat
-		{ soundFormatBitsPerSample = 8
+		{ soundFormatSampleType = SoundSampleByte
 		, soundFormatChannelsCount = 2
 		} -> AL_FORMAT_STEREO8
 	SoundFormat
-		{ soundFormatBitsPerSample = 16
+		{ soundFormatSampleType = SoundSampleShort
 		, soundFormatChannelsCount = 2
 		} -> AL_FORMAT_STEREO16
 	_ -> error "unsupported sound format"

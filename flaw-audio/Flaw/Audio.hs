@@ -9,6 +9,7 @@ License: MIT
 module Flaw.Audio
 	( Device(..)
 	, SoundFormat(..)
+	, SoundSampleType(..)
 	) where
 
 import qualified Data.ByteString as B
@@ -40,6 +41,15 @@ class Device d where
 -- | Sound format type.
 data SoundFormat = SoundFormat
 	{ soundFormatSamplesPerSecond :: {-# UNPACK #-} !Int
-	, soundFormatBitsPerSample :: {-# UNPACK #-} !Int
+	, soundFormatSampleType :: !SoundSampleType
 	, soundFormatChannelsCount :: {-# UNPACK #-} !Int
-	}
+	} deriving Show
+
+-- | Sound sample type.
+data SoundSampleType
+	= SoundSampleByte
+	| SoundSampleShort
+	| SoundSampleInt
+	| SoundSampleFloat
+	| SoundSampleDouble
+	deriving Show
