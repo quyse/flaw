@@ -10,14 +10,13 @@ module Flaw.Audio
 	( Device(..)
 	, SoundFormat(..)
 	, SoundSampleType(..)
-	, Stream(..)
 	, soundSampleSize
 	) where
 
 import Control.Concurrent.STM
 import qualified Data.ByteString as B
-import qualified Data.ByteString.Lazy as BL
 
+import Flaw.ByteStream
 import Flaw.Math
 
 class Device d where
@@ -29,7 +28,7 @@ class Device d where
 	createSound :: d -> SoundFormat -> B.ByteString -> IO (SoundId d, IO ())
 	-- | Create streaming sound.
 	-- Streaming sound player pulls sound data from bounded queue.
-	createStreamingSound :: d -> IO ((SoundFormat, Stream), IO ()) -> IO (SoundId d, IO ())
+	createStreamingSound :: d -> IO ((SoundFormat, ByteStream), IO ()) -> IO (SoundId d, IO ())
 	-- | Create player for a sound.
 	createSoundPlayer :: SoundId d -> IO (SoundPlayerId d, IO ())
 	-- | Apply deferred updates to all sound objects simultaneously.
@@ -62,12 +61,6 @@ data SoundSampleType
 	| SoundSampleFloat
 	| SoundSampleDouble
 	deriving Show
-
--- | Stream type.
-data Stream = Stream
-	{ streamBytesVar :: {-# UNPACK #-} !(TVar BL.ByteString)
-	, streamFinishedVar :: {-# UNPACK #-} !(TVar Bool)
-	}
 
 -- | Size of a single sample.
 soundSampleSize :: SoundSampleType -> Int

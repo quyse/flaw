@@ -21,6 +21,7 @@ library
   exposed-modules:
     Flaw.BinaryCache
     Flaw.Book
+    Flaw.ByteStream
     Flaw.Exception
     Flaw.Flow
     Flaw.Stack

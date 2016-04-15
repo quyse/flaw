@@ -27,6 +27,7 @@ import Foreign.Storable
 import Flaw.Audio
 import Flaw.Audio.OpenAL.FFI
 import Flaw.Book
+import Flaw.ByteStream
 import Flaw.Exception
 import Flaw.Flow
 import Flaw.Math
@@ -44,7 +45,7 @@ data AlSoundSource
 		{ alSoundSourceBufferName :: {-# UNPACK #-} !ALuint
 		}
 	| AlStreamingSoundSource
-		{ alSoundSourceStream :: !(IO ((SoundFormat, Stream), IO ()))
+		{ alSoundSourceCreateStream :: !(IO ((SoundFormat, ByteStream), IO ()))
 		}
 
 data AlStreamingState = AlStreamingState
@@ -88,10 +89,10 @@ instance Device AlDevice where
 				}
 			}
 
-	createStreamingSound device stream = return (AlSoundId
+	createStreamingSound device createStream = return (AlSoundId
 		{ alSoundDevice = device
 		, alSoundSource = AlStreamingSoundSource
-			{ alSoundSourceStream = stream
+			{ alSoundSourceCreateStream = createStream
 			}
 		}, return ())
 
@@ -124,7 +125,7 @@ instance Device AlDevice where
 				alSourcei sourceName AL_BUFFER (fromIntegral bufferName)
 				alCheckErrors0 "set source buffer"
 			AlStreamingSoundSource
-				{ alSoundSourceStream = stream
+				{ alSoundSourceCreateStream = createStream
 				} -> do
 				-- create a few buffers for streaming
 				buffers <- forM [1..2 :: Int] $ \_i -> do
@@ -139,10 +140,7 @@ instance Device AlDevice where
 					{ soundFormatSamplesPerSecond = samplesPerSecond
 					, soundFormatSampleType = sampleType
 					, soundFormatChannelsCount = channelsCount
-					}, Stream
-					{ streamBytesVar = bytesVar
-					, streamFinishedVar = finishedVar
-					}) <- book bk stream
+					}, byteStream) <- book bk createStream
 				-- create state ref
 				stateRef <- newIORef AlStreamingState
 					{ alStreamingStateFreeBuffers = buffers
@@ -180,14 +178,12 @@ instance Device AlDevice where
 					when (freeBuffersCount > 0) $ do
 						-- get bytes
 						(feedBytes, buffersToFeedCount) <- atomically $ do
-							bytes <- readTVar bytesVar
-							finished <- readTVar finishedVar
-							let bytesLength = fromIntegral $ BL.length bytes
+							bytesLength <- fromIntegral <$> byteStreamLength byteStream
+							finished <- isByteStreamFinished byteStream
 							-- allow feeding last buffer partially if stream is finished
 							let buffersToFeedCount = min freeBuffersCount $ if finished then (bytesLength + bufferSize - 1) `quot` bufferSize else bytesLength `quot` bufferSize
 							if buffersToFeedCount > 0 then do
-								let (feedBytes, restBytes) = BL.splitAt (fromIntegral $ buffersToFeedCount * bufferSize) bytes
-								writeTVar bytesVar restBytes
+								feedBytes <- pullByteStream byteStream $ fromIntegral $ buffersToFeedCount * bufferSize
 								return (feedBytes, buffersToFeedCount)
 							else return (BL.empty, 0)
 						-- if there're some data
