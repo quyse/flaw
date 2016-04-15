@@ -35,6 +35,8 @@ class Device d where
 	tickAudio :: d -> IO ()
 	-- | Start playing.
 	playSound :: SoundPlayerId d -> STM ()
+	-- | Start playing a loop.
+	playLoopSound :: SoundPlayerId d -> STM ()
 	-- | Pause playing.
 	pauseSound :: SoundPlayerId d -> STM ()
 	-- | Stop playing.

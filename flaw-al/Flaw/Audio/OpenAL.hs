@@ -241,8 +241,19 @@ instance Device AlDevice where
 		, alSoundPlayerSourceName = sourceName
 		, alSoundPlayerPlayingRef = playingRef
 		} = alDeferredOperation device $ do
+		alSourcei sourceName AL_LOOPING AL_FALSE
 		alSourcePlay sourceName
-		alCheckErrors0 "play source"
+		alCheckErrors0 "play"
+		writeIORef playingRef True
+
+	playLoopSound AlSoundPlayerId
+		{ alSoundPlayerDevice = device
+		, alSoundPlayerSourceName = sourceName
+		, alSoundPlayerPlayingRef = playingRef
+		} = alDeferredOperation device $ do
+		alSourcei sourceName AL_LOOPING AL_TRUE
+		alSourcePlay sourceName
+		alCheckErrors0 "play loop"
 		writeIORef playingRef True
 
 	pauseSound AlSoundPlayerId

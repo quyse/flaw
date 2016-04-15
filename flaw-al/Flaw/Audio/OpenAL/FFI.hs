@@ -51,10 +51,13 @@ module Flaw.Audio.OpenAL.FFI
 	, pattern AL_FORMAT_MONO16
 	, pattern AL_FORMAT_STEREO8
 	, pattern AL_FORMAT_STEREO16
-	, pattern AL_BUFFER
+	, pattern AL_FALSE
+	, pattern AL_TRUE
 	, pattern AL_POSITION
 	, pattern AL_DIRECTION
 	, pattern AL_VELOCITY
+	, pattern AL_LOOPING
+	, pattern AL_BUFFER
 	, pattern AL_SOURCE_STATE
 	, pattern AL_INITIAL
 	, pattern AL_PLAYING
@@ -113,10 +116,14 @@ pattern AL_FORMAT_MONO16 = 0x1101
 pattern AL_FORMAT_STEREO8 = 0x1102
 pattern AL_FORMAT_STEREO16 = 0x1103
 
-pattern AL_BUFFER = 0x1009
+pattern AL_FALSE = 0
+pattern AL_TRUE = 1
+
 pattern AL_POSITION = 0x1004
 pattern AL_DIRECTION = 0x1005
 pattern AL_VELOCITY = 0x1006
+pattern AL_LOOPING = 0x1007
+pattern AL_BUFFER = 0x1009
 
 pattern AL_SOURCE_STATE = 0x1010
 
