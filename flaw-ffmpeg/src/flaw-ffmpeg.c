@@ -26,11 +26,66 @@ AVFormatContext* flaw_ffmpeg_openInput(const char* url)
 {
 	AVFormatContext* ctx = NULL;
 	BEGIN_DISABLE_ALARMS();
-	int r = avformat_open_input(&ctx, url, NULL, NULL);
+	int ret = avformat_open_input(&ctx, url, NULL, NULL);
 	END_DISABLE_ALARMS();
-	if(r == 0) return ctx;
+	if(ret != 0)
+	{
+		goto err;
+	}
+
+	if(avformat_find_stream_info(ctx, NULL) != 0)
+	{
+		goto err;
+	}
+
+	return ctx;
+
+err:
 	avformat_free_context(ctx);
 	return NULL;
+}
+
+void flaw_ffmpeg_closeInput(AVFormatContext* ctx)
+{
+	avformat_close_input(&ctx);
+}
+
+AVFormatContext* flaw_ffmpeg_openOutput(const char* url)
+{
+	AVFormatContext* ctx = NULL;
+	int ret = avformat_alloc_output_context2(&ctx, NULL, NULL, url);
+	if(ret != 0)
+	{
+		goto err;
+	}
+
+	// open file if needed
+	if(!(ctx->oformat->flags & AVFMT_NOFILE))
+	{
+		if(avio_open(&ctx->pb, url, AVIO_FLAG_WRITE) != 0)
+		{
+			goto err;
+		}
+	}
+
+	return ctx;
+
+err:
+	avformat_free_context(ctx);
+	return NULL;
+}
+
+void flaw_ffmpeg_closeOutput(AVFormatContext* ctx)
+{
+	if(!ctx) return;
+
+	// close file if it was opened by us
+	if(!(ctx->oformat->flags & AVFMT_NOFILE))
+	{
+		avio_closep(&ctx->pb);
+	}
+
+	avformat_free_context(ctx);
 }
 
 int flaw_ffmpeg_getStreamsCount(AVFormatContext* ctx)
@@ -65,8 +120,6 @@ int flaw_ffmpeg_demux(AVFormatContext* ctx, int (*callback)(AVPacket*, void*), v
 			pkt.size = 0;
 		}
 
-		AVPacket origPkt = pkt;
-
 		int ret = callback(&pkt, opaque);
 		if(ret != 0)
 		{
@@ -74,7 +127,7 @@ int flaw_ffmpeg_demux(AVFormatContext* ctx, int (*callback)(AVPacket*, void*), v
 		}
 
 		// free packet
-		av_packet_unref(&origPkt);
+		av_packet_unref(&pkt);
 	}
 	while(err == 0 && gotPacket);
 
@@ -198,6 +251,70 @@ int flaw_ffmpeg_decode(AVFormatContext* ctx, int streamsMask, int (*callback)(AV
 	}
 
 	return err;
+}
+
+struct RemuxState
+{
+	AVFormatContext* inctx;
+	AVFormatContext* outctx;
+};
+
+int remuxCallback(AVPacket* pkt, void* opaque)
+{
+	struct RemuxState* state = (struct RemuxState*)opaque;
+
+	// skip empty packets
+	if(!pkt->data) return 0;
+
+	AVStream* inStream = state->inctx->streams[pkt->stream_index];
+	AVStream* outStream = state->outctx->streams[pkt->stream_index];
+
+	// copy packet
+	pkt->pts = av_rescale_q_rnd(pkt->pts, inStream->time_base, outStream->time_base, AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX);
+	pkt->dts = av_rescale_q_rnd(pkt->dts, inStream->time_base, outStream->time_base, AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX);
+	pkt->duration = av_rescale_q(pkt->duration, inStream->time_base, outStream->time_base);
+	pkt->pos = -1;
+
+	return av_interleaved_write_frame(state->outctx, pkt);
+}
+
+int flaw_ffmpeg_remux(AVFormatContext* inctx, AVFormatContext* outctx)
+{
+	// create output streams
+	for(int i = 0; i < inctx->nb_streams; ++i)
+	{
+		AVStream* inStream = inctx->streams[i];
+		AVStream* outStream = avformat_new_stream(outctx, inStream->codec->codec);
+		if(!outStream || avcodec_copy_context(outStream->codec, inStream->codec) != 0)
+		{
+			return -1;
+		}
+		outStream->codec->codec_tag = 0;
+		if(outctx->oformat->flags & AVFMT_GLOBALHEADER)
+		{
+			outStream->codec->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+		}
+	}
+
+	int ret;
+
+	// write header
+	if((ret = avformat_write_header(outctx, NULL)) != 0)
+	{
+		return ret;
+	}
+
+	// copy packets
+	struct RemuxState state;
+	state.inctx = inctx;
+	state.outctx = outctx;
+	if((ret = flaw_ffmpeg_demux(inctx, remuxCallback, &state)) != 0)
+	{
+		return ret;
+	}
+
+	// write trailer
+	return av_write_trailer(outctx);
 }
 
 struct ChainedDecodeCallback
