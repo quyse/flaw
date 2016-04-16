@@ -270,9 +270,7 @@ int remuxCallback(AVPacket* pkt, void* opaque)
 	AVStream* outStream = state->outctx->streams[pkt->stream_index];
 
 	// copy packet
-	pkt->pts = av_rescale_q_rnd(pkt->pts, inStream->time_base, outStream->time_base, AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX);
-	pkt->dts = av_rescale_q_rnd(pkt->dts, inStream->time_base, outStream->time_base, AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX);
-	pkt->duration = av_rescale_q(pkt->duration, inStream->time_base, outStream->time_base);
+	av_packet_rescale_ts(pkt, inStream->time_base, outStream->time_base);
 	pkt->pos = -1;
 
 	return av_interleaved_write_frame(state->outctx, pkt);
