@@ -46,6 +46,108 @@ void flaw_ffmpeg_getStreamsTypes(AVFormatContext* ctx, int* outStreamsTypes)
 	}
 }
 
+int flaw_ffmpeg_demux(AVFormatContext* ctx, int (*callback)(AVPacket*, void*), void* opaque)
+{
+	// init packet struct
+	AVPacket pkt;
+	av_init_packet(&pkt);
+	pkt.data = NULL;
+	pkt.size = 0;
+
+	// loop reading packets
+	int err = 0, gotPacket;
+	do
+	{
+		gotPacket = av_read_frame(ctx, &pkt) >= 0;
+		if(!gotPacket)
+		{
+			pkt.data = NULL;
+			pkt.size = 0;
+		}
+
+		AVPacket origPkt = pkt;
+
+		int ret = callback(&pkt, opaque);
+		if(ret != 0)
+		{
+			err = ret;
+		}
+
+		// free packet
+		av_packet_unref(&origPkt);
+	}
+	while(err == 0 && gotPacket);
+
+	return err;
+}
+
+struct DecodeState
+{
+	AVFormatContext* ctx;
+	AVFrame* frame;
+	int streamsMask;
+	int (*callback)(AVFrame*, void*);
+	void* callbackOpaque;
+};
+
+static int decodeCallback(AVPacket* pkt, void* opaque)
+{
+	struct DecodeState* state = (struct DecodeState*)opaque;
+
+	// skip streams we don't care about
+	if(!(state->streamsMask & (1 << pkt->stream_index))) return 0;
+
+	AVCodecContext* codec = state->ctx->streams[pkt->stream_index]->codec;
+	// loop decoding frames
+	int gotFrame, err = 0;
+	do
+	{
+		// decode frame
+		gotFrame = 0;
+		int decoded = 0;
+		switch(codec->codec_type)
+		{
+		case AVMEDIA_TYPE_VIDEO:
+			decoded = avcodec_decode_video2(codec, state->frame, &gotFrame, pkt);
+			break;
+		case AVMEDIA_TYPE_AUDIO:
+			decoded = avcodec_decode_audio4(codec, state->frame, &gotFrame, pkt);
+			break;
+		case AVMEDIA_TYPE_DATA:
+			break;
+		case AVMEDIA_TYPE_SUBTITLE:
+			break;
+		case AVMEDIA_TYPE_ATTACHMENT:
+			break;
+		}
+		if(decoded < 0)
+		{
+			err = decoded;
+		}
+		else
+		{
+			// output frame
+			if(gotFrame)
+			{
+				int ret = state->callback(state->frame, state->callbackOpaque);
+				if(ret != 0)
+				{
+					err = ret;
+				}
+			}
+			// advance packet
+			if(pkt->data)
+			{
+				pkt->data += decoded;
+				pkt->size -= decoded;
+			}
+		}
+	}
+	while(err == 0 && (pkt->data ? pkt->size > 0 : gotFrame));
+
+	return err;
+}
+
 // Decode streams using decode callback provided.
 // If callback returns non-zero value, decoding is stopped and that value is returned.
 int flaw_ffmpeg_decode(AVFormatContext* ctx, int streamsMask, int (*callback)(AVFrame*, void*), void* callbackOpaque)
@@ -73,83 +175,18 @@ int flaw_ffmpeg_decode(AVFormatContext* ctx, int streamsMask, int (*callback)(AV
 		}
 	}
 
-	// init frame
-	AVFrame* frame = av_frame_alloc();
+	// init state
+	struct DecodeState state;
+	state.ctx = ctx;
+	state.frame = av_frame_alloc();
+	state.streamsMask = streamsMask;
+	state.callback = callback;
+	state.callbackOpaque = callbackOpaque;
 
-	// init packet struct
-	AVPacket pkt;
-	av_init_packet(&pkt);
-	pkt.data = NULL;
-	pkt.size = 0;
-
-	// loop reading packets
-	int err = 0, gotPacket;
-	do
-	{
-		gotPacket = av_read_frame(ctx, &pkt) >= 0;
-		if(!gotPacket)
-		{
-			pkt.data = NULL;
-			pkt.size = 0;
-		}
-		if(streamsMask & (1 << pkt.stream_index))
-		{
-			AVCodecContext* codec = ctx->streams[pkt.stream_index]->codec;
-			AVPacket origPkt = pkt;
-			// loop decoding frames
-			int gotFrame;
-			do
-			{
-				// decode frame
-				gotFrame = 0;
-				int decoded = 0;
-				switch(codec->codec_type)
-				{
-				case AVMEDIA_TYPE_VIDEO:
-					decoded = avcodec_decode_video2(codec, frame, &gotFrame, &pkt);
-					break;
-				case AVMEDIA_TYPE_AUDIO:
-					decoded = avcodec_decode_audio4(codec, frame, &gotFrame, &pkt);
-					break;
-				case AVMEDIA_TYPE_DATA:
-					break;
-				case AVMEDIA_TYPE_SUBTITLE:
-					break;
-				case AVMEDIA_TYPE_ATTACHMENT:
-					break;
-				}
-				if(decoded < 0)
-				{
-					err = decoded;
-				}
-				else
-				{
-					// output frame
-					if(gotFrame)
-					{
-						int ret = callback(frame, callbackOpaque);
-						if(ret != 0)
-						{
-							err = ret;
-						}
-					}
-					// advance packet
-					if(gotPacket)
-					{
-						pkt.data += decoded;
-						pkt.size -= decoded;
-					}
-				}
-			}
-			while(err >= 0 && (gotPacket ? pkt.size > 0 : gotFrame));
-		}
-		// free packet
-		av_packet_unref(&pkt);
-	}
-	while(err >= 0 && gotPacket);
+	int err = flaw_ffmpeg_demux(ctx, decodeCallback, &state);
 
 	// close frame
-	av_frame_free(&frame);
+	av_frame_free(&state.frame);
 
 	// close decoders
 	for(int i = 0; i < ctx->nb_streams; ++i)
