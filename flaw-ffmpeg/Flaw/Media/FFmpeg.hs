@@ -10,23 +10,19 @@ module Flaw.Media.FFmpeg
 	( FFmpegAVFormatContext()
 	, ffmpegInit
 	, ffmpegOpenAVFormatContext
-	, ffmpegDecodeAudio
+	, ffmpegDecodeSingleAudioStream
 	) where
 
 import Control.Exception
 import Control.Concurrent
 import Control.Monad
 import qualified Data.ByteString as B
-import qualified Data.ByteString.Lazy as BL
-import Data.IORef
 import Data.Monoid
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import Foreign.C.Types
-import Foreign.Marshal.Alloc
 import Foreign.Marshal.Utils
 import Foreign.Ptr
-import Foreign.Storable
 
 import Flaw.Audio
 import Flaw.Book
@@ -51,28 +47,20 @@ ffmpegOpenAVFormatContext url = describeException "failed to open FFmpeg AV form
 
 	return $ FFmpegAVFormatContext formatContextPtr
 
-ffmpegDecodeAudio :: FFmpegAVFormatContext -> IO (SoundFormat, BL.ByteString)
-ffmpegDecodeAudio (FFmpegAVFormatContext formatContextPtr) = describeException "failed to decode ffmpeg audio" $ do
-	-- get audio stream
-	streamPtr <- flaw_ffmpeg_getSingleAudioStream formatContextPtr
-	when (streamPtr == nullPtr) $ throwIO $ DescribeFirstException "no single audio stream"
-	-- prepare to decode
-	checkAVError "prepare decoding" $ flaw_ffmpeg_prepareStreamDecoding streamPtr
-	-- get format
-	format <- alloca $ \samplesPerSecondPtr -> alloca $ \sampleFormatPtr -> alloca $ \channelsCountPtr -> do
-		flaw_ffmpeg_getAudioStreamFormat streamPtr samplesPerSecondPtr sampleFormatPtr channelsCountPtr
-		SoundFormat
-			<$> (fromIntegral <$> peek samplesPerSecondPtr)
-			<*> (convertSampleFormat <$> peek sampleFormatPtr)
-			<*> (fromIntegral <$> peek channelsCountPtr)
-	-- decode
-	chunksRef <- newIORef []
-	outputCallback <- wrapOutputCallback $ \chunkPtr chunkLen ->
-		modifyIORef' chunksRef =<< (:) <$> B.packCStringLen (chunkPtr, fromIntegral chunkLen)
-	checkAVError "decode audio" $ flaw_ffmpeg_decodeAudio formatContextPtr streamPtr outputCallback
-	-- get samples data
-	bytes <- BL.fromChunks . reverse <$> readIORef chunksRef
-	return (format, bytes)
+ffmpegDecodeSingleAudioStream :: FFmpegAVFormatContext -> (SoundFormat -> Ptr () -> Int -> IO ()) -> IO ()
+ffmpegDecodeSingleAudioStream (FFmpegAVFormatContext formatContextPtr) callback = describeException "failed to decode ffmpeg single audio stream" $ withBook $ \bk -> do
+
+	wrappedCallback <- wrapDecodeAudioCallback $ \samplesPerSecond sampleFormat channelsCount dataPtr size -> do
+		callback SoundFormat
+			{ soundFormatSamplesPerSecond = fromIntegral samplesPerSecond
+			, soundFormatSampleType = convertSampleFormat sampleFormat
+			, soundFormatChannelsCount = fromIntegral channelsCount
+			} dataPtr (fromIntegral size)
+		return 0
+
+	book bk $ return ((), freeHaskellFunPtr wrappedCallback)
+
+	checkAVError "decode audio" $ flaw_ffmpeg_decodeSinglePackedAudioStream formatContextPtr wrappedCallback
 
 checkAVError :: String -> IO CInt -> IO ()
 checkAVError message action = do
@@ -92,22 +80,16 @@ convertSampleFormat sampleFormat = case sampleFormat of
 
 foreign import ccall safe flaw_ffmpeg_init :: IO ()
 foreign import ccall safe flaw_ffmpeg_openInput :: Ptr CChar -> IO (Ptr C_AVFormatContext)
-foreign import ccall safe flaw_ffmpeg_getSingleVideoStream :: Ptr C_AVFormatContext -> IO (Ptr C_AVStream)
-foreign import ccall safe flaw_ffmpeg_getSingleAudioStream :: Ptr C_AVFormatContext -> IO (Ptr C_AVStream)
-foreign import ccall safe flaw_ffmpeg_prepareStreamDecoding :: Ptr C_AVStream -> IO CInt
-foreign import ccall unsafe flaw_ffmpeg_getAudioStreamFormat :: Ptr C_AVStream -> Ptr CInt -> Ptr CInt -> Ptr CInt -> IO ()
-foreign import ccall safe flaw_ffmpeg_decodeAudio
-	:: Ptr C_AVFormatContext -> Ptr C_AVStream -> FunPtr OutputCallback -> IO CInt
+foreign import ccall safe flaw_ffmpeg_decodeSinglePackedAudioStream :: Ptr C_AVFormatContext -> FunPtr DecodeAudioCallback -> IO CInt
 
 -- wrappers
 
-type OutputCallback = Ptr CChar -> CInt -> IO ()
-foreign import ccall "wrapper" wrapOutputCallback :: OutputCallback -> IO (FunPtr OutputCallback)
+type DecodeAudioCallback = CInt -> CInt -> CInt -> Ptr () -> CInt -> IO CInt
+foreign import ccall "wrapper" wrapDecodeAudioCallback :: DecodeAudioCallback -> IO (FunPtr DecodeAudioCallback)
 
 -- ffmpeg types
 
 data C_AVFormatContext
-data C_AVStream
 data C_AVDictionary
 
 -- ffmpeg routines

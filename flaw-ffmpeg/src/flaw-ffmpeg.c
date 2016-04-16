@@ -33,49 +33,45 @@ AVFormatContext* flaw_ffmpeg_openInput(const char* url)
 	return NULL;
 }
 
-static AVStream* getSingleStreamWithType(AVFormatContext* ctx, enum AVMediaType codecType)
+int flaw_ffmpeg_getStreamsCount(AVFormatContext* ctx)
 {
-	int r = -1;
+	return ctx->nb_streams;
+}
+
+void flaw_ffmpeg_getStreamsTypes(AVFormatContext* ctx, int* outStreamsTypes)
+{
 	for(int i = 0; i < ctx->nb_streams; ++i)
-		if(ctx->streams[i]->codec->codec_type == codecType)
-			if(r < 0) r = i;
-			else return NULL;
-	return r >= 0 ? ctx->streams[r] : NULL;
+	{
+		outStreamsTypes[i] = ctx->streams[i]->codec->codec_type;
+	}
 }
 
-AVStream* flaw_ffmpeg_getSingleVideoStream(AVFormatContext* ctx)
+// Decode streams using decode callback provided.
+// If callback returns non-zero value, decoding is stopped and that value is returned.
+int flaw_ffmpeg_decode(AVFormatContext* ctx, int streamsMask, int (*callback)(AVFrame*, void*), void* callbackOpaque)
 {
-	return getSingleStreamWithType(ctx, AVMEDIA_TYPE_VIDEO);
-}
-
-AVStream* flaw_ffmpeg_getSingleAudioStream(AVFormatContext* ctx)
-{
-	return getSingleStreamWithType(ctx, AVMEDIA_TYPE_AUDIO);
-}
-
-int flaw_ffmpeg_prepareStreamDecoding(AVStream* stream)
-{
-	int ret;
-	AVCodec* decoder = avcodec_find_decoder(stream->codec->codec_id);
-	if(!decoder) return -1;
-	if((ret = avcodec_open2(stream->codec, decoder, NULL)) < 0) return ret;
-	return 0;
-}
-
-void flaw_ffmpeg_getAudioStreamFormat(AVStream* stream, int* outSamplesPerSecond, int* outFormat, int* outChannelsCount)
-{
-	*outSamplesPerSecond = stream->codec->sample_rate;
-	*outFormat = av_get_packed_sample_fmt(stream->codec->sample_fmt);
-	*outChannelsCount = stream->codec->channels;
-}
-
-int flaw_ffmpeg_decodeAudio(AVFormatContext* ctx, AVStream* stream, void (*output)(const void*, int))
-{
-	// some calculations
-	int channelsCount = stream->codec->channels;
-	int bytesPerSample = av_get_bytes_per_sample(stream->codec->sample_fmt);
-	int planar = av_sample_fmt_is_planar(stream->codec->sample_fmt);
-	int bytesPerInterleavedSample = bytesPerSample * channelsCount;
+	// open decoders for streams needed
+	for(int i = 0; i < ctx->nb_streams; ++i)
+	{
+		if(streamsMask & (1 << i))
+		{
+			AVCodecContext* codec = ctx->streams[i]->codec;
+			AVCodec* decoder = avcodec_find_decoder(codec->codec_id);
+			int ret = decoder ? avcodec_open2(codec, decoder, NULL) : -1;
+			if(ret < 0)
+			{
+				// close already opened decoders
+				for(int j = 0; j < i; ++j)
+				{
+					if(streamsMask & (1 << j))
+					{
+						avcodec_close(ctx->streams[j]->codec);
+					}
+				}
+				return ret;
+			}
+		}
+	}
 
 	// init frame
 	AVFrame* frame = av_frame_alloc();
@@ -96,66 +92,162 @@ int flaw_ffmpeg_decodeAudio(AVFormatContext* ctx, AVStream* stream, void (*outpu
 			pkt.data = NULL;
 			pkt.size = 0;
 		}
-		if(pkt.stream_index == stream->index)
+		if(streamsMask & (1 << pkt.stream_index))
 		{
+			AVCodecContext* codec = ctx->streams[pkt.stream_index]->codec;
 			AVPacket origPkt = pkt;
-			// loop decoding packets
+			// loop decoding frames
 			int gotFrame;
 			do
 			{
-				// decode audio frame
+				// decode frame
 				gotFrame = 0;
-				int decoded = avcodec_decode_audio4(stream->codec, frame, &gotFrame, &pkt);
+				int decoded = 0;
+				switch(codec->codec_type)
+				{
+				case AVMEDIA_TYPE_VIDEO:
+					decoded = avcodec_decode_video2(codec, frame, &gotFrame, &pkt);
+					break;
+				case AVMEDIA_TYPE_AUDIO:
+					decoded = avcodec_decode_audio4(codec, frame, &gotFrame, &pkt);
+					break;
+				case AVMEDIA_TYPE_DATA:
+					break;
+				case AVMEDIA_TYPE_SUBTITLE:
+					break;
+				case AVMEDIA_TYPE_ATTACHMENT:
+					break;
+				}
 				if(decoded < 0)
 				{
 					err = decoded;
-					break;
 				}
-				if(gotFrame)
+				else
 				{
-					int samplesCount = frame->nb_samples;
-					int interleavedDataSize = samplesCount * bytesPerSample * channelsCount;
-					if(planar)
+					// output frame
+					if(gotFrame)
 					{
-						// convert to interleaved format
-						uint8_t interleavedData[interleavedDataSize];
-						for(int i = 0; i < channelsCount; ++i)
+						int ret = callback(frame, callbackOpaque);
+						if(ret != 0)
 						{
-							uint8_t* interleavedChannelData = interleavedData + i * bytesPerSample;
-							const uint8_t* planarChannelData = frame->extended_data[i];
-							for(int j = 0; j < samplesCount; ++j)
-							{
-								uint8_t* interleavedSamplePtr = interleavedChannelData + j * bytesPerInterleavedSample;
-								const uint8_t* planarSamplePtr = planarChannelData + j * bytesPerSample;
-								for(int k = 0; k < bytesPerSample; ++k)
-									interleavedSamplePtr[k] = planarSamplePtr[k];
-							}
+							err = ret;
 						}
-						// output interleaved data
-						output(interleavedData, interleavedDataSize);
 					}
-					else
+					// advance packet
+					if(gotPacket)
 					{
-						// output interleaved data
-						output(frame->extended_data[0], interleavedDataSize);
+						pkt.data += decoded;
+						pkt.size -= decoded;
 					}
-				}
-				// advance packet
-				if(gotPacket)
-				{
-					pkt.data += decoded;
-					pkt.size -= decoded;
 				}
 			}
 			while(err >= 0 && (gotPacket ? pkt.size > 0 : gotFrame));
-			// free packet
-			av_packet_unref(&origPkt);
 		}
+		// free packet
+		av_packet_unref(&pkt);
 	}
 	while(err >= 0 && gotPacket);
 
-	avcodec_close(stream->codec);
+	// close frame
 	av_frame_free(&frame);
 
+	// close decoders
+	for(int i = 0; i < ctx->nb_streams; ++i)
+	{
+		if(streamsMask & (1 << i))
+		{
+			avcodec_close(ctx->streams[i]->codec);
+		}
+	}
+
 	return err;
+}
+
+struct ChainedDecodeCallback
+{
+	void* callback;
+	void* opaque;
+};
+
+typedef int (*PackAudioCallback)(AVFrame* frame, int packedFormat, void* packedData, int packedSize, void* opaque);
+
+// ensure audio is in a packed format, and pass it further
+int flaw_ffmpeg_packAudio(AVFrame* frame, void* opaque)
+{
+	int samplesCount = frame->nb_samples;
+	int bytesPerSample = av_get_bytes_per_sample(frame->format);
+	int channelsCount = av_frame_get_channels(frame);
+	int bytesPerInterleavedSample = bytesPerSample * channelsCount;
+	int interleavedDataSize = samplesCount * bytesPerInterleavedSample;
+
+	PackAudioCallback callback = (PackAudioCallback)((struct ChainedDecodeCallback*)opaque)->callback;
+	void* callbackOpaque = ((struct ChainedDecodeCallback*)opaque)->opaque;
+
+	if(av_sample_fmt_is_planar(frame->format))
+	{
+		// convert to packed format
+		uint8_t interleavedData[interleavedDataSize];
+		for(int i = 0; i < channelsCount; ++i)
+		{
+			uint8_t* interleavedChannelData = interleavedData + i * bytesPerSample;
+			const uint8_t* planarChannelData = frame->extended_data[i];
+			for(int j = 0; j < samplesCount; ++j)
+			{
+				uint8_t* interleavedSamplePtr = interleavedChannelData + j * bytesPerInterleavedSample;
+				const uint8_t* planarSamplePtr = planarChannelData + j * bytesPerSample;
+				for(int k = 0; k < bytesPerSample; ++k)
+					interleavedSamplePtr[k] = planarSamplePtr[k];
+			}
+		}
+		// output packed data
+		callback(frame, av_get_packed_sample_fmt(frame->format), interleavedData, interleavedDataSize, callbackOpaque);
+	}
+	else
+	{
+		// output packed data
+		callback(frame, frame->format, frame->extended_data[0], interleavedDataSize, callbackOpaque);
+	}
+}
+
+typedef int (*DecodeAudioCallback)(int samplesPerSecond, int sampleFormat, int channelsCount, const void* data, int size);
+
+static int decodePackedAudioCallback(AVFrame* frame, int format, void* data, int size, void* opaque)
+{
+	return ((DecodeAudioCallback)opaque)(av_frame_get_sample_rate(frame), format, av_frame_get_channels(frame), data, size);
+}
+
+// find a single audio stream and decode it, converting from planar format if needed
+int flaw_ffmpeg_decodeSinglePackedAudioStream(AVFormatContext* ctx, DecodeAudioCallback callback)
+{
+	// find audio stream
+	int streamsCount = flaw_ffmpeg_getStreamsCount(ctx);
+	int streamsTypes[streamsCount];
+	flaw_ffmpeg_getStreamsTypes(ctx, streamsTypes);
+	int audioStreamIndex = -1;
+	for(int i = 0; i < streamsCount; ++i)
+	{
+		if(streamsTypes[i] == AVMEDIA_TYPE_AUDIO)
+		{
+			if(audioStreamIndex < 0)
+			{
+				audioStreamIndex = i;
+			}
+			else
+			{
+				// more than one audio stream
+				return -1;
+			}
+		}
+	}
+	// no audio streams
+	if(audioStreamIndex < 0)
+	{
+		return -1;
+	}
+
+	// decode
+	struct ChainedDecodeCallback chainedCallback;
+	chainedCallback.callback = &decodePackedAudioCallback;
+	chainedCallback.opaque = callback;
+	return flaw_ffmpeg_decode(ctx, 1 << audioStreamIndex, flaw_ffmpeg_packAudio, &chainedCallback);
 }
