@@ -25,6 +25,7 @@ module Flaw.Audio.OpenAL.FFI
 	, ALCdevice
 	, ALCcontext
 	-- * ALC functions
+	, alcGetError
 	, alcOpenDevice
 	, alcCloseDevice
 	, alcCreateContext
@@ -47,6 +48,11 @@ module Flaw.Audio.OpenAL.FFI
 	, alSourceUnqueueBuffers
 	-- * AL enums
 	, pattern AL_NO_ERROR
+	, pattern AL_INVALID_NAME
+	, pattern AL_INVALID_ENUM
+	, pattern AL_INVALID_VALUE
+	, pattern AL_INVALID_OPERATION
+	, pattern AL_OUT_OF_MEMORY
 	, pattern AL_FORMAT_MONO8
 	, pattern AL_FORMAT_MONO16
 	, pattern AL_FORMAT_STEREO8
@@ -64,6 +70,13 @@ module Flaw.Audio.OpenAL.FFI
 	, pattern AL_PAUSED
 	, pattern AL_STOPPED
 	, pattern AL_BUFFERS_PROCESSED
+	-- * ALC enums
+	, pattern ALC_NO_ERROR
+	, pattern ALC_INVALID_DEVICE
+	, pattern ALC_INVALID_CONTEXT
+	, pattern ALC_INVALID_ENUM
+	, pattern ALC_INVALID_VALUE
+	, pattern ALC_OUT_OF_MEMORY
 	) where
 
 import Foreign.C.Types
@@ -84,6 +97,8 @@ type ALdouble = CDouble
 
 data ALCdevice
 data ALCcontext
+
+foreign import ccall safe alcGetError :: Ptr ALCdevice -> IO ALenum
 
 foreign import ccall safe alcOpenDevice :: Ptr ALchar -> IO (Ptr ALCdevice)
 foreign import ccall safe alcCloseDevice :: Ptr ALCdevice -> IO ALboolean
@@ -110,6 +125,11 @@ foreign import ccall unsafe alSourceQueueBuffers :: ALuint -> ALsizei -> Ptr ALu
 foreign import ccall unsafe alSourceUnqueueBuffers :: ALuint -> ALsizei -> Ptr ALuint -> IO ()
 
 pattern AL_NO_ERROR = 0
+pattern AL_INVALID_NAME = 0xA001
+pattern AL_INVALID_ENUM = 0xA002
+pattern AL_INVALID_VALUE = 0xA003
+pattern AL_INVALID_OPERATION = 0xA004
+pattern AL_OUT_OF_MEMORY = 0xA005
 
 pattern AL_FORMAT_MONO8 = 0x1100
 pattern AL_FORMAT_MONO16 = 0x1101
@@ -133,3 +153,10 @@ pattern AL_PAUSED = 0x1013
 pattern AL_STOPPED = 0x1014
 
 pattern AL_BUFFERS_PROCESSED = 0x1016
+
+pattern ALC_NO_ERROR = 0
+pattern ALC_INVALID_DEVICE = 0xA001
+pattern ALC_INVALID_CONTEXT = 0xA002
+pattern ALC_INVALID_ENUM = 0xA003
+pattern ALC_INVALID_VALUE = 0xA004
+pattern ALC_OUT_OF_MEMORY = 0xA005
