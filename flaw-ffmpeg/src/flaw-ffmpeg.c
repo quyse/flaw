@@ -50,10 +50,10 @@ void flaw_ffmpeg_closeInput(AVFormatContext* ctx)
 	avformat_close_input(&ctx);
 }
 
-AVFormatContext* flaw_ffmpeg_openOutput(const char* url)
+AVFormatContext* flaw_ffmpeg_openOutput(const char* url, const char* format)
 {
 	AVFormatContext* ctx = NULL;
-	int ret = avformat_alloc_output_context2(&ctx, NULL, NULL, url);
+	int ret = avformat_alloc_output_context2(&ctx, NULL, format, url);
 	if(ret != 0)
 	{
 		goto err;
@@ -101,70 +101,87 @@ void flaw_ffmpeg_getStreamsTypes(AVFormatContext* ctx, int* outStreamsTypes)
 	}
 }
 
-int flaw_ffmpeg_demux(AVFormatContext* ctx, int (*callback)(AVPacket*, void*), void* opaque)
+AVPacket* flaw_ffmpeg_refPacket(AVPacket* pkt)
+{
+	AVPacket* newpkt = av_packet_alloc();
+	if(av_packet_ref(newpkt, pkt) != 0)
+	{
+		av_packet_free(&newpkt);
+	}
+	return newpkt;
+}
+
+void flaw_ffmpeg_freePacket(AVPacket* pkt)
+{
+	av_packet_free(&pkt);
+}
+
+int flaw_ffmpeg_getPacketStreamIndex(AVPacket* pkt)
+{
+	return pkt->stream_index;
+}
+
+int flaw_ffmpeg_demux(AVFormatContext* ctx, int (*callback)(AVPacket*))
 {
 	// init packet struct
-	AVPacket pkt;
-	av_init_packet(&pkt);
-	pkt.data = NULL;
-	pkt.size = 0;
+	AVPacket* pkt = av_packet_alloc();
 
 	// loop reading packets
 	int err = 0, gotPacket;
 	do
 	{
-		gotPacket = av_read_frame(ctx, &pkt) >= 0;
-		if(!gotPacket)
-		{
-			pkt.data = NULL;
-			pkt.size = 0;
-		}
+		gotPacket = av_read_frame(ctx, pkt) >= 0;
 
-		int ret = callback(&pkt, opaque);
+		int ret = callback(pkt);
 		if(ret != 0)
 		{
 			err = ret;
 		}
 
-		// free packet
-		av_packet_unref(&pkt);
+		av_packet_unref(pkt);
 	}
 	while(err == 0 && gotPacket);
+
+	av_packet_free(&pkt);
 
 	return err;
 }
 
-struct DecodeState
+AVFrame* flaw_ffmpeg_refFrame(AVFrame* frame)
 {
-	AVFormatContext* ctx;
-	AVFrame* frame;
-	int streamsMask;
-	int (*callback)(AVFrame*, void*);
-	void* callbackOpaque;
-};
+	AVFrame* newFrame = av_frame_alloc();
+	if(av_frame_ref(newFrame, frame) != 0)
+	{
+		av_frame_free(&newFrame);
+	}
+	return newFrame;
+}
 
-static int decodeCallback(AVPacket* pkt, void* opaque)
+void flaw_ffmpeg_freeFrame(AVFrame* frame)
 {
-	struct DecodeState* state = (struct DecodeState*)opaque;
+	av_frame_free(&frame);
+}
 
-	// skip streams we don't care about
-	if(!(state->streamsMask & (1 << pkt->stream_index))) return 0;
-
-	AVCodecContext* codec = state->ctx->streams[pkt->stream_index]->codec;
+int flaw_ffmpeg_decode(AVFormatContext* ctx, AVPacket* pktOrig, int (*callback)(AVFrame*))
+{
+	AVPacket pkt = *pktOrig;
+	AVCodecContext* codec = ctx->streams[pkt.stream_index]->codec;
 	// loop decoding frames
+	AVFrame* frame = av_frame_alloc();
 	int gotFrame, err = 0;
 	do
 	{
 		// decode frame
 		gotFrame = 0;
 		int decoded = 0;
+
 		switch(codec->codec_type)
 		{
 		case AVMEDIA_TYPE_VIDEO:
-			decoded = avcodec_decode_video2(codec, state->frame, &gotFrame, pkt);
+			decoded = avcodec_decode_video2(codec, frame, &gotFrame, &pkt);
 			break;
 		case AVMEDIA_TYPE_AUDIO:
-			decoded = avcodec_decode_audio4(codec, state->frame, &gotFrame, pkt);
+			decoded = avcodec_decode_audio4(codec, frame, &gotFrame, &pkt);
 			break;
 		case AVMEDIA_TYPE_DATA:
 			break;
@@ -173,6 +190,7 @@ static int decodeCallback(AVPacket* pkt, void* opaque)
 		case AVMEDIA_TYPE_ATTACHMENT:
 			break;
 		}
+
 		if(decoded < 0)
 		{
 			err = decoded;
@@ -182,101 +200,46 @@ static int decodeCallback(AVPacket* pkt, void* opaque)
 			// output frame
 			if(gotFrame)
 			{
-				int ret = state->callback(state->frame, state->callbackOpaque);
+				int ret = callback(frame);
 				if(ret != 0)
 				{
 					err = ret;
 				}
 			}
 			// advance packet
-			if(pkt->data)
+			if(pkt.data)
 			{
-				pkt->data += decoded;
-				pkt->size -= decoded;
+				pkt.data += decoded;
+				pkt.size -= decoded;
 			}
 		}
+
+		av_frame_unref(frame);
 	}
-	while(err == 0 && (pkt->data ? pkt->size > 0 : gotFrame));
+	while(err == 0 && (pkt.data ? pkt.size > 0 : gotFrame));
+
+	av_frame_free(&frame);
 
 	return err;
 }
 
-// Decode streams using decode callback provided.
-// If callback returns non-zero value, decoding is stopped and that value is returned.
-int flaw_ffmpeg_decode(AVFormatContext* ctx, int streamsMask, int (*callback)(AVFrame*, void*), void* callbackOpaque)
+int flaw_ffmpeg_openCodec(AVFormatContext* ctx, int streamIndex)
 {
-	// open decoders for streams needed
-	for(int i = 0; i < ctx->nb_streams; ++i)
-	{
-		if(streamsMask & (1 << i))
-		{
-			AVCodecContext* codec = ctx->streams[i]->codec;
-			AVCodec* decoder = avcodec_find_decoder(codec->codec_id);
-			int ret = decoder ? avcodec_open2(codec, decoder, NULL) : -1;
-			if(ret < 0)
-			{
-				// close already opened decoders
-				for(int j = 0; j < i; ++j)
-				{
-					if(streamsMask & (1 << j))
-					{
-						avcodec_close(ctx->streams[j]->codec);
-					}
-				}
-				return ret;
-			}
-		}
-	}
-
-	// init state
-	struct DecodeState state;
-	state.ctx = ctx;
-	state.frame = av_frame_alloc();
-	state.streamsMask = streamsMask;
-	state.callback = callback;
-	state.callbackOpaque = callbackOpaque;
-
-	int err = flaw_ffmpeg_demux(ctx, decodeCallback, &state);
-
-	// close frame
-	av_frame_free(&state.frame);
-
-	// close decoders
-	for(int i = 0; i < ctx->nb_streams; ++i)
-	{
-		if(streamsMask & (1 << i))
-		{
-			avcodec_close(ctx->streams[i]->codec);
-		}
-	}
-
-	return err;
+	AVCodecContext* codec = ctx->streams[streamIndex]->codec;
+	AVCodec* decoder = avcodec_find_decoder(codec->codec_id);
+	AVDictionary* opts = NULL;
+	av_dict_set(&opts, "refcounted_frames", "1", 0);
+	int ret = decoder ? avcodec_open2(codec, decoder, &opts) : -1;
+	av_dict_free(&opts);
+	return ret;
 }
 
-struct RemuxState
+void flaw_ffmpeg_closeCodec(AVFormatContext* ctx, int streamIndex)
 {
-	AVFormatContext* inctx;
-	AVFormatContext* outctx;
-};
-
-int remuxCallback(AVPacket* pkt, void* opaque)
-{
-	struct RemuxState* state = (struct RemuxState*)opaque;
-
-	// skip empty packets
-	if(!pkt->data) return 0;
-
-	AVStream* inStream = state->inctx->streams[pkt->stream_index];
-	AVStream* outStream = state->outctx->streams[pkt->stream_index];
-
-	// copy packet
-	av_packet_rescale_ts(pkt, inStream->time_base, outStream->time_base);
-	pkt->pos = -1;
-
-	return av_interleaved_write_frame(state->outctx, pkt);
+	avcodec_close(ctx->streams[streamIndex]->codec);
 }
 
-int flaw_ffmpeg_remux(AVFormatContext* inctx, AVFormatContext* outctx)
+int flaw_ffmpeg_prepareRemux(AVFormatContext* inctx, AVFormatContext* outctx)
 {
 	// create output streams
 	for(int i = 0; i < inctx->nb_streams; ++i)
@@ -294,51 +257,57 @@ int flaw_ffmpeg_remux(AVFormatContext* inctx, AVFormatContext* outctx)
 		}
 	}
 
-	int ret;
-
 	// write header
-	if((ret = avformat_write_header(outctx, NULL)) != 0)
-	{
-		return ret;
-	}
-
-	// copy packets
-	struct RemuxState state;
-	state.inctx = inctx;
-	state.outctx = outctx;
-	if((ret = flaw_ffmpeg_demux(inctx, remuxCallback, &state)) != 0)
-	{
-		return ret;
-	}
-
-	// write trailer
-	return av_write_trailer(outctx);
+	return avformat_write_header(outctx, NULL);
 }
 
-struct ChainedDecodeCallback
+int flaw_ffmpeg_remuxPacket(AVFormatContext* inctx, AVFormatContext* outctx, AVPacket* pkt)
 {
-	void* callback;
-	void* opaque;
-};
+	// skip empty packets
+	if(!pkt->data) return 0;
 
-typedef int (*PackAudioCallback)(AVFrame* frame, int packedFormat, void* packedData, int packedSize, void* opaque);
+	AVStream* inStream = inctx->streams[pkt->stream_index];
+	AVStream* outStream = outctx->streams[pkt->stream_index];
 
-// ensure audio is in a packed format, and pass it further
-int flaw_ffmpeg_packAudio(AVFrame* frame, void* opaque)
+	av_packet_rescale_ts(pkt, inStream->time_base, outStream->time_base);
+	pkt->pos = -1;
+	return av_interleaved_write_frame(outctx, pkt);
+}
+
+int flaw_ffmpeg_finalizeOutputContext(AVFormatContext* ctx)
+{
+	// write trailer
+	return av_write_trailer(ctx);
+}
+
+int flaw_ffmpeg_getSingleAudioStream(AVFormatContext* ctx)
+{
+	int r = -1;
+	for(int i = 0; i < ctx->nb_streams; ++i)
+		if(ctx->streams[i]->codec->codec_type == AVMEDIA_TYPE_AUDIO)
+		{
+			if(r < 0) r = i;
+			else return -1;
+		}
+	return r;
+}
+
+typedef int (*DecodeAudioCallback)(int samplesPerSecond, int sampleFormat, int channelsCount, const void* data, int size);
+
+// get audio from frame, converting to packed format if needed
+int flaw_ffmpeg_packAudioFrame(AVFrame* frame, DecodeAudioCallback callback)
 {
 	int samplesCount = frame->nb_samples;
+	int samplesPerSecond = av_frame_get_sample_rate(frame);
 	int bytesPerSample = av_get_bytes_per_sample(frame->format);
 	int channelsCount = av_frame_get_channels(frame);
 	int bytesPerInterleavedSample = bytesPerSample * channelsCount;
-	int interleavedDataSize = samplesCount * bytesPerInterleavedSample;
+	int interleavedSize = samplesCount * bytesPerInterleavedSample;
 
-	PackAudioCallback callback = (PackAudioCallback)((struct ChainedDecodeCallback*)opaque)->callback;
-	void* callbackOpaque = ((struct ChainedDecodeCallback*)opaque)->opaque;
-
+	// if frame's data is planar, convert to packed data
 	if(av_sample_fmt_is_planar(frame->format))
 	{
-		// convert to packed format
-		uint8_t interleavedData[interleavedDataSize];
+		uint8_t interleavedData[interleavedSize];
 		for(int i = 0; i < channelsCount; ++i)
 		{
 			uint8_t* interleavedChannelData = interleavedData + i * bytesPerSample;
@@ -351,55 +320,10 @@ int flaw_ffmpeg_packAudio(AVFrame* frame, void* opaque)
 					interleavedSamplePtr[k] = planarSamplePtr[k];
 			}
 		}
-		// output packed data
-		callback(frame, av_get_packed_sample_fmt(frame->format), interleavedData, interleavedDataSize, callbackOpaque);
+		return callback(samplesPerSecond, av_get_packed_sample_fmt(frame->format), channelsCount, interleavedData, interleavedSize);
 	}
 	else
 	{
-		// output packed data
-		callback(frame, frame->format, frame->extended_data[0], interleavedDataSize, callbackOpaque);
+		return callback(samplesPerSecond, frame->format, channelsCount, frame->extended_data[0], interleavedSize);
 	}
-}
-
-typedef int (*DecodeAudioCallback)(int samplesPerSecond, int sampleFormat, int channelsCount, const void* data, int size);
-
-static int decodePackedAudioCallback(AVFrame* frame, int format, void* data, int size, void* opaque)
-{
-	return ((DecodeAudioCallback)opaque)(av_frame_get_sample_rate(frame), format, av_frame_get_channels(frame), data, size);
-}
-
-// find a single audio stream and decode it, converting from planar format if needed
-int flaw_ffmpeg_decodeSinglePackedAudioStream(AVFormatContext* ctx, DecodeAudioCallback callback)
-{
-	// find audio stream
-	int streamsCount = flaw_ffmpeg_getStreamsCount(ctx);
-	int streamsTypes[streamsCount];
-	flaw_ffmpeg_getStreamsTypes(ctx, streamsTypes);
-	int audioStreamIndex = -1;
-	for(int i = 0; i < streamsCount; ++i)
-	{
-		if(streamsTypes[i] == AVMEDIA_TYPE_AUDIO)
-		{
-			if(audioStreamIndex < 0)
-			{
-				audioStreamIndex = i;
-			}
-			else
-			{
-				// more than one audio stream
-				return -1;
-			}
-		}
-	}
-	// no audio streams
-	if(audioStreamIndex < 0)
-	{
-		return -1;
-	}
-
-	// decode
-	struct ChainedDecodeCallback chainedCallback;
-	chainedCallback.callback = &decodePackedAudioCallback;
-	chainedCallback.opaque = callback;
-	return flaw_ffmpeg_decode(ctx, 1 << audioStreamIndex, flaw_ffmpeg_packAudio, &chainedCallback);
 }
