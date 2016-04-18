@@ -15,31 +15,31 @@ module Flaw.Book
 	, withSpecialBook
 	) where
 
+import Control.Concurrent.STM
 import Control.Exception
-import Data.IORef
+import Control.Monad
 
-newtype Book = Book (IORef [IO ()])
+newtype Book = Book (TVar [IO ()])
 
 {-# INLINE newBook #-}
 newBook :: IO Book
-newBook = Book <$> newIORef []
+newBook = Book <$> newTVarIO []
 
 -- | Free the book.
 {-# INLINE freeBook #-}
 freeBook :: Book -> IO ()
-freeBook (Book ref) = do
-	sequence_ =<< readIORef ref
-	writeIORef ref []
+freeBook = join . releaseBook
 
 -- | Return IO action freeing everything, and clear the book.
 -- Returned action captures state of the book at the moment of call,
 -- so it won't free resources added after.
 {-# INLINE releaseBook #-}
 releaseBook :: Book -> IO (IO ())
-releaseBook (Book ref) = do
-	finalizers <- readIORef ref
-	writeIORef ref []
-	return $ sequence_ finalizers
+releaseBook (Book var) = return $ sequence_ =<< atomically q
+	where q = do
+		finalizers <- readTVar var
+		writeTVar var []
+		return finalizers
 
 -- | Create a dynamic book which could be safely freed multiple times.
 {-# INLINE newDynamicBook #-}
@@ -50,10 +50,9 @@ newDynamicBook = do
 
 {-# INLINE book #-}
 book :: Book -> IO (a, IO ()) -> IO a
-book (Book ref) q = do
+book (Book var) q = do
 	(a, r) <- q
-	rs <- readIORef ref
-	writeIORef ref $ r : rs
+	atomically $ modifyTVar' var (r :)
 	return a
 
 {-# INLINE withBook #-}
