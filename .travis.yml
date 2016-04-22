@@ -7,22 +7,20 @@ language: c
 matrix:
   include:
   - os: linux
-    env: OS=linux GHCVER=7.10.3 MOREPACKAGES=flaw-gl-mesa
+    env: OS=linux GHCVER=7.10.3
     addons:
       apt:
         packages:
         - ghc-7.10.3
-        - libgl1-mesa-dev
         - libopenal-dev
         sources:
         - hvr-ghc
   - os: linux
-    env: OS=linux GHCVER=HEAD MOREPACKAGES=flaw-gl-mesa
+    env: OS=linux GHCVER=HEAD
     addons:
       apt:
         packages:
         - ghc-head
-        - libgl1-mesa-dev
         - libopenal-dev
         sources:
         - hvr-ghc
@@ -83,7 +81,6 @@ script: >-
   flaw-ui-default-style
   flaw-visual
   flaw-window
-  $MOREPACKAGES
 
 cache:
   directories:
