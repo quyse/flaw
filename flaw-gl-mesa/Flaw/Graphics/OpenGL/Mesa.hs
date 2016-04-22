@@ -82,7 +82,7 @@ instance Presenter OpenGLOsMesaPresenter OpenGLOsMesaSystem GlContext GlContext 
 
 createOpenGLOsMesaPresenter :: Int -> Int -> Bool -> Bool -> IO ((GlContext, OpenGLOsMesaPresenter), IO ())
 createOpenGLOsMesaPresenter width height needDepth debug = describeException "failed to create OpenGL OS MESA presenter" $ withSpecialBook $ \bk -> do
-	flow <- book bk newFlow
+	flow <- book bk newFlowOS
 	runInFlow flow $ do
 		bufferPtr <- book bk $ do
 			bufferPtr <- mallocBytes (width * height * 4)
