@@ -64,6 +64,7 @@ script: >-
   flaw-font-fthb
   flaw-game
   flaw-gl
+  flaw-gl-mesa
   flaw-gl-sdl
   flaw-graphics
   flaw-input

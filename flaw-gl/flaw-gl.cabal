@@ -40,6 +40,8 @@ library
     build-depends:       flaw-window, ghcjs-base
     js-sources:        js/flaw-webgl.js
   else
+    exposed-modules:
+      Flaw.Graphics.OpenGL
     other-modules:
       Flaw.Graphics.OpenGL.FFI
     build-depends:       OpenGLRaw
