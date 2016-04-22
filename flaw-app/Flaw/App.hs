@@ -62,7 +62,7 @@ type AppInputManager = Win32InputManager
 #else
 
 import Flaw.Graphics
-import Flaw.Graphics.OpenGL
+import Flaw.Graphics.OpenGL.SDL
 import Flaw.Input.Sdl
 import Flaw.Window.Sdl
 

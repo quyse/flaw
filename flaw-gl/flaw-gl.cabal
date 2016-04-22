@@ -24,10 +24,10 @@ flag gldebug
 
 library
   exposed-modules:
-  other-modules:
     Flaw.Graphics.GlContext
     Flaw.Graphics.GLSL
-  build-depends:       base, bytestring, cereal, cereal-text, flaw-base, flaw-graphics, flaw-math, flaw-sl, flaw-window, text, vector
+  other-modules:
+  build-depends:       base, bytestring, cereal, cereal-text, flaw-base, flaw-graphics, flaw-math, flaw-sl, text, vector
   if flag(gldebug)
     cpp-options:         -DGL_ERROR_LEVEL=0
   else
@@ -37,13 +37,11 @@ library
       Flaw.Graphics.WebGL
     other-modules:
       Flaw.Graphics.WebGL.FFI
-    build-depends:       ghcjs-base
+    build-depends:       flaw-window, ghcjs-base
     js-sources:        js/flaw-webgl.js
   else
-    exposed-modules:
-      Flaw.Graphics.OpenGL
     other-modules:
       Flaw.Graphics.OpenGL.FFI
-    build-depends:       flaw-sdl, OpenGLRaw, sdl2
+    build-depends:       OpenGLRaw
   -- hs-source-dirs:      
   default-language:    Haskell2010
