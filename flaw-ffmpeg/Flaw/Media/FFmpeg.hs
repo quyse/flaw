@@ -8,6 +8,9 @@ License: MIT
 
 module Flaw.Media.FFmpeg
 	( FFmpegAVFormatContext()
+	, FFmpegAVPacket()
+	, FFmpegAVFrame()
+	, FFmpegScaler()
 	, ffmpegInit
 	, ffmpegOpenInput
 	, ffmpegOpenOutput
@@ -19,6 +22,8 @@ module Flaw.Media.FFmpeg
 	, ffmpegPrepareRemux
 	, ffmpegRemuxPacket
 	, ffmpegFinalizeOutputContext
+	, ffmpegNewScaler
+	, ffmpegScaleVideoFrame
 	, ffmpegDecodeSingleAudioStream
 	) where
 
@@ -40,6 +45,7 @@ import Flaw.Exception
 newtype FFmpegAVFormatContext = FFmpegAVFormatContext (Ptr C_AVFormatContext)
 newtype FFmpegAVPacket = FFmpegAVPacket (ForeignPtr C_AVPacket)
 newtype FFmpegAVFrame = FFmpegAVFrame (ForeignPtr C_AVFrame)
+newtype FFmpegScaler = FFmpegScaler (ForeignPtr C_FFmpegScaler)
 
 ffmpegInit :: IO ()
 ffmpegInit = flaw_ffmpeg_init
@@ -121,6 +127,26 @@ ffmpegRemuxPacket (FFmpegAVFormatContext inputFormatContextPtr) (FFmpegAVFormatC
 ffmpegFinalizeOutputContext :: FFmpegAVFormatContext -> IO ()
 ffmpegFinalizeOutputContext (FFmpegAVFormatContext formatContextPtr) = checkAVError "finalize output context" $ flaw_ffmpeg_finalizeOutputContext formatContextPtr
 
+-- | Create video scaler/converter.
+-- Format, width and height arguments are all optional, missing argument means
+-- use value from source (don't change format or size).
+ffmpegNewScaler :: Maybe FFmpegPixFmt -> Maybe Int -> Maybe Int -> IO FFmpegScaler
+ffmpegNewScaler outputFormat outputWidth outputHeight = do
+	scalerPtr <- flaw_ffmpeg_newScaler
+		(maybe (-1) (fromIntegral . fromEnum) outputFormat)
+		(maybe (-1) fromIntegral outputWidth)
+		(maybe (-1) fromIntegral outputHeight)
+	when (scalerPtr == nullPtr) $ throwIO $ DescribeFirstException "failed to create FFmpeg scaler"
+	FFmpegScaler <$> newForeignPtr flaw_ffmpeg_freeScaler scalerPtr
+
+-- | Scale video frame.
+ffmpegScaleVideoFrame :: FFmpegScaler -> FFmpegAVFrame -> IO FFmpegAVFrame
+ffmpegScaleVideoFrame (FFmpegScaler scalerFPtr) (FFmpegAVFrame frameFPtr) = do
+	outputFramePtr <- withForeignPtr scalerFPtr $ \scalerPtr ->
+		withForeignPtr frameFPtr $ flaw_ffmpeg_scaleVideoFrame scalerPtr
+	when (outputFramePtr == nullPtr) $ throwIO $ DescribeFirstException "failed to scale video frame"
+	FFmpegAVFrame <$> newForeignPtr flaw_ffmpeg_freeFrame outputFramePtr
+
 ffmpegDecodeSingleAudioStream :: FFmpegAVFormatContext -> (SoundFormat -> Ptr () -> Int -> IO ()) -> IO ()
 ffmpegDecodeSingleAudioStream formatContext@(FFmpegAVFormatContext formatContextPtr) callback = describeException "failed to decode ffmpeg single audio stream" $ withBook $ \bk -> do
 
@@ -188,8 +214,16 @@ foreign import ccall safe flaw_ffmpeg_prepareRemux :: Ptr C_AVFormatContext -> P
 foreign import ccall safe flaw_ffmpeg_remuxPacket :: Ptr C_AVFormatContext -> Ptr C_AVFormatContext -> Ptr C_AVPacket -> IO CInt
 foreign import ccall safe flaw_ffmpeg_finalizeOutputContext :: Ptr C_AVFormatContext -> IO CInt
 
+foreign import ccall safe flaw_ffmpeg_newScaler :: CInt -> CInt -> CInt -> IO (Ptr C_FFmpegScaler)
+foreign import ccall safe "&flaw_ffmpeg_freeScaler" flaw_ffmpeg_freeScaler :: FunPtr (Ptr C_FFmpegScaler -> IO ())
+foreign import ccall safe flaw_ffmpeg_scaleVideoFrame :: Ptr C_FFmpegScaler -> Ptr C_AVFrame -> IO (Ptr C_AVFrame)
+
 foreign import ccall unsafe flaw_ffmpeg_getSingleAudioStream :: Ptr C_AVFormatContext -> IO CInt
 foreign import ccall safe flaw_ffmpeg_packAudioFrame :: Ptr C_AVFrame -> FunPtr DecodeAudioCallback -> IO CInt
+
+-- flaw-ffmpeg structs
+
+data C_FFmpegScaler
 
 -- wrappers
 
@@ -213,6 +247,14 @@ data C_AVPacket
 data C_AVFrame
 
 -- ffmpeg enums
+
+-- | Pixel format, corresponds to AV_PIX_FMT_* defines.
+data FFmpegPixFmt
+	= FFmpegPixFmtYUV420P
+	| FFmpegPixFmtYUVV422
+	| FFmpegPixFmtRGB24
+	| FFmpegPixFmtBGR24
+	deriving Enum
 
 pattern AV_SAMPLE_FMT_U8 = 0
 pattern AV_SAMPLE_FMT_S16 = 1

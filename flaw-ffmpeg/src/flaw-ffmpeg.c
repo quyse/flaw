@@ -280,6 +280,67 @@ int flaw_ffmpeg_finalizeOutputContext(AVFormatContext* ctx)
 	return av_write_trailer(ctx);
 }
 
+struct FFmpegScaler
+{
+	int inputFormat, inputWidth, inputHeight;
+	int outputFormat, outputWidth, outputHeight;
+	struct SwsContext* context;
+};
+
+struct FFmpegScaler* flaw_ffmpeg_newScaler(int outputFormat, int outputWidth, int outputHeight)
+{
+	struct FFmpegScaler* scaler = (struct FFmpegScaler*)av_malloc(sizeof(struct FFmpegScaler));
+	scaler->inputFormat = -1;
+	scaler->inputWidth = -1;
+	scaler->inputHeight = -1;
+	scaler->outputFormat = outputFormat;
+	scaler->outputWidth = outputWidth;
+	scaler->outputHeight = outputHeight;
+	scaler->context = NULL;
+	return scaler;
+}
+
+void flaw_ffmpeg_freeScaler(struct FFmpegScaler* scaler)
+{
+	sws_freeContext(scaler->context);
+	av_free(scaler);
+}
+
+AVFrame* flaw_ffmpeg_scaleVideoFrame(struct FFmpegScaler* scaler, AVFrame* frame)
+{
+	int outputFormat = scaler->outputFormat < 0 ? frame->format : scaler->outputFormat;
+	int outputWidth = scaler->outputWidth < 0 ? frame->width : scaler->outputWidth;
+	int outputHeight = scaler->outputHeight < 0 ? frame->height : scaler->outputHeight;
+
+	if(scaler->inputFormat != frame->format || scaler->inputWidth != frame->width || scaler->inputHeight != frame->height)
+	{
+		sws_freeContext(scaler->context);
+		scaler->inputFormat = frame->format;
+		scaler->inputWidth = frame->width;
+		scaler->inputHeight = frame->height;
+		scaler->context = sws_getContext(
+			scaler->inputWidth, scaler->inputHeight, scaler->inputFormat,
+			outputWidth, outputHeight, outputFormat,
+			SWS_FAST_BILINEAR, NULL, NULL, NULL);
+		if(!scaler->context) return NULL;
+	}
+
+	// allocate frame
+	AVFrame* outFrame = av_frame_alloc();
+	outFrame->format = outputFormat;
+	outFrame->width = outputWidth;
+	outFrame->height = outputHeight;
+	if(av_frame_get_buffer(outFrame, 16) != 0)
+	{
+		av_frame_free(&outFrame);
+		return NULL;
+	}
+
+	sws_scale(scaler->context, (const uint8_t*const*)frame->data, frame->linesize, 0, frame->height, frame->data, frame->linesize);
+
+	return outFrame;
+}
+
 int flaw_ffmpeg_getSingleAudioStream(AVFormatContext* ctx)
 {
 	int r = -1;
