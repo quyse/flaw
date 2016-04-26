@@ -110,6 +110,16 @@ int flaw_ffmpeg_getSingleStreamOfType(AVFormatContext* ctx, int mediaType)
 	return r;
 }
 
+AVPacket* flaw_ffmpeg_newPacket()
+{
+	return av_packet_alloc();
+}
+
+void flaw_ffmpeg_freePacket(AVPacket* pkt)
+{
+	av_packet_free(&pkt);
+}
+
 AVPacket* flaw_ffmpeg_refPacket(AVPacket* pkt)
 {
 	AVPacket* newpkt = av_packet_alloc();
@@ -120,40 +130,24 @@ AVPacket* flaw_ffmpeg_refPacket(AVPacket* pkt)
 	return newpkt;
 }
 
-void flaw_ffmpeg_freePacket(AVPacket* pkt)
-{
-	av_packet_free(&pkt);
-}
-
 int flaw_ffmpeg_getPacketStreamIndex(AVPacket* pkt)
 {
 	return pkt->stream_index;
 }
 
-int flaw_ffmpeg_demux(AVFormatContext* ctx, int (*callback)(AVPacket*))
+int flaw_ffmpeg_demux(AVFormatContext* ctx, AVPacket* pkt)
 {
-	// init packet struct
-	AVPacket* pkt = av_packet_alloc();
+	return av_read_frame(ctx, pkt);
+}
 
-	// loop reading packets
-	int err = 0, gotPacket;
-	do
-	{
-		gotPacket = av_read_frame(ctx, pkt) >= 0;
+AVFrame* flaw_ffmpeg_newFrame()
+{
+	return av_frame_alloc();
+}
 
-		int ret = callback(pkt);
-		if(ret != 0)
-		{
-			err = ret;
-		}
-
-		av_packet_unref(pkt);
-	}
-	while(err == 0 && gotPacket);
-
-	av_packet_free(&pkt);
-
-	return err;
+void flaw_ffmpeg_freeFrame(AVFrame* frame)
+{
+	av_frame_free(&frame);
 }
 
 AVFrame* flaw_ffmpeg_refFrame(AVFrame* frame)
@@ -166,31 +160,21 @@ AVFrame* flaw_ffmpeg_refFrame(AVFrame* frame)
 	return newFrame;
 }
 
-void flaw_ffmpeg_freeFrame(AVFrame* frame)
+int flaw_ffmpeg_decode(AVFormatContext* ctx, AVPacket* pkt, AVFrame* frame)
 {
-	av_frame_free(&frame);
-}
-
-int flaw_ffmpeg_decode(AVFormatContext* ctx, AVPacket* pktOrig, int (*callback)(AVFrame*))
-{
-	AVPacket pkt = *pktOrig;
-	AVCodecContext* codec = ctx->streams[pkt.stream_index]->codec;
-	// loop decoding frames
-	AVFrame* frame = av_frame_alloc();
-	int gotFrame, err = 0;
+	AVCodecContext* codec = ctx->streams[pkt->stream_index]->codec;
+	int gotFrame;
 	do
 	{
-		// decode frame
 		gotFrame = 0;
 		int decoded = 0;
-
 		switch(codec->codec_type)
 		{
 		case AVMEDIA_TYPE_VIDEO:
-			decoded = avcodec_decode_video2(codec, frame, &gotFrame, &pkt);
+			decoded = avcodec_decode_video2(codec, frame, &gotFrame, pkt);
 			break;
 		case AVMEDIA_TYPE_AUDIO:
-			decoded = avcodec_decode_audio4(codec, frame, &gotFrame, &pkt);
+			decoded = avcodec_decode_audio4(codec, frame, &gotFrame, pkt);
 			break;
 		case AVMEDIA_TYPE_DATA:
 			break;
@@ -199,37 +183,15 @@ int flaw_ffmpeg_decode(AVFormatContext* ctx, AVPacket* pktOrig, int (*callback)(
 		case AVMEDIA_TYPE_ATTACHMENT:
 			break;
 		}
-
-		if(decoded < 0)
+		if(decoded < 0) return decoded;
+		if(pkt->data)
 		{
-			err = decoded;
+			pkt->data += decoded;
+			pkt->size -= decoded;
 		}
-		else
-		{
-			// output frame
-			if(gotFrame)
-			{
-				int ret = callback(frame);
-				if(ret != 0)
-				{
-					err = ret;
-				}
-			}
-			// advance packet
-			if(pkt.data)
-			{
-				pkt.data += decoded;
-				pkt.size -= decoded;
-			}
-		}
-
-		av_frame_unref(frame);
 	}
-	while(err == 0 && (pkt.data ? pkt.size > 0 : gotFrame));
-
-	av_frame_free(&frame);
-
-	return err;
+	while(!gotFrame && pkt->data && pkt->size > 0);
+	return !gotFrame;
 }
 
 int flaw_ffmpeg_openCodec(AVFormatContext* ctx, int streamIndex)
