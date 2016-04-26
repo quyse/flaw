@@ -120,6 +120,13 @@ AVStream* flaw_ffmpeg_getSingleStreamOfType(AVFormatContext* ctx, int mediaType)
 	return r;
 }
 
+void flaw_ffmpeg_setVideoStreamOptions(AVStream* stream, int format, int width, int height)
+{
+	stream->codec->pix_fmt = format;
+	stream->codec->width = width;
+	stream->codec->height = height;
+}
+
 AVPacket* flaw_ffmpeg_newPacket()
 {
 	return av_packet_alloc();
@@ -145,9 +152,22 @@ int flaw_ffmpeg_getPacketStreamIndex(AVPacket* pkt)
 	return pkt->stream_index;
 }
 
+void flaw_ffmpeg_setPacketStreamIndex(AVPacket* pkt, int streamIndex)
+{
+	pkt->stream_index = streamIndex;
+}
+
 int flaw_ffmpeg_demux(AVFormatContext* ctx, AVPacket* pkt)
 {
 	return av_read_frame(ctx, pkt);
+}
+
+int flaw_ffmpeg_mux(AVFormatContext* ctx, AVPacket* pkt)
+{
+	// skip empty packets
+	if(!pkt->data)
+		return 0;
+	return av_interleaved_write_frame(ctx, pkt);
 }
 
 AVFrame* flaw_ffmpeg_newFrame()
@@ -186,12 +206,6 @@ int flaw_ffmpeg_decode(AVFormatContext* ctx, AVPacket* pkt, AVFrame* frame)
 		case AVMEDIA_TYPE_AUDIO:
 			decoded = avcodec_decode_audio4(codec, frame, &gotFrame, pkt);
 			break;
-		case AVMEDIA_TYPE_DATA:
-			break;
-		case AVMEDIA_TYPE_SUBTITLE:
-			break;
-		case AVMEDIA_TYPE_ATTACHMENT:
-			break;
 		}
 		if(decoded < 0) return decoded;
 		if(pkt->data)
@@ -202,6 +216,23 @@ int flaw_ffmpeg_decode(AVFormatContext* ctx, AVPacket* pkt, AVFrame* frame)
 	}
 	while(!gotFrame && pkt->data && pkt->size > 0);
 	return !gotFrame;
+}
+
+int flaw_ffmpeg_encode(AVFormatContext* ctx, AVFrame* frame, AVPacket* pkt)
+{
+	AVCodecContext* codec = ctx->streams[pkt->stream_index]->codec;
+	int gotPacket = 0, ret = -1;
+	switch(codec->codec_type)
+	{
+	case AVMEDIA_TYPE_VIDEO:
+		ret = avcodec_encode_video2(codec, pkt, frame, &gotPacket);
+		break;
+	case AVMEDIA_TYPE_AUDIO:
+		ret = avcodec_encode_audio2(codec, pkt, frame, &gotPacket);
+		break;
+	}
+	if(ret < 0) return ret;
+	return !gotPacket;
 }
 
 int flaw_ffmpeg_openDecoder(AVStream* stream)
@@ -219,7 +250,22 @@ AVStream* flaw_ffmpeg_addOutputStream(AVFormatContext* ctx, const char* codecNam
 {
 	AVCodec* encoder = avcodec_find_encoder_by_name(codecName);
 	if(!encoder) return NULL;
-	return avformat_new_stream(ctx, encoder);
+	AVStream* stream = avformat_new_stream(ctx, encoder);
+	if(!stream) return NULL;
+	if(ctx->oformat->flags & AVFMT_GLOBALHEADER)
+		stream->codec->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+	return stream;
+}
+
+AVStream* flaw_ffmpeg_copyOutputStream(AVFormatContext* ctx, AVStream* copyFromStream)
+{
+	AVStream* stream = avformat_new_stream(ctx, copyFromStream->codec->codec);
+	if(!stream || avcodec_copy_context(stream->codec, copyFromStream->codec) != 0)
+		return NULL;
+	stream->codec->codec_tag = 0;
+	if(ctx->oformat->flags & AVFMT_GLOBALHEADER)
+		stream->codec->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+	return stream;
 }
 
 void flaw_ffmpeg_closeCodec(AVStream* stream)
@@ -227,45 +273,20 @@ void flaw_ffmpeg_closeCodec(AVStream* stream)
 	avcodec_close(stream->codec);
 }
 
-int flaw_ffmpeg_prepareRemux(AVFormatContext* inctx, AVFormatContext* outctx)
+int flaw_ffmpeg_initializeOutputContext(AVFormatContext* ctx)
 {
-	// create output streams
-	for(int i = 0; i < inctx->nb_streams; ++i)
-	{
-		AVStream* inStream = inctx->streams[i];
-		AVStream* outStream = avformat_new_stream(outctx, inStream->codec->codec);
-		if(!outStream || avcodec_copy_context(outStream->codec, inStream->codec) != 0)
-		{
-			return -1;
-		}
-		outStream->codec->codec_tag = 0;
-		if(outctx->oformat->flags & AVFMT_GLOBALHEADER)
-		{
-			outStream->codec->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
-		}
-	}
-
-	// write header
-	return avformat_write_header(outctx, NULL);
-}
-
-int flaw_ffmpeg_remuxPacket(AVFormatContext* inctx, AVFormatContext* outctx, AVPacket* pkt)
-{
-	// skip empty packets
-	if(!pkt->data) return 0;
-
-	AVStream* inStream = inctx->streams[pkt->stream_index];
-	AVStream* outStream = outctx->streams[pkt->stream_index];
-
-	av_packet_rescale_ts(pkt, inStream->time_base, outStream->time_base);
-	pkt->pos = -1;
-	return av_interleaved_write_frame(outctx, pkt);
+	return avformat_write_header(ctx, NULL);
 }
 
 int flaw_ffmpeg_finalizeOutputContext(AVFormatContext* ctx)
 {
-	// write trailer
 	return av_write_trailer(ctx);
+}
+
+void flaw_ffmpeg_rescalePacketTime(AVStream* fromStream, AVStream* toStream, AVPacket* pkt)
+{
+	av_packet_rescale_ts(pkt, fromStream->time_base, toStream->time_base);
+	pkt->pos = -1;
 }
 
 struct FFmpegScaler
