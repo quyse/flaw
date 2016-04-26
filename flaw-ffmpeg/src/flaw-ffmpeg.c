@@ -93,12 +93,21 @@ int flaw_ffmpeg_getStreamsCount(AVFormatContext* ctx)
 	return ctx->nb_streams;
 }
 
-void flaw_ffmpeg_getStreamsTypes(AVFormatContext* ctx, int* outStreamsTypes)
+int flaw_ffmpeg_getStreamType(AVFormatContext* ctx, int i)
 {
+	return ctx->streams[i]->codec->codec_type;
+}
+
+int flaw_ffmpeg_getSingleStreamOfType(AVFormatContext* ctx, int mediaType)
+{
+	int r = -1;
 	for(int i = 0; i < ctx->nb_streams; ++i)
-	{
-		outStreamsTypes[i] = ctx->streams[i]->codec->codec_type;
-	}
+		if(ctx->streams[i]->codec->codec_type == mediaType)
+		{
+			if(r < 0) r = i;
+			else return -1;
+		}
+	return r;
 }
 
 AVPacket* flaw_ffmpeg_refPacket(AVPacket* pkt)
@@ -339,18 +348,6 @@ AVFrame* flaw_ffmpeg_scaleVideoFrame(struct FFmpegScaler* scaler, AVFrame* frame
 	sws_scale(scaler->context, (const uint8_t*const*)frame->data, frame->linesize, 0, frame->height, frame->data, frame->linesize);
 
 	return outFrame;
-}
-
-int flaw_ffmpeg_getSingleAudioStream(AVFormatContext* ctx)
-{
-	int r = -1;
-	for(int i = 0; i < ctx->nb_streams; ++i)
-		if(ctx->streams[i]->codec->codec_type == AVMEDIA_TYPE_AUDIO)
-		{
-			if(r < 0) r = i;
-			else return -1;
-		}
-	return r;
 }
 
 typedef int (*DecodeAudioCallback)(int samplesPerSecond, int sampleFormat, int channelsCount, const void* data, int size);

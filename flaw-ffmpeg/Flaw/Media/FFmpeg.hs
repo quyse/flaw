@@ -14,6 +14,9 @@ module Flaw.Media.FFmpeg
 	, ffmpegInit
 	, ffmpegOpenInput
 	, ffmpegOpenOutput
+	, ffmpegGetStreamsCount
+	, ffmpegGetStreamType
+	, ffmpegGetSingleStreamOfType
 	, ffmpegSetContextOption
 	, ffmpegDemux
 	, ffmpegGetPacketStreamIndex
@@ -25,6 +28,8 @@ module Flaw.Media.FFmpeg
 	, ffmpegNewScaler
 	, ffmpegScaleVideoFrame
 	, ffmpegDecodeSingleAudioStream
+	, FFmpegStreamType(..)
+	, FFmpegPixFmt(..)
 	) where
 
 import Control.Exception
@@ -70,6 +75,18 @@ ffmpegOpenOutput url format = describeException "failed to open output FFmpeg co
 	book bk $ return ((), flaw_ffmpeg_closeOutput formatContextPtr)
 
 	return $ FFmpegAVFormatContext formatContextPtr
+
+ffmpegGetStreamsCount :: FFmpegAVFormatContext -> IO Int
+ffmpegGetStreamsCount (FFmpegAVFormatContext formatContextPtr) = fromIntegral <$> flaw_ffmpeg_getStreamsCount formatContextPtr
+
+ffmpegGetStreamType :: FFmpegAVFormatContext -> Int -> IO FFmpegStreamType
+ffmpegGetStreamType (FFmpegAVFormatContext formatContextPtr) streamIndex = toEnum . fromIntegral <$> flaw_ffmpeg_getStreamType formatContextPtr (fromIntegral streamIndex)
+
+ffmpegGetSingleStreamOfType :: FFmpegAVFormatContext -> FFmpegStreamType -> IO Int
+ffmpegGetSingleStreamOfType (FFmpegAVFormatContext formatContextPtr) streamType = do
+	streamIndex <- flaw_ffmpeg_getSingleStreamOfType formatContextPtr (fromIntegral $ fromEnum streamType)
+	when (streamIndex < 0) $ throwIO $ DescribeFirstException "no single stream of specified type"
+	return $ fromIntegral streamIndex
 
 -- | Set AV format context option.
 ffmpegSetContextOption :: FFmpegAVFormatContext -> T.Text -> T.Text -> IO ()
@@ -148,10 +165,10 @@ ffmpegScaleVideoFrame (FFmpegScaler scalerFPtr) (FFmpegAVFrame frameFPtr) = do
 	FFmpegAVFrame <$> newForeignPtr flaw_ffmpeg_freeFrame outputFramePtr
 
 ffmpegDecodeSingleAudioStream :: FFmpegAVFormatContext -> (SoundFormat -> Ptr () -> Int -> IO ()) -> IO ()
-ffmpegDecodeSingleAudioStream formatContext@(FFmpegAVFormatContext formatContextPtr) callback = describeException "failed to decode ffmpeg single audio stream" $ withBook $ \bk -> do
+ffmpegDecodeSingleAudioStream formatContext callback = describeException "failed to decode ffmpeg single audio stream" $ withBook $ \bk -> do
 
 	-- find single audio stream
-	streamIndex <- fromIntegral <$> flaw_ffmpeg_getSingleAudioStream formatContextPtr
+	streamIndex <- fromIntegral <$> ffmpegGetSingleStreamOfType formatContext FFmpegStreamTypeAudio
 	when (streamIndex < 0) $ throwIO $ DescribeFirstException "no single audio stream"
 
 	-- open codec
@@ -198,6 +215,10 @@ foreign import ccall safe flaw_ffmpeg_closeInput :: Ptr C_AVFormatContext -> IO 
 foreign import ccall safe flaw_ffmpeg_openOutput :: Ptr CChar -> Ptr CChar -> IO (Ptr C_AVFormatContext)
 foreign import ccall safe flaw_ffmpeg_closeOutput :: Ptr C_AVFormatContext -> IO ()
 
+foreign import ccall unsafe flaw_ffmpeg_getStreamsCount :: Ptr C_AVFormatContext -> IO CInt
+foreign import ccall unsafe flaw_ffmpeg_getStreamType :: Ptr C_AVFormatContext -> CInt -> IO CInt
+foreign import ccall unsafe flaw_ffmpeg_getSingleStreamOfType :: Ptr C_AVFormatContext -> CInt -> IO CInt
+
 foreign import ccall safe flaw_ffmpeg_refPacket :: Ptr C_AVPacket -> IO (Ptr C_AVPacket)
 foreign import ccall safe "&flaw_ffmpeg_freePacket" flaw_ffmpeg_freePacket :: FunPtr (Ptr C_AVPacket -> IO ())
 foreign import ccall unsafe flaw_ffmpeg_getPacketStreamIndex :: Ptr C_AVPacket -> IO CInt
@@ -218,7 +239,6 @@ foreign import ccall safe flaw_ffmpeg_newScaler :: CInt -> CInt -> CInt -> IO (P
 foreign import ccall safe "&flaw_ffmpeg_freeScaler" flaw_ffmpeg_freeScaler :: FunPtr (Ptr C_FFmpegScaler -> IO ())
 foreign import ccall safe flaw_ffmpeg_scaleVideoFrame :: Ptr C_FFmpegScaler -> Ptr C_AVFrame -> IO (Ptr C_AVFrame)
 
-foreign import ccall unsafe flaw_ffmpeg_getSingleAudioStream :: Ptr C_AVFormatContext -> IO CInt
 foreign import ccall safe flaw_ffmpeg_packAudioFrame :: Ptr C_AVFrame -> FunPtr DecodeAudioCallback -> IO CInt
 
 -- flaw-ffmpeg structs
@@ -248,7 +268,16 @@ data C_AVFrame
 
 -- ffmpeg enums
 
--- | Pixel format, corresponds to AV_PIX_FMT_* defines.
+-- | Stream type, corresponds to AVMediaType.
+data FFmpegStreamType
+	= FFmpegStreamTypeVideo
+	| FFmpegStreamTypeAudio
+	| FFmpegStreamTypeData -- ^ Opaque data usually continuous.
+	| FFmpegStreamTypeSubtitle
+	| FFmpegStreamTypeAttachment -- ^ Opaque data usually sparse.
+	deriving Enum
+
+-- | Pixel format, corresponds to AV_PIX_FMT_*.
 data FFmpegPixFmt
 	= FFmpegPixFmtYUV420P
 	| FFmpegPixFmtYUVV422
