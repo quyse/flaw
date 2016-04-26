@@ -93,19 +93,29 @@ int flaw_ffmpeg_getStreamsCount(AVFormatContext* ctx)
 	return ctx->nb_streams;
 }
 
-int flaw_ffmpeg_getStreamType(AVFormatContext* ctx, int i)
+AVStream* flaw_ffmpeg_getStream(AVFormatContext* ctx, int i)
 {
-	return ctx->streams[i]->codec->codec_type;
+	return ctx->streams[i];
 }
 
-int flaw_ffmpeg_getSingleStreamOfType(AVFormatContext* ctx, int mediaType)
+int flaw_ffmpeg_getStreamIndex(AVStream* stream)
 {
-	int r = -1;
+	return stream->index;
+}
+
+int flaw_ffmpeg_getStreamType(AVStream* stream)
+{
+	return stream->codec->codec_type;
+}
+
+AVStream* flaw_ffmpeg_getSingleStreamOfType(AVFormatContext* ctx, int mediaType)
+{
+	AVStream* r = NULL;
 	for(int i = 0; i < ctx->nb_streams; ++i)
 		if(ctx->streams[i]->codec->codec_type == mediaType)
 		{
-			if(r < 0) r = i;
-			else return -1;
+			if(!r) r = ctx->streams[i];
+			else return NULL;
 		}
 	return r;
 }
@@ -194,9 +204,9 @@ int flaw_ffmpeg_decode(AVFormatContext* ctx, AVPacket* pkt, AVFrame* frame)
 	return !gotFrame;
 }
 
-int flaw_ffmpeg_openCodec(AVFormatContext* ctx, int streamIndex)
+int flaw_ffmpeg_openDecoder(AVStream* stream)
 {
-	AVCodecContext* codec = ctx->streams[streamIndex]->codec;
+	AVCodecContext* codec = stream->codec;
 	AVCodec* decoder = avcodec_find_decoder(codec->codec_id);
 	AVDictionary* opts = NULL;
 	av_dict_set(&opts, "refcounted_frames", "1", 0);
@@ -205,9 +215,16 @@ int flaw_ffmpeg_openCodec(AVFormatContext* ctx, int streamIndex)
 	return ret;
 }
 
-void flaw_ffmpeg_closeCodec(AVFormatContext* ctx, int streamIndex)
+AVStream* flaw_ffmpeg_addOutputStream(AVFormatContext* ctx, const char* codecName)
 {
-	avcodec_close(ctx->streams[streamIndex]->codec);
+	AVCodec* encoder = avcodec_find_encoder_by_name(codecName);
+	if(!encoder) return NULL;
+	return avformat_new_stream(ctx, encoder);
+}
+
+void flaw_ffmpeg_closeCodec(AVStream* stream)
+{
+	avcodec_close(stream->codec);
 }
 
 int flaw_ffmpeg_prepareRemux(AVFormatContext* inctx, AVFormatContext* outctx)

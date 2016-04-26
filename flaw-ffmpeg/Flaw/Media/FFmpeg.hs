@@ -8,21 +8,26 @@ License: MIT
 
 module Flaw.Media.FFmpeg
 	( FFmpegAVFormatContext()
+	, FFmpegAVStream()
 	, FFmpegAVPacket()
 	, FFmpegAVFrame()
 	, ffmpegInit
 	, ffmpegOpenInput
 	, ffmpegOpenOutput
 	, ffmpegGetStreamsCount
+	, ffmpegGetStream
+	, ffmpegGetStreamIndex
 	, ffmpegGetStreamType
 	, ffmpegGetSingleStreamOfType
 	, ffmpegSetContextOption
+	, ffmpegSetStreamOption
 	, ffmpegRefPacket
 	, ffmpegDemux
 	, ffmpegGetPacketStreamIndex
 	, ffmpegRefFrame
 	, ffmpegDecode
-	, ffmpegOpenCodec
+	, ffmpegOpenDecoder
+	, ffmpegAddOutputStream
 	, ffmpegPrepareRemux
 	, ffmpegRemuxPacket
 	, ffmpegFinalizeOutputContext
@@ -49,6 +54,7 @@ import Flaw.Book
 import Flaw.Exception
 
 newtype FFmpegAVFormatContext = FFmpegAVFormatContext (Ptr C_AVFormatContext)
+newtype FFmpegAVStream = FFmpegAVStream (Ptr C_AVStream)
 newtype FFmpegAVPacket = FFmpegAVPacket (ForeignPtr C_AVPacket)
 newtype FFmpegAVFrame = FFmpegAVFrame (ForeignPtr C_AVFrame)
 
@@ -77,23 +83,39 @@ ffmpegOpenOutput url format = describeException "failed to open output FFmpeg co
 	return $ FFmpegAVFormatContext formatContextPtr
 
 ffmpegGetStreamsCount :: FFmpegAVFormatContext -> IO Int
-ffmpegGetStreamsCount (FFmpegAVFormatContext formatContextPtr) = fromIntegral <$> flaw_ffmpeg_getStreamsCount formatContextPtr
+ffmpegGetStreamsCount (FFmpegAVFormatContext formatContextPtr) =
+	fromIntegral <$> flaw_ffmpeg_getStreamsCount formatContextPtr
 
-ffmpegGetStreamType :: FFmpegAVFormatContext -> Int -> IO FFmpegStreamType
-ffmpegGetStreamType (FFmpegAVFormatContext formatContextPtr) streamIndex = toEnum . fromIntegral <$> flaw_ffmpeg_getStreamType formatContextPtr (fromIntegral streamIndex)
+ffmpegGetStream :: FFmpegAVFormatContext -> Int -> IO FFmpegAVStream
+ffmpegGetStream (FFmpegAVFormatContext formatContextPtr) streamIndex =
+	FFmpegAVStream <$> flaw_ffmpeg_getStream formatContextPtr (fromIntegral streamIndex)
 
-ffmpegGetSingleStreamOfType :: FFmpegAVFormatContext -> FFmpegStreamType -> IO Int
+ffmpegGetStreamIndex :: FFmpegAVStream -> IO Int
+ffmpegGetStreamIndex (FFmpegAVStream streamPtr) = fromIntegral <$> flaw_ffmpeg_getStreamIndex streamPtr
+
+ffmpegGetStreamType :: FFmpegAVStream -> IO FFmpegStreamType
+ffmpegGetStreamType (FFmpegAVStream streamPtr) =
+	toEnum . fromIntegral <$> flaw_ffmpeg_getStreamType streamPtr
+
+ffmpegGetSingleStreamOfType :: FFmpegAVFormatContext -> FFmpegStreamType -> IO FFmpegAVStream
 ffmpegGetSingleStreamOfType (FFmpegAVFormatContext formatContextPtr) streamType = do
-	streamIndex <- flaw_ffmpeg_getSingleStreamOfType formatContextPtr (fromIntegral $ fromEnum streamType)
-	when (streamIndex < 0) $ throwIO $ DescribeFirstException "no single stream of specified type"
-	return $ fromIntegral streamIndex
+	streamPtr <- flaw_ffmpeg_getSingleStreamOfType formatContextPtr (fromIntegral $ fromEnum streamType)
+	when (streamPtr == nullPtr) $ throwIO $ DescribeFirstException "no single stream of specified type"
+	return $ FFmpegAVStream streamPtr
 
 -- | Set AV format context option.
 ffmpegSetContextOption :: FFmpegAVFormatContext -> T.Text -> T.Text -> IO ()
-ffmpegSetContextOption (FFmpegAVFormatContext formatContextPtr) option value = do
+ffmpegSetContextOption (FFmpegAVFormatContext formatContextPtr) = ffmpegSetOption formatContextPtr
+
+-- | Set AV stream option.
+ffmpegSetStreamOption :: FFmpegAVStream -> T.Text -> T.Text -> IO ()
+ffmpegSetStreamOption (FFmpegAVStream streamPtr) = ffmpegSetOption streamPtr
+
+ffmpegSetOption :: Ptr a -> T.Text -> T.Text -> IO ()
+ffmpegSetOption ptr option value = do
 	r <- B.useAsCString (T.encodeUtf8 option) $ \optionPtr ->
 		B.useAsCString (T.encodeUtf8 value) $ \valuePtr ->
-		av_opt_set (castPtr formatContextPtr) optionPtr valuePtr AV_OPT_SEARCH_CHILDREN
+		av_opt_set (castPtr ptr) optionPtr valuePtr AV_OPT_SEARCH_CHILDREN
 	unless (r == 0) $ let
 		desc = case r of
 			AVERROR_OPTION_NOT_FOUND -> "option not found"
@@ -134,10 +156,16 @@ ffmpegDecode (FFmpegAVFormatContext formatContextPtr) (FFmpegAVPacket packetFPtr
 		r <- withForeignPtr packetFPtr $ \packetPtr -> withForeignPtr frameFPtr $ flaw_ffmpeg_decode formatContextPtr packetPtr
 		if r == 0 then (FFmpegAVFrame frameFPtr :) <$> step else return []
 
-ffmpegOpenCodec :: FFmpegAVFormatContext -> Int -> IO ((), IO ())
-ffmpegOpenCodec (FFmpegAVFormatContext formatContextPtr) streamIndex = do
-	checkAVError "open codec" $ flaw_ffmpeg_openCodec formatContextPtr (fromIntegral streamIndex)
-	return ((), flaw_ffmpeg_closeCodec formatContextPtr (fromIntegral streamIndex))
+ffmpegOpenDecoder :: FFmpegAVStream -> IO ((), IO ())
+ffmpegOpenDecoder (FFmpegAVStream streamPtr) = do
+	checkAVError "open decoder" $ flaw_ffmpeg_openDecoder streamPtr
+	return ((), flaw_ffmpeg_closeCodec streamPtr)
+
+ffmpegAddOutputStream :: FFmpegAVFormatContext -> T.Text -> IO (FFmpegAVStream, IO ())
+ffmpegAddOutputStream (FFmpegAVFormatContext formatContextPtr) codecName = do
+	streamPtr <- B.useAsCString (T.encodeUtf8 codecName) $ flaw_ffmpeg_addOutputStream formatContextPtr
+	when (streamPtr == nullPtr) $ throwIO $ DescribeFirstException "failed to add FFmpeg output stream"
+	return (FFmpegAVStream streamPtr, flaw_ffmpeg_closeCodec streamPtr)
 
 ffmpegPrepareRemux :: FFmpegAVFormatContext -> FFmpegAVFormatContext -> IO ()
 ffmpegPrepareRemux (FFmpegAVFormatContext inputFormatContextPtr) (FFmpegAVFormatContext outputFormatContextPtr) = do
@@ -173,11 +201,11 @@ ffmpegDecodeSingleAudioStream :: FFmpegAVFormatContext -> (SoundFormat -> Ptr ()
 ffmpegDecodeSingleAudioStream formatContext callback = describeException "failed to decode ffmpeg single audio stream" $ withBook $ \bk -> do
 
 	-- find single audio stream
-	streamIndex <- fromIntegral <$> ffmpegGetSingleStreamOfType formatContext FFmpegStreamTypeAudio
-	when (streamIndex < 0) $ throwIO $ DescribeFirstException "no single audio stream"
+	stream <- ffmpegGetSingleStreamOfType formatContext FFmpegStreamTypeAudio
+	streamIndex <- ffmpegGetStreamIndex stream
 
-	-- open codec
-	book bk $ ffmpegOpenCodec formatContext streamIndex
+	-- open decoder
+	book bk $ ffmpegOpenDecoder stream
 
 	-- wrap callback
 	wrappedCallback <- wrapDecodeAudioCallback $
@@ -223,8 +251,10 @@ foreign import ccall safe flaw_ffmpeg_openOutput :: Ptr CChar -> Ptr CChar -> IO
 foreign import ccall safe flaw_ffmpeg_closeOutput :: Ptr C_AVFormatContext -> IO ()
 
 foreign import ccall unsafe flaw_ffmpeg_getStreamsCount :: Ptr C_AVFormatContext -> IO CInt
-foreign import ccall unsafe flaw_ffmpeg_getStreamType :: Ptr C_AVFormatContext -> CInt -> IO CInt
-foreign import ccall unsafe flaw_ffmpeg_getSingleStreamOfType :: Ptr C_AVFormatContext -> CInt -> IO CInt
+foreign import ccall unsafe flaw_ffmpeg_getStream :: Ptr C_AVFormatContext -> CInt -> IO (Ptr C_AVStream)
+foreign import ccall unsafe flaw_ffmpeg_getStreamIndex :: Ptr C_AVStream -> IO CInt
+foreign import ccall unsafe flaw_ffmpeg_getStreamType :: Ptr C_AVStream -> IO CInt
+foreign import ccall unsafe flaw_ffmpeg_getSingleStreamOfType :: Ptr C_AVFormatContext -> CInt -> IO (Ptr C_AVStream)
 
 foreign import ccall safe flaw_ffmpeg_newPacket :: IO (Ptr C_AVPacket)
 foreign import ccall safe "&flaw_ffmpeg_freePacket" flaw_ffmpeg_freePacket :: FunPtr (Ptr C_AVPacket -> IO ())
@@ -237,8 +267,9 @@ foreign import ccall safe "&flaw_ffmpeg_freeFrame" flaw_ffmpeg_freeFrame :: FunP
 foreign import ccall safe flaw_ffmpeg_refFrame :: Ptr C_AVFrame -> IO (Ptr C_AVFrame)
 foreign import ccall safe flaw_ffmpeg_decode :: Ptr C_AVFormatContext -> Ptr C_AVPacket -> Ptr C_AVFrame -> IO CInt
 
-foreign import ccall safe flaw_ffmpeg_openCodec :: Ptr C_AVFormatContext -> CInt -> IO CInt
-foreign import ccall safe flaw_ffmpeg_closeCodec :: Ptr C_AVFormatContext -> CInt -> IO ()
+foreign import ccall safe flaw_ffmpeg_openDecoder :: Ptr C_AVStream -> IO CInt
+foreign import ccall safe flaw_ffmpeg_addOutputStream :: Ptr C_AVFormatContext -> Ptr CChar -> IO (Ptr C_AVStream)
+foreign import ccall safe flaw_ffmpeg_closeCodec :: Ptr C_AVStream -> IO ()
 
 foreign import ccall safe flaw_ffmpeg_prepareRemux :: Ptr C_AVFormatContext -> Ptr C_AVFormatContext -> IO CInt
 foreign import ccall safe flaw_ffmpeg_remuxPacket :: Ptr C_AVFormatContext -> Ptr C_AVFormatContext -> Ptr C_AVPacket -> IO CInt
@@ -266,6 +297,7 @@ foreign import ccall unsafe av_opt_set :: Ptr () -> Ptr CChar -> Ptr CChar -> CI
 -- ffmpeg types
 
 data C_AVFormatContext
+data C_AVStream
 data C_AVPacket
 data C_AVFrame
 
