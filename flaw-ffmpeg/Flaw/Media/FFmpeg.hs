@@ -10,7 +10,6 @@ module Flaw.Media.FFmpeg
 	( FFmpegAVFormatContext()
 	, FFmpegAVPacket()
 	, FFmpegAVFrame()
-	, FFmpegScaler()
 	, ffmpegInit
 	, ffmpegOpenInput
 	, ffmpegOpenOutput
@@ -28,7 +27,6 @@ module Flaw.Media.FFmpeg
 	, ffmpegRemuxPacket
 	, ffmpegFinalizeOutputContext
 	, ffmpegNewScaler
-	, ffmpegScaleVideoFrame
 	, ffmpegDecodeSingleAudioStream
 	, FFmpegStreamType(..)
 	, FFmpegPixFmt(..)
@@ -53,7 +51,6 @@ import Flaw.Exception
 newtype FFmpegAVFormatContext = FFmpegAVFormatContext (Ptr C_AVFormatContext)
 newtype FFmpegAVPacket = FFmpegAVPacket (ForeignPtr C_AVPacket)
 newtype FFmpegAVFrame = FFmpegAVFrame (ForeignPtr C_AVFrame)
-newtype FFmpegScaler = FFmpegScaler (ForeignPtr C_FFmpegScaler)
 
 ffmpegInit :: IO ()
 ffmpegInit = flaw_ffmpeg_init
@@ -157,22 +154,20 @@ ffmpegFinalizeOutputContext (FFmpegAVFormatContext formatContextPtr) = checkAVEr
 -- | Create video scaler/converter.
 -- Format, width and height arguments are all optional, missing argument means
 -- use value from source (don't change format or size).
-ffmpegNewScaler :: Maybe FFmpegPixFmt -> Maybe Int -> Maybe Int -> IO FFmpegScaler
+ffmpegNewScaler :: Maybe FFmpegPixFmt -> Maybe Int -> Maybe Int -> IO (FFmpegAVFrame -> IO FFmpegAVFrame)
 ffmpegNewScaler outputFormat outputWidth outputHeight = do
-	scalerPtr <- flaw_ffmpeg_newScaler
-		(maybe (-1) (fromIntegral . fromEnum) outputFormat)
-		(maybe (-1) fromIntegral outputWidth)
-		(maybe (-1) fromIntegral outputHeight)
-	when (scalerPtr == nullPtr) $ throwIO $ DescribeFirstException "failed to create FFmpeg scaler"
-	FFmpegScaler <$> newForeignPtr flaw_ffmpeg_freeScaler scalerPtr
-
--- | Scale video frame.
-ffmpegScaleVideoFrame :: FFmpegScaler -> FFmpegAVFrame -> IO FFmpegAVFrame
-ffmpegScaleVideoFrame (FFmpegScaler scalerFPtr) (FFmpegAVFrame frameFPtr) = do
-	outputFramePtr <- withForeignPtr scalerFPtr $ \scalerPtr ->
-		withForeignPtr frameFPtr $ flaw_ffmpeg_scaleVideoFrame scalerPtr
-	when (outputFramePtr == nullPtr) $ throwIO $ DescribeFirstException "failed to scale video frame"
-	FFmpegAVFrame <$> newForeignPtr flaw_ffmpeg_freeFrame outputFramePtr
+	scalerFPtr <- newForeignPtr flaw_ffmpeg_freeScaler =<< do
+		scalerPtr <- flaw_ffmpeg_newScaler
+			(maybe (-1) (fromIntegral . fromEnum) outputFormat)
+			(maybe (-1) fromIntegral outputWidth)
+			(maybe (-1) fromIntegral outputHeight)
+		when (scalerPtr == nullPtr) $ throwIO $ DescribeFirstException "failed to create FFmpeg scaler"
+		return scalerPtr
+	return $ \(FFmpegAVFrame frameFPtr) -> do
+		outputFramePtr <- withForeignPtr scalerFPtr $ \scalerPtr ->
+			withForeignPtr frameFPtr $ flaw_ffmpeg_scaleVideoFrame scalerPtr
+		when (outputFramePtr == nullPtr) $ throwIO $ DescribeFirstException "failed to scale video frame"
+		FFmpegAVFrame <$> newForeignPtr flaw_ffmpeg_freeFrame outputFramePtr
 
 ffmpegDecodeSingleAudioStream :: FFmpegAVFormatContext -> (SoundFormat -> Ptr () -> Int -> IO ()) -> IO ()
 ffmpegDecodeSingleAudioStream formatContext callback = describeException "failed to decode ffmpeg single audio stream" $ withBook $ \bk -> do
