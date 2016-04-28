@@ -147,6 +147,11 @@ AVPacket* flaw_ffmpeg_refPacket(AVPacket* pkt)
 	return newpkt;
 }
 
+int flaw_ffmpeg_isPacketEmpty(AVPacket* pkt)
+{
+	return !pkt->data || pkt->size <= 0;
+}
+
 int flaw_ffmpeg_getPacketStreamIndex(AVPacket* pkt)
 {
 	return pkt->stream_index;

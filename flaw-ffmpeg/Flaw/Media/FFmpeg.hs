@@ -200,36 +200,46 @@ ffmpegSetFrameTime (FFmpegAVFrame frameFPtr) time = withForeignPtr frameFPtr $ \
 -- | Decode packet from single stream into frames.
 ffmpegDecode :: FFmpegAVStream -> P.Producer FFmpegAVPacket IO () -> P.Producer FFmpegAVFrame IO ()
 ffmpegDecode (FFmpegAVStream streamPtr) packetProducer = do
-	let decodeFrames packet@(FFmpegAVPacket packetFPtr) = do
+	let decode (FFmpegAVPacket packetFPtr) = do
 		frame@(FFmpegAVFrame frameFPtr) <- P.lift ffmpegNewFrame
-		r <- P.lift $ withForeignPtr packetFPtr $ \packetPtr ->
-			withForeignPtr frameFPtr $ flaw_ffmpeg_decode streamPtr packetPtr
-		when (r == 0) $ do
-			P.yield frame
-			decodeFrames packet
-	-- receive and decode packets
-	P.for packetProducer decodeFrames
+		r <- P.lift $ withForeignPtr packetFPtr $ \packetPtr -> withForeignPtr frameFPtr $ flaw_ffmpeg_decode streamPtr packetPtr
+		when (r == 0) $ P.yield frame
+		return r
+	-- decode frames
+	P.for packetProducer $ \packet@(FFmpegAVPacket packetFPtr) -> do
+		let decodeFrames = do
+			r <- decode packet
+			if r == 0 then do
+				packetIsEmpty <- P.lift $ withForeignPtr packetFPtr flaw_ffmpeg_isPacketEmpty
+				when (packetIsEmpty == 0) decodeFrames
+			else when (r < 0) $ P.lift $ throwIO $ DescribeFirstException "failed to FFmpeg decode"
+		decodeFrames
 	-- flush decoder
-	decodeFrames =<< P.lift ffmpegNewPacket
+	emptyPacket <- P.lift ffmpegNewPacket
+	let flush = do
+		r <- decode emptyPacket
+		if r == 0 then flush
+		else when (r < 0) $ P.lift $ throwIO $ DescribeFirstException "failed to flush FFmpeg decoder"
+	flush
 
 -- | Encode frames into packets.
 ffmpegEncode :: FFmpegAVStream -> P.Producer FFmpegAVFrame IO () -> P.Producer FFmpegAVPacket IO ()
 ffmpegEncode stream@(FFmpegAVStream streamPtr) frameProducer = do
 	streamIndex <- P.lift $ ffmpegGetStreamIndex stream
-	let encode (FFmpegAVFrame frameFPtr) = do
+	let encode frameFPtr = do
 		packet@(FFmpegAVPacket packetFPtr) <- P.lift ffmpegNewPacket
 		P.lift $ ffmpegSetPacketStreamIndex packet streamIndex
 		r <- P.lift $ withForeignPtr frameFPtr $ \framePtr -> withForeignPtr packetFPtr $ flaw_ffmpeg_encode streamPtr framePtr
 		when (r == 0) $ P.yield packet
 		return r
 	-- encode frames
-	P.for frameProducer $ \frame -> do
-		r <- encode frame
+	P.for frameProducer $ \(FFmpegAVFrame frameFPtr) -> do
+		r <- encode frameFPtr
 		when (r < 0) $ P.lift $ throwIO $ DescribeFirstException "failed to FFmpeg encode"
 	-- flush encoder
-	emptyFrame <- P.lift ffmpegNewFrame
+	emptyFrameFPtr <- P.lift $ newForeignPtr_ nullPtr
 	let flush = do
-		r <- encode emptyFrame
+		r <- encode emptyFrameFPtr
 		if r == 0 then flush
 		else when (r < 0) $ P.lift $ throwIO $ DescribeFirstException "failed to flush FFmpeg encoder"
 	flush
@@ -340,6 +350,7 @@ foreign import ccall unsafe flaw_ffmpeg_setVideoStreamOptions :: Ptr C_AVStream 
 foreign import ccall safe flaw_ffmpeg_newPacket :: IO (Ptr C_AVPacket)
 foreign import ccall safe "&flaw_ffmpeg_freePacket" flaw_ffmpeg_freePacket :: FunPtr (Ptr C_AVPacket -> IO ())
 foreign import ccall safe flaw_ffmpeg_refPacket :: Ptr C_AVPacket -> IO (Ptr C_AVPacket)
+foreign import ccall unsafe flaw_ffmpeg_isPacketEmpty :: Ptr C_AVPacket -> IO CInt
 foreign import ccall unsafe flaw_ffmpeg_getPacketStreamIndex :: Ptr C_AVPacket -> IO CInt
 foreign import ccall unsafe flaw_ffmpeg_setPacketStreamIndex :: Ptr C_AVPacket -> CInt -> IO ()
 foreign import ccall unsafe flaw_ffmpeg_rescalePacketTime :: Ptr C_AVStream -> Ptr C_AVStream -> Ptr C_AVPacket -> IO ()
