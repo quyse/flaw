@@ -157,6 +157,17 @@ void flaw_ffmpeg_setPacketStreamIndex(AVPacket* pkt, int streamIndex)
 	pkt->stream_index = streamIndex;
 }
 
+void flaw_ffmpeg_setPacketTime(AVPacket* pkt, int64_t pts)
+{
+	pkt->pts = pts;
+}
+
+void flaw_ffmpeg_rescalePacketTime(AVStream* fromStream, AVStream* toStream, AVPacket* pkt)
+{
+	av_packet_rescale_ts(pkt, fromStream->time_base, toStream->time_base);
+	pkt->pos = -1;
+}
+
 int flaw_ffmpeg_demux(AVFormatContext* ctx, AVPacket* pkt)
 {
 	return av_read_frame(ctx, pkt);
@@ -190,9 +201,23 @@ AVFrame* flaw_ffmpeg_refFrame(AVFrame* frame)
 	return newFrame;
 }
 
-int flaw_ffmpeg_decode(AVFormatContext* ctx, AVPacket* pkt, AVFrame* frame)
+void flaw_ffmpeg_setFrameTime(AVFrame* frame, int64_t time)
 {
-	AVCodecContext* codec = ctx->streams[pkt->stream_index]->codec;
+	frame->pts = time;
+}
+
+void flaw_ffmpeg_frameGetAudio(AVFrame* frame, int* outSamplesCount, int* outSamplesPerSecond, int* outSampleFormat, int* outChannelsCount, int* outSize)
+{
+	*outSamplesCount = frame->nb_samples;
+	*outSamplesPerSecond = av_frame_get_sample_rate(frame);
+	*outSampleFormat = av_get_packed_sample_fmt(frame->format);
+	*outChannelsCount = av_frame_get_channels(frame);
+	*outSize = frame->nb_samples * av_get_bytes_per_sample(frame->format) * av_frame_get_channels(frame);
+}
+
+int flaw_ffmpeg_decode(AVStream* stream, AVPacket* pkt, AVFrame* frame)
+{
+	AVCodecContext* codec = stream->codec;
 	int gotFrame;
 	do
 	{
@@ -218,9 +243,9 @@ int flaw_ffmpeg_decode(AVFormatContext* ctx, AVPacket* pkt, AVFrame* frame)
 	return !gotFrame;
 }
 
-int flaw_ffmpeg_encode(AVFormatContext* ctx, AVFrame* frame, AVPacket* pkt)
+int flaw_ffmpeg_encode(AVStream* stream, AVFrame* frame, AVPacket* pkt)
 {
-	AVCodecContext* codec = ctx->streams[pkt->stream_index]->codec;
+	AVCodecContext* codec = stream->codec;
 	int gotPacket = 0, ret = -1;
 	switch(codec->codec_type)
 	{
@@ -246,15 +271,22 @@ int flaw_ffmpeg_openDecoder(AVStream* stream)
 	return ret;
 }
 
-AVStream* flaw_ffmpeg_addOutputStream(AVFormatContext* ctx, const char* codecName)
+AVStream* flaw_ffmpeg_addOutputStream(AVFormatContext* ctx, const char* codecName, int timeBaseNum, int timeBaseDen)
 {
 	AVCodec* encoder = avcodec_find_encoder_by_name(codecName);
 	if(!encoder) return NULL;
 	AVStream* stream = avformat_new_stream(ctx, encoder);
 	if(!stream) return NULL;
+	stream->time_base.num = timeBaseNum;
+	stream->time_base.den = timeBaseDen;
 	if(ctx->oformat->flags & AVFMT_GLOBALHEADER)
 		stream->codec->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
 	return stream;
+}
+
+int flaw_ffmpeg_openEncoder(AVStream* stream)
+{
+	return avcodec_open2(stream->codec, NULL, NULL);
 }
 
 AVStream* flaw_ffmpeg_copyOutputStream(AVFormatContext* ctx, AVStream* copyFromStream)
@@ -281,12 +313,6 @@ int flaw_ffmpeg_initializeOutputContext(AVFormatContext* ctx)
 int flaw_ffmpeg_finalizeOutputContext(AVFormatContext* ctx)
 {
 	return av_write_trailer(ctx);
-}
-
-void flaw_ffmpeg_rescalePacketTime(AVStream* fromStream, AVStream* toStream, AVPacket* pkt)
-{
-	av_packet_rescale_ts(pkt, fromStream->time_base, toStream->time_base);
-	pkt->pos = -1;
 }
 
 struct FFmpegScaler
@@ -350,10 +376,8 @@ AVFrame* flaw_ffmpeg_scaleVideoFrame(struct FFmpegScaler* scaler, AVFrame* frame
 	return outFrame;
 }
 
-typedef int (*DecodeAudioCallback)(int samplesPerSecond, int sampleFormat, int channelsCount, const void* data, int size);
-
 // get audio from frame, converting to packed format if needed
-int flaw_ffmpeg_packAudioFrame(AVFrame* frame, DecodeAudioCallback callback)
+void flaw_ffmpeg_packAudioFrame(AVFrame* frame, uint8_t* buf)
 {
 	int samplesCount = frame->nb_samples;
 	int samplesPerSecond = av_frame_get_sample_rate(frame);
@@ -365,10 +389,10 @@ int flaw_ffmpeg_packAudioFrame(AVFrame* frame, DecodeAudioCallback callback)
 	// if frame's data is planar, convert to packed data
 	if(av_sample_fmt_is_planar(frame->format))
 	{
-		uint8_t interleavedData[interleavedSize];
+		// convert samples to interleaved
 		for(int i = 0; i < channelsCount; ++i)
 		{
-			uint8_t* interleavedChannelData = interleavedData + i * bytesPerSample;
+			uint8_t* interleavedChannelData = buf + i * bytesPerSample;
 			const uint8_t* planarChannelData = frame->extended_data[i];
 			for(int j = 0; j < samplesCount; ++j)
 			{
@@ -378,10 +402,9 @@ int flaw_ffmpeg_packAudioFrame(AVFrame* frame, DecodeAudioCallback callback)
 					interleavedSamplePtr[k] = planarSamplePtr[k];
 			}
 		}
-		return callback(samplesPerSecond, av_get_packed_sample_fmt(frame->format), channelsCount, interleavedData, interleavedSize);
 	}
 	else
 	{
-		return callback(samplesPerSecond, frame->format, channelsCount, frame->extended_data[0], interleavedSize);
+		memcpy(buf, frame->extended_data[0], frame->linesize[0]);
 	}
 }

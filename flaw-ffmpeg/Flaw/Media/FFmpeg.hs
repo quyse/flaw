@@ -29,11 +29,14 @@ module Flaw.Media.FFmpeg
 	, ffmpegDemux
 	, ffmpegMux
 	, ffmpegRescalePacketTime
+	, ffmpegNewFrame
 	, ffmpegRefFrame
+	, ffmpegSetFrameTime
 	, ffmpegDecode
 	, ffmpegEncode
 	, ffmpegOpenDecoder
 	, ffmpegAddOutputStream
+	, ffmpegOpenEncoder
 	, ffmpegCopyOutputStream
 	, ffmpegNewScaler
 	, ffmpegDecodeSingleAudioStream
@@ -45,13 +48,18 @@ import Control.Exception
 import Control.Concurrent
 import Control.Monad
 import qualified Data.ByteString as B
+import qualified Data.ByteString.Unsafe as B
+import Data.Int
 import Data.Monoid
+import Data.Ratio
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import Foreign.C.Types
 import Foreign.ForeignPtr
+import Foreign.Marshal.Alloc
 import Foreign.Ptr
-import System.IO.Unsafe
+import Foreign.Storable
+import qualified Pipes as P
 
 import Flaw.Audio
 import Flaw.Book
@@ -151,21 +159,24 @@ ffmpegSetPacketStreamIndex :: FFmpegAVPacket -> Int -> IO ()
 ffmpegSetPacketStreamIndex (FFmpegAVPacket packetFPtr) streamIndex = withForeignPtr packetFPtr $ \packetPtr ->
 	flaw_ffmpeg_setPacketStreamIndex packetPtr (fromIntegral streamIndex)
 
--- | Demux packets lazily from input context.
-ffmpegDemux :: FFmpegAVFormatContext -> IO [FFmpegAVPacket]
+-- | Demux packets from input context.
+ffmpegDemux :: FFmpegAVFormatContext -> P.Producer FFmpegAVPacket IO ()
 ffmpegDemux (FFmpegAVFormatContext formatContextPtr) = step where
-	step = unsafeInterleaveIO $ do
-		FFmpegAVPacket packetFPtr <- ffmpegNewPacket
-		r <- withForeignPtr packetFPtr $ flaw_ffmpeg_demux formatContextPtr
-		-- return packet in any case, in order to allow single null packet in the end of stream
-		(FFmpegAVPacket packetFPtr :) <$> if r == 0 then step else return []
+	step = do
+		packet@(FFmpegAVPacket packetFPtr) <- P.lift ffmpegNewPacket
+		r <- P.lift $ withForeignPtr packetFPtr $ flaw_ffmpeg_demux formatContextPtr
+		when (r == 0) $ do
+			P.yield packet
+			step
 
 -- | Mux packets into output context.
-ffmpegMux :: FFmpegAVFormatContext -> [FFmpegAVPacket] -> IO ()
-ffmpegMux (FFmpegAVFormatContext formatContextPtr) packets = do
+ffmpegMux :: FFmpegAVFormatContext -> P.Producer FFmpegAVPacket IO () -> IO ()
+ffmpegMux (FFmpegAVFormatContext formatContextPtr) packetProducer = do
 	checkAVError "initialize output context" $ flaw_ffmpeg_initializeOutputContext formatContextPtr
-	forM_ packets $ \(FFmpegAVPacket packetFPtr) ->
-		checkAVError "mux packet" $ withForeignPtr packetFPtr $ flaw_ffmpeg_mux formatContextPtr
+
+	P.runEffect $ P.for packetProducer $ \(FFmpegAVPacket packetFPtr) ->
+		P.lift $ checkAVError "mux packet" $ withForeignPtr packetFPtr $ flaw_ffmpeg_mux formatContextPtr
+
 	checkAVError "finalize output context" $ flaw_ffmpeg_finalizeOutputContext formatContextPtr
 
 -- | Rescale timestamps of packet coming from one stream, to mux into another.
@@ -173,45 +184,72 @@ ffmpegRescalePacketTime :: FFmpegAVStream -> FFmpegAVStream -> FFmpegAVPacket ->
 ffmpegRescalePacketTime (FFmpegAVStream fromStreamPtr) (FFmpegAVStream toStreamPtr) (FFmpegAVPacket packetFPtr) =
 	withForeignPtr packetFPtr $ flaw_ffmpeg_rescalePacketTime fromStreamPtr toStreamPtr
 
+-- | Create new empty frame.
+ffmpegNewFrame :: IO FFmpegAVFrame
+ffmpegNewFrame = FFmpegAVFrame <$> (newForeignPtr flaw_ffmpeg_freeFrame =<< flaw_ffmpeg_newFrame)
+
 -- | Copy frame (but not data in it).
 ffmpegRefFrame :: FFmpegAVFrame -> IO FFmpegAVFrame
 ffmpegRefFrame (FFmpegAVFrame frameFPtr) = FFmpegAVFrame <$>
 	(newForeignPtr flaw_ffmpeg_freeFrame =<< withForeignPtr frameFPtr flaw_ffmpeg_refFrame)
 
--- | Decode packet into frames lazily.
-ffmpegDecode :: FFmpegAVFormatContext -> FFmpegAVPacket -> IO [FFmpegAVFrame]
-ffmpegDecode (FFmpegAVFormatContext formatContextPtr) (FFmpegAVPacket packetFPtr) = step where
-	step = unsafeInterleaveIO $ do
-		frameFPtr <- newForeignPtr flaw_ffmpeg_freeFrame =<< flaw_ffmpeg_newFrame
-		r <- withForeignPtr packetFPtr $ \packetPtr -> withForeignPtr frameFPtr $ flaw_ffmpeg_decode formatContextPtr packetPtr
-		if r == 0 then (FFmpegAVFrame frameFPtr :) <$> step else return []
+-- | Set frame presentation timestamp.
+ffmpegSetFrameTime :: FFmpegAVFrame -> Int64 -> IO ()
+ffmpegSetFrameTime (FFmpegAVFrame frameFPtr) time = withForeignPtr frameFPtr $ \framePtr -> flaw_ffmpeg_setFrameTime framePtr time
 
--- | Encode frames lazily into packets.
-ffmpegEncode :: FFmpegAVFormatContext -> FFmpegAVStream -> [FFmpegAVFrame] -> IO [FFmpegAVPacket]
-ffmpegEncode (FFmpegAVFormatContext formatContextPtr) stream fs = do
-	streamIndex <- ffmpegGetStreamIndex stream
-	let step frames = unsafeInterleaveIO $ do
-		let (withFramePtr, restFrames, noPacketAction) = case frames of
-			FFmpegAVFrame frameFPtr : rest -> (withForeignPtr frameFPtr, rest, step rest)
-			[] -> (($ nullPtr), [], return [])
-		packet@(FFmpegAVPacket packetFPtr) <- ffmpegNewPacket
-		ffmpegSetPacketStreamIndex packet streamIndex
-		r <- withFramePtr $ withForeignPtr packetFPtr . flaw_ffmpeg_encode formatContextPtr
-		if r == 0 then (packet :) <$> step restFrames
-		else if r > 0 then noPacketAction
-		else throwIO $ DescribeFirstException "failed to FFmpeg encode"
-	step fs
+-- | Decode packet from single stream into frames.
+ffmpegDecode :: FFmpegAVStream -> P.Producer FFmpegAVPacket IO () -> P.Producer FFmpegAVFrame IO ()
+ffmpegDecode (FFmpegAVStream streamPtr) packetProducer = do
+	let decodeFrames packet@(FFmpegAVPacket packetFPtr) = do
+		frame@(FFmpegAVFrame frameFPtr) <- P.lift ffmpegNewFrame
+		r <- P.lift $ withForeignPtr packetFPtr $ \packetPtr ->
+			withForeignPtr frameFPtr $ flaw_ffmpeg_decode streamPtr packetPtr
+		when (r == 0) $ do
+			P.yield frame
+			decodeFrames packet
+	-- receive and decode packets
+	P.for packetProducer decodeFrames
+	-- flush decoder
+	decodeFrames =<< P.lift ffmpegNewPacket
+
+-- | Encode frames into packets.
+ffmpegEncode :: FFmpegAVStream -> P.Producer FFmpegAVFrame IO () -> P.Producer FFmpegAVPacket IO ()
+ffmpegEncode stream@(FFmpegAVStream streamPtr) frameProducer = do
+	streamIndex <- P.lift $ ffmpegGetStreamIndex stream
+	let encode (FFmpegAVFrame frameFPtr) = do
+		packet@(FFmpegAVPacket packetFPtr) <- P.lift ffmpegNewPacket
+		P.lift $ ffmpegSetPacketStreamIndex packet streamIndex
+		r <- P.lift $ withForeignPtr frameFPtr $ \framePtr -> withForeignPtr packetFPtr $ flaw_ffmpeg_encode streamPtr framePtr
+		when (r == 0) $ P.yield packet
+		return r
+	-- encode frames
+	P.for frameProducer $ \frame -> do
+		r <- encode frame
+		when (r < 0) $ P.lift $ throwIO $ DescribeFirstException "failed to FFmpeg encode"
+	-- flush encoder
+	emptyFrame <- P.lift ffmpegNewFrame
+	let flush = do
+		r <- encode emptyFrame
+		if r == 0 then flush
+		else when (r < 0) $ P.lift $ throwIO $ DescribeFirstException "failed to flush FFmpeg encoder"
+	flush
 
 ffmpegOpenDecoder :: FFmpegAVStream -> IO ((), IO ())
 ffmpegOpenDecoder (FFmpegAVStream streamPtr) = do
 	checkAVError "open decoder" $ flaw_ffmpeg_openDecoder streamPtr
 	return ((), flaw_ffmpeg_closeCodec streamPtr)
 
-ffmpegAddOutputStream :: FFmpegAVFormatContext -> T.Text -> IO (FFmpegAVStream, IO ())
-ffmpegAddOutputStream (FFmpegAVFormatContext formatContextPtr) codecName = do
-	streamPtr <- B.useAsCString (T.encodeUtf8 codecName) $ flaw_ffmpeg_addOutputStream formatContextPtr
+ffmpegAddOutputStream :: FFmpegAVFormatContext -> T.Text -> Rational -> IO FFmpegAVStream
+ffmpegAddOutputStream (FFmpegAVFormatContext formatContextPtr) codecName timeBase = do
+	streamPtr <- B.useAsCString (T.encodeUtf8 codecName) $ \codecNamePtr ->
+		flaw_ffmpeg_addOutputStream formatContextPtr codecNamePtr (fromIntegral $ numerator timeBase) (fromIntegral $ denominator timeBase)
 	when (streamPtr == nullPtr) $ throwIO $ DescribeFirstException "failed to add FFmpeg output stream"
-	return (FFmpegAVStream streamPtr, flaw_ffmpeg_closeCodec streamPtr)
+	return $ FFmpegAVStream streamPtr
+
+ffmpegOpenEncoder :: FFmpegAVStream -> IO ((), IO ())
+ffmpegOpenEncoder (FFmpegAVStream streamPtr) = do
+	checkAVError "open encoder" $ flaw_ffmpeg_openEncoder streamPtr
+	return ((), flaw_ffmpeg_closeCodec streamPtr)
 
 ffmpegCopyOutputStream :: FFmpegAVFormatContext -> FFmpegAVStream -> IO (FFmpegAVStream, IO ())
 ffmpegCopyOutputStream (FFmpegAVFormatContext formatContextPtr) (FFmpegAVStream copyFromStreamPtr) = do
@@ -237,35 +275,36 @@ ffmpegNewScaler outputFormat outputWidth outputHeight = do
 		when (outputFramePtr == nullPtr) $ throwIO $ DescribeFirstException "failed to scale video frame"
 		FFmpegAVFrame <$> newForeignPtr flaw_ffmpeg_freeFrame outputFramePtr
 
-ffmpegDecodeSingleAudioStream :: FFmpegAVFormatContext -> (SoundFormat -> Ptr () -> Int -> IO ()) -> IO ()
-ffmpegDecodeSingleAudioStream formatContext callback = describeException "failed to decode ffmpeg single audio stream" $ withBook $ \bk -> do
-
-	-- find single audio stream
-	stream <- ffmpegGetSingleStreamOfType formatContext FFmpegStreamTypeAudio
-	streamIndex <- ffmpegGetStreamIndex stream
-
-	-- open decoder
-	book bk $ ffmpegOpenDecoder stream
-
-	-- wrap callback
-	wrappedCallback <- wrapDecodeAudioCallback $
-		\samplesPerSecond sampleFormat channelsCount dataPtr size -> handle (\SomeException {} -> return 1) $ do
-		callback SoundFormat
-			{ soundFormatSamplesPerSecond = fromIntegral samplesPerSecond
-			, soundFormatSampleType = convertSampleFormat sampleFormat
-			, soundFormatChannelsCount = fromIntegral channelsCount
-			} dataPtr (fromIntegral size)
-		return 0
-	book bk $ return ((), freeHaskellFunPtr wrappedCallback)
+ffmpegDecodeSingleAudioStream :: FFmpegAVFormatContext -> FFmpegAVStream -> P.Producer (SoundFormat, B.ByteString) IO ()
+ffmpegDecodeSingleAudioStream formatContext stream = do
+	streamIndex <- P.lift $ ffmpegGetStreamIndex stream
 
 	-- demux and decode
-	packets <- ffmpegDemux formatContext
-	forM_ packets $ \packet -> do
-		packetStreamIndex <- ffmpegGetPacketStreamIndex packet
-		when (streamIndex == packetStreamIndex) $ do
-			frames <- ffmpegDecode formatContext packet
-			forM_ frames $ \(FFmpegAVFrame frameFPtr) -> withForeignPtr frameFPtr $ \framePtr ->
-				checkAVError "pack audio" $ flaw_ffmpeg_packAudioFrame framePtr wrappedCallback
+	let frames = ffmpegDecode stream $ P.for (ffmpegDemux formatContext) $ \packet -> do
+		packetStreamIndex <- P.lift $ ffmpegGetPacketStreamIndex packet
+		when (streamIndex == packetStreamIndex) $ P.yield packet
+
+	-- get audio data, converting to packed format if needed
+	P.for frames $ \(FFmpegAVFrame frameFPtr) -> (P.yield =<<) . P.lift $ withForeignPtr frameFPtr $ \framePtr -> do
+		(format, size) <- alloca $ \samplesCountPtr ->
+			alloca $ \samplesPerSecondPtr ->
+			alloca $ \sampleFormatPtr ->
+			alloca $ \channelsCountPtr ->
+			alloca $ \sizePtr -> do
+			flaw_ffmpeg_frameGetAudio framePtr samplesCountPtr samplesPerSecondPtr sampleFormatPtr channelsCountPtr sizePtr
+			samplesPerSecond <- peek samplesPerSecondPtr
+			sampleFormat <- peek sampleFormatPtr
+			channelsCount <- peek channelsCountPtr
+			size <- peek sizePtr
+			return (SoundFormat
+				{ soundFormatSamplesPerSecond = fromIntegral samplesPerSecond
+				, soundFormatSampleType = convertSampleFormat sampleFormat
+				, soundFormatChannelsCount = fromIntegral channelsCount
+				}, fromIntegral size)
+		bytesPtr <- mallocBytes size
+		flaw_ffmpeg_packAudioFrame framePtr (castPtr bytesPtr)
+		bytes <- B.unsafePackMallocCStringLen ( bytesPtr, size)
+		return (format, bytes)
 
 checkAVError :: String -> IO CInt -> IO ()
 checkAVError message action = do
@@ -303,18 +342,22 @@ foreign import ccall safe "&flaw_ffmpeg_freePacket" flaw_ffmpeg_freePacket :: Fu
 foreign import ccall safe flaw_ffmpeg_refPacket :: Ptr C_AVPacket -> IO (Ptr C_AVPacket)
 foreign import ccall unsafe flaw_ffmpeg_getPacketStreamIndex :: Ptr C_AVPacket -> IO CInt
 foreign import ccall unsafe flaw_ffmpeg_setPacketStreamIndex :: Ptr C_AVPacket -> CInt -> IO ()
+foreign import ccall unsafe flaw_ffmpeg_rescalePacketTime :: Ptr C_AVStream -> Ptr C_AVStream -> Ptr C_AVPacket -> IO ()
 foreign import ccall safe flaw_ffmpeg_demux :: Ptr C_AVFormatContext -> Ptr C_AVPacket -> IO CInt
 foreign import ccall safe flaw_ffmpeg_mux :: Ptr C_AVFormatContext -> Ptr C_AVPacket -> IO CInt
-foreign import ccall unsafe flaw_ffmpeg_rescalePacketTime :: Ptr C_AVStream -> Ptr C_AVStream -> Ptr C_AVPacket -> IO ()
 
 foreign import ccall safe flaw_ffmpeg_newFrame :: IO (Ptr C_AVFrame)
 foreign import ccall safe "&flaw_ffmpeg_freeFrame" flaw_ffmpeg_freeFrame :: FunPtr (Ptr C_AVFrame -> IO ())
 foreign import ccall safe flaw_ffmpeg_refFrame :: Ptr C_AVFrame -> IO (Ptr C_AVFrame)
-foreign import ccall safe flaw_ffmpeg_decode :: Ptr C_AVFormatContext -> Ptr C_AVPacket -> Ptr C_AVFrame -> IO CInt
-foreign import ccall safe flaw_ffmpeg_encode :: Ptr C_AVFormatContext -> Ptr C_AVFrame -> Ptr C_AVPacket -> IO CInt
+foreign import ccall unsafe flaw_ffmpeg_setFrameTime :: Ptr C_AVFrame -> Int64 -> IO ()
+foreign import ccall unsafe flaw_ffmpeg_frameGetAudio :: Ptr C_AVFrame -> Ptr CInt -> Ptr CInt -> Ptr CInt -> Ptr CInt -> Ptr CInt -> IO ()
+
+foreign import ccall safe flaw_ffmpeg_decode :: Ptr C_AVStream -> Ptr C_AVPacket -> Ptr C_AVFrame -> IO CInt
+foreign import ccall safe flaw_ffmpeg_encode :: Ptr C_AVStream -> Ptr C_AVFrame -> Ptr C_AVPacket -> IO CInt
 
 foreign import ccall safe flaw_ffmpeg_openDecoder :: Ptr C_AVStream -> IO CInt
-foreign import ccall safe flaw_ffmpeg_addOutputStream :: Ptr C_AVFormatContext -> Ptr CChar -> IO (Ptr C_AVStream)
+foreign import ccall safe flaw_ffmpeg_addOutputStream :: Ptr C_AVFormatContext -> Ptr CChar -> CInt -> CInt -> IO (Ptr C_AVStream)
+foreign import ccall safe flaw_ffmpeg_openEncoder :: Ptr C_AVStream -> IO CInt
 foreign import ccall safe flaw_ffmpeg_copyOutputStream :: Ptr C_AVFormatContext -> Ptr C_AVStream -> IO (Ptr C_AVStream)
 foreign import ccall safe flaw_ffmpeg_closeCodec :: Ptr C_AVStream -> IO ()
 
@@ -325,16 +368,11 @@ foreign import ccall safe flaw_ffmpeg_newScaler :: CInt -> CInt -> CInt -> IO (P
 foreign import ccall safe "&flaw_ffmpeg_freeScaler" flaw_ffmpeg_freeScaler :: FunPtr (Ptr C_FFmpegScaler -> IO ())
 foreign import ccall safe flaw_ffmpeg_scaleVideoFrame :: Ptr C_FFmpegScaler -> Ptr C_AVFrame -> IO (Ptr C_AVFrame)
 
-foreign import ccall safe flaw_ffmpeg_packAudioFrame :: Ptr C_AVFrame -> FunPtr DecodeAudioCallback -> IO CInt
+foreign import ccall safe flaw_ffmpeg_packAudioFrame :: Ptr C_AVFrame -> Ptr CUChar -> IO ()
 
 -- flaw-ffmpeg structs
 
 data C_FFmpegScaler
-
--- wrappers
-
-type DecodeAudioCallback = CInt -> CInt -> CInt -> Ptr () -> CInt -> IO CInt
-foreign import ccall "wrapper" wrapDecodeAudioCallback :: DecodeAudioCallback -> IO (FunPtr DecodeAudioCallback)
 
 -- ffmpeg functions
 
@@ -373,5 +411,7 @@ pattern AV_SAMPLE_FMT_FLT = 3
 pattern AV_SAMPLE_FMT_DBL = 4
 
 pattern AV_OPT_SEARCH_CHILDREN = 1
-pattern AVERROR_OPTION_NOT_FOUND = (-0x54504ff8)
+--pattern AVERROR_EAGAIN = (-11)
 pattern AVERROR_EINVAL = (-22)
+--pattern AVERROR_EOF = (-0x20464f45)
+pattern AVERROR_OPTION_NOT_FOUND = (-0x54504ff8)
