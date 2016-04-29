@@ -79,6 +79,7 @@ variables:
     flaw-build
     flaw-canvas
     flaw-ffi
+    flaw-game
     flaw-gl
     flaw-graphics
     flaw-input
