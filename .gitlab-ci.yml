@@ -89,7 +89,7 @@ variables:
     flaw-window
   INTEGERSIMPLE_CONFIG_FIX: >-
     powershell
-    "Add-Content stack.yaml \"extra-deps: [text-1.2.1.3, cereal-text-0.1.0.1]\""
+    "Add-Content stack.yaml \"extra-deps: [cereal-text-0.1.0.1]\""
   INTEGERSIMPLE_FLAGS_WINDOWS: >-
     --ghc-variant integersimple
     --flag text:integer-simple
