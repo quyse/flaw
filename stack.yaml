@@ -33,6 +33,7 @@ packages:
 - flaw-physics
 - flaw-sdl
 - flaw-sl
+- flaw-social
 - flaw-sqlite
 - flaw-ui
 - flaw-ui-default-style
