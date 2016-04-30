@@ -29,3 +29,14 @@ function h$flaw_js_vendor_fixup_addEventListener(object, event, listener, option
 		: (("ms" + event) in object) ? ("ms" + event)
 		: event, listener, options);
 }
+
+// get params map from URL
+function h$flaw_js_get_url_params() {
+	var pieces = window.location.search.substr(1).split('&');
+	var keyValues = {};
+	for(var i = 0; i < pieces.length; ++i) {
+		var keyValue = pieces[i].split('=');
+		keyValues[decodeURIComponent(keyValue[0])] = decodeURIComponent(keyValue[1]);
+	}
+	return keyValues;
+}

@@ -24,7 +24,7 @@ library
   build-depends:       base, text
   default-language:    Haskell2010
   if impl(ghcjs)
-    build-depends:       flaw-base, ghcjs-base
+    build-depends:       flaw-base, flaw-js, ghcjs-base
     js-sources:
       js/flaw-social-vk.js
   else
