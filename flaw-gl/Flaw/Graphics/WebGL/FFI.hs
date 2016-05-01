@@ -573,11 +573,11 @@ import qualified Data.Text as T
 import Foreign.C.Types
 import Foreign.Ptr
 import Foreign.Storable
-import qualified GHCJS.Buffer
 import GHCJS.Foreign.Callback
 import GHCJS.Marshal.Pure
 import GHCJS.Types
 
+import Flaw.Js
 import Flaw.Math
 
 -- | Placeholders for WebGL javascript types.
@@ -785,49 +785,49 @@ foreign import javascript unsafe "h$flaw_webgl_context.uniformMatrix4fv($1, $2, 
 
 {-# INLINE glUniform1fv #-}
 glUniform1fv :: JS_WebGLUniformLocation -> GLsizei -> Ptr GLfloat -> IO ()
-glUniform1fv location size ptr = glUniform1fv_val location $ js_ptrToFloat32Array ptr size
+glUniform1fv location size ptr = glUniform1fv_val location $ ptrToFloat32Array ptr size
 {-# INLINE glUniform2fv #-}
 glUniform2fv :: JS_WebGLUniformLocation -> GLsizei -> Ptr GLfloat -> IO ()
-glUniform2fv location size ptr = glUniform2fv_val location $ js_ptrToFloat32Array ptr $ size * 2
+glUniform2fv location size ptr = glUniform2fv_val location $ ptrToFloat32Array ptr $ size * 2
 {-# INLINE glUniform3fv #-}
 glUniform3fv :: JS_WebGLUniformLocation -> GLsizei -> Ptr GLfloat -> IO ()
-glUniform3fv location size ptr = glUniform3fv_val location $ js_ptrToFloat32Array ptr $ size * 3
+glUniform3fv location size ptr = glUniform3fv_val location $ ptrToFloat32Array ptr $ size * 3
 {-# INLINE glUniform4fv #-}
 glUniform4fv :: JS_WebGLUniformLocation -> GLsizei -> Ptr GLfloat -> IO ()
-glUniform4fv location size ptr = glUniform4fv_val location $ js_ptrToFloat32Array ptr $ size * 4
+glUniform4fv location size ptr = glUniform4fv_val location $ ptrToFloat32Array ptr $ size * 4
 
 {-# INLINE glUniform1iv #-}
 glUniform1iv :: JS_WebGLUniformLocation -> GLsizei -> Ptr GLint -> IO ()
-glUniform1iv location size ptr = glUniform1iv_val location $ js_ptrToInt32Array ptr size
+glUniform1iv location size ptr = glUniform1iv_val location $ ptrToInt32Array ptr size
 {-# INLINE glUniform2iv #-}
 glUniform2iv :: JS_WebGLUniformLocation -> GLsizei -> Ptr GLint -> IO ()
-glUniform2iv location size ptr = glUniform2iv_val location $ js_ptrToInt32Array ptr $ size * 2
+glUniform2iv location size ptr = glUniform2iv_val location $ ptrToInt32Array ptr $ size * 2
 {-# INLINE glUniform3iv #-}
 glUniform3iv :: JS_WebGLUniformLocation -> GLsizei -> Ptr GLint -> IO ()
-glUniform3iv location size ptr = glUniform3iv_val location $ js_ptrToInt32Array ptr $ size * 3
+glUniform3iv location size ptr = glUniform3iv_val location $ ptrToInt32Array ptr $ size * 3
 {-# INLINE glUniform4iv #-}
 glUniform4iv :: JS_WebGLUniformLocation -> GLsizei -> Ptr GLint -> IO ()
-glUniform4iv location size ptr = glUniform4iv_val location $ js_ptrToInt32Array ptr $ size * 4
+glUniform4iv location size ptr = glUniform4iv_val location $ ptrToInt32Array ptr $ size * 4
 
 {-# INLINE glUniform1uiv #-}
 glUniform1uiv :: JS_WebGLUniformLocation -> GLsizei -> Ptr GLuint -> IO ()
-glUniform1uiv location size ptr = glUniform1uiv_val location $ js_ptrToUint32Array ptr size
+glUniform1uiv location size ptr = glUniform1uiv_val location $ ptrToUint32Array ptr size
 {-# INLINE glUniform2uiv #-}
 glUniform2uiv :: JS_WebGLUniformLocation -> GLsizei -> Ptr GLuint -> IO ()
-glUniform2uiv location size ptr = glUniform2uiv_val location $ js_ptrToUint32Array ptr $ size * 2
+glUniform2uiv location size ptr = glUniform2uiv_val location $ ptrToUint32Array ptr $ size * 2
 {-# INLINE glUniform3uiv #-}
 glUniform3uiv :: JS_WebGLUniformLocation -> GLsizei -> Ptr GLuint -> IO ()
-glUniform3uiv location size ptr = glUniform3uiv_val location $ js_ptrToUint32Array ptr $ size * 3
+glUniform3uiv location size ptr = glUniform3uiv_val location $ ptrToUint32Array ptr $ size * 3
 {-# INLINE glUniform4uiv #-}
 glUniform4uiv :: JS_WebGLUniformLocation -> GLsizei -> Ptr GLuint -> IO ()
-glUniform4uiv location size ptr = glUniform4uiv_val location $ js_ptrToUint32Array ptr $ size * 4
+glUniform4uiv location size ptr = glUniform4uiv_val location $ ptrToUint32Array ptr $ size * 4
 
 {-# INLINE glUniformMatrix3fv #-}
 glUniformMatrix3fv :: JS_WebGLUniformLocation -> GLsizei -> GLboolean -> Ptr GLfloat -> IO ()
-glUniformMatrix3fv location size transpose ptr = glUniformMatrix3fv_val location transpose $ js_ptrToFloat32Array ptr $ size * 16
+glUniformMatrix3fv location size transpose ptr = glUniformMatrix3fv_val location transpose $ ptrToFloat32Array ptr $ size * 16
 {-# INLINE glUniformMatrix4fv #-}
 glUniformMatrix4fv :: JS_WebGLUniformLocation -> GLsizei -> GLboolean -> Ptr GLfloat -> IO ()
-glUniformMatrix4fv location size transpose ptr = glUniformMatrix4fv_val location transpose $ js_ptrToFloat32Array ptr $ size * 16
+glUniformMatrix4fv location size transpose ptr = glUniformMatrix4fv_val location transpose $ ptrToFloat32Array ptr $ size * 16
 
 
 foreign import javascript unsafe "h$flaw_webgl_context.createVertexArray()" glCreateVertexArray :: IO JS_WebGLVertexArray
@@ -1036,19 +1036,6 @@ foreign import javascript unsafe "$r = null" glNullProgramName :: JS_WebGLProgra
 -- Helpers.
 
 foreign import javascript interruptible "var image=new Image();image.onload=function(){$c(image);};image.src=$1;" js_loadImage :: JSString -> IO JSVal
-
--- | Convert bytestring to Javascript DataView object.
--- Looks like there's no official GHCJS (exported) function to get a view for a part of the buffer.
--- There's only non-exported JavaScript.TypedArray.DataView.dataView' function.
-byteStringToJsDataView :: B.ByteString -> JSVal
-byteStringToJsDataView bytes = js_dataViewFromBuffer buf off len where
-	(buf, off, len) = GHCJS.Buffer.fromByteString bytes
-
-foreign import javascript unsafe "new DataView($1.buf, $2, $3)" js_dataViewFromBuffer :: GHCJS.Buffer.Buffer -> Int -> Int -> JSVal
-
-foreign import javascript unsafe "$1.f3.subarray($1_2, $1_2 + $2)" js_ptrToFloat32Array :: Ptr Float -> Int -> JSVal
-foreign import javascript unsafe "$1.i3.subarray($1_2, $1_2 + $2)" js_ptrToInt32Array :: Ptr Int -> Int -> JSVal
-foreign import javascript unsafe "$1.u3.subarray($1_2, $1_2 + $2)" js_ptrToUint32Array :: Ptr Word -> Int -> JSVal
 
 
 type GlOffset = GLintptr

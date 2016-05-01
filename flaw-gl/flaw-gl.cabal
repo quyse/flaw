@@ -37,7 +37,7 @@ library
       Flaw.Graphics.WebGL
     other-modules:
       Flaw.Graphics.WebGL.FFI
-    build-depends:       flaw-window, ghcjs-base
+    build-depends:       flaw-js, flaw-window, ghcjs-base
     js-sources:        js/flaw-webgl.js
   else
     exposed-modules:
