@@ -22,7 +22,7 @@ library
     Flaw.Social
     Flaw.Social.Fakebook
     Flaw.Social.VK
-  build-depends:       base, text
+  build-depends:       base, bytestring, cereal, text
   default-language:    Haskell2010
   if impl(ghcjs)
     build-depends:       flaw-base, flaw-js, ghcjs-base
@@ -30,4 +30,4 @@ library
       js/flaw-social-fakebook.js
       js/flaw-social-vk.js
   else
-    build-depends:       blaze-html, bytestring, cryptonite, memory, text
+    build-depends:       blaze-html, cryptonite, memory

@@ -4,7 +4,7 @@ Description: Fake social network, only for testing.
 License: MIT
 -}
 
-{-# LANGUAGE CPP, TypeFamilies #-}
+{-# LANGUAGE CPP, GeneralizedNewtypeDeriving, OverloadedStrings, TypeFamilies #-}
 
 module Flaw.Social.Fakebook
 	( Fakebook
@@ -13,13 +13,16 @@ module Flaw.Social.Fakebook
 	, initFakebook
 	) where
 
-import qualified Data.Text as T
+import qualified Data.ByteString as B
+import Data.Monoid
+import qualified Data.Serialize as S
 
 import Flaw.Social
 
 #if defined(ghcjs_HOST_OS)
 
 import Data.JSString.Text
+import qualified Data.Text.Encoding as T
 import GHCJS.Types
 
 #endif
@@ -27,8 +30,9 @@ import GHCJS.Types
 data Fakebook = Fakebook
 
 instance Social Fakebook where
-	newtype SocialUserId Fakebook = FakebookUserId T.Text
-	newtype SocialUserToken Fakebook = FakebookUserToken T.Text
+	newtype SocialUserId Fakebook = FakebookUserId B.ByteString deriving S.Serialize
+	newtype SocialUserToken Fakebook = FakebookUserToken B.ByteString deriving S.Serialize
+	socialUniversalUserId (FakebookUserId userId) = "fakebook_" <> userId
 
 #if defined(ghcjs_HOST_OS)
 
@@ -37,11 +41,10 @@ initFakebook = do
 	js_init
 	return Fakebook
 
-
 instance SocialClient Fakebook where
 	authSocialClient Fakebook = do
-		userId <- textFromJSString <$> js_userId
-		if T.null userId then return Nothing
+		userId <- T.encodeUtf8 . textFromJSString <$> js_userId
+		if B.null userId then return Nothing
 		else return $ Just (FakebookUserId userId, FakebookUserToken userId)
 
 foreign import javascript unsafe "h$flaw_social_fakebook_init" js_init :: IO ()

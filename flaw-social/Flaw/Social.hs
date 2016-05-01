@@ -4,7 +4,7 @@ Description: Social networks abstract interface.
 License: MIT
 -}
 
-{-# LANGUAGE CPP, TypeFamilies #-}
+{-# LANGUAGE CPP, FlexibleContexts, TypeFamilies #-}
 
 module Flaw.Social
 	( Social(..)
@@ -15,6 +15,9 @@ module Flaw.Social
 #endif
 	) where
 
+import qualified Data.ByteString as B
+import qualified Data.Serialize as S
+
 #if defined(ghcjs_HOST_OS)
 
 #else
@@ -22,11 +25,13 @@ module Flaw.Social
 #endif
 
 -- | Social network abstraction.
-class Social s where
+class (S.Serialize (SocialUserId s), S.Serialize (SocialUserToken s)) => Social s where
 	-- | User id in this social network.
 	data SocialUserId s :: *
 	-- | Token to prove client authentication to server.
 	data SocialUserToken s :: *
+	-- | Get universal user id.
+	socialUniversalUserId :: SocialUserId s -> B.ByteString
 
 #if defined(ghcjs_HOST_OS)
 

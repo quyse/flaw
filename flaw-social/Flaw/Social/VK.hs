@@ -4,7 +4,7 @@ Description: VK.com integration.
 License: MIT
 -}
 
-{-# LANGUAGE CPP, JavaScriptFFI, OverloadedStrings, TypeFamilies #-}
+{-# LANGUAGE CPP, GeneralizedNewtypeDeriving, JavaScriptFFI, OverloadedStrings, TypeFamilies #-}
 
 module Flaw.Social.VK
 	( VK()
@@ -18,7 +18,11 @@ module Flaw.Social.VK
 #endif
 	) where
 
+import qualified Data.ByteString as B
+import Data.Monoid
+import qualified Data.Serialize as S
 import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
 
 import Flaw.Social
 
@@ -34,11 +38,8 @@ import Flaw.Exception
 #else
 
 import qualified Data.ByteArray as BA
-import qualified Data.ByteString as B
 import qualified Data.ByteString.Builder as B
 import qualified Data.ByteString.Lazy as BL
-import Data.Monoid
-import qualified Data.Text.Encoding as T
 import Crypto.Hash
 import qualified Text.Blaze.Html5 as H
 import qualified Text.Blaze.Html5.Attributes as A
@@ -46,8 +47,9 @@ import qualified Text.Blaze.Html5.Attributes as A
 #endif
 
 instance Social VK where
-	newtype SocialUserId VK = VKUserId T.Text
-	newtype SocialUserToken VK = VKUserToken T.Text
+	newtype SocialUserId VK = VKUserId B.ByteString deriving S.Serialize
+	newtype SocialUserToken VK = VKUserToken B.ByteString deriving S.Serialize
+	socialUniversalUserId (VKUserId userId) = "vk" <> userId
 
 #if defined(ghcjs_HOST_OS)
 
@@ -62,10 +64,10 @@ initVKiframe = do
 
 instance SocialClient VK where
 	authSocialClient VK = do
-		viewerId <- textFromJSString <$> js_viewerId
-		if T.null viewerId then return Nothing
+		viewerId <- T.encodeUtf8 . textFromJSString <$> js_viewerId
+		if B.null viewerId then return Nothing
 		else do
-			authKey <- textFromJSString <$> js_authKey
+			authKey <- T.encodeUtf8 . textFromJSString <$> js_authKey
 			return $ Just (VKUserId viewerId, VKUserToken authKey)
 
 foreign import javascript interruptible "h$flaw_social_vk_init_iframe($c);" js_init_iframe :: IO Bool
@@ -91,12 +93,12 @@ instance SocialServer VK where
 	verifySocialUserToken VK
 		{ vkAppIdBytes = appIdBytes
 		, vkAppSecretBytes = appSecretBytes
-		} (VKUserId userId) (VKUserToken userToken) = return $ T.encodeUtf8 userToken == userTokenShouldBe
+		} (VKUserId userId) (VKUserToken userToken) = return $ userToken == userTokenShouldBe
 		where userTokenShouldBe = BL.toStrict $ B.toLazyByteString $ B.byteStringHex $ BA.convert
 			$ (hash :: B.ByteString -> Digest MD5) $ BL.toStrict $ B.toLazyByteString
 			$  B.byteString appIdBytes
 			<> B.char7 '_'
-			<> B.byteString (T.encodeUtf8 userId)
+			<> B.byteString userId
 			<> B.char7 '_'
 			<> B.byteString appSecretBytes
 
