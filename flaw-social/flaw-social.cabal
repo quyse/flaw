@@ -30,4 +30,4 @@ library
       js/flaw-social-fakebook.js
       js/flaw-social-vk.js
   else
-    build-depends:       blaze-html, cryptonite, memory
+    build-depends:       blaze-html, cryptonite, memory, transformers, wai-routes

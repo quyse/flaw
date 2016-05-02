@@ -22,6 +22,8 @@ import qualified Data.Serialize as S
 
 #else
 
+import qualified Network.Wai.Middleware.Routes as W
+
 #endif
 
 -- | Social network abstraction.
@@ -44,6 +46,8 @@ class Social s => SocialClient s where
 
 -- | Social network, server-side.
 class Social s => SocialServer s where
+	-- | Authenticate client using data from main GET request to app's page.
+	authSocialClientByRequest :: s -> W.HandlerM sub master (Maybe (SocialUserId s))
 	-- | Check validity of a client.
 	verifySocialUserToken :: s -> SocialUserId s -> SocialUserToken s -> IO Bool
 

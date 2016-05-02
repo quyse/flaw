@@ -37,10 +37,12 @@ import Flaw.Exception
 
 #else
 
+import Crypto.Hash
+import Control.Monad.IO.Class
 import qualified Data.ByteArray as BA
 import qualified Data.ByteString.Builder as B
 import qualified Data.ByteString.Lazy as BL
-import Crypto.Hash
+import qualified Network.Wai.Middleware.Routes as W
 import qualified Text.Blaze.Html5 as H
 import qualified Text.Blaze.Html5.Attributes as A
 
@@ -88,6 +90,15 @@ initVK appId appSecret = return VK
 	}
 
 instance SocialServer VK where
+	authSocialClientByRequest vk = do
+		maybeViewerId <- W.getParam "viewer_id"
+		maybeAuthKey <- W.getParam "auth_key"
+		case (maybeViewerId, maybeAuthKey) of
+			(Just viewerId, Just authKey) -> do
+				let userId = VKUserId $ T.encodeUtf8 viewerId
+				ok <- liftIO $ verifySocialUserToken vk userId (VKUserToken $ T.encodeUtf8 authKey)
+				return $ if ok then Just userId else Nothing
+			_ -> return Nothing
 	-- | Verify user token.
 	-- TODO: check via secure.checkToken.
 	verifySocialUserToken VK

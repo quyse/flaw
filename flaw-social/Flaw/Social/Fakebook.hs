@@ -16,14 +16,18 @@ module Flaw.Social.Fakebook
 import qualified Data.ByteString as B
 import Data.Monoid
 import qualified Data.Serialize as S
+import qualified Data.Text.Encoding as T
 
 import Flaw.Social
 
 #if defined(ghcjs_HOST_OS)
 
 import Data.JSString.Text
-import qualified Data.Text.Encoding as T
 import GHCJS.Types
+
+#else
+
+import qualified Network.Wai.Middleware.Routes as W
 
 #endif
 
@@ -56,6 +60,7 @@ initFakebook :: IO Fakebook
 initFakebook = return Fakebook
 
 instance SocialServer Fakebook where
+	authSocialClientByRequest Fakebook = (FakebookUserId . T.encodeUtf8 <$>) <$> W.getParam "fakebook_user_id"
 	verifySocialUserToken Fakebook (FakebookUserId userId) (FakebookUserToken userToken) = return $ userId == userToken
 
 #endif
