@@ -10,6 +10,7 @@ module Flaw.Js
 	( initJs
 	, byteStringToJsDataView
 	, arrayBufferToByteString
+	, blobToArrayBuffer
 	, ptrToFloat32Array
 	, ptrToInt32Array
 	, ptrToUint32Array
@@ -20,6 +21,7 @@ import Foreign.Ptr
 import qualified GHCJS.Buffer
 import GHCJS.Types
 import JavaScript.TypedArray.ArrayBuffer(ArrayBuffer)
+import JavaScript.Web.Blob(Blob)
 
 -- Even if nothing has to be done, the module has to contain some code called by some other
 -- code (currently flaw-app calls it), otherwise it's excluded from linking together with javascript sources.
@@ -37,6 +39,9 @@ foreign import javascript unsafe "new DataView($1.buf, $2, $3)" js_dataViewFromB
 
 arrayBufferToByteString :: ArrayBuffer -> B.ByteString
 arrayBufferToByteString = GHCJS.Buffer.toByteString 0 Nothing . GHCJS.Buffer.createFromArrayBuffer
+
+-- | Convert Blob to ArrayBuffer.
+foreign import javascript interruptible "h$flaw_js_blob_to_array_buffer($1, $c);" blobToArrayBuffer :: Blob -> ArrayBuffer
 
 -- Converting pointers to arrays.
 

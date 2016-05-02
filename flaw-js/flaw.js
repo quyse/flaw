@@ -40,3 +40,11 @@ function h$flaw_js_get_url_params() {
 	}
 	return keyValues;
 }
+
+function h$flaw_js_blob_to_array_buffer(blob, callback) {
+	var reader = new FileReader();
+	reader.addEventListener("loadend", function() {
+		callback(reader.result);
+	});
+	reader.readAsArrayBuffer(blob);
+}
