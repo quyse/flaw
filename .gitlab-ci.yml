@@ -28,6 +28,7 @@ variables:
     flaw-lua
     flaw-lua-refimpl
     flaw-math
+    flaw-network
     flaw-oil
     flaw-oil-client
     flaw-oil-server
@@ -39,6 +40,7 @@ variables:
     flaw-ui
     flaw-ui-default-style
     flaw-visual
+    flaw-websocket-server
     flaw-window
   PACKAGES_WINDOWS: >-
     flaw-al
@@ -62,6 +64,7 @@ variables:
     flaw-lua
     flaw-lua-refimpl
     flaw-math
+    flaw-network
     flaw-oil
     flaw-oil-client
     flaw-oil-server
@@ -72,6 +75,7 @@ variables:
     flaw-ui
     flaw-ui-default-style
     flaw-visual
+    flaw-websocket-server
     flaw-window
   PACKAGES_WEB: >-
     flaw-app
@@ -87,6 +91,7 @@ variables:
     flaw-input
     flaw-js
     flaw-math
+    flaw-network
     flaw-physics
     flaw-sl
     flaw-social

@@ -70,6 +70,7 @@ script: >-
   flaw-lua
   flaw-lua-refimpl
   flaw-math
+  flaw-network
   flaw-oil
   flaw-oil-client
   flaw-oil-server
@@ -81,6 +82,7 @@ script: >-
   flaw-ui
   flaw-ui-default-style
   flaw-visual
+  flaw-websocket-server
   flaw-window
 
 cache:
