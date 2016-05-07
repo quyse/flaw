@@ -95,6 +95,7 @@ variables:
     flaw-physics
     flaw-sl
     flaw-social
+    flaw-websocket-client
     flaw-window
   INTEGERSIMPLE_CONFIG_FIX: >-
     powershell

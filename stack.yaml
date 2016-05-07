@@ -39,6 +39,7 @@ packages:
 - flaw-ui
 - flaw-ui-default-style
 - flaw-visual
+- flaw-websocket-client
 - flaw-websocket-server
 - flaw-window
 
