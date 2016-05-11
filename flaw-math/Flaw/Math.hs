@@ -25,6 +25,7 @@ module Flaw.Math
 	-- ** Vectors and matrices
 	, VecX(..), VecY(..), VecZ(..), VecW(..)
 	, Vectorized(..)
+	, VectorizedFunctor(..)
 	, Vec1(..), Vec2(..), Vec3(..), Vec4(..)
 	, Mat3x3(..), Mat3x4(..), Mat4x4(..)
 	-- ** Quaternions
@@ -124,6 +125,11 @@ fmap return $ do
 		let unpackFuncDec = sigD (mkName $ "unmat" ++ dimStr) [t| $(conT dataName) $(varT tvA) -> $(foldl appT (tupleT (dimN * dimM)) $ replicate (dimN * dimM) $ varT tvA) |]
 		return [dataDec, packFuncDec, unpackFuncDec]
 	classD (sequence [ [t| Ord $(varT tvA) |], [t| Show $(varT tvA) |] ]) (mkName "Vectorized") [PlainTV tvA] [] $ vecDecs ++ matDecs
+
+-- | Special functor class over Vectorized elements.
+class VectorizedFunctor f where
+	-- | Apply function to elements of functor.
+	vecfmap :: (Vectorized a, Vectorized b) => (a -> b) -> f a -> f b
 
 -- Pattern synonyms for vectors and matrices.
 -- TH doesn't support pattern synonyms yet (https://ghc.haskell.org/trac/ghc/ticket/8761), so doing it manually :(
@@ -237,6 +243,11 @@ do
 			instanceD (sequence [ [t| Vectorized $elemType |] ]) [t| $(conT className) ($(conT dataName) $elemType) |] =<< addInlines
 				[ funD funName [clause [conP conName [if c == component then varP varName else wildP | c <- components]] (normalB (varE varName)) []]
 				]
+
+		-- instance for VectorizedFunctor class
+		vectorizedFunctorInstance <- instanceD (sequence []) [t| VectorizedFunctor $(conT dataName) |] =<< addInlines
+			[ funD 'vecfmap [clause [varP p, conP conName $ map varP as] (normalB $ foldl appE (conE conName) $ map (appE (varE p) . varE) as) []]
+			]
 
 		-- instance for Dot class
 		dotInstance <- instanceD (sequence [ [t| Vectorized $elemType |], [t| Num $elemType |] ]) [t| Dot ($(conT dataName) $elemType) |] =<< addInlines
@@ -408,7 +419,7 @@ do
 				, funD 'S.get [clause [] (normalB $ doE $ map (\a -> bindS (varP a) [| S.get |]) as ++ [noBindS $ [| return $(foldl appE (conE conName) $ map varE as) |] ]) []]
 				]
 
-		return $ vecInstance : dotInstance : numInstance : normInstance : normalizeInstance : fractionalInstance : floatingInstance : storableInstance : eqInstance : ordInstance : showInstance : serializeInstance :
+		return $ vecInstance : vectorizedFunctorInstance : dotInstance : numInstance : normInstance : normalizeInstance : fractionalInstance : floatingInstance : storableInstance : eqInstance : ordInstance : showInstance : serializeInstance :
 			vecComponentInstances ++ swizzleVecInstances
 
 	-- Cross instance
