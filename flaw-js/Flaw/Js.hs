@@ -45,6 +45,6 @@ foreign import javascript interruptible "h$flaw_js_blob_to_array_buffer($1, $c);
 
 -- Converting pointers to arrays.
 
-foreign import javascript unsafe "$1.f3.subarray($1_2, $1_2 + $2)" ptrToFloat32Array :: Ptr Float -> Int -> JSVal
-foreign import javascript unsafe "$1.i3.subarray($1_2, $1_2 + $2)" ptrToInt32Array :: Ptr Int -> Int -> JSVal
-foreign import javascript unsafe "$1.u3.subarray($1_2, $1_2 + $2)" ptrToUint32Array :: Ptr Word -> Int -> JSVal
+foreign import javascript unsafe "$1.f3.subarray($1_2 >> 2, ($1_2 >> 2) + $2)" ptrToFloat32Array :: Ptr Float -> Int -> JSVal
+foreign import javascript unsafe "$1.i3.subarray($1_2 >> 2, ($1_2 >> 2) + $2)" ptrToInt32Array :: Ptr Int -> Int -> JSVal
+foreign import javascript unsafe "$1.u3.subarray($1_2 >> 2, ($1_2 >> 2) + $2)" ptrToUint32Array :: Ptr Word -> Int -> JSVal
