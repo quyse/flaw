@@ -4,7 +4,7 @@ Description: Asset pack loading assets from files (or via AJAX request in case o
 License: MIT
 -}
 
-{-# LANGUAGE CPP, JavaScriptFFI, TypeFamilies #-}
+{-# LANGUAGE CPP, JavaScriptFFI, TemplateHaskell, TypeFamilies #-}
 
 module Flaw.Asset.FolderAssetPack
 	( FolderAssetPack(..)
@@ -16,6 +16,7 @@ import Data.Monoid
 import qualified Data.Text as T
 
 import Flaw.Asset
+import Flaw.Build
 
 #ifdef ghcjs_HOST_OS
 import Data.JSString.Text
@@ -26,6 +27,8 @@ import Flaw.Js
 
 -- | The simpliest asset pack loading files just from folder (or URL prefix).
 newtype FolderAssetPack = FolderAssetPack T.Text
+
+genEmbed ''FolderAssetPack
 
 instance AssetPack FolderAssetPack where
 	type AssetId FolderAssetPack = T.Text

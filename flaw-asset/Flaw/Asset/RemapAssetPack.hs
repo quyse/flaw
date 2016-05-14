@@ -4,36 +4,43 @@ Description: Asset pack transformer remapping asset ids.
 License: MIT
 -}
 
-{-# LANGUAGE FlexibleContexts, TypeFamilies, OverloadedStrings #-}
+{-# LANGUAGE CPP, FlexibleContexts, TypeFamilies, OverloadedStrings, TemplateHaskell #-}
 
 module Flaw.Asset.RemapAssetPack
 	( RemapAssetPack(..)
 	, AssetPackBuilder(..)
-	, loadRemapAssetPack
+	, RemapAssetPackContainer(..)
 	, newRemapAssetPackBuilder
-	, saveRemapAssetPackBuilder
+	, finalizeRemapAssetPackBuilder
+	, loadRemapAssetPack
+#ifndef ghcjs_HOST_OS
 	, remapAssetWithHash
+#endif
 	) where
 
 import Control.Concurrent.STM
 import Control.Exception
 import Control.Monad
-import qualified Data.ByteArray as BA
-import qualified Data.ByteArray.Encoding as BA
 import qualified Data.ByteString as B
 import Data.Hashable
 import qualified Data.HashMap.Strict as HM
 import Data.Maybe
 import Data.Monoid
 import qualified Data.Serialize as S
-import Data.Serialize.Text()
+import Data.Typeable
+
+#ifndef ghcjs_HOST_OS
+import qualified Crypto.Hash as C
+import qualified Data.ByteArray as BA
+import qualified Data.ByteArray.Encoding as BA
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
-import Data.Typeable
-import qualified Crypto.Hash as C
+#endif
 
 import Flaw.Asset
+import Flaw.Build
 
+-- | Remap asset pack, includes underlying asset pack and mapping of asset ids.
 data RemapAssetPack ap ai = RemapAssetPack !ap !(HM.HashMap ai (AssetId ap))
 
 instance (AssetPack ap, Eq ai, Hashable ai, Typeable ai, Show ai) => AssetPack (RemapAssetPack ap ai) where
@@ -70,18 +77,29 @@ instance (WebAssetPack ap, Eq ai, Hashable ai, Typeable ai, Show ai) => WebAsset
 				, assetErrorReason = WrongAssetId
 				}
 
-loadRemapAssetPack :: (AssetPack ap, Eq ai, Hashable ai, S.Serialize ai, S.Serialize (AssetId ap)) => ap -> B.ByteString -> IO (RemapAssetPack ap ai)
-loadRemapAssetPack assetPack packBytes = case S.decode packBytes of
-	Right ids -> return $ RemapAssetPack assetPack $ HM.fromList ids
-	Left e -> error e
+instance (Embed ap, Embed ai, Embed (AssetId ap)) => Embed (RemapAssetPack ap ai) where
+	embedExp (RemapAssetPack assetPack ids) = [| RemapAssetPack $(embedExp assetPack) $ HM.fromList $(embedExp $ HM.toList ids) |]
+
+-- | Remap asset pack container, includes only mapping, serializable.
+newtype RemapAssetPackContainer ai1 ai2 = RemapAssetPackContainer (HM.HashMap ai1 ai2)
+
+instance (S.Serialize ai1, S.Serialize ai2, Eq ai1, Hashable ai1) => S.Serialize (RemapAssetPackContainer ai1 ai2) where
+	put (RemapAssetPackContainer ids) = S.put $ HM.toList ids
+	get = RemapAssetPackContainer . HM.fromList <$> S.get
+
+instance (Embed ai1, Embed ai2) => Embed (RemapAssetPackContainer ai1 ai2) where
+	embedExp (RemapAssetPackContainer ids) = [| RemapAssetPackContainer $ HM.fromList $(embedExp $ HM.toList ids) |]
 
 newRemapAssetPackBuilder :: AssetPack ap => AssetPackBuilder ap -> (ai -> B.ByteString -> AssetId ap) -> IO (AssetPackBuilder (RemapAssetPack ap ai))
 newRemapAssetPackBuilder assetPackBuilder remap = do
 	idsVar <- newTVarIO HM.empty
 	return $ RemapAssetPackBuilder assetPackBuilder remap idsVar
 
-saveRemapAssetPackBuilder :: (S.Serialize ai, S.Serialize (AssetId ap)) => AssetPackBuilder (RemapAssetPack ap ai) -> IO B.ByteString
-saveRemapAssetPackBuilder (RemapAssetPackBuilder _assetPackBuilder _remap idsVar) = (S.encode . HM.toList) <$> readTVarIO idsVar
+finalizeRemapAssetPackBuilder :: AssetPackBuilder (RemapAssetPack ap ai) -> IO (RemapAssetPackContainer ai (AssetId ap))
+finalizeRemapAssetPackBuilder (RemapAssetPackBuilder _assetPackBuilder _remap idsVar) = RemapAssetPackContainer <$> readTVarIO idsVar
+
+loadRemapAssetPack :: (AssetPack ap, AssetId ap ~ ai2) => RemapAssetPackContainer ai1 ai2 -> ap -> RemapAssetPack ap ai1
+loadRemapAssetPack (RemapAssetPackContainer ids) assetPack = RemapAssetPack assetPack ids
 
 handler :: (Typeable ai, Show ai) => ai -> SomeException -> IO a
 handler assetId e = throwIO AssetError
@@ -89,6 +107,10 @@ handler assetId e = throwIO AssetError
 	, assetErrorReason = UnderlyingAssetError e
 	}
 
--- | One particular function suitable for generating "hashed" names.
+#ifndef ghcjs_HOST_OS
+
+-- | One particular function suitable for generating "hashed" URLs.
 remapAssetWithHash :: T.Text -> B.ByteString -> T.Text
-remapAssetWithHash assetId asset = T.decodeUtf8 (BA.convertToBase BA.Base64URLUnpadded $ BA.takeView (C.hashFinalize $ C.hashUpdate C.hashInit asset :: C.Digest C.SHA256) 10) <> "-" <> assetId
+remapAssetWithHash assetId asset = T.decodeUtf8 (BA.convertToBase BA.Base64URLUnpadded $ BA.takeView (C.hash asset :: C.Digest C.SHA256) 10) <> "/" <> T.takeWhileEnd (/= '/') assetId
+
+#endif

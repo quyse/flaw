@@ -24,7 +24,7 @@ import Language.Haskell.TH
 import Flaw.Asset
 import Flaw.Build
 
-data HashMapAssetPack k = HashMapAssetPack (HM.HashMap k B.ByteString)
+newtype HashMapAssetPack k = HashMapAssetPack (HM.HashMap k B.ByteString)
 
 instance (Eq k, Hashable k, Typeable k, Show k) => AssetPack (HashMapAssetPack k) where
 	type AssetId (HashMapAssetPack k) = k
