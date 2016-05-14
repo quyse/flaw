@@ -48,3 +48,13 @@ function h$flaw_js_blob_to_array_buffer(blob, callback) {
 	});
 	reader.readAsArrayBuffer(blob);
 }
+
+function h$flaw_js_load_url(url, callback) {
+	var xhr = new XMLHttpRequest();
+	xhr.open('GET', url, true);
+	xhr.responseType = 'arraybuffer';
+	xhr.onload = function(e) {
+		callback(this.status == 200 ? this.response : new ArrayBuffer(0));
+	};
+	xhr.send();
+}

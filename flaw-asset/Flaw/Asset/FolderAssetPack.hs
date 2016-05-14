@@ -18,9 +18,8 @@ import qualified Data.Text as T
 import Flaw.Asset
 
 #ifdef ghcjs_HOST_OS
+import Data.JSString.Text
 import GHCJS.Marshal.Pure
-import GHCJS.Types
-import qualified JavaScript.TypedArray.ArrayBuffer as J
 
 import Flaw.Js
 #endif
@@ -35,7 +34,7 @@ instance AssetPack FolderAssetPack where
 		let fullFileName = prefix <> fileName
 #ifdef ghcjs_HOST_OS
 		-- get asset by url, convert to bytestring
-		arrayBufferToByteString <$> js_getAsset (pToJSVal fullFileName)
+		arrayBufferToByteString <$> arrayBufferFromUrl (textToJSString fullFileName)
 #else
 		-- just load file
 		B.readFile $ T.unpack fullFileName
@@ -46,7 +45,3 @@ instance AssetPack FolderAssetPack where
 
 instance WebAssetPack FolderAssetPack where
 	getWebAssetUrl (FolderAssetPack prefix) fileName = return $ prefix <> fileName
-
-#ifdef ghcjs_HOST_OS
-foreign import javascript interruptible "h$flaw_asset_get_asset($1, $c);" js_getAsset :: JSVal -> IO J.ArrayBuffer
-#endif
