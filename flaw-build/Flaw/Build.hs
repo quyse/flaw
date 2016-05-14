@@ -139,8 +139,7 @@ embedStringExp s = litE $ stringL s
 
 -- | EmbedIO file data as an expression.
 fileExp :: FilePath -> Q Exp
-fileExp filePath = do
-	embedIOExp =<< loadFile filePath
+fileExp filePath = embedIOExp =<< loadFile filePath
 
 -- | Pack storable list to bytestring.
 packList :: Storable a => [a] -> IO B.ByteString
@@ -193,13 +192,17 @@ genEmbed :: Name -> Q [Dec]
 genEmbed dn = do
 	info <- reify dn
 	case info of
-		TyConI (DataD dataContext dataName tvbs cons _derivings) -> do
-			let tvns = [case tvb of
+		TyConI (DataD dataContext dataName tvbs cons _derivings) -> process dataContext dataName tvbs cons
+		TyConI (NewtypeD dataContext dataName tvbs con _derivings) -> process dataContext dataName tvbs [con]
+		_ -> fail $ show ("unsupported declaration for embedding", info)
+	where
+	process dataContext dataName tvbs cons = do
+		let
+			tvns = [case tvb of
 				PlainTV n -> n
 				KindedTV n _k -> n
 				| tvb <- tvbs]
-			x <- newName "x"
-			let embedMatch con = case con of
+			embedMatch con = case con of
 				NormalC conName sts -> do
 					xs <- mapM (newName . snd) $ zip sts ["x" ++ show (n :: Int) | n <- [1..]]
 					let body = normalB $ foldl
@@ -224,11 +227,11 @@ genEmbed dn = do
 						[| uInfixE (embedExp $(varE x1)) (conE $(embedExp conName)) (embedExp $(varE x2)) |]
 					match (infixP (varP x1) conName (varP x2)) body []
 				ForallC _tvbs _cxt c -> embedMatch c
-			sequence
-				[ instanceD (return dataContext) (appT (conT ''Embed) $ foldl (\a b -> appT a (varT b)) (conT dataName) tvns)
-					[ funD 'embedExp
-						[ clause [varP x] (normalB $ caseE (varE x) $ map embedMatch cons) []
-						]
+		x <- newName "x"
+		sequence
+			[ instanceD (return dataContext) (appT (conT ''Embed) $ foldl (\a b -> appT a (varT b)) (conT dataName) tvns)
+				[ funD 'embedExp
+					[ clause [varP x] (normalB $ caseE (varE x) $ map embedMatch cons) []
 					]
 				]
-		_ -> fail "unsupported declaration"
+			]
