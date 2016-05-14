@@ -28,5 +28,5 @@ library
   -- hs-source-dirs:      
   default-language:    Haskell2010
   if impl(ghcjs)
-    build-depends:     ghcjs-base
+    build-depends:     flaw-js, ghcjs-base
     js-sources:        js/flaw-asset.js

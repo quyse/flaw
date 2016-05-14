@@ -15,15 +15,15 @@ import qualified Data.ByteString as B
 import Data.Monoid
 import qualified Data.Text as T
 
+import Flaw.Asset
+
 #ifdef ghcjs_HOST_OS
-import qualified GHCJS.Buffer
-import GHCJS.Foreign
 import GHCJS.Marshal.Pure
 import GHCJS.Types
 import qualified JavaScript.TypedArray.ArrayBuffer as J
-#endif
 
-import Flaw.Asset
+import Flaw.Js
+#endif
 
 -- | The simpliest asset pack loading files just from folder (or URL prefix).
 newtype FolderAssetPack = FolderAssetPack T.Text
@@ -34,10 +34,8 @@ instance AssetPack FolderAssetPack where
 	loadAsset (FolderAssetPack prefix) fileName = do
 		let fullFileName = prefix <> fileName
 #ifdef ghcjs_HOST_OS
-		-- get asset by url
-		buffer <- js_getAsset $ pToJSVal fullFileName
-		-- convert to bytestring
-		return $ GHCJS.Buffer.toByteString 0 Nothing $ GHCJS.Buffer.createFromArrayBuffer buffer
+		-- get asset by url, convert to bytestring
+		arrayBufferToByteString <$> js_getAsset (pToJSVal fullFileName)
 #else
 		-- just load file
 		B.readFile $ T.unpack fullFileName
