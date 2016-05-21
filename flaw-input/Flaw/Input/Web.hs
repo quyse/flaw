@@ -37,13 +37,13 @@ initWebInput Web.Canvas
 	let addMouseEvent event = atomically $ writeTChan mouseChan event
 
 	-- register callbacks
-	keydownCallback <- syncCallback1 ThrowWouldBlock $ addKeyboardEvent . KeyDownEvent . convertKeyCode
-	keyupCallback <- syncCallback1 ThrowWouldBlock $ addKeyboardEvent . KeyUpEvent . convertKeyCode
-	keypressCallback <- syncCallback1 ThrowWouldBlock $ addKeyboardEvent . CharEvent . chr . pFromJSVal
-	mousedownCallback <- syncCallback1 ThrowWouldBlock $ addMouseEvent . MouseDownEvent . convertMouseButton
-	mouseupCallback <- syncCallback1 ThrowWouldBlock $ addMouseEvent . MouseUpEvent . convertMouseButton
-	rawMouseMoveCallback <- syncCallback3 ThrowWouldBlock $ \jsX jsY jsZ -> addMouseEvent $ RawMouseMoveEvent (pFromJSVal jsX) (pFromJSVal jsY) (pFromJSVal jsZ)
-	cursorMoveCallback <- syncCallback2 ThrowWouldBlock $ \jsX jsY -> addMouseEvent $ CursorMoveEvent (pFromJSVal jsX) (pFromJSVal jsY)
+	keydownCallback <- asyncCallback1 $ addKeyboardEvent . KeyDownEvent . convertKeyCode
+	keyupCallback <- asyncCallback1 $ addKeyboardEvent . KeyUpEvent . convertKeyCode
+	keypressCallback <- asyncCallback1 $ addKeyboardEvent . CharEvent . chr . pFromJSVal
+	mousedownCallback <- asyncCallback1 $ addMouseEvent . MouseDownEvent . convertMouseButton
+	mouseupCallback <- asyncCallback1 $ addMouseEvent . MouseUpEvent . convertMouseButton
+	rawMouseMoveCallback <- asyncCallback3 $ \jsX jsY jsZ -> addMouseEvent $ RawMouseMoveEvent (pFromJSVal jsX) (pFromJSVal jsY) (pFromJSVal jsZ)
+	cursorMoveCallback <- asyncCallback2 $ \jsX jsY -> addMouseEvent $ CursorMoveEvent (pFromJSVal jsX) (pFromJSVal jsY)
 
 	js_registerEvents jsCanvas
 		keydownCallback keyupCallback keypressCallback
