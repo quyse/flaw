@@ -33,7 +33,6 @@ import qualified Data.Vector as V
 import qualified Data.Vector.Mutable as VM
 import Data.Word
 import Foreign.Marshal.Alloc
-import Foreign.Marshal.Utils
 import Foreign.Ptr
 import Foreign.Storable
 import GHC.Float
@@ -55,6 +54,7 @@ import Flaw.Graphics.WebGL.FFI
 
 #else
 
+import Foreign.Marshal.Utils
 import Graphics.GL.ARB.GetProgramBinary
 import Graphics.GL.ARB.TextureStorage
 import Graphics.GL.ARB.UniformBufferObject
@@ -192,8 +192,6 @@ instance Device GlContext where
 	nullIndexBuffer = GlIndexBufferId glNullBufferName GL_UNSIGNED_SHORT
 	nullUniformBuffer = GlNullUniformBufferId
 
-	createDeferredContext = undefined
-
 	createStaticTexture GlContext
 		{ glContextInvoke = invoke
 		, glContextCaps = GlCaps
@@ -327,6 +325,15 @@ instance Device GlContext where
 		glCheckErrors1 "create static texture"
 
 		return (GlTextureId textureName, invoke $ glDeleteTextureName textureName)
+
+#if defined(ghcjs_HOST_OS)
+	createNativeTexture GlContext
+		{ glContextInvoke = invoke
+		} samplerStateInfo bytes = invoke $ describeException "failed to create OpenGL native texture" $ do
+		(glTarget, jsTexture) <- glNativeTexture bytes
+		glSetupTextureSampling glTarget samplerStateInfo
+		return (GlTextureId jsTexture, invoke $ glDeleteTextureName jsTexture)
+#endif
 
 	createSamplerState GlContext
 		{ glContextInvoke = invoke
@@ -960,9 +967,6 @@ instance Context GlContext GlContext where
 			else
 				glDrawArrays GL_TRIANGLES 0 (fromIntegral indicesCount)
 		glCheckErrors0 "draw"
-
-	-- TODO
-	contextPlay = undefined
 
 	contextRender GlContext
 		{ glContextDesiredState = desiredContextState
@@ -1657,6 +1661,11 @@ glSetupTextureSampling target samplerStateInfo@SamplerStateInfo
 	-- wrap V
 	glTexParameteri target GL_TEXTURE_WRAP_T $ fromIntegral $ glSamplerWrap wrapV
 	glCheckErrors0 "wrap V"
+
+#if defined(ghcjs_HOST_OS)
+	let _ = (wrapW, minLod, maxLod, borderColor)
+	return ()
+#else
 	-- wrap W
 	glTexParameteri target GL_TEXTURE_WRAP_R $ fromIntegral $ glSamplerWrap wrapW
 	glCheckErrors0 "wrap W"
@@ -1671,6 +1680,7 @@ glSetupTextureSampling target samplerStateInfo@SamplerStateInfo
 	-- border color
 	with borderColor $ glTexParameterfv target GL_TEXTURE_BORDER_COLOR . castPtr
 	glCheckErrors0 "border color"
+#endif
 
 refSetup :: Eq a => IORef a -> IORef a -> (a -> IO ()) -> IO Bool
 refSetup actualRef desiredRef setup = do

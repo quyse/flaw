@@ -1022,9 +1022,6 @@ instance Context Dx11Context Dx11Device where
 				else
 					m_ID3D11DeviceContext_Draw contextInterface (fromIntegral indicesCount) 0
 
-	-- TODO
-	contextPlay = undefined
-
 	contextRender Dx11Context
 		{ dx11ContextDesiredState = desiredContextState
 		} f = do

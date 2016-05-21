@@ -12,16 +12,13 @@ module Flaw.Graphics.WebGL
 	, WebGLContext
 	, WebGLPresenter()
 	, webglInit
-	, loadWebGLTexture2DFromURL
 	) where
 
 import Control.Exception
 import Control.Concurrent.MVar
 import Control.Monad
-import Data.JSString.Text
 import Data.IORef
 import Data.String
-import qualified Data.Text as T
 import GHCJS.Foreign
 import GHCJS.Foreign.Callback
 
@@ -172,15 +169,3 @@ webglInit canvas@Canvas
 
 	-- return
 	return ((device, context, presenter), return ())
-
-loadWebGLTexture2DFromURL :: WebGLDevice -> T.Text -> IO (TextureId WebGLDevice, IO ())
-loadWebGLTexture2DFromURL _device url = describeException "failed to load WebGL texture from URL" $ do
-	image <- js_loadImage $ textToJSString url
-	jsTexture <- glCreateTexture
-	glBindTexture GL_TEXTURE_2D jsTexture
-	glTexImage2D_image GL_TEXTURE_2D 0 GL_RGBA GL_RGBA GL_UNSIGNED_BYTE image
-	glTexParameteri GL_TEXTURE_2D GL_TEXTURE_WRAP_S GL_REPEAT
-	glTexParameteri GL_TEXTURE_2D GL_TEXTURE_WRAP_T GL_REPEAT
-	glTexParameteri GL_TEXTURE_2D GL_TEXTURE_MIN_FILTER GL_LINEAR
-	glTexParameteri GL_TEXTURE_2D GL_TEXTURE_MAG_FILTER GL_LINEAR
-	return (GlTextureId jsTexture, glDeleteTexture jsTexture)

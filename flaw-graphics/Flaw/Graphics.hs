@@ -44,11 +44,13 @@ module Flaw.Graphics
 	, present
 	) where
 
+import Control.Exception
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Reader
 import qualified Data.ByteString as B
 import qualified Data.Text as T
 
+import Flaw.Exception
 import Flaw.Graphics.Blend
 import Flaw.Graphics.Program.Internal
 import Flaw.Graphics.Sampler
@@ -119,8 +121,12 @@ class Device d where
 
 	-- | Create deferred context.
 	createDeferredContext :: Context (DeferredContext d) d => d -> IO (DeferredContext d, IO ())
+	createDeferredContext _ = throwIO $ DescribeFirstException "creating deferred context is not supported"
 	-- | Create static texture.
 	createStaticTexture :: d -> TextureInfo -> SamplerStateInfo -> B.ByteString -> IO (TextureId d, IO ())
+	-- | Create texture from image packed in any format natively supported by device.
+	createNativeTexture :: d -> SamplerStateInfo -> B.ByteString -> IO (TextureId d, IO ())
+	createNativeTexture _ _ _ = throwIO $ DescribeFirstException "creating native texture is not supported"
 	-- | Create sampler state.
 	createSamplerState :: d -> SamplerStateInfo -> IO (SamplerStateId d, IO ())
 	-- | Create blend state.
@@ -178,6 +184,7 @@ class Device d => Context c d | c -> d where
 		-> IO ()
 	-- | Replay deferred context on immediate context.
 	contextPlay :: Context dc d => c -> dc -> IO ()
+	contextPlay _ _ = throwIO $ DescribeFirstException "playing deferred context is not supported"
 	-- | Perform offscreen rendering. Initial state is context's default state.
 	contextRender :: c -> IO a -> IO a
 	------- Setup commands.

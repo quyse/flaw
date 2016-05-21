@@ -20,7 +20,6 @@ source-repository head
 library
   exposed-modules:
     Flaw.App
-    Flaw.App.PlainTexture
   other-modules:
   -- other-extensions:    
   build-depends:       base, bytestring, flaw-asset, flaw-base, flaw-build, flaw-graphics, flaw-input, flaw-window, template-haskell, text, time, transformers
@@ -29,7 +28,6 @@ library
   if impl(ghcjs)
     build-depends:       flaw-gl, flaw-js
   else
-    build-depends:       flaw-visual
     if os(windows)
       build-depends:       flaw-dx11
     else

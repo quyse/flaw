@@ -140,7 +140,7 @@ module Flaw.Graphics.WebGL.FFI
 	, glDrawArraysInstanced
 	, glDrawElementsInstanced
 	-- ** Misc.
-	, js_loadImage
+	, glNativeTexture
 	-- * Name manipulation.
 	, BufferName
 	, TextureName
@@ -1034,6 +1034,15 @@ foreign import javascript unsafe "$r = null" glNullProgramName :: JS_WebGLProgra
 
 
 -- Helpers.
+
+-- | Load texture natively.
+glNativeTexture :: B.ByteString -> IO (GLenum, JS_WebGLTexture)
+glNativeTexture bytes = do
+	image <- js_loadImage $ getUrl mempty $ byteStringToJsDataView bytes
+	jsTexture <- glCreateTexture
+	glBindTexture GL_TEXTURE_2D jsTexture
+	glTexImage2D_image GL_TEXTURE_2D 0 GL_RGBA GL_RGBA GL_UNSIGNED_BYTE image
+	return (GL_TEXTURE_2D, jsTexture)
 
 foreign import javascript interruptible "var image=new Image();image.onload=function(){$c(image);};image.src=$1;" js_loadImage :: JSString -> IO JSVal
 

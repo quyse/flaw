@@ -118,6 +118,7 @@ initApp AppConfig
 
 	inputManager <- initWebInput window
 
+	let _ = (maybeWindowPosition, maybeWindowSize, binaryCache, debug)
 	(graphicsDevice, graphicsContext, presenter) <- book bk $ webglInit window needDepthBuffer
 
 #else
