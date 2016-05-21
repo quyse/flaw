@@ -12,8 +12,14 @@ function h$flaw_window_init_canvas() {
 	canvas.height = window.innerHeight;
 
 	// add canvas to page
-	document.body.appendChild(canvas);
-	document.body.style.overflow = 'hidden';
+	// try to add to container
+	var container = document.getElementById('flaw_window_container');
+	if(container) {
+		container.appendChild(canvas);
+	} else {
+		document.body.appendChild(canvas);
+		document.body.style.overflow = 'hidden';
+	}
 
 	// ensure canvas is always full-window
 	window.addEventListener('resize', function() {
