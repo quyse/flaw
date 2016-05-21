@@ -4,7 +4,7 @@ Description: General javascript things.
 License: MIT
 -}
 
-{-# LANGUAGE JavaScriptFFI #-}
+{-# LANGUAGE FlexibleInstances, JavaScriptFFI, TypeSynonymInstances #-}
 
 module Flaw.Js
 	( initJs
@@ -15,6 +15,7 @@ module Flaw.Js
 	, ptrToInt32Array
 	, ptrToUint32Array
 	, arrayBufferFromUrl
+	, HasUrl(..)
 	) where
 
 import qualified Data.ByteString as B
@@ -52,3 +53,19 @@ foreign import javascript unsafe "$1.u3.subarray($1_2 >> 2, ($1_2 >> 2) + $2)" p
 
 -- | Load binary data by URL.
 foreign import javascript interruptible "h$flaw_js_load_url($1, $c);" arrayBufferFromUrl :: JSString -> IO ArrayBuffer
+
+-- | Class of things which could be converted to URL.
+class HasUrl a where
+	-- | Create URL representing object, with specified MIME type.
+	getUrl :: JSString -> a -> JSString
+
+instance HasUrl JSVal where
+	getUrl = objectUrl
+
+instance HasUrl B.ByteString where
+	getUrl mime = objectUrl mime . byteStringToJsDataView
+
+instance HasUrl ArrayBuffer where
+	getUrl mime = objectUrl mime . jsval
+
+foreign import javascript unsafe "h$flaw_js_object_url($1, $2)" objectUrl :: JSString -> JSVal -> JSString

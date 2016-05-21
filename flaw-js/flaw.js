@@ -58,3 +58,9 @@ function h$flaw_js_load_url(url, callback) {
 	};
 	xhr.send();
 }
+
+function h$flaw_js_object_url(mime, object) {
+	return URL.createObjectURL(new Blob([object], {
+		type: mime
+	}));
+}
