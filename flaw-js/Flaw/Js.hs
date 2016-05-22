@@ -15,7 +15,8 @@ module Flaw.Js
 	, ptrToInt32Array
 	, ptrToUint32Array
 	, arrayBufferFromUrl
-	, HasUrl(..)
+	, HasObjectUrl(..)
+	, revokeObjectUrl
 	) where
 
 import qualified Data.ByteString as B
@@ -55,17 +56,20 @@ foreign import javascript unsafe "$1.u3.subarray($1_2 >> 2, ($1_2 >> 2) + $2)" p
 foreign import javascript interruptible "h$flaw_js_load_url($1, $c);" arrayBufferFromUrl :: JSString -> IO ArrayBuffer
 
 -- | Class of things which could be converted to URL.
-class HasUrl a where
+class HasObjectUrl a where
 	-- | Create URL representing object, with specified MIME type.
-	getUrl :: JSString -> a -> JSString
+	createObjectUrl :: JSString -> a -> IO JSString
 
-instance HasUrl JSVal where
-	getUrl = objectUrl
+-- | Revoke URL representing object.
+foreign import javascript unsafe "URL.revokeObjectURL($1)" revokeObjectUrl :: JSString -> IO ()
 
-instance HasUrl B.ByteString where
-	getUrl mime = objectUrl mime . byteStringToJsDataView
+instance HasObjectUrl JSVal where
+	createObjectUrl = objectUrl
 
-instance HasUrl ArrayBuffer where
-	getUrl mime = objectUrl mime . jsval
+instance HasObjectUrl B.ByteString where
+	createObjectUrl mime = objectUrl mime . byteStringToJsDataView
 
-foreign import javascript unsafe "h$flaw_js_object_url($1, $2)" objectUrl :: JSString -> JSVal -> JSString
+instance HasObjectUrl ArrayBuffer where
+	createObjectUrl mime = objectUrl mime . jsval
+
+foreign import javascript unsafe "h$flaw_js_object_url($1, $2)" objectUrl :: JSString -> JSVal -> IO JSString

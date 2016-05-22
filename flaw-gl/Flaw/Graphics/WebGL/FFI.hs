@@ -1038,7 +1038,9 @@ foreign import javascript unsafe "$r = null" glNullProgramName :: JS_WebGLProgra
 -- | Load texture natively.
 glNativeTexture :: B.ByteString -> IO (GLenum, JS_WebGLTexture)
 glNativeTexture bytes = do
-	image <- js_loadImage $ getUrl mempty $ byteStringToJsDataView bytes
+	objectUrl <- createObjectUrl mempty $ byteStringToJsDataView bytes
+	image <- js_loadImage objectUrl
+	revokeObjectUrl objectUrl
 	jsTexture <- glCreateTexture
 	glBindTexture GL_TEXTURE_2D jsTexture
 	glTexImage2D_image GL_TEXTURE_2D 0 GL_RGBA GL_RGBA GL_UNSIGNED_BYTE image
