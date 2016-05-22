@@ -32,6 +32,7 @@ module Flaw.UI
 	, DraggableInFreeContainer(..)
 	, SomeFreeChild(..)
 	, DefaultActionRedirector(..)
+	, Focusable(..)
 	, MouseCursor(..) -- re-export from Flaw.Window
 	) where
 
@@ -186,3 +187,6 @@ data SomeFreeChild where
 class Element a => DefaultActionRedirector a where
 	setDefaultElement :: Element e => a -> e -> STM ()
 	setCancelElement :: Element e => a -> e -> STM ()
+
+class Element a => Focusable a where
+	isFocused :: a -> STM Bool

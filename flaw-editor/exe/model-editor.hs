@@ -308,9 +308,9 @@ main = handle errorHandler $ withBook $ \bk -> do
 		_ -> return False
 
 	-- init UI
-	mainWindow@Window
+	(mainWindow@Window
 		{ windowKeyboardState = keyboardState
-		} <- atomically $ do
+		}, renderBox) <- atomically $ do
 		windowPanel <- newPanel True
 		mainWindow <- newWindow window inputManager windowPanel
 		setWindowCloseHandler mainWindow $ writeTVar exitVar True
@@ -413,7 +413,7 @@ main = handle errorHandler $ withBook $ \bk -> do
 			placeFreeChild windowPanel renderBoxChild $ Vec2 0 0
 			layoutElement renderBox size
 
-		return mainWindow
+		return (mainWindow, renderBox)
 
 	-- run
 	runApp $ \frameTime -> do
@@ -422,37 +422,39 @@ main = handle errorHandler $ withBook $ \bk -> do
 
 		-- process camera
 		liftIO $ atomically $ do
-			editorState@EditorState
-				{ editorStateEyePosition = position
-				, editorStateEyeSpeed = speed
-				} <- readTVar editorStateVar
-			w <- getKeyState keyboardState KeyW
-			s <- getKeyState keyboardState KeyS
-			a <- getKeyState keyboardState KeyA
-			d <- getKeyState keyboardState KeyD
-			q <- getKeyState keyboardState KeyQ
-			e <- getKeyState keyboardState KeyE
-			up <- getKeyState keyboardState KeyUp
-			down <- getKeyState keyboardState KeyDown
-			left <- getKeyState keyboardState KeyLeft
-			right <- getKeyState keyboardState KeyRight
-			let acceleration = 5
-			let direction = getEyeDirection editorState
-			let forward = direction
-			let rightward = normalize $ cross direction (Float3 0 0 1)
-			let upward = normalize $ cross rightward forward
-			let newSpeed = (speed + acceleration *
-				( forward * vecFromScalar (frameTime * ((if w || up then 1 else 0) + (if s || down then (-1) else 0)))
-				+ rightward * vecFromScalar (frameTime * ((if d || right then 1 else 0) + (if a || left then (-1) else 0)))
-				+ upward * vecFromScalar (frameTime * ((if e then 1 else 0) + (if q then (-1) else 0)))
-				)) * vecFromScalar (exp (log 0.01 * frameTime))
-			let newSpeedNorm = norm newSpeed
-			let maxSpeed = 10
-			let newSpeed2 = if newSpeedNorm > maxSpeed then newSpeed * vecFromScalar (maxSpeed / newSpeedNorm) else newSpeed
-			writeTVar editorStateVar editorState
-				{ editorStateEyePosition = position + speed * vecFromScalar frameTime
-				, editorStateEyeSpeed = newSpeed2
-				}
+			focused <- isFocused renderBox
+			when focused $ do
+				editorState@EditorState
+					{ editorStateEyePosition = position
+					, editorStateEyeSpeed = speed
+					} <- readTVar editorStateVar
+				w <- getKeyState keyboardState KeyW
+				s <- getKeyState keyboardState KeyS
+				a <- getKeyState keyboardState KeyA
+				d <- getKeyState keyboardState KeyD
+				q <- getKeyState keyboardState KeyQ
+				e <- getKeyState keyboardState KeyE
+				up <- getKeyState keyboardState KeyUp
+				down <- getKeyState keyboardState KeyDown
+				left <- getKeyState keyboardState KeyLeft
+				right <- getKeyState keyboardState KeyRight
+				let acceleration = 5
+				let direction = getEyeDirection editorState
+				let forward = direction
+				let rightward = normalize $ cross direction (Float3 0 0 1)
+				let upward = normalize $ cross rightward forward
+				let newSpeed = (speed + acceleration *
+					( forward * vecFromScalar (frameTime * ((if w || up then 1 else 0) + (if s || down then (-1) else 0)))
+					+ rightward * vecFromScalar (frameTime * ((if d || right then 1 else 0) + (if a || left then (-1) else 0)))
+					+ upward * vecFromScalar (frameTime * ((if e then 1 else 0) + (if q then (-1) else 0)))
+					)) * vecFromScalar (exp (log 0.01 * frameTime))
+				let newSpeedNorm = norm newSpeed
+				let maxSpeed = 10
+				let newSpeed2 = if newSpeedNorm > maxSpeed then newSpeed * vecFromScalar (maxSpeed / newSpeedNorm) else newSpeed
+				writeTVar editorStateVar editorState
+					{ editorStateEyePosition = position + speed * vecFromScalar frameTime
+					, editorStateEyeSpeed = newSpeed2
+					}
 
 		-- update drawer
 		atomically $ setDrawerFrameTime drawer frameTime

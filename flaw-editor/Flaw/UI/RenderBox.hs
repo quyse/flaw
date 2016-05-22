@@ -22,6 +22,7 @@ data RenderBox = RenderBox
 	{ renderBoxRenderCallback :: !RenderCallback
 	, renderBoxInputCallback :: !InputCallback
 	, renderBoxSizeVar :: !(TVar Size)
+	, renderBoxFocusedVar :: !(TVar Bool)
 	}
 
 type RenderCallback = forall c d. Context c d => Position -> Size -> STM (Render c ())
@@ -31,10 +32,12 @@ type InputCallback = InputEvent -> InputState -> STM Bool
 newRenderBox :: RenderCallback -> InputCallback -> STM RenderBox
 newRenderBox renderCallback inputCallback = do
 	sizeVar <- newTVar $ Vec2 0 0
+	focusedVar <- newTVar False
 	return RenderBox
 		{ renderBoxRenderCallback = renderCallback
 		, renderBoxInputCallback = inputCallback
 		, renderBoxSizeVar = sizeVar
+		, renderBoxFocusedVar = focusedVar
 		}
 
 instance Element RenderBox where
@@ -62,4 +65,17 @@ instance Element RenderBox where
 		{ renderBoxInputCallback = inputCallback
 		} = inputCallback
 
-	focusElement _ = return True
+	focusElement RenderBox
+		{ renderBoxFocusedVar = focusedVar
+		} = do
+		writeTVar focusedVar True
+		return True
+
+	unfocusElement RenderBox
+		{ renderBoxFocusedVar = focusedVar
+		} = writeTVar focusedVar False
+
+instance Focusable RenderBox where
+	isFocused RenderBox
+		{ renderBoxFocusedVar = focusedVar
+		} = readTVar focusedVar
