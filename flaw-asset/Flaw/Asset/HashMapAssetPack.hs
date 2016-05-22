@@ -18,6 +18,7 @@ import qualified Data.ByteString as B
 import Data.Hashable
 import qualified Data.HashMap.Strict as HM
 import Data.IORef
+import qualified Data.Serialize as S
 import Data.Typeable
 import Language.Haskell.TH
 
@@ -39,6 +40,10 @@ instance (Eq k, Hashable k, Typeable k, Show k) => AssetPack (HashMapAssetPack k
 	newtype AssetPackBuilder (HashMapAssetPack k) = HashMapAssetPackBuilder (IORef (HM.HashMap k B.ByteString))
 
 	putAsset (HashMapAssetPackBuilder assetsRef) assetId asset = modifyIORef' assetsRef $ HM.insert assetId asset
+
+instance (Eq k, Hashable k, S.Serialize k) => S.Serialize (HashMapAssetPack k) where
+	put (HashMapAssetPack assets) = S.put $ HM.toList assets
+	get = HashMapAssetPack . HM.fromList <$> S.get
 
 newHashMapAssetPackBuilder :: IO (AssetPackBuilder (HashMapAssetPack k))
 newHashMapAssetPackBuilder = do
