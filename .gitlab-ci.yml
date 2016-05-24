@@ -141,27 +141,27 @@ windows:
   - windows
   - x64
 
-# web:
-#   script:
-#   - "stack --no-terminal --compiler ghcjs-0.2.0_ghc-7.10.3 build --test $PACKAGES_WEB"
-#   tags:
-#   - haskellstack
-#   - ghcjs
-#   - linux
-#   - x64
+web:
+  script:
+  - "stack --no-terminal --compiler ghcjs-0.2.0_ghc-7.10.3 build --test $PACKAGES_WEB"
+  tags:
+  - haskellstack
+  - ghcjs
+  - linux
+  - x64
 
-# linux-arm:
-#   script:
-#   - "mkdir bin"
-#   - "stack --no-terminal build --test --copy-bins --local-bin-path bin $PACKAGES_LINUX"
-#   artifacts:
-#     name: "flaw-linux_arm-$CI_BUILD_ID"
-#     paths:
-#     - bin
-#   tags:
-#   - haskellstack
-#   - linux
-#   - arm
+linux-arm:
+  script:
+  - "mkdir bin"
+  - "stack --no-terminal build --test --copy-bins --local-bin-path bin $PACKAGES_LINUX"
+  artifacts:
+    name: "flaw-linux_arm-$CI_BUILD_ID"
+    paths:
+    - bin
+  tags:
+  - haskellstack
+  - linux
+  - arm
 
 itch:
   stage: deploy
@@ -176,26 +176,26 @@ itch:
   tags:
   - linux
   - x64
-  # only:
-  # - master
+  only:
+  - master
 
-# pages:
-#   stage: deploy
-#   dependencies: []
-#   script:
-#   - "stack --no-terminal build --test --haddock --coverage $PACKAGES_LINUX"
-#   - "mkdir public"
-#   - "hlint . --cross --no-exit-code --quiet --report=public/hlint.html"
-#   - "mv $(stack path --local-doc-root) public/docs"
-#   - "mv $(stack path --local-hpc-root) public/hpc"
-#   - "curl -o public/docs/badge.svg https://img.shields.io/badge/haddock-$(date +%Y/%m/%d)-blue.svg"
-#   - "curl -o public/hpc/badge.svg https://img.shields.io/badge/test%20coverage-$(date +%Y/%m/%d)-orange.svg"
-#   tags:
-#   - haskellstack
-#   - linux
-#   - x64
-#   artifacts:
-#     paths:
-#     - public
-#   only:
-#   - master
+pages:
+  stage: deploy
+  dependencies: []
+  script:
+  - "stack --no-terminal build --test --haddock --coverage $PACKAGES_LINUX"
+  - "mkdir public"
+  - "hlint . --cross --no-exit-code --quiet --report=public/hlint.html"
+  - "mv $(stack path --local-doc-root) public/docs"
+  - "mv $(stack path --local-hpc-root) public/hpc"
+  - "curl -o public/docs/badge.svg https://img.shields.io/badge/haddock-$(date +%Y/%m/%d)-blue.svg"
+  - "curl -o public/hpc/badge.svg https://img.shields.io/badge/test%20coverage-$(date +%Y/%m/%d)-orange.svg"
+  tags:
+  - haskellstack
+  - linux
+  - x64
+  artifacts:
+    paths:
+    - public
+  only:
+  - master
