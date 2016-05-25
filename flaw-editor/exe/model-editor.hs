@@ -136,8 +136,9 @@ main = handle errorHandler $ withBook $ \bk -> do
 				[c, c, c, 255]
 		initialNormalTextureCell <- book bk $ newTextureCell $ do
 			let
-				width = 256
-				height = 256
+				width = 1024
+				height = 1024
+				step = 64
 			(compressedTextureInfo, compressedTextureBytes) <- dxtCompressTexture TextureInfo
 				{ textureWidth = width
 				, textureHeight = height
@@ -153,13 +154,16 @@ main = handle errorHandler $ withBook $ \bk -> do
 				} $ B.pack $ do
 				i <- [0..(height - 1)]
 				j <- [0..(width - 1)]
-				let Float3 x y _z = normalize $
-					if i < j then
-						if height - i < j then Vec3 1 0 1
-						else Vec3 0 (-1) 1
-					else
-						if height - i < j then Vec3 0 1 1
-						else Vec3 (-1) 0 1
+				let
+					ii = i `rem` step
+					jj = j `rem` step
+					Float3 x y _z = normalize $
+						if ii < jj then
+							if step - ii < jj then Vec3 1 0 1
+							else Vec3 0 (-1) 1
+						else
+							if step - ii < jj then Vec3 0 1 1
+							else Vec3 (-1) 0 1
 				[fromIntegral (floor (x * 127) + 127 :: Int), fromIntegral (floor (y * 127) + 127 :: Int)]
 			createStaticTexture device compressedTextureInfo defaultSamplerStateInfo compressedTextureBytes
 		newTVarIO EditorState
@@ -206,9 +210,8 @@ main = handle errorHandler $ withBook $ \bk -> do
 		vertexViewNormal <- temp $ xyz__ $ mul uView $ cvec31 aNormal (constf 0)
 		rasterize (uViewProj `mul` worldPosition) $ do
 			albedo <- temp $ sample (sampler2D3f 0) aTexcoord
-			normalTexcoord <- temp $ aTexcoord * vecFromScalar 50
-			(viewTangent, viewBinormal, viewNormal) <- tangentFrame (xyz__ viewPosition) vertexViewNormal normalTexcoord
-			bentNormalXY <- temp $ sample (sampler2D2f 1) normalTexcoord * vecFromScalar 2 - vecFromScalar 1
+			(viewTangent, viewBinormal, viewNormal) <- tangentFrame (xyz__ viewPosition) vertexViewNormal aTexcoord
+			bentNormalXY <- temp $ sample (sampler2D2f 1) aTexcoord * vecFromScalar 2 - vecFromScalar 1
 			bentNormal <- temp $ cvec21 bentNormalXY $ sqrt $ 1 - dot bentNormalXY bentNormalXY
 			resultViewNormal <- temp $ normalize $ viewTangent * xxx__ bentNormal + viewBinormal * yyy__ bentNormal + viewNormal * zzz__ bentNormal
 			let emission = 0
@@ -322,24 +325,27 @@ main = handle errorHandler $ withBook $ \bk -> do
 			fileName <- getText colladaFileElement
 			nodeName <- getText colladaNodeEditBox
 			asyncRunInFlow flow $ loadColladaFile fileName nodeName
-		textureFileElement <- newFileElement metrics
-		setClickHandler textureFileElement $ do
-			fileName <- getText textureFileElement
-			asyncRunInFlow flow $ handle errorHandler $ do
-				EditorState
-					{ editorStateAlbedoTextureCell = TextureCell
+		let textureFileElement getTextureCell setTextureCell = do
+			fileElement <- newFileElement metrics
+			setClickHandler fileElement $ do
+				fileName <- getText fileElement
+				asyncRunInFlow flow $ handle errorHandler $ do
+					cell@TextureCell
 						{ textureCellBook = cellBook
+						} <- getTextureCell <$> readTVarIO editorStateVar
+					freePreviousTexture <- releaseBook cellBook
+					texture <- book cellBook $ loadTextureFile fileName
+					atomically $ modifyTVar' editorStateVar $ setTextureCell cell
+						{ textureCellTexture = texture
 						}
-					} <- readTVarIO editorStateVar
-				freePreviousTexture <- releaseBook cellBook
-				albedoTexture <- book cellBook $ loadTextureFile fileName
-				atomically $ modifyTVar' editorStateVar $ \s -> s
-					{ editorStateAlbedoTextureCell = TextureCell
-						{ textureCellBook = cellBook
-						, textureCellTexture = albedoTexture
-						}
-					}
-				freePreviousTexture
+					freePreviousTexture
+			return fileElement
+		albedoTextureFileElement <- textureFileElement editorStateAlbedoTextureCell $ \c s -> s
+			{ editorStateAlbedoTextureCell = c
+			}
+		normalTextureFileElement <- textureFileElement editorStateNormalTextureCell $ \c s -> s
+			{ editorStateNormalTextureCell = c
+			}
 		lightIntensitySlider <- newSlider metrics 0.01
 		setFloatValue lightIntensitySlider 0.5
 		setChangeHandler lightIntensitySlider $ do
@@ -392,7 +398,8 @@ main = handle errorHandler $ withBook $ \bk -> do
 		propertiesFrame <- frameFlowLayout metrics $ do
 			labeledFlowLayout "collada file" $ elementInFlowLayout colladaFileElement
 			labeledFlowLayout "collada node" $ elementInFlowLayout colladaNodeEditBox
-			labeledFlowLayout "texture file" $ elementInFlowLayout textureFileElement
+			labeledFlowLayout "albedo texture" $ elementInFlowLayout albedoTextureFileElement
+			labeledFlowLayout "normal texture" $ elementInFlowLayout normalTextureFileElement
 			labeledFlowLayout "light" $ elementInFlowLayout lightIntensitySlider
 			labeledFlowLayout "ambient light" $ elementInFlowLayout ambientLightIntensitySlider
 			labeledFlowLayout "diffuse" $ elementInFlowLayout diffuseSlider
