@@ -35,11 +35,12 @@ freeBook = join . releaseBook
 -- so it won't free resources added after.
 {-# INLINE releaseBook #-}
 releaseBook :: Book -> IO (IO ())
-releaseBook (Book var) = return $ sequence_ =<< atomically q
-	where q = do
+releaseBook (Book var) = do
+	finalizers <- atomically $ do
 		finalizers <- readTVar var
 		writeTVar var []
 		return finalizers
+	return $ sequence_ finalizers
 
 -- | Create a dynamic book which could be safely freed multiple times.
 {-# INLINE newDynamicBook #-}
