@@ -162,6 +162,7 @@ linux-arm:
   - haskellstack
   - linux
   - arm
+  allow_failure: true
 
 itch:
   stage: deploy
