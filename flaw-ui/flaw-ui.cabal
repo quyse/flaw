@@ -30,6 +30,7 @@ library
     Flaw.UI.Layout
     Flaw.UI.Metrics
     Flaw.UI.Panel
+    Flaw.UI.PileBox
     Flaw.UI.Slider
     Flaw.UI.VisualElement
     Flaw.UI.Window
