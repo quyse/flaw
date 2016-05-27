@@ -125,6 +125,8 @@ linux:
   - haskellstack
   - linux
   - x64
+  except:
+  - arm
 
 windows:
   script:
@@ -140,6 +142,8 @@ windows:
   - haskellstack
   - windows
   - x64
+  except:
+  - arm
 
 web:
   script:
@@ -149,6 +153,8 @@ web:
   - ghcjs
   - linux
   - x64
+  except:
+  - arm
 
 linux-arm:
   script:
@@ -162,7 +168,8 @@ linux-arm:
   - haskellstack
   - linux
   - arm
-  allow_failure: true
+  only:
+  - arm
 
 itch:
   stage: deploy
