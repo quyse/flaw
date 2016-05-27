@@ -54,7 +54,7 @@ initDrawer canvas glyphRenderer styles = do
 setDrawerFrameTime :: Drawer d -> Float -> STM ()
 setDrawerFrameTime Drawer
 	{ drawerFrameTimeVar = frameTimeVar
-	} frameTime = writeTVar frameTimeVar frameTime
+	} = writeTVar frameTimeVar
 
 -- | Style information.
 data DrawerStyles d = DrawerStyles

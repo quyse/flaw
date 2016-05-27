@@ -76,7 +76,7 @@ instance Element Button where
 
 	layoutElement Button
 		{ buttonSizeVar = sizeVar
-		} size = writeTVar sizeVar size
+		} = writeTVar sizeVar
 
 	dabElement Button
 		{ buttonSizeVar = sizeVar
