@@ -41,13 +41,15 @@ data EditBox = EditBox
 	, editBoxMousePressedVar :: !(TVar Bool)
 	, editBoxFocusedVar :: !(TVar Bool)
 	, editBoxBlinkVar :: !(TVar Float)
-	, editBoxDelayedOpsQueue :: !(TBQueue DelayedOp)
+	, editBoxDelayedOpVar :: !(TVar DelayedOp)
 	}
 
 -- | Operation delayed to rendering time.
 data DelayedOp
-	= SetSelectionDelayedOp !Position
-	| SetSelectionEndDelayedOp !Position
+	= EmptyDelayedOp
+	| SetSelectionEndDelayedOp
+	| SetSelectionDelayedOp
+	deriving (Eq, Ord)
 
 newEditBox :: STM EditBox
 newEditBox = do
@@ -61,7 +63,7 @@ newEditBox = do
 	mousePressedVar <- newTVar False
 	focusedVar <- newTVar False
 	blinkVar <- newTVar 0
-	delayedOpsQueue <- newTBQueue 10
+	delayedOpVar <- newTVar EmptyDelayedOp
 	return EditBox
 		{ editBoxTextVar = textVar
 		, editBoxTextScriptVar = textScriptVar
@@ -73,7 +75,7 @@ newEditBox = do
 		, editBoxMousePressedVar = mousePressedVar
 		, editBoxFocusedVar = focusedVar
 		, editBoxBlinkVar = blinkVar
-		, editBoxDelayedOpsQueue = delayedOpsQueue
+		, editBoxDelayedOpVar = delayedOpVar
 		}
 
 instance Element EditBox where
@@ -102,7 +104,7 @@ instance Element EditBox where
 		, editBoxLastMousePositionVar = lastMousePositionVar
 		, editBoxFocusedVar = focusedVar
 		, editBoxBlinkVar = blinkVar
-		, editBoxDelayedOpsQueue = delayedOpsQueue
+		, editBoxDelayedOpVar = delayedOpVar
 		} Drawer
 		{ drawerCanvas = canvas
 		, drawerGlyphRenderer = glyphRenderer
@@ -126,7 +128,8 @@ instance Element EditBox where
 		text <- (\text -> if passwordMode then T.map (const '●') text else text) <$> readTVar textVar
 		textScript <- readTVar textScriptVar
 		Vec2 sx sy <- readTVar sizeVar
-		moused <- isJust <$> readTVar lastMousePositionVar
+		maybeLastMousePosition <- readTVar lastMousePositionVar
+		let moused = isJust maybeLastMousePosition
 		focused <- readTVar focusedVar
 		let style = if moused || focused then mousedStyle else normalStyle
 
@@ -209,29 +212,34 @@ instance Element EditBox where
 						if x >= cx then step m r else step l m
 					len = T.length text
 				(l, r) <- step 0 len
-				(snd . minimumBy (\a b -> compare (fst a) (fst b)) <$>) . forM (filter (\i -> i >= 0 && i <= len) [(l - 1)..(r + 1)]) $ \i -> do
+				(minimumBy (\a b -> compare (abs $ x - fst a) (abs $ x - fst b)) <$>) . forM (filter (\i -> i >= 0 && i <= len) [(l - 1)..(r + 1)]) $ \i -> do
 					cx <- calc i
-					return (abs (cx - x), i)
+					return (cx, i)
 
-			-- process delayed ops
-			let delayedOpStep = do
-				maybeDelayedOp <- atomically $ (Just <$> readTBQueue delayedOpsQueue) `orElse` return Nothing
-				case maybeDelayedOp of
-					Just delayedOp -> do
-						case delayedOp of
-							SetSelectionDelayedOp (Vec2 qx _qy) -> do
-								newSelection <- splitTextByX $ fromIntegral (px + qx) - textX
-								atomically $ do
-									writeTVar selectionVar (newSelection, newSelection)
-									writeTVar blinkVar 0 -- reset blink
-							SetSelectionEndDelayedOp (Vec2 qx _qy) -> do
-								newSelectionEnd <- splitTextByX $ fromIntegral (px + qx) - textX
-								atomically $ do
-									writeTVar selectionVar (selectionStart, newSelectionEnd)
-									writeTVar blinkVar 0 -- reset blink
-						delayedOpStep
-					Nothing -> return ()
-			liftIO delayedOpStep
+			-- get position of floating cursor
+			maybeFloatingCursor <- case maybeLastMousePosition of
+				Just (Vec2 qx _qy) -> (Just <$>) . liftIO $ splitTextByX $ fromIntegral (px + qx) - textX
+				Nothing -> return Nothing
+
+			-- process delayed op
+			liftIO $ atomically $ do
+				delayedOp <- readTVar delayedOpVar
+				case delayedOp of
+					EmptyDelayedOp -> return ()
+					SetSelectionEndDelayedOp -> do
+						case maybeFloatingCursor of
+							Just (_, floatingCursor) -> do
+								writeTVar selectionVar (selectionStart, floatingCursor)
+								writeTVar blinkVar 0 -- reset blink
+							Nothing -> return ()
+						writeTVar delayedOpVar EmptyDelayedOp
+					SetSelectionDelayedOp -> do
+						case maybeFloatingCursor of
+							Just (_, floatingCursor) -> do
+								writeTVar selectionVar (floatingCursor, floatingCursor)
+								writeTVar blinkVar 0 -- reset blink
+							Nothing -> return ()
+						writeTVar delayedOpVar EmptyDelayedOp
 
 			-- draw selection
 			unless (T.null textSelected) $ do
@@ -247,6 +255,14 @@ instance Element EditBox where
 					(Vec4 (floor selectionTop) (floor $ selectionTop + 1) (floor $ selectionBottom - 1) (floor selectionBottom))
 					(styleFillColor selectedStyle) (styleBorderColor selectedStyle)
 
+			-- draw floating cursor
+			case maybeFloatingCursor of
+				Just (floatingCursorX, _) -> drawBorderedRectangle canvas
+					(Vec4 (floor $ textX + floatingCursorX) (floor $ textX + floatingCursorX + 1) (floor $ textX + floatingCursorX + 1) (floor $ textX + floatingCursorX + 1))
+					(Vec4 (floor selectionTop) (floor $ selectionTop + 1) (floor $ selectionBottom - 1) (floor selectionBottom))
+					(styleFillColor selectedStyle) (styleFillColor selectedStyle)
+				Nothing -> return ()
+
 			-- render glyphs
 			renderGlyphs glyphRenderer renderableFont $ do
 				forM_ (zip runs [styleTextColor style, styleTextColor selectedStyle, styleTextColor style]) $ \((shapedGlyphs, _advance), color) -> do
@@ -258,7 +274,7 @@ instance Element EditBox where
 		, editBoxLastMousePositionVar = lastMousePositionVar
 		, editBoxMousePressedVar = mousePressedVar
 		, editBoxBlinkVar = blinkVar
-		, editBoxDelayedOpsQueue = delayedOpsQueue
+		, editBoxDelayedOpVar = delayedOpVar
 		} inputEvent InputState
 		{ inputStateKeyboard = keyboardState
 		, inputStateGetClipboardText = getClipboardText
@@ -363,12 +379,11 @@ instance Element EditBox where
 		MouseInputEvent mouseEvent -> case mouseEvent of
 			MouseDownEvent LeftMouseButton -> do
 				maybeLastMousePosition <- readTVar lastMousePositionVar
-				case maybeLastMousePosition of
-					Just lastMousePosition -> do
-						addDelayedOp $ SetSelectionDelayedOp lastMousePosition
-						writeTVar mousePressedVar True
-						return True
-					Nothing -> return False
+				if isJust maybeLastMousePosition then do
+					setDelayedOp SetSelectionDelayedOp
+					writeTVar mousePressedVar True
+					return True
+				else return False
 			MouseUpEvent LeftMouseButton -> do
 				writeTVar mousePressedVar False
 				return True
@@ -376,7 +391,7 @@ instance Element EditBox where
 				let mousePosition = Vec2 x y
 				writeTVar lastMousePositionVar $ Just mousePosition
 				mousePressed <- readTVar mousePressedVar
-				when mousePressed $ addDelayedOp $ SetSelectionEndDelayedOp mousePosition
+				when mousePressed $ setDelayedOp SetSelectionEndDelayedOp
 				return True
 			_ -> return False
 		MouseLeaveEvent -> do
@@ -414,7 +429,9 @@ instance Element EditBox where
 				(selectionStart, selectionEnd) <- readTVar selectionVar
 				let (_textBefore, textSelected, _textAfter) = splitTextBySelection text selectionStart selectionEnd
 				return textSelected
-			addDelayedOp op = writeTBQueue delayedOpsQueue op `orElse` return ()
+			setDelayedOp newOp = do
+				oldOp <- readTVar delayedOpVar
+				when (newOp > oldOp) $ writeTVar delayedOpVar newOp
 
 	focusElement EditBox
 		{ editBoxFocusedVar = focusedVar
