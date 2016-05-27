@@ -10,11 +10,13 @@ module Flaw.UI.Label
 	, newLabel
 	, newTextLabel
 	, newTitleLabel
+	, renderLabel
 	) where
 
 import Control.Concurrent.STM
 import qualified Data.Text as T
 
+import Flaw.Graphics
 import Flaw.Graphics.Font
 import Flaw.Graphics.Font.Render
 import Flaw.Math
@@ -52,33 +54,11 @@ instance Visual Label where
 	renderVisual Label
 		{ labelTextVar = textVar
 		, labelTextScriptVar = textScriptVar
-		, labelStyle = style
-		} Drawer
-		{ drawerGlyphRenderer = glyphRenderer
-		, drawerStyles = styles
-		} (Vec2 px py) (Vec2 sx sy) Style
-		{ styleTextColor = color
-		} = do
+		, labelStyle = lstyle
+		} drawer position size style = do
 		text <- readTVar textVar
 		textScript <- readTVar textScriptVar
-		(DrawerFont
-			{ drawerFontRenderableFont = renderableFont
-			, drawerFontShaper = SomeFontShaper fontShaper
-			}, alignmentX, alignmentY) <- return $ case style of
-			LabelStyleText -> (drawerLabelFont styles, AlignLeft, AlignMiddle)
-			LabelStyleButton -> (drawerLabelFont styles, AlignCenter, AlignMiddle)
-			LabelStyleTitle -> (drawerTitleFont styles, AlignLeft, AlignMiddle)
-		let (x, cursorX) = case alignmentX of
-			AlignLeft -> (fromIntegral px, RenderTextCursorLeft)
-			AlignCenter -> (fromIntegral px + fromIntegral sx * 0.5, RenderTextCursorCenter)
-			AlignRight -> (fromIntegral px + fromIntegral sx, RenderTextCursorRight)
-		let (y, cursorY) = case alignmentY of
-			AlignTop -> (fromIntegral py, RenderTextCursorTop)
-			AlignMiddle -> (fromIntegral py + fromIntegral sy * 0.5, RenderTextCursorMiddle)
-			AlignBottom -> (fromIntegral py + fromIntegral sy, RenderTextCursorBottom)
-		return $ do
-			renderGlyphs glyphRenderer renderableFont $ do
-				renderTexts fontShaper [(text, color)] textScript (Vec2 x y) cursorX cursorY
+		return $ renderLabel text textScript lstyle drawer position size style
 
 instance HasText Label where
 	setText Label
@@ -90,3 +70,29 @@ instance HasText Label where
 	getText Label
 		{ labelTextVar = textVar
 		} = readTVar textVar
+
+{-# INLINABLE renderLabel #-}
+renderLabel :: Context c d => T.Text -> FontScript -> LabelStyle -> Drawer d -> Position -> Size -> Style -> Render c ()
+renderLabel text textScript style Drawer
+	{ drawerGlyphRenderer = glyphRenderer
+	, drawerStyles = styles
+	} (Vec2 px py) (Vec2 sx sy) Style
+	{ styleTextColor = color
+	} = do
+	(DrawerFont
+		{ drawerFontRenderableFont = renderableFont
+		, drawerFontShaper = SomeFontShaper fontShaper
+		}, alignmentX, alignmentY) <- return $ case style of
+		LabelStyleText -> (drawerLabelFont styles, AlignLeft, AlignMiddle)
+		LabelStyleButton -> (drawerLabelFont styles, AlignCenter, AlignMiddle)
+		LabelStyleTitle -> (drawerTitleFont styles, AlignLeft, AlignMiddle)
+	let (x, cursorX) = case alignmentX of
+		AlignLeft -> (fromIntegral px, RenderTextCursorLeft)
+		AlignCenter -> (fromIntegral px + fromIntegral sx * 0.5, RenderTextCursorCenter)
+		AlignRight -> (fromIntegral px + fromIntegral sx, RenderTextCursorRight)
+	let (y, cursorY) = case alignmentY of
+		AlignTop -> (fromIntegral py, RenderTextCursorTop)
+		AlignMiddle -> (fromIntegral py + fromIntegral sy * 0.5, RenderTextCursorMiddle)
+		AlignBottom -> (fromIntegral py + fromIntegral sy, RenderTextCursorBottom)
+	renderGlyphs glyphRenderer renderableFont $ do
+		renderTexts fontShaper [(text, color)] textScript (Vec2 x y) cursorX cursorY

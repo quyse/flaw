@@ -28,6 +28,7 @@ library
     Flaw.UI.Frame
     Flaw.UI.Label
     Flaw.UI.Layout
+    Flaw.UI.ListBox
     Flaw.UI.Metrics
     Flaw.UI.Panel
     Flaw.UI.PileBox

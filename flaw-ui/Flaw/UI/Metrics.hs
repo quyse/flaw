@@ -49,6 +49,14 @@ data Metrics = Metrics
 	, metricsSliderPieceWidth :: {-# UNPACK #-} !Metric
 	-- | Height of the slider.
 	, metricsSliderHeight :: {-# UNPACK #-} !Metric
+	-- | Width of element in pile box.
+	, metricsPileBoxElementWidth :: {-# UNPACK #-} !Metric
+	-- | Width of resizing grip in pile box.
+	, metricsPileBoxGripWidth :: {-# UNPACK #-} !Metric
+	-- | Height of listbox column header.
+	, metricsListBoxColumnHeaderHeight :: {-# UNPACK #-} !Metric
+	-- | Height of listbox item.
+	, metricsListBoxItemHeight :: {-# UNPACK #-} !Metric
 	}
 
 -- | Class of something which has preferred size in metrics.

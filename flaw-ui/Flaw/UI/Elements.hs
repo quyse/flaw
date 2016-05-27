@@ -13,6 +13,7 @@ import Flaw.UI.CheckBox as X
 import Flaw.UI.EditBox as X
 import Flaw.UI.Frame as X
 import Flaw.UI.Label as X
+import Flaw.UI.ListBox as X
 import Flaw.UI.Panel as X
 import Flaw.UI.PileBox as X
 import Flaw.UI.Slider as X
