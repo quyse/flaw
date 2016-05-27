@@ -76,7 +76,6 @@ variables:
     flaw-ui
     flaw-ui-default-style
     flaw-visual
-    flaw-websocket-server
     flaw-window
   PACKAGES_WEB: >-
     flaw-app
