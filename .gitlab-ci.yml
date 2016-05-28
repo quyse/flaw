@@ -68,7 +68,6 @@ variables:
     flaw-network
     flaw-oil
     flaw-oil-client
-    flaw-oil-server
     flaw-physics
     flaw-sl
     flaw-sqlite
