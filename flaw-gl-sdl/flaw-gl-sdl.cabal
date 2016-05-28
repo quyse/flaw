@@ -19,7 +19,7 @@ source-repository head
 
 library
   exposed-modules:
-    Flaw.Graphics.OpenGL.SDL
+    Flaw.Graphics.OpenGL.Sdl
   other-modules:
   build-depends:       base, bytestring, flaw-base, flaw-gl, flaw-graphics, flaw-math, flaw-sdl, flaw-window, OpenGLRaw, sdl2, text
   -- hs-source-dirs:      

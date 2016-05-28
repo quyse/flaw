@@ -1,12 +1,12 @@
 {-|
-Module: Flaw.Graphics.OpenGL.SDL
+Module: Flaw.Graphics.OpenGL.Sdl
 Description: OpenGL graphics implementation, using SDL for low-level interaction with system.
 License: MIT
 -}
 
 {-# LANGUAGE MultiParamTypeClasses, TypeFamilies #-}
 
-module Flaw.Graphics.OpenGL.SDL
+module Flaw.Graphics.OpenGL.Sdl
 	( OpenGLSdlSystem()
 	, OpenGLSdlDevice
 	, OpenGLSdlContext
