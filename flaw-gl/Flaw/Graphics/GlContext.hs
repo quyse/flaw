@@ -85,15 +85,15 @@ data GlContext = GlContext
 type GlDevice = GlContext
 
 data GlCaps = GlCaps
-	{ glCapsArbUniformBufferObject :: !Bool
-	, glCapsArbSamplerObjects :: !Bool
-	, glCapsArbVertexAttribBinding :: !Bool
-	, glCapsArbFramebufferObject :: !Bool
-	, glCapsArbTextureStorage :: !Bool
-	, glCapsArbInstancedArrays :: !Bool
+	{ glCapsUniformBufferObject :: !Bool
+	, glCapsSamplerObjects :: !Bool
+	, glCapsVertexAttribBinding :: !Bool
+	, glCapsFramebufferObject :: !Bool
+	, glCapsTextureStorage :: !Bool
+	, glCapsInstancedArrays :: !Bool
 	, glCapsClearBuffer :: !Bool
-	, glCapsArbDebugOutput :: !Bool
-	, glCapsArbGetProgramBinary :: !Bool
+	, glCapsDebugOutput :: !Bool
+	, glCapsGetProgramBinary :: !Bool
 	} deriving Show
 
 data GlContextState = GlContextState
@@ -195,7 +195,7 @@ instance Device GlContext where
 	createStaticTexture GlContext
 		{ glContextInvoke = invoke
 		, glContextCaps = GlCaps
-			{ glCapsArbTextureStorage = useTextureStorage
+			{ glCapsTextureStorage = useTextureStorage
 			}
 		} textureInfo@TextureInfo
 		{ textureFormat = format
@@ -387,7 +387,7 @@ instance Device GlContext where
 	createReadableRenderTarget GlContext
 		{ glContextInvoke = invoke
 		, glContextCaps = GlCaps
-			{ glCapsArbTextureStorage = useTextureStorage
+			{ glCapsTextureStorage = useTextureStorage
 			}
 		} width height format samplerStateInfo = invoke $ describeException "failed to create OpenGL readable render target" $ do
 
@@ -559,8 +559,8 @@ instance Device GlContext where
 	createProgram GlContext
 		{ glContextInvoke = invoke
 		, glContextCaps = GlCaps
-			{ glCapsArbVertexAttribBinding = capArbVertexAttribBinding
-			, glCapsArbGetProgramBinary = capArbGetProgramBinary
+			{ glCapsVertexAttribBinding = capVertexAttribBinding
+			, glCapsGetProgramBinary = capGetProgramBinary
 			}
 		, glContextGlslConfig = glslConfig
 		, glContextActualState = GlContextState
@@ -589,7 +589,7 @@ instance Device GlContext where
 
 		-- if binary programs are supported, try to use binary cache
 		let cacheKey = S.encode glslProgram
-		binaryLoaded <- if capArbGetProgramBinary then do
+		binaryLoaded <- if capGetProgramBinary then do
 			encodedBinaryProgram <- getCachedBinary programCache cacheKey
 			case S.decode encodedBinaryProgram of
 				Right binaryProgram -> do
@@ -672,7 +672,7 @@ instance Device GlContext where
 				peek statusPtr
 			if status == 1 then do
 				-- save binary program into cache
-				when capArbGetProgramBinary $ do
+				when capGetProgramBinary $ do
 					len <- alloca $ \lenPtr -> do
 						glGetProgramiv programName GL_PROGRAM_BINARY_LENGTH lenPtr
 						glCheckErrors0 "get binary program length"
@@ -758,7 +758,7 @@ instance Device GlContext where
 			V.unsafeFreeze slots
 
 		-- create vertex array if supported
-		(vertexArrayName, attributeSlots, attributesCount) <- if capArbVertexAttribBinding then do
+		(vertexArrayName, attributeSlots, attributesCount) <- if capVertexAttribBinding then do
 			-- create vertex array
 			vaName <- book bk $ do
 				vaName <- glAllocVertexArrayName
@@ -859,7 +859,7 @@ instance Device GlContext where
 	createUniformBuffer GlContext
 		{ glContextInvoke = invoke
 		, glContextCaps = GlCaps
-			{ glCapsArbUniformBufferObject = useUniformBufferObject
+			{ glCapsUniformBufferObject = useUniformBufferObject
 			}
 		} size = invoke $ describeException "failed to create OpenGL uniform buffer" $ do
 
@@ -1247,9 +1247,9 @@ data TextureType
 glUpdateContext :: GlContext -> IO ()
 glUpdateContext context@GlContext
 	{ glContextCaps = GlCaps
-		{ glCapsArbSamplerObjects = capArbSamplerObjects
-		, glCapsArbVertexAttribBinding = capArbVertexAttribBinding
-		, glCapsArbInstancedArrays = capArbInstancedArrays
+		{ glCapsSamplerObjects = capSamplerObjects
+		, glCapsVertexAttribBinding = capVertexAttribBinding
+		, glCapsInstancedArrays = capInstancedArrays
 		}
 	, glContextActualState = GlContextState
 		{ glContextStateVertexBuffers = actualVertexBuffersVector
@@ -1280,7 +1280,7 @@ glUpdateContext context@GlContext
 	vectorSetup actualSamplersVector desiredSamplersVector $ \i (GlTextureId textureName, GlSamplerStateId samplerName) -> do
 		glActiveTexture $ GL_TEXTURE0 + fromIntegral i
 		glBindTexture GL_TEXTURE_2D textureName
-		when capArbSamplerObjects $ glBindSampler (fromIntegral i) samplerName
+		when capSamplerObjects $ glBindSampler (fromIntegral i) samplerName
 		glCheckErrors0 "bind sampler"
 
 	-- program
@@ -1371,7 +1371,7 @@ glUpdateContext context@GlContext
 				GlNullUniformBufferId -> return ()
 
 	-- if vertex array is supported, bind vertex buffers
-	if capArbVertexAttribBinding then do
+	if capVertexAttribBinding then do
 		vectorSetupCond programUpdated actualVertexBuffersVector desiredVertexBuffersVector $ \i (GlVertexBufferId bufferName stride) -> do
 			glBindVertexBuffer (fromIntegral i) bufferName 0 (fromIntegral stride)
 			glCheckErrors0 "bind vertex buffer"
@@ -1408,7 +1408,7 @@ glUpdateContext context@GlContext
 						glVertexAttribPointer i size t isNormalized stride (glIntToOffset offset)
 					glCheckErrors0 "vertex attrib pointer"
 
-					when capArbInstancedArrays $ do
+					when capInstancedArrays $ do
 						glVertexAttribDivisor i divisor
 						glCheckErrors0 "vertex attrib divisor"
 

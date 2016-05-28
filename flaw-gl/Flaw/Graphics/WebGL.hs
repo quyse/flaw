@@ -105,15 +105,15 @@ webglInit canvas@Canvas
 	when (isNull jsContextVal) $ throwIO $ DescribeFirstException "cannot get WebGL context"
 	-- create context
 	context <- newGlContext id GlCaps
-		{ glCapsArbUniformBufferObject = False
-		, glCapsArbSamplerObjects = False
-		, glCapsArbVertexAttribBinding = False
-		, glCapsArbFramebufferObject = True
-		, glCapsArbTextureStorage = False
-		, glCapsArbInstancedArrays = False
+		{ glCapsUniformBufferObject = False
+		, glCapsSamplerObjects = False
+		, glCapsVertexAttribBinding = False
+		, glCapsFramebufferObject = True
+		, glCapsTextureStorage = False
+		, glCapsInstancedArrays = False
 		, glCapsClearBuffer = False
-		, glCapsArbDebugOutput = False
-		, glCapsArbGetProgramBinary = False
+		, glCapsDebugOutput = False
+		, glCapsGetProgramBinary = False
 		} GlslConfig
 		{ glslConfigVersion = Nothing
 		, glslConfigForceFloatAttributes = True

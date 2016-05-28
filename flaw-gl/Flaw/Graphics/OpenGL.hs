@@ -39,30 +39,30 @@ createOpenGLContext programCache invoke debug = do
 
 	let
 		isExtensionSupported = flip elem extensions
-		capArbUniformBufferObject = isExtensionSupported "GL_ARB_uniform_buffer_object"
-		capArbSamplerObjects      = isExtensionSupported "GL_ARB_sampler_objects"
-		capArbVertexAttribBinding = isExtensionSupported "GL_ARB_vertex_attrib_binding"
-		capArbFramebufferObject   = isExtensionSupported "GL_ARB_framebuffer_object"
-		capArbTextureStorage      = isExtensionSupported "GL_ARB_texture_storage"
-		capArbInstancedArrays     = isExtensionSupported "GL_ARB_instanced_arrays"
-		capArbDebugOutput         = isExtensionSupported "GL_ARB_debug_output"
-		capArbGetProgramBinary    = isExtensionSupported "GL_ARB_get_program_binary"
+		capUniformBufferObject = isExtensionSupported "GL_ARB_uniform_buffer_object"
+		capSamplerObjects      = isExtensionSupported "GL_ARB_sampler_objects"
+		capVertexAttribBinding = isExtensionSupported "GL_ARB_vertex_attrib_binding"
+		capFramebufferObject   = isExtensionSupported "GL_ARB_framebuffer_object"
+		capTextureStorage      = isExtensionSupported "GL_ARB_texture_storage"
+		capInstancedArrays     = isExtensionSupported "GL_ARB_instanced_arrays"
+		capDebugOutput         = isExtensionSupported "GL_ARB_debug_output"
+		capGetProgramBinary    = isExtensionSupported "GL_ARB_get_program_binary"
 
 	context <- newGlContext invoke GlCaps
-		{ glCapsArbUniformBufferObject = capArbUniformBufferObject
-		, glCapsArbSamplerObjects = capArbSamplerObjects
-		, glCapsArbVertexAttribBinding = capArbVertexAttribBinding
-		, glCapsArbFramebufferObject = capArbFramebufferObject
-		, glCapsArbTextureStorage = capArbTextureStorage
-		, glCapsArbInstancedArrays = capArbInstancedArrays
+		{ glCapsUniformBufferObject = capUniformBufferObject
+		, glCapsSamplerObjects = capSamplerObjects
+		, glCapsVertexAttribBinding = capVertexAttribBinding
+		, glCapsFramebufferObject = capFramebufferObject
+		, glCapsTextureStorage = capTextureStorage
+		, glCapsInstancedArrays = capInstancedArrays
 		, glCapsClearBuffer = True
-		, glCapsArbDebugOutput = capArbDebugOutput
-		, glCapsArbGetProgramBinary = capArbGetProgramBinary
+		, glCapsDebugOutput = capDebugOutput
+		, glCapsGetProgramBinary = capGetProgramBinary
 		} GlslConfig
 		{ glslConfigVersion = Just 330
 		, glslConfigForceFloatAttributes = False
 		, glslConfigUnsignedUnsupported = False
-		, glslConfigUniformBlocks = capArbUniformBufferObject
+		, glslConfigUniformBlocks = capUniformBufferObject
 		, glslConfigInOutSyntax = True
 		, glslConfigTextureSampleDimensionSpecifier = False
 		} (SomeBinaryCache programCache)
@@ -79,7 +79,7 @@ createOpenGLContext programCache invoke debug = do
 	glCheckErrors1 "init state"
 
 	-- if debug mode requested, setup debug output
-	when (debug && capArbDebugOutput) $ do
+	when (debug && capDebugOutput) $ do
 		-- set debug message callback
 		callbackPtr <- wrapGlDebugMessageCallback $ \messageSource messageType messageId messageSeverity messageLength messagePtr _userParam -> do
 			-- unfortunately we cannot pattern match against gl_* constants here (as they are not patterns)
