@@ -27,6 +27,15 @@ import Flaw.Graphics.GLSL
 -- | Create OpenGL context and perform basic initialization.
 createOpenGLContext :: BinaryCache c => c -> (forall a. IO a -> IO a) -> Bool -> IO GlContext
 createOpenGLContext programCache invoke debug = do
+	-- OpenGL version
+	majorVersion <- alloca $ \majorVersionPtr -> do
+		glGetIntegerv GL_MAJOR_VERSION majorVersionPtr
+		peek majorVersionPtr
+	minorVersion <- alloca $ \minorVersionPtr -> do
+		glGetIntegerv GL_MINOR_VERSION minorVersionPtr
+		peek minorVersionPtr
+	let version = (majorVersion, minorVersion)
+
 	-- init capabilities
 	numExtensions <- alloca $ \numExtensionsPtr -> do
 		glGetIntegerv GL_NUM_EXTENSIONS numExtensionsPtr
@@ -37,20 +46,23 @@ createOpenGLContext programCache invoke debug = do
 			| otherwise = return restExtensions
 		in getExtensions (numExtensions - 1) []
 
+
 	let
 		isExtensionSupported = flip elem extensions
-		capUniformBufferObject = isExtensionSupported "GL_ARB_uniform_buffer_object"
-		capSamplerObjects      = isExtensionSupported "GL_ARB_sampler_objects"
-		capVertexAttribBinding = isExtensionSupported "GL_ARB_vertex_attrib_binding"
-		capFramebufferObject   = isExtensionSupported "GL_ARB_framebuffer_object"
-		capTextureStorage      = isExtensionSupported "GL_ARB_texture_storage"
-		capInstancedArrays     = isExtensionSupported "GL_ARB_instanced_arrays"
-		capDebugOutput         = isExtensionSupported "GL_ARB_debug_output"
-		capGetProgramBinary    = isExtensionSupported "GL_ARB_get_program_binary"
+		capUniformBufferObject = version >= (3, 1) || isExtensionSupported "GL_ARB_uniform_buffer_object"
+		capSamplerObjects      = version >= (3, 3) || isExtensionSupported "GL_ARB_sampler_objects"
+		capVertexArrayObject   = version >= (3, 0) || isExtensionSupported "GL_ARB_vertex_array_object"
+		capVertexAttribBinding = version >= (4, 3) || isExtensionSupported "GL_ARB_vertex_attrib_binding"
+		capFramebufferObject   = version >= (3, 0) || isExtensionSupported "GL_ARB_framebuffer_object"
+		capTextureStorage      = version >= (4, 2) || isExtensionSupported "GL_ARB_texture_storage"
+		capInstancedArrays     = version >= (3, 3) || isExtensionSupported "GL_ARB_instanced_arrays"
+		capDebugOutput         = version >= (4, 3) || isExtensionSupported "GL_ARB_debug_output"
+		capGetProgramBinary    = version >= (4, 1) || isExtensionSupported "GL_ARB_get_program_binary"
 
 	context <- newGlContext invoke GlCaps
 		{ glCapsUniformBufferObject = capUniformBufferObject
 		, glCapsSamplerObjects = capSamplerObjects
+		, glCapsVertexArrayObject = capVertexArrayObject
 		, glCapsVertexAttribBinding = capVertexAttribBinding
 		, glCapsFramebufferObject = capFramebufferObject
 		, glCapsTextureStorage = capTextureStorage

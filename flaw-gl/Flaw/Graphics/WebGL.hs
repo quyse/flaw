@@ -107,6 +107,7 @@ webglInit canvas@Canvas
 	context <- newGlContext id GlCaps
 		{ glCapsUniformBufferObject = False
 		, glCapsSamplerObjects = False
+		, glCapsVertexArrayObject = False
 		, glCapsVertexAttribBinding = False
 		, glCapsFramebufferObject = True
 		, glCapsTextureStorage = False
@@ -150,7 +151,7 @@ webglInit canvas@Canvas
 		, "OES_texture_float_linear"
 		, "OES_texture_half_float"
 		, "OES_texture_half_float_linear"
-		, "OES_vertex_array_object"
+		--, "OES_vertex_array_object" -- better to not enable it, as we don't really support it right now in WebGL
 		, "WEBGL_color_buffer_float"
 		, "WEBGL_compressed_texture_atc"
 		, "WEBGL_compressed_texture_pvrtc"

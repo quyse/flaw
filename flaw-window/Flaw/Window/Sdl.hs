@@ -18,6 +18,7 @@ import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Exception
 import Control.Monad
+import Data.Bits
 import qualified Data.ByteString as B
 import qualified Data.HashMap.Strict as HashMap
 import Data.Int
@@ -148,12 +149,16 @@ initSdlWindowSystem debug = withSpecialBook $ \bk -> do
 		mapM_ (\(attr, value) -> checkSdlError (== 0) $ SDL.glSetAttribute attr value)
 			[ (SDL.SDL_GL_CONTEXT_MAJOR_VERSION, 3)
 			, (SDL.SDL_GL_CONTEXT_MINOR_VERSION, 3)
+			, (SDL.SDL_GL_CONTEXT_PROFILE_MASK, SDL.SDL_GL_CONTEXT_PROFILE_CORE)
 			, (SDL.SDL_GL_DOUBLEBUFFER, 1)
 			-- SDL_GL_FRAMEBUFFER_SRGB_CAPABLE really should be set, but it's reported to cause problems
 			-- ("cannot find matching GLX visual", in particular with proprietary NVIDIA drivers)
 			-- seems like SRGB-capable framebuffer is created anyway, so skip it
 			--, (SDL.SDL_GL_FRAMEBUFFER_SRGB_CAPABLE, 1)
-			, (SDL.SDL_GL_CONTEXT_FLAGS, if debug then SDL.SDL_GL_CONTEXT_DEBUG_FLAG else 0)
+			, ( SDL.SDL_GL_CONTEXT_FLAGS
+				, SDL.SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG
+					.|. (if debug then SDL.SDL_GL_CONTEXT_DEBUG_FLAG else 0)
+				)
 			]
 
 		-- quit flag

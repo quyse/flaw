@@ -87,6 +87,7 @@ type GlDevice = GlContext
 data GlCaps = GlCaps
 	{ glCapsUniformBufferObject :: !Bool
 	, glCapsSamplerObjects :: !Bool
+	, glCapsVertexArrayObject :: !Bool
 	, glCapsVertexAttribBinding :: !Bool
 	, glCapsFramebufferObject :: !Bool
 	, glCapsTextureStorage :: !Bool
@@ -168,7 +169,7 @@ instance Device GlContext where
 		, glProgramVertexArrayName :: {-# UNPACK #-} !VertexArrayName
 		, glProgramAttributeSlots :: {-# UNPACK #-} !(V.Vector GlAttributeSlot)
 		-- | Number of generic vertex attributes used (i.e. used attributes are from 0 to this number minus 1).
-		-- Only for manual binding, i.e. zero when vertex array is used.
+		-- Only for manual binding, i.e. zero when vertex attrib binding is used.
 		, glProgramAttributesCount :: {-# UNPACK #-} !Int
 		-- | "Manual" uniforms by slot.
 		, glProgramUniforms :: {-# UNPACK #-} !(V.Vector (V.Vector GlUniform))
@@ -559,7 +560,8 @@ instance Device GlContext where
 	createProgram GlContext
 		{ glContextInvoke = invoke
 		, glContextCaps = GlCaps
-			{ glCapsVertexAttribBinding = capVertexAttribBinding
+			{ glCapsVertexArrayObject = capVertexArrayObject
+			, glCapsVertexAttribBinding = capVertexAttribBinding
 			, glCapsGetProgramBinary = capGetProgramBinary
 			}
 		, glContextGlslConfig = glslConfig
@@ -758,16 +760,23 @@ instance Device GlContext where
 			V.unsafeFreeze slots
 
 		-- create vertex array if supported
-		(vertexArrayName, attributeSlots, attributesCount) <- if capVertexAttribBinding then do
+		vertexArrayName <- if capVertexArrayObject then do
 			-- create vertex array
 			vaName <- book bk $ do
 				vaName <- glAllocVertexArrayName
 				return (vaName, glDeleteVertexArrayName vaName)
-
 			-- bind vertex array
 			glBindVertexArray vaName
 			glCheckErrors0 "bind vertex array"
+			-- enable attributes for vertex array
+			forM_ (zip attributes [0..]) $ \(_attribute, i) -> do
+				glEnableVertexAttribArray i
+				glCheckErrors0 "enable vertex attrib array"
+			return vaName
+			else return glNullVertexArrayName
 
+		-- setup vertex formats in vertex array if supported
+		(attributeSlots, attributesCount) <- if vertexArrayName /= glNullVertexArrayName && capVertexAttribBinding then do
 			-- setup attributes for vertex array
 			forM_ (zip attributes [0..]) $ \(GlslAttribute
 				{ glslAttributeInfo = Attribute
@@ -777,10 +786,6 @@ instance Device GlContext where
 					, attributeType = aType
 					}
 				}, i) -> do
-				-- enable attribute
-				glEnableVertexAttribArray i
-				glCheckErrors0 "enable vertex attrib array"
-
 				-- get attribute's info
 				let (size, t, isNormalized, isInteger) = glGetAttributeSTNI aType
 
@@ -797,11 +802,7 @@ instance Device GlContext where
 				glVertexBindingDivisor (fromIntegral slot) (fromIntegral divisor)
 				glCheckErrors0 "vertex binding divisor"
 
-			-- unbind vertex array
-			glBindVertexArray glNullVertexArrayName
-			glCheckErrors0 "unbind vertex array"
-
-			return (vaName, V.empty, 0)
+			return (V.empty, 0)
 		-- else create "manual" attribute binding
 		else do
 			-- sort attributes by slot
@@ -844,7 +845,12 @@ instance Device GlContext where
 						}
 				return slots
 
-			return (glNullVertexArrayName, attributeSlots, length attributes)
+			return (attributeSlots, length attributes)
+
+		-- unbind vertex array if it was created
+		when (vertexArrayName /= glNullVertexArrayName) $ do
+			glBindVertexArray glNullVertexArrayName
+			glCheckErrors0 "unbind vertex array"
 
 		glCheckErrors1 "create program"
 
@@ -1248,6 +1254,7 @@ glUpdateContext :: GlContext -> IO ()
 glUpdateContext context@GlContext
 	{ glContextCaps = GlCaps
 		{ glCapsSamplerObjects = capSamplerObjects
+		, glCapsVertexArrayObject = capVertexArrayObject
 		, glCapsVertexAttribBinding = capVertexAttribBinding
 		, glCapsInstancedArrays = capInstancedArrays
 		}
@@ -1370,7 +1377,7 @@ glUpdateContext context@GlContext
 					updateActual
 				GlNullUniformBufferId -> return ()
 
-	-- if vertex array is supported, bind vertex buffers
+	-- bind vertex buffers if supported
 	if capVertexAttribBinding then do
 		vectorSetupCond programUpdated actualVertexBuffersVector desiredVertexBuffersVector $ \i (GlVertexBufferId bufferName stride) -> do
 			glBindVertexBuffer (fromIntegral i) bufferName 0 (fromIntegral stride)
@@ -1399,8 +1406,10 @@ glUpdateContext context@GlContext
 					, glAttributeOffset = offset
 					} -> do
 
-					glEnableVertexAttribArray i
-					glCheckErrors0 "enable vertex attrib array"
+					-- attributes already enabled in vertex array, if it's supported
+					unless capVertexArrayObject $ do
+						glEnableVertexAttribArray i
+						glCheckErrors0 "enable vertex attrib array"
 
 					if isInteger > 0 then
 						glVertexAttribIPointer i size t stride (glIntToOffset offset)
