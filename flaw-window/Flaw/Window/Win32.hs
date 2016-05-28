@@ -40,7 +40,6 @@ import Flaw.FFI.Win32
 
 data Win32WindowSystem = Win32WindowSystem
 	{ wsHandle :: Ptr () -- ^ Opaque handle for C side.
-	, wsShutdownVar :: MVar ()
 	}
 
 data Win32Window = Win32Window
@@ -100,24 +99,26 @@ instance Window Win32Window where
 -- | Run Win32 window system.
 runWin32WindowSystem :: MVar (Win32WindowSystem, IO ()) -> IO ()
 runWin32WindowSystem resultVar = do
-	-- initialize window system, get a thread handle
+	-- initialize window system, get handle
 	h <- c_initWin32WindowSystem
 	-- create shutdown var
 	shutdownVar <- newEmptyMVar
 	-- return result in var
+	let ws = Win32WindowSystem
+		{ wsHandle = h
+		}
 	let shutdown = do
 		-- send a message to stop window loop
 		invokeWin32WindowSystem_ ws c_stopWin32WindowSystem
 		-- wait for actual completion
-		readMVar $ wsShutdownVar ws
-		-- free resources
-		c_shutdownWin32WindowSystem $ wsHandle ws
-	putMVar resultVar (Win32WindowSystem
-		{ wsHandle = h
-		, wsShutdownVar = shutdownVar
-		}, shutdown)
+		readMVar shutdownVar
+	putMVar resultVar (ws, shutdown)
 	-- run window system
 	c_runWin32WindowSystem h
+	-- free resources
+	c_shutdownWin32WindowSystem h
+	-- signal end
+	putMVar shutdownVar ()
 
 createWin32Window :: Win32WindowSystem -> T.Text -> Maybe (Int, Int) -> Maybe (Int, Int) -> IO (Win32Window, IO ())
 createWin32Window ws title maybePosition maybeSize = internalCreateWin32Window ws title maybePosition maybeSize False
