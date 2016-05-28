@@ -7,11 +7,14 @@ License: MIT
 {-# LANGUAGE JavaScriptFFI, OverloadedStrings #-}
 
 module Flaw.Window.Web.Canvas
-	( Canvas(..)
+	( WebWindowSystem(..)
+	, Canvas(..)
+	, runWebWindowSystem
 	, initCanvas
 	, setCanvasFullscreen
 	) where
 
+import Control.Concurrent
 import Control.Concurrent.STM
 import qualified Data.Text as T
 import GHCJS.Marshal.Pure
@@ -19,13 +22,21 @@ import GHCJS.Types
 
 import Flaw.Window
 
+data WebWindowSystem = WebWindowSystem
+
 data Canvas = Canvas
 	{ canvasElement :: {-# UNPACK #-} !JSVal
 	, canvasEventsChan :: {-# UNPACK #-} !(TChan WindowEvent)
 	}
 
-initCanvas :: T.Text -> IO Canvas
-initCanvas title = do
+runWebWindowSystem :: MVar (WebWindowSystem, IO ()) -> IO ()
+runWebWindowSystem resultVar = do
+	stopVar <- newEmptyMVar
+	putMVar resultVar (WebWindowSystem, putMVar stopVar ())
+	takeMVar stopVar
+
+initCanvas :: WebWindowSystem -> T.Text -> IO Canvas
+initCanvas WebWindowSystem title = do
 	jsCanvas <- js_initCanvas
 	eventsChan <- newBroadcastTChanIO
 	let canvas = Canvas

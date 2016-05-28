@@ -7,7 +7,7 @@ License: MIT
 {-# LANGUAGE CPP, GADTs, OverloadedStrings #-}
 
 module Flaw.App
-	( initApp
+	( withApp
 	, runApp
 	, exitApp
 	, appConfig
@@ -96,84 +96,77 @@ appConfig = AppConfig
 	, appConfigDebug = False
 	}
 
-initApp :: AppConfig
-	-> IO
-		( (AppWindow, AppGraphicsDevice, AppGraphicsContext, AppGraphicsPresenter, AppInputManager)
-		, IO ()
-		)
-initApp AppConfig
+-- | Init application.
+-- This function must be called from main thread, and it doesn't return until windowing system
+-- is shut down. It forks a new lightweight thread and calls the callback provided in it.
+-- That complexity comes from demands of various windowing systems.
+withApp :: AppConfig
+	-> (AppWindow -> AppGraphicsDevice -> AppGraphicsContext -> AppGraphicsPresenter -> AppInputManager -> IO ()) -> IO ()
+withApp AppConfig
 	{ appConfigTitle = title
 	, appConfigWindowPosition = maybeWindowPosition
 	, appConfigWindowSize = maybeWindowSize
 	, appConfigNeedDepthBuffer = needDepthBuffer
 	, appConfigBinaryCache = binaryCache
 	, appConfigDebug = debug
-	} = withSpecialBook $ \bk -> do
+	} callback = do
 
 #if defined(ghcjs_HOST_OS)
-
 	initJs
+#endif
 
-	window <- Web.initCanvas title
+	windowSystemVar <- newEmptyMVar
+	void $ forkIO $ withBook $ \bk -> do
+		windowSystem <- book bk $ takeMVar windowSystemVar
 
-	inputManager <- initWebInput window
-
-	let _ = (maybeWindowPosition, maybeWindowSize, binaryCache, debug)
-	(graphicsDevice, graphicsContext, presenter) <- book bk $ webglInit window needDepthBuffer
-
+#if defined(ghcjs_HOST_OS)
+		window <- Web.initCanvas windowSystem title
+		inputManager <- initWebInput window
+		let _ = (maybeWindowPosition, maybeWindowSize, binaryCache, debug)
+		(graphicsDevice, graphicsContext, presenter) <- book bk $ webglInit window needDepthBuffer
 #else
-
 #if defined(mingw32_HOST_OS)
-
-	windowSystem <- book bk $ initWin32WindowSystem
-	window <- book bk $ createWin32Window windowSystem title maybeWindowPosition maybeWindowSize
-
-	inputManager <- initWin32Input window
-
-	graphicsSystem <- book bk $ dxgiCreateSystem
-	graphicsDevices <- book bk $ getInstalledDevices graphicsSystem
-	(graphicsDevice, graphicsContext) <- book bk $ dx11CreateDevice (fst $ head graphicsDevices) binaryCache debug
-	presenter <- book bk $ dx11CreatePresenter graphicsDevice window Nothing needDepthBuffer
-
+		window <- book bk $ createWin32Window windowSystem title maybeWindowPosition maybeWindowSize
+		inputManager <- initWin32Input window
+		graphicsSystem <- book bk $ dxgiCreateSystem
+		graphicsDevices <- book bk $ getInstalledDevices graphicsSystem
+		(graphicsDevice, graphicsContext) <- book bk $ dx11CreateDevice (fst $ head graphicsDevices) binaryCache debug
+		presenter <- book bk $ dx11CreatePresenter graphicsDevice window Nothing needDepthBuffer
 #else
-
-	windowSystem <- book bk $ initSdlWindowSystem debug
-	window <- book bk $ createSdlWindow windowSystem title maybeWindowPosition maybeWindowSize needDepthBuffer
-
-	inputManager <- initSdlInput window
-
-	graphicsSystem <- book bk createOpenGLSdlSystem
-	graphicsDevices <- book bk $ getInstalledDevices graphicsSystem
-	(graphicsContext, presenter) <- book bk $ createOpenGLSdlPresenter (fst $ head graphicsDevices) window binaryCache debug
-	let graphicsDevice = graphicsContext
-
+		window <- book bk $ createSdlWindow windowSystem title maybeWindowPosition maybeWindowSize needDepthBuffer
+		inputManager <- initSdlInput window
+		graphicsSystem <- book bk createOpenGLSdlSystem
+		graphicsDevices <- book bk $ getInstalledDevices graphicsSystem
+		(graphicsContext, presenter) <- book bk $ createOpenGLSdlPresenter (fst $ head graphicsDevices) window binaryCache debug
+		let graphicsDevice = graphicsContext
+#endif
 #endif
 
-#endif
+		callback window graphicsDevice graphicsContext presenter inputManager
 
-	return (window, graphicsDevice, graphicsContext, presenter, inputManager)
+	-- run window system
+#if defined(ghcjs_HOST_OS)
+	Web.runWebWindowSystem windowSystemVar
+#else
+#if defined(mingw32_HOST_OS)
+	runWin32WindowSystem windowSystemVar
+#else
+	runSdlWindowSystem debug windowSystemVar
+#endif
+#endif
 
 -- | Run app loop.
 -- To exit loop, call `exitApp`.
 {-# INLINE runApp #-}
 runApp :: (Float -> IO ()) -> IO ()
 runApp step = do
-	-- run everything in a separate thread, to not to be bounded to OS thread (main thread)
-	resultVar <- newEmptyMVar
-	void $ forkIO $ do
-		let run = do
-			let f lastTime = do
-				currentTime <- getCurrentTime
-				let frameTime = fromRational $ toRational $ diffUTCTime currentTime lastTime
-				step frameTime
-				f currentTime
-			veryFirstTime <- getCurrentTime
-			catch (f veryFirstTime) $ \ExitAppException -> return ()
-			return Nothing
-		result <- catch run $ return . Just
-		putMVar resultVar result
-	result <- takeMVar resultVar
-	maybe (return ()) (throwIO :: SomeException -> IO ()) result
+	let f lastTime = do
+		currentTime <- getCurrentTime
+		let frameTime = fromRational $ toRational $ diffUTCTime currentTime lastTime
+		step frameTime
+		f currentTime
+	veryFirstTime <- getCurrentTime
+	catch (f veryFirstTime) $ \ExitAppException -> return ()
 
 {-# INLINE exitApp #-}
 exitApp :: IO ()

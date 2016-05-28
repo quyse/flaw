@@ -7,7 +7,7 @@ License: MIT
 module Flaw.Window.Sdl
 	( SdlWindowSystem(..)
 	, SdlWindow(..)
-	, initSdlWindowSystem
+	, runSdlWindowSystem
 	, createSdlWindow
 	, invokeSdlWindowSystem_
 	, invokeSdlWindowSystem
@@ -90,164 +90,155 @@ instance Window SdlWindow where
 		} mouseCursor = SDL.setCursor $ mouseCursors V.! fromEnum mouseCursor
 	setWindowMouseLock _ mouseLock = checkSdlError (== 0) $ SDL.setRelativeMouseMode mouseLock
 
-initSdlWindowSystem :: Bool -> IO (SdlWindowSystem, IO ())
-initSdlWindowSystem debug = withSpecialBook $ \bk -> do
+-- | Run SDL window system.
+-- This function must be called from main thread (it's a requirement for OS X).
+-- This function doesn't return until finalizer is called.
+runSdlWindowSystem :: Bool -> MVar (SdlWindowSystem, IO ()) -> IO ()
+runSdlWindowSystem debug resultVar = withBook $ \bk -> do
 
-	-- var for returning initialization result from SDL thread
-	initResultVar <- newEmptyMVar
+	-- initialize
 
-	-- run window thread
-	_ <- forkOS $ do
+	book bk initSdlVideo
 
-		-- initialize
+	windowsVar <- newTVarIO HashMap.empty
 
-		book bk initSdlVideo
+	userEventCodes <- SDL.registerEvents 2
+	let invokeUserEventCode = fromIntegral userEventCodes
+	let quitUserEventCode = invokeUserEventCode + 1
 
-		windowsVar <- newTVarIO HashMap.empty
+	-- mouse cursors
+	mouseCursors <- V.forM (V.fromList [minBound .. maxBound]) $ \mouseCursor -> do
+		let sdlSystemCursor = case mouseCursor of
+			MouseCursorArrow -> SDL.SDL_SYSTEM_CURSOR_ARROW
+			MouseCursorWait -> SDL.SDL_SYSTEM_CURSOR_WAIT
+			MouseCursorWaitArrow -> SDL.SDL_SYSTEM_CURSOR_WAITARROW
+			MouseCursorIBeam -> SDL.SDL_SYSTEM_CURSOR_IBEAM
+			MouseCursorSizeNWSE -> SDL.SDL_SYSTEM_CURSOR_SIZENWSE
+			MouseCursorSizeNESW -> SDL.SDL_SYSTEM_CURSOR_SIZENESW
+			MouseCursorSizeWE -> SDL.SDL_SYSTEM_CURSOR_SIZEWE
+			MouseCursorSizeNS -> SDL.SDL_SYSTEM_CURSOR_SIZENS
+			MouseCursorSizeAll -> SDL.SDL_SYSTEM_CURSOR_SIZEALL
+			MouseCursorHand -> SDL.SDL_SYSTEM_CURSOR_HAND
+		sdlCursor <- SDL.createSystemCursor sdlSystemCursor
+		book bk $ return (sdlCursor, SDL.freeCursor sdlCursor)
 
-		userEventCodes <- SDL.registerEvents 2
-		let invokeUserEventCode = fromIntegral userEventCodes
-		let quitUserEventCode = invokeUserEventCode + 1
+	-- return result into initial thread
+	threadId <- SDL.threadID
+	let shutdown = with SDL.UserEvent
+		{ SDL.eventType = SDL.SDL_USEREVENT
+		, SDL.eventTimestamp = 0
+		, SDL.userEventWindowID = 0
+		, SDL.userEventCode = quitUserEventCode
+		, SDL.userEventData1 = nullPtr
+		, SDL.userEventData2 = nullPtr
+		} $ checkSdlError (== 1) . SDL.pushEvent
+	putMVar resultVar (SdlWindowSystem
+		{ swsThreadId = threadId
+		, swsWindows = windowsVar
+		, swsInvokeUserEventCode = invokeUserEventCode
+		, swsMouseCursors = mouseCursors
+		}, shutdown)
 
-		let shutdown = with SDL.UserEvent
-			{ SDL.eventType = SDL.SDL_USEREVENT
-			, SDL.eventTimestamp = 0
-			, SDL.userEventWindowID = 0
-			, SDL.userEventCode = quitUserEventCode
-			, SDL.userEventData1 = nullPtr
-			, SDL.userEventData2 = nullPtr
-			} $ checkSdlError (== 1) . SDL.pushEvent
+	-- set common attributes
+	mapM_ (\(attr, value) -> checkSdlError (== 0) $ SDL.glSetAttribute attr value)
+		[ (SDL.SDL_GL_CONTEXT_MAJOR_VERSION, 3)
+		, (SDL.SDL_GL_CONTEXT_MINOR_VERSION, 3)
+		, (SDL.SDL_GL_CONTEXT_PROFILE_MASK, SDL.SDL_GL_CONTEXT_PROFILE_CORE)
+		, (SDL.SDL_GL_DOUBLEBUFFER, 1)
+		-- SDL_GL_FRAMEBUFFER_SRGB_CAPABLE really should be set, but it's reported to cause problems
+		-- ("cannot find matching GLX visual", in particular with proprietary NVIDIA drivers)
+		-- seems like SRGB-capable framebuffer is created anyway, so skip it
+		--, (SDL.SDL_GL_FRAMEBUFFER_SRGB_CAPABLE, 1)
+		, ( SDL.SDL_GL_CONTEXT_FLAGS
+			, SDL.SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG
+				.|. (if debug then SDL.SDL_GL_CONTEXT_DEBUG_FLAG else 0)
+			)
+		]
 
-		book bk $ return ((), shutdown)
+	-- quit flag
+	quitRef <- newIORef False
 
-		-- mouse cursors
-		mouseCursors <- V.forM (V.fromList [minBound .. maxBound]) $ \mouseCursor -> do
-			let sdlSystemCursor = case mouseCursor of
-				MouseCursorArrow -> SDL.SDL_SYSTEM_CURSOR_ARROW
-				MouseCursorWait -> SDL.SDL_SYSTEM_CURSOR_WAIT
-				MouseCursorWaitArrow -> SDL.SDL_SYSTEM_CURSOR_WAITARROW
-				MouseCursorIBeam -> SDL.SDL_SYSTEM_CURSOR_IBEAM
-				MouseCursorSizeNWSE -> SDL.SDL_SYSTEM_CURSOR_SIZENWSE
-				MouseCursorSizeNESW -> SDL.SDL_SYSTEM_CURSOR_SIZENESW
-				MouseCursorSizeWE -> SDL.SDL_SYSTEM_CURSOR_SIZEWE
-				MouseCursorSizeNS -> SDL.SDL_SYSTEM_CURSOR_SIZENS
-				MouseCursorSizeAll -> SDL.SDL_SYSTEM_CURSOR_SIZEALL
-				MouseCursorHand -> SDL.SDL_SYSTEM_CURSOR_HAND
-			sdlCursor <- SDL.createSystemCursor sdlSystemCursor
-			book bk $ return (sdlCursor, SDL.freeCursor sdlCursor)
+	let loop = do
+		-- wait for event
+		event <- alloca $ \eventPtr -> do
+			checkSdlError (== 1) $ SDL.waitEvent eventPtr
+			peek eventPtr
 
-		-- return result into initial thread
-		threadId <- SDL.threadID
-		putMVar initResultVar SdlWindowSystem
-			{ swsThreadId = threadId
-			, swsWindows = windowsVar
-			, swsInvokeUserEventCode = invokeUserEventCode
-			, swsMouseCursors = mouseCursors
-			}
+		-- get window id
+		let maybeWindowId = case event of
+			SDL.WindowEvent
+				{ SDL.windowEventWindowID = windowId
+				} -> Just windowId
+			SDL.KeyboardEvent
+				{ SDL.keyboardEventWindowID = windowId
+				} -> Just windowId
+			SDL.TextEditingEvent
+				{ SDL.textEditingEventWindowID = windowId
+				} -> Just windowId
+			SDL.TextInputEvent
+				{ SDL.textInputEventWindowID = windowId
+				} -> Just windowId
+			SDL.MouseMotionEvent
+				{ SDL.mouseMotionEventWindowID = windowId
+				} -> Just windowId
+			SDL.MouseButtonEvent
+				{ SDL.mouseButtonEventWindowID = windowId
+				} -> Just windowId
+			SDL.MouseWheelEvent
+				{ SDL.mouseWheelEventWindowID = windowId
+				} -> Just windowId
+			SDL.UserEvent
+				{ SDL.userEventWindowID = windowId
+				} -> Just windowId
+			_ -> Nothing
 
-		-- set common attributes
-		mapM_ (\(attr, value) -> checkSdlError (== 0) $ SDL.glSetAttribute attr value)
-			[ (SDL.SDL_GL_CONTEXT_MAJOR_VERSION, 3)
-			, (SDL.SDL_GL_CONTEXT_MINOR_VERSION, 3)
-			, (SDL.SDL_GL_CONTEXT_PROFILE_MASK, SDL.SDL_GL_CONTEXT_PROFILE_CORE)
-			, (SDL.SDL_GL_DOUBLEBUFFER, 1)
-			-- SDL_GL_FRAMEBUFFER_SRGB_CAPABLE really should be set, but it's reported to cause problems
-			-- ("cannot find matching GLX visual", in particular with proprietary NVIDIA drivers)
-			-- seems like SRGB-capable framebuffer is created anyway, so skip it
-			--, (SDL.SDL_GL_FRAMEBUFFER_SRGB_CAPABLE, 1)
-			, ( SDL.SDL_GL_CONTEXT_FLAGS
-				, SDL.SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG
-					.|. (if debug then SDL.SDL_GL_CONTEXT_DEBUG_FLAG else 0)
-				)
-			]
+		-- get window
+		maybeWindow <- case maybeWindowId of
+			Just windowId -> fmap (HashMap.lookup windowId) $ atomically $ readTVar windowsVar
+			Nothing -> return Nothing
 
-		-- quit flag
-		quitRef <- newIORef False
+		-- if there's a window, call user callbacks
+		case maybeWindow of
+			Just SdlWindow
+				{ swUserCallbacksRef = userCallbacksRef
+				} -> mapM_ ($ event) =<< readIORef userCallbacksRef
+			Nothing -> return ()
 
-		let loop = do
-			-- wait for event
-			event <- alloca $ \eventPtr -> do
-				checkSdlError (== 1) $ SDL.waitEvent eventPtr
-				peek eventPtr
+		-- process some events
+		case event of
+			SDL.WindowEvent
+				{ SDL.windowEventEvent = eventType
+				, SDL.windowEventData1 = data1
+				, SDL.windowEventData2 = data2
+				} -> do
+				case maybeWindow of
+					Just SdlWindow
+						{ swEventsChan = eventsChan
+						} -> case eventType of
+						SDL.SDL_WINDOWEVENT_RESIZED -> atomically $ do
+							let width = fromIntegral data1
+							let height = fromIntegral data2
+							writeTChan eventsChan $ ResizeWindowEvent width height
+						SDL.SDL_WINDOWEVENT_CLOSE -> atomically $ writeTChan eventsChan CloseWindowEvent
+						_ -> return ()
+					Nothing -> return ()
+			SDL.UserEvent
+				{ SDL.userEventCode = eventCode
+				, SDL.userEventData1 = eventData
+				} -> do
+				if eventCode == invokeUserEventCode then do
+					let funPtr = castPtrToFunPtr eventData
+					unwrapInvokeCallback funPtr
+					freeHaskellFunPtr funPtr
+				else if eventCode == quitUserEventCode then writeIORef quitRef True
+				else return ()
+			_ -> return ()
 
-			-- get window id
-			let maybeWindowId = case event of
-				SDL.WindowEvent
-					{ SDL.windowEventWindowID = windowId
-					} -> Just windowId
-				SDL.KeyboardEvent
-					{ SDL.keyboardEventWindowID = windowId
-					} -> Just windowId
-				SDL.TextEditingEvent
-					{ SDL.textEditingEventWindowID = windowId
-					} -> Just windowId
-				SDL.TextInputEvent
-					{ SDL.textInputEventWindowID = windowId
-					} -> Just windowId
-				SDL.MouseMotionEvent
-					{ SDL.mouseMotionEventWindowID = windowId
-					} -> Just windowId
-				SDL.MouseButtonEvent
-					{ SDL.mouseButtonEventWindowID = windowId
-					} -> Just windowId
-				SDL.MouseWheelEvent
-					{ SDL.mouseWheelEventWindowID = windowId
-					} -> Just windowId
-				SDL.UserEvent
-					{ SDL.userEventWindowID = windowId
-					} -> Just windowId
-				_ -> Nothing
+		-- check if quit flag is set
+		quit <- readIORef quitRef
+		unless quit loop
 
-			-- get window
-			maybeWindow <- case maybeWindowId of
-				Just windowId -> fmap (HashMap.lookup windowId) $ atomically $ readTVar windowsVar
-				Nothing -> return Nothing
-
-			-- if there's a window, call user callbacks
-			case maybeWindow of
-				Just SdlWindow
-					{ swUserCallbacksRef = userCallbacksRef
-					} -> mapM_ ($ event) =<< readIORef userCallbacksRef
-				Nothing -> return ()
-
-			-- process some events
-			case event of
-				SDL.WindowEvent
-					{ SDL.windowEventEvent = eventType
-					, SDL.windowEventData1 = data1
-					, SDL.windowEventData2 = data2
-					} -> do
-					case maybeWindow of
-						Just SdlWindow
-							{ swEventsChan = eventsChan
-							} -> case eventType of
-							SDL.SDL_WINDOWEVENT_RESIZED -> atomically $ do
-								let width = fromIntegral data1
-								let height = fromIntegral data2
-								writeTChan eventsChan $ ResizeWindowEvent width height
-							SDL.SDL_WINDOWEVENT_CLOSE -> atomically $ writeTChan eventsChan CloseWindowEvent
-							_ -> return ()
-						Nothing -> return ()
-				SDL.UserEvent
-					{ SDL.userEventCode = eventCode
-					, SDL.userEventData1 = eventData
-					} -> do
-					if eventCode == invokeUserEventCode then do
-						let funPtr = castPtrToFunPtr eventData
-						unwrapInvokeCallback funPtr
-						freeHaskellFunPtr funPtr
-					else if eventCode == quitUserEventCode then writeIORef quitRef True
-					else return ()
-				_ -> return ()
-
-			-- check if quit flag is set
-			quit <- readIORef quitRef
-			unless quit loop
-
-		loop
-
-	-- wait for initialization and return result from thread
-	takeMVar initResultVar
+	loop
 
 createSdlWindow :: SdlWindowSystem -> T.Text -> Maybe (Int, Int) -> Maybe (Int, Int) -> Bool -> IO (SdlWindow, IO ())
 createSdlWindow ws@SdlWindowSystem

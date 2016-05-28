@@ -87,12 +87,10 @@ getEyeDirection EditorState
 	sb = sin eyeBeta
 
 main :: IO ()
-main = handle errorHandler $ withBook $ \bk -> do
-	-- init app
-	(window, device, context, presenter, inputManager) <- book bk $ initApp $ appConfig
-		{ appConfigTitle = "Flaw Model Editor"
-		, appConfigNeedDepthBuffer = False
-		}
+main = handle errorHandler $ withApp appConfig
+	{ appConfigTitle = "Flaw Model Editor"
+	, appConfigNeedDepthBuffer = False
+	} $ \window device context presenter inputManager -> withBook $ \bk -> do
 
 	-- UI styles and drawer
 	let metrics = defaultStyleMetrics

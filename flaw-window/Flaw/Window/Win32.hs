@@ -9,7 +9,7 @@ License: MIT
 module Flaw.Window.Win32
 	( Win32WindowSystem()
 	, Win32Window(..)
-	, initWin32WindowSystem
+	, runWin32WindowSystem
 	, createWin32Window
 	, createLayeredWin32Window
 	, updateLayeredWin32Window
@@ -40,7 +40,6 @@ import Flaw.FFI.Win32
 
 data Win32WindowSystem = Win32WindowSystem
 	{ wsHandle :: Ptr () -- ^ Opaque handle for C side.
-	, wsThreadId :: ThreadId
 	, wsShutdownVar :: MVar ()
 	}
 
@@ -98,31 +97,14 @@ instance Window Win32Window where
 		, wHandle = hwnd
 		} mouseLock = invokeWin32WindowSystem_ ws $ c_setMouseLock hwnd (if mouseLock then 1 else 0)
 
-initWin32WindowSystem :: IO (Win32WindowSystem, IO ())
-initWin32WindowSystem = do
-	-- create vars
-	handleVar <- newEmptyMVar
+-- | Run Win32 window system.
+runWin32WindowSystem :: MVar (Win32WindowSystem, IO ()) -> IO ()
+runWin32WindowSystem resultVar = do
+	-- initialize window system, get a thread handle
+	h <- c_initWin32WindowSystem
+	-- create shutdown var
 	shutdownVar <- newEmptyMVar
-
-	-- create OS thread for window loop
-	threadId <- forkOS $ do
-		-- initialize window system, get a thread handle
-		h <- c_initWin32WindowSystem
-		-- send handles to the original thread
-		putMVar handleVar h
-		-- run window system
-		c_runWin32WindowSystem h
-		-- notify that window system quit
-		putMVar shutdownVar ()
-	-- wait for handle
-	h <- readMVar handleVar
-
-	let ws = Win32WindowSystem
-		{ wsHandle = h
-		, wsThreadId = threadId
-		, wsShutdownVar = shutdownVar
-		}
-
+	-- return result in var
 	let shutdown = do
 		-- send a message to stop window loop
 		invokeWin32WindowSystem_ ws c_stopWin32WindowSystem
@@ -130,8 +112,12 @@ initWin32WindowSystem = do
 		readMVar $ wsShutdownVar ws
 		-- free resources
 		c_shutdownWin32WindowSystem $ wsHandle ws
-
-	return (ws, shutdown)
+	putMVar resultVar (Win32WindowSystem
+		{ wsHandle = h
+		, wsShutdownVar = shutdownVar
+		}, shutdown)
+	-- run window system
+	c_runWin32WindowSystem h
 
 createWin32Window :: Win32WindowSystem -> T.Text -> Maybe (Int, Int) -> Maybe (Int, Int) -> IO (Win32Window, IO ())
 createWin32Window ws title maybePosition maybeSize = internalCreateWin32Window ws title maybePosition maybeSize False
