@@ -75,6 +75,41 @@ variables:
     flaw-ui-default-style
     flaw-visual
     flaw-window
+  PACKAGES_OSX: >-
+    flaw-al
+    flaw-app
+    flaw-asset
+    flaw-asset-dxt
+    flaw-audio
+    flaw-base
+    flaw-build
+    flaw-bullet
+    flaw-canvas
+    flaw-collada
+    flaw-editor
+    flaw-ffi
+    flaw-ffmpeg
+    flaw-font
+    flaw-font-fthb
+    flaw-game
+    flaw-gl
+    flaw-gl-sdl
+    flaw-graphics
+    flaw-input
+    flaw-lua
+    flaw-lua-refimpl
+    flaw-math
+    flaw-network
+    flaw-oil
+    flaw-oil-client
+    flaw-physics
+    flaw-sdl
+    flaw-sl
+    flaw-sqlite
+    flaw-ui
+    flaw-ui-default-style
+    flaw-visual
+    flaw-window
   PACKAGES_WEB: >-
     flaw-app
     flaw-asset
@@ -145,7 +180,7 @@ windows:
 osx:
   script:
   - "mkdir -p flaw-osx/bin"
-  - "stack --no-terminal build --test --copy-bins --local-bin-path flaw-osx/bin $PACKAGES_LINUX"
+  - "stack --no-terminal build --test --copy-bins --local-bin-path flaw-osx/bin $PACKAGES_OSX"
   artifacts:
     name: "flaw-osx_x64-$CI_BUILD_ID"
     paths:
