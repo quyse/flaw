@@ -236,7 +236,6 @@ itch:
   - x64
   only:
   - master
-  - osx
 
 pages:
   stage: deploy
