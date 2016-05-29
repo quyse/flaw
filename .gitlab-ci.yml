@@ -112,12 +112,12 @@ variables:
 
 linux:
   script:
-  - "mkdir bin"
-  - "stack --no-terminal build --test --copy-bins --local-bin-path bin $PACKAGES_LINUX"
+  - "mkdir -p flaw-linux/bin"
+  - "stack --no-terminal build --test --copy-bins --local-bin-path flaw-linux/bin $PACKAGES_LINUX"
   artifacts:
     name: "flaw-linux_x64-$CI_BUILD_ID"
     paths:
-    - bin
+    - flaw-linux
   tags:
   - haskellstack
   - linux
@@ -129,15 +129,30 @@ windows:
   script:
   - "%FIX_TH_WINDOWS%"
   - "%INTEGERSIMPLE_CONFIG_FIX%"
-  - "mkdir bin"
-  - "stack --no-terminal build --test --copy-bins --local-bin-path bin %INTEGERSIMPLE_FLAGS_WINDOWS% %PACKAGES_WINDOWS%"
+  - "mkdir flaw-windows\\bin"
+  - "stack --no-terminal build --test --copy-bins --local-bin-path flaw-windows/bin %INTEGERSIMPLE_FLAGS_WINDOWS% %PACKAGES_WINDOWS%"
   artifacts:
     name: "flaw-windows_x64-$CI_BUILD_ID"
     paths:
-    - bin
+    - flaw-windows
   tags:
   - haskellstack
   - windows
+  - x64
+  except:
+  - arm
+
+osx:
+  script:
+  - "mkdir -p flaw-osx/bin"
+  - "stack --no-terminal build --test --copy-bins --local-bin-path flaw-osx/bin $PACKAGES_LINUX"
+  artifacts:
+    name: "flaw-osx_x64-$CI_BUILD_ID"
+    paths:
+    - flaw-osx
+  tags:
+  - haskellstack
+  - osx
   - x64
   except:
   - arm
@@ -155,12 +170,12 @@ web:
 
 linux-arm:
   script:
-  - "mkdir bin"
-  - "stack --no-terminal build --test --copy-bins --local-bin-path bin $PACKAGES_LINUX"
+  - "mkdir -p flaw-linux-arm/bin"
+  - "stack --no-terminal build --test --copy-bins --local-bin-path flaw-linux-arm/bin $PACKAGES_LINUX"
   artifacts:
     name: "flaw-linux_arm-$CI_BUILD_ID"
     paths:
-    - bin
+    - flaw-linux-arm
   tags:
   - haskellstack
   - linux
@@ -173,16 +188,20 @@ itch:
   dependencies:
   - linux
   - windows
+  - osx
   script:
-  - "mkdir linux && mv bin/model-editor linux/"
-  - "mkdir windows && mv bin/model-editor.exe windows/"
+  - "mkdir linux && mv flaw-linux/bin/model-editor linux/"
+  - "mkdir windows && mv flaw-windows/bin/model-editor.exe windows/"
+  - "mkdir osx && mv flaw-osx/bin/model-editor osx/"
   - "butler push linux quyse/flaw:model-editor-linux"
   - "butler push windows quyse/flaw:model-editor-windows"
+  - "butler push osx quyse/flaw:model-editor-osx"
   tags:
   - linux
   - x64
   only:
   - master
+  - osx
 
 pages:
   stage: deploy
