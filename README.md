@@ -1,6 +1,5 @@
 # FLAW Engine
 
-[![Travis Build Status](https://travis-ci.org/quyse/flaw.svg?branch=master)](https://travis-ci.org/quyse/flaw)
 [![Gitlab Build Status](https://gitlab.com/quyse/flaw/badges/master/build.svg)](https://gitlab.com/quyse/flaw/builds)
 [![Code Climate](https://codeclimate.com/github/quyse/flaw/badges/gpa.svg)](https://codeclimate.com/github/quyse/flaw)
 [![Haddock Status](https://quyse.gitlab.io/flaw/docs/badge.svg)](https://quyse.gitlab.io/flaw/docs/)
