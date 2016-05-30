@@ -101,6 +101,7 @@ runSdlWindowSystem debug resultVar = withBook $ \bk -> do
 	book bk initSdlVideo
 
 	windowsVar <- newTVarIO HashMap.empty
+	shutdownVar <- newEmptyMVar
 
 	userEventCodes <- SDL.registerEvents 2
 	let invokeUserEventCode = fromIntegral userEventCodes
@@ -124,14 +125,17 @@ runSdlWindowSystem debug resultVar = withBook $ \bk -> do
 
 	-- return result into initial thread
 	threadId <- SDL.threadID
-	let shutdown = with SDL.UserEvent
-		{ SDL.eventType = SDL.SDL_USEREVENT
-		, SDL.eventTimestamp = 0
-		, SDL.userEventWindowID = 0
-		, SDL.userEventCode = quitUserEventCode
-		, SDL.userEventData1 = nullPtr
-		, SDL.userEventData2 = nullPtr
-		} $ checkSdlError (== 1) . SDL.pushEvent
+	let shutdown = do
+		with SDL.UserEvent
+			{ SDL.eventType = SDL.SDL_USEREVENT
+			, SDL.eventTimestamp = 0
+			, SDL.userEventWindowID = 0
+			, SDL.userEventCode = quitUserEventCode
+			, SDL.userEventData1 = nullPtr
+			, SDL.userEventData2 = nullPtr
+			} $ checkSdlError (== 1) . SDL.pushEvent
+		-- wait for shutdown to finish
+		takeMVar shutdownVar
 	putMVar resultVar (SdlWindowSystem
 		{ swsThreadId = threadId
 		, swsWindows = windowsVar
@@ -239,6 +243,8 @@ runSdlWindowSystem debug resultVar = withBook $ \bk -> do
 		unless quit loop
 
 	loop
+	-- signal ending of event loop
+	putMVar shutdownVar ()
 
 createSdlWindow :: SdlWindowSystem -> T.Text -> Maybe (Int, Int) -> Maybe (Int, Int) -> Bool -> IO (SdlWindow, IO ())
 createSdlWindow ws@SdlWindowSystem
