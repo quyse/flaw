@@ -87,7 +87,7 @@ getEyeDirection EditorState
 	sb = sin eyeBeta
 
 main :: IO ()
-main = handle errorHandler $ withApp appConfig
+main = withApp appConfig
 	{ appConfigTitle = "Flaw Model Editor"
 	, appConfigNeedDepthBuffer = False
 	} $ \window device context presenter inputManager -> withBook $ \bk -> do
