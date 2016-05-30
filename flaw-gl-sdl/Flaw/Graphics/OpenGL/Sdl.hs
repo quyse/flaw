@@ -163,4 +163,4 @@ openglInvoke OpenGLSdlPresenter
 	{ openglPresenterWindow = SdlWindow
 		{ swSystem = windowSystem
 		}
-	} io = invokeSdlWindowSystem windowSystem io
+	} = invokeSdlWindowSystem windowSystem

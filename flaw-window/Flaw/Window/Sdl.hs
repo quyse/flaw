@@ -280,7 +280,7 @@ createSdlWindow ws@SdlWindowSystem
 	-- add window into list
 	atomically $ modifyTVar windowsVar $ HashMap.insert windowID window
 
-	return (window, SDL.destroyWindow windowHandle)
+	return (window, invokeSdlWindowSystem ws $ SDL.destroyWindow windowHandle)
 
 addSdlWindowCallback :: SdlWindow -> (SDL.Event -> IO ()) -> IO ()
 addSdlWindowCallback SdlWindow
