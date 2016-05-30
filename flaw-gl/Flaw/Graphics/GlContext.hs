@@ -587,7 +587,7 @@ instance Device GlContext where
 		-- create program
 		programName <- book bk $ do
 			p <- glCreateProgram
-			return (p, glDeleteProgram p)
+			return (p, invoke $ glDeleteProgram p)
 
 		-- if binary programs are supported, try to use binary cache
 		let cacheKey = S.encode glslProgram
@@ -618,7 +618,7 @@ instance Device GlContext where
 					GlslVertexStage -> GL_VERTEX_SHADER
 					GlslFragmentStage -> GL_FRAGMENT_SHADER
 				glCheckErrors0 "create shader"
-				_ <- book bk $ return (shaderName, glDeleteShader shaderName)
+				_ <- book bk $ return (shaderName, invoke $ glDeleteShader shaderName)
 
 				-- set shader source
 				glShaderSource_s shaderName shaderSource
@@ -764,7 +764,7 @@ instance Device GlContext where
 			-- create vertex array
 			vaName <- book bk $ do
 				vaName <- glAllocVertexArrayName
-				return (vaName, glDeleteVertexArrayName vaName)
+				return (vaName, invoke $ glDeleteVertexArrayName vaName)
 			-- bind vertex array
 			glBindVertexArray vaName
 			glCheckErrors0 "bind vertex array"
