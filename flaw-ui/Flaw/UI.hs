@@ -33,6 +33,8 @@ module Flaw.UI
 	, SomeFreeChild(..)
 	, DefaultActionRedirector(..)
 	, Focusable(..)
+	, Scrollable(..)
+	, SomeScrollable(..)
 	, MouseCursor(..) -- re-export from Flaw.Window
 	) where
 
@@ -190,3 +192,24 @@ class Element a => DefaultActionRedirector a where
 
 class Element a => Focusable a where
 	isFocused :: a -> STM Bool
+
+-- | Class of scrollable elements.
+-- Scrollable element can render only part of itself.
+-- It does accept call to layoutElement with size of visible area,
+-- but then it must return real size via 'scrollableElementSize'.
+class Element a => Scrollable a where
+	-- | Render specified part of element.
+	renderScrollableElement
+		:: Context c d
+		=> a -- ^ Scrollable element.
+		-> Drawer d -- ^ Drawer.
+		-- | Position of left-top corner (possible invisible or out-of-screen because of scrolling)
+		-- of the element in render coordinates.
+		-> Position
+		-> Rect -- ^ Part of element to render, in element's coordinates.
+		-> STM (Render c ())
+	-- | Return real total size of the element.
+	scrollableElementSize :: a -> STM Size
+
+data SomeScrollable where
+	SomeScrollable :: Scrollable a => !a -> SomeScrollable
