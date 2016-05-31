@@ -22,12 +22,14 @@ import Control.Concurrent.STM
 import Control.Monad
 import Control.Monad.Fix
 import qualified Data.IntMap.Strict as IM
+import qualified Data.IntSet as IS
 import qualified Data.Set as S
 import qualified Data.Text as T
 
 import Flaw.Graphics
 import Flaw.Graphics.Canvas
 import Flaw.Graphics.Font
+import Flaw.Input.Keyboard
 import Flaw.Input.Mouse
 import Flaw.Math
 import Flaw.UI
@@ -36,6 +38,7 @@ import Flaw.UI.Label
 import Flaw.UI.Metrics
 import Flaw.UI.Panel
 import Flaw.UI.PileBox
+import Flaw.UI.ScrollBox
 
 data ListBox v = ListBox
 	{ listBoxPanel :: !Panel
@@ -45,14 +48,12 @@ data ListBox v = ListBox
 	, listBoxValuesVar :: !(TVar (IM.IntMap v))
   -- | Items ordered by current sort function.
 	, listBoxItemsVar :: !(TVar (ListBoxItems v))
+	-- | Selected values.
+	, listBoxSelectedValuesVar :: {-# UNPACK #-} !(TVar IS.IntSet)
 	-- | Index to assign next added item.
 	, listBoxNextItemIndexVar :: !(TVar Int)
 	-- | Columns.
 	, listBoxColumns :: [ListBoxColumn v]
-	, listBoxSizeVar :: !(TVar Size)
-	, listBoxFocusedVar :: !(TVar Bool)
-	, listBoxMousedVar :: !(TVar Bool)
-	, listBoxPressedVar :: !(TVar Bool)
 	}
 
 -- | Handle for list box item.
@@ -94,6 +95,13 @@ data ListBoxColumnDesc v where
 		, listBoxColumnDescRenderFunc :: !(forall c d. Context c d => v -> Drawer d -> Position -> Size -> Style -> STM (Render c ()))
 		} -> ListBoxColumnDesc v
 
+data ListBoxContent v = ListBoxContent
+	{ listBoxContentParent :: !(ListBox v)
+	, listBoxContentWidthVar :: {-# UNPACK #-} !(TVar Metric)
+	, listBoxContentFocusedVar :: {-# UNPACK #-} !(TVar Bool)
+	, listBoxContentLastMousePositionVar :: {-# UNPACK #-} !(TVar (Maybe Position))
+	}
+
 newListBox :: Metrics -> [ListBoxColumnDesc v] -> STM (ListBox v)
 newListBox metrics@Metrics
 	{ metricsListBoxColumnHeaderHeight = columnHeaderHeight
@@ -117,29 +125,43 @@ newListBox metrics@Metrics
 
 		valuesVar <- newTVar IM.empty
 		itemsVar <- newTVar $ ListBoxItems (const (0 :: Int)) S.empty
+		selectedValuesVar <- newTVar IS.empty
 		nextItemIndexVar <- newTVar 0
-		sizeVar <- newTVar $ Vec2 0 0
-		focusedVar <- newTVar False
-		mousedVar <- newTVar False
-		pressedVar <- newTVar False
 		return ListBox
 			{ listBoxPanel = panel
 			, listBoxColumnHeaderHeight = columnHeaderHeight
 			, listBoxItemHeight = itemHeight
 			, listBoxValuesVar = valuesVar
 			, listBoxItemsVar = itemsVar
+			, listBoxSelectedValuesVar = selectedValuesVar
 			, listBoxNextItemIndexVar = nextItemIndexVar
 			, listBoxColumns = columns
-			, listBoxSizeVar = sizeVar
-			, listBoxFocusedVar = focusedVar
-			, listBoxMousedVar = mousedVar
-			, listBoxPressedVar = pressedVar
 			}
 
 	-- pile box for column headers
 	pileBox <- newPileBox metrics $ map SomeElement columns
-	void $ addFreeChild panel pileBox
-	setLayoutHandler panel $ \(Vec2 sx _sy) -> layoutElement pileBox $ Vec2 sx columnHeaderHeight
+	pileBoxChild <- addFreeChild panel pileBox
+
+	-- content element
+	widthVar <- newTVar 0
+	focusedVar <- newTVar False
+	lastMousePositionVar <- newTVar Nothing
+	let content = ListBoxContent
+		{ listBoxContentParent = listBox
+		, listBoxContentWidthVar = widthVar
+		, listBoxContentFocusedVar = focusedVar
+		, listBoxContentLastMousePositionVar = lastMousePositionVar
+		}
+
+	-- scroll box
+	scrollBox <- newScrollBox content
+	scrollBoxChild <- addFreeChild panel scrollBox
+
+	setLayoutHandler panel $ \(Vec2 sx sy) -> do
+		placeFreeChild panel pileBoxChild $ Vec2 1 1
+		layoutElement pileBox $ Vec2 (sx - 2) columnHeaderHeight
+		placeFreeChild panel scrollBoxChild $ Vec2 1 (1 + columnHeaderHeight)
+		layoutElement scrollBox $ Vec2 (sx - 2) (sy - 2 - columnHeaderHeight)
 
 	return listBox
 
@@ -162,6 +184,7 @@ removeListBoxItem :: ListBox v -> ListBoxItemHandle v -> STM ()
 removeListBoxItem ListBox
 	{ listBoxValuesVar = valuesVar
 	, listBoxItemsVar = itemsVar
+	, listBoxSelectedValuesVar = selectedValuesVar
 	} (ListBoxItemHandle itemIndex) = do
 	values <- readTVar valuesVar
 	case IM.lookup itemIndex values of
@@ -170,6 +193,7 @@ removeListBoxItem ListBox
 			modifyTVar' itemsVar $ \(ListBoxItems keyFunc items) ->
 				ListBoxItems keyFunc $ S.delete (ListBoxItem itemIndex keyFunc value) items
 		Nothing -> return ()
+	modifyTVar' selectedValuesVar $ IS.delete itemIndex
 
 -- | Change list item by handle.
 -- List item's handle remains valid.
@@ -193,9 +217,11 @@ clearListBox :: ListBox v -> STM ()
 clearListBox ListBox
 	{ listBoxValuesVar = valuesVar
 	, listBoxItemsVar = itemsVar
+	, listBoxSelectedValuesVar = selectedValuesVar
 	} = do
 	writeTVar valuesVar IM.empty
 	modifyTVar' itemsVar $ \(ListBoxItems keyFunc _items) -> ListBoxItems keyFunc S.empty
+	writeTVar selectedValuesVar IS.empty
 
 -- | Reorder list box using new sort function.
 reorderListBox :: Ord k => ListBox v -> (v -> k) -> STM ()
@@ -206,98 +232,158 @@ reorderListBox ListBox
 	$ \(ListBoxItem itemIndex _oldSortFunc value) -> ListBoxItem itemIndex newSortFunc value
 
 instance Element (ListBox v) where
-
-	layoutElement ListBox
-		{ listBoxPanel = panel
-		, listBoxSizeVar = sizeVar
-		} size = do
-		writeTVar sizeVar size
-		layoutElement panel $ size - Vec2 2 2
-
-	dabElement ListBox
-		{ listBoxSizeVar = sizeVar
-		} (Vec2 x y) = do
-		if x < 0 || y < 0 then return False else do
-			Vec2 sx sy <- readTVar sizeVar
-			return $ x < sx && y < sy
-
+	layoutElement = layoutElement . listBoxPanel
+	dabElement = dabElement . listBoxPanel
 	elementMouseCursor = elementMouseCursor . listBoxPanel
-
 	renderElement ListBox
-		{ listBoxPanel = panel
-		, listBoxColumnHeaderHeight = columnHeaderHeight
-		, listBoxItemHeight = itemHeight
-		, listBoxItemsVar = itemsVar
-		, listBoxColumns = columns
-		, listBoxSizeVar = sizeVar
-		, listBoxFocusedVar = focusedVar
-		, listBoxMousedVar = mousedVar
-		, listBoxPressedVar = pressedVar
+		{ listBoxPanel = panel@Panel
+			{ panelSizeVar = sizeVar
+			}
+		} drawer@Drawer
+		{ drawerCanvas = canvas
+		, drawerStyles = DrawerStyles
+			{ drawerLoweredStyleVariant = StyleVariant
+				{ styleVariantNormalStyle = Style
+					{ styleFillColor = fillColor
+					, styleBorderColor = borderColor
+					}
+				}
+			}
+		} position@(Vec2 px py) = do
+		Vec2 sx sy <- readTVar sizeVar
+		r <- renderElement panel drawer position
+		return $ do
+			drawBorderedRectangle canvas
+				(Vec4 px (px + 1) (px + sx - 1) (px + sx))
+				(Vec4 py (py + 1) (py + sy - 1) (py + sy))
+				fillColor borderColor
+			renderIntersectScissor $ Vec4 (px + 1) (py + 1) (px + sx - 2) (py + sy - 2)
+			r
+	processInputEvent = processInputEvent . listBoxPanel
+	focusElement = focusElement . listBoxPanel
+	unfocusElement = unfocusElement . listBoxPanel
+
+instance Element (ListBoxContent v) where
+	layoutElement ListBoxContent
+		{ listBoxContentWidthVar = widthVar
+		} (Vec2 sx _sy) = writeTVar widthVar sx
+	dabElement content (Vec2 x y) = if x < 0 || y < 0 then return False else do
+		Vec2 sx sy <- scrollableElementSize content
+		return $ x < sx && y < sy
+	renderElement _ _ _ = return $ return ()
+	processInputEvent ListBoxContent
+		{ listBoxContentParent = ListBox
+			{ listBoxItemHeight = itemHeight
+			, listBoxItemsVar = itemsVar
+			, listBoxSelectedValuesVar = selectedValuesVar
+			}
+		, listBoxContentLastMousePositionVar = lastMousePositionVar
+		} inputEvent InputState
+		{ inputStateKeyboard = keyboardState
+		} = case inputEvent of
+		KeyboardInputEvent keyboardEvent -> return False
+		MouseInputEvent mouseEvent -> case mouseEvent of
+			MouseDownEvent LeftMouseButton -> do
+				maybeLastMousePosition <- readTVar lastMousePositionVar
+				case maybeLastMousePosition of
+					Just (Vec2 _x y) -> do
+						let itemOrderIndex = y `quot` itemHeight
+						ListBoxItems _keyFunc items <- readTVar itemsVar
+						shiftLPressed <- getKeyState keyboardState KeyShiftL
+						shiftRPressed <- getKeyState keyboardState KeyShiftR
+						selectedValues <- if shiftLPressed || shiftRPressed then readTVar selectedValuesVar else return IS.empty
+						writeTVar selectedValuesVar $
+							if itemOrderIndex >= 0 && itemOrderIndex < S.size items then
+								let ListBoxItem itemIndex _keyFunc _value = S.elemAt itemOrderIndex items
+								in IS.insert itemIndex selectedValues
+							else selectedValues
+						return True
+					Nothing -> return False
+			CursorMoveEvent x y -> do
+				writeTVar lastMousePositionVar $ Just $ Vec2 x y
+				return True
+			_ -> return False
+		MouseLeaveEvent -> do
+			writeTVar lastMousePositionVar Nothing
+			return True
+	focusElement ListBoxContent
+		{ listBoxContentFocusedVar = focusedVar
+		} = do
+		writeTVar focusedVar True
+		return True
+	unfocusElement ListBoxContent
+		{ listBoxContentFocusedVar = focusedVar
+		} = writeTVar focusedVar False
+
+instance Scrollable (ListBoxContent v) where
+	renderScrollableElement ListBoxContent
+		{ listBoxContentParent = ListBox
+			{ listBoxItemHeight = itemHeight
+			, listBoxItemsVar = itemsVar
+			, listBoxSelectedValuesVar = selectedValuesVar
+			, listBoxColumns = columns
+			}
+		, listBoxContentFocusedVar = focusedVar
 		} drawer@Drawer
 		{ drawerCanvas = canvas
 		, drawerStyles = DrawerStyles
 			{ drawerLoweredStyleVariant = StyleVariant
 				{ styleVariantNormalStyle = normalStyle
 				, styleVariantMousedStyle = mousedStyle
-				, styleVariantPressedStyle = pressedStyle
+				, styleVariantSelectedFocusedStyle = selectedFocusedStyle
+				, styleVariantSelectedUnfocusedStyle = selectedUnfocusedStyle
 				}
 			}
-		} (Vec2 px py) = do
+		} (Vec2 px py) (Vec4 left top right bottom) = do
 		-- get state
-		Vec2 sx sy <- readTVar sizeVar
 		focused <- readTVar focusedVar
-		moused <- readTVar mousedVar
-		pressed <- readTVar pressedVar
-		-- get style
-		let style
-			| pressed = pressedStyle
-			| moused || focused = mousedStyle
-			| otherwise = normalStyle
+		let unselectedStyle = if focused then mousedStyle else normalStyle
+		let selectedStyle = if focused then selectedFocusedStyle else selectedUnfocusedStyle
+		selectedValues <- readTVar selectedValuesVar
 	
 		-- calculate rendering of items
 		renderItemColumns <- let
-			f left (ListBoxColumn
+			f x (ListBoxColumn
 				{ listBoxColumnDesc = ListBoxColumnDesc
 					{ listBoxColumnDescRenderFunc = renderFunc
 					}
 				, listBoxColumnWidthVar = widthVar
 				} : restColumns) = do
 				width <- readTVar widthVar
-				((left, width, renderFunc) :) <$> f (left + width) restColumns
+				((x, width, renderFunc) :) <$> f (x + width) restColumns
 			f _ [] = return []
-			in f (px + 1) columns
+			in f px columns
 		ListBoxItems _keyFunc items <- readTVar itemsVar
 		let
-			renderItems top (ListBoxItem _itemIndex _keyFunc value : restItems) = do
-				r <- (sequence_ <$>) . forM renderItemColumns $ \(left, width, renderFunc) -> do
-					r <- renderFunc value drawer (Vec2 left top) (Vec2 width itemHeight) style
+			renderItems y (ListBoxItem itemIndex _keyFunc value : restItems) = do
+				let selected = IS.member itemIndex selectedValues
+				let style = if selected then selectedStyle else unselectedStyle
+				r <- (sequence_ <$>) . forM renderItemColumns $ \(x, width, renderFunc) -> do
+					r <- renderFunc value drawer (Vec2 (x + 1) (y + 1)) (Vec2 (width - 2) (itemHeight - 2)) style
 					return $ renderScope $ do
-						renderIntersectScissor $ Vec4 left top (left + width) (top + itemHeight)
+						renderIntersectScissor $ Vec4 (x + 1) (y + 1) (x + width - 2) (y + itemHeight - 2)
 						r
-				(r >>) <$> renderItems (top + itemHeight) restItems
+				let rr = if selected then do
+					drawBorderedRectangle canvas
+						(Vec4 (px + left) (px + left + 1) (px + right - 1) (px + right))
+						(Vec4 y (y + 1) (y + itemHeight - 1) (y + itemHeight))
+						(styleFillColor style) (styleBorderColor style)
+					r
+					else r
+				(rr >>) <$> renderItems (y + itemHeight) restItems
 			renderItems _ [] = return $ return ()
-		itemsRender <- renderItems (py + 1 + columnHeaderHeight) $ S.toAscList items
-		panelRender <- renderElement panel drawer (Vec2 (px + 1) (py + 1))
-		return $ do
-			drawBorderedRectangle canvas
-				(Vec4 px (px + 1) (px + sx - 1) (px + sx))
-				(Vec4 py (py + 1) (py + sy - 1) (py + sy))
-				(styleFillColor style) (styleBorderColor style)
-			renderIntersectScissor $ Vec4 (px + 1) (py + 1) (px + sx - 1) (py + sy - 1)
-			panelRender
-			itemsRender
+		renderItems py $ S.toAscList items
 
-	processInputEvent = processInputEvent . listBoxPanel
-
-	focusElement ListBox
-		{ listBoxFocusedVar = focusedVar
+	scrollableElementSize ListBoxContent
+		{ listBoxContentParent = ListBox
+			{ listBoxItemHeight = itemHeight
+			, listBoxValuesVar = valuesVar
+			}
+		, listBoxContentWidthVar = widthVar
 		} = do
-		writeTVar focusedVar True
-		return True
-
-	unfocusElement ListBox
-		{ listBoxFocusedVar = focusedVar
-		} = writeTVar focusedVar False
+		width <- readTVar widthVar
+		height <- (itemHeight *) . IM.size <$> readTVar valuesVar
+		return $ Vec2 width height
 
 instance Element (ListBoxColumn v) where
 
