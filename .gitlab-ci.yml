@@ -159,7 +159,6 @@ linux:
   - x64
   except:
   - arm
-  - improve_docs
 
 windows:
   script:
@@ -177,7 +176,6 @@ windows:
   - x64
   except:
   - arm
-  - improve_docs
 
 osx:
   script:
@@ -193,7 +191,6 @@ osx:
   - x64
   except:
   - arm
-  - improve_docs
 
 web:
   script:
@@ -205,7 +202,6 @@ web:
   - x64
   except:
   - arm
-  - improve_docs
 
 linux-arm:
   script:
@@ -262,4 +258,3 @@ pages:
     - public
   only:
   - master
-  - improve_docs
