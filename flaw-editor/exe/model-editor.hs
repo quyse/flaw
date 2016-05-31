@@ -209,8 +209,8 @@ main = withApp appConfig
 		rasterize (uViewProj `mul` worldPosition) $ do
 			albedo <- temp $ sample (sampler2D3f 0) aTexcoord
 			(viewTangent, viewBinormal, viewNormal) <- tangentFrame (xyz__ viewPosition) vertexViewNormal aTexcoord
-			bentNormalXY <- temp $ sample (sampler2D2f 1) aTexcoord * vecFromScalar 2 - vecFromScalar 1
-			bentNormal <- temp $ cvec21 bentNormalXY $ sqrt $ 1 - dot bentNormalXY bentNormalXY
+			bentNormalXY <- temp $ sample (sampler2D2f 1) aTexcoord * vecFromScalar (255 / 127) - vecFromScalar 1
+			bentNormal <- temp $ cvec21 bentNormalXY $ sqrt $ max_ 0 $ 1 - dot bentNormalXY bentNormalXY
 			resultViewNormal <- temp $ normalize $ viewTangent * xxx__ bentNormal + viewBinormal * yyy__ bentNormal + viewNormal * zzz__ bentNormal
 			let emission = 0
 			let occlusion = 1
