@@ -146,7 +146,7 @@ initDefaultStyleDrawer device = withSpecialBook $ \bk -> do
 				}
 			, styleVariantSelectedUnfocusedStyle = Style
 				{ styleTextColor = color "ffffffff"
-				, styleFillColor = color "808080ff"
+				, styleFillColor = color "404040ff"
 				, styleBorderColor = color "ffffff00"
 				}
 			}
