@@ -246,7 +246,7 @@ pages:
   - "hlint . --cross --no-exit-code --quiet --report=public/hlint.html"
   - "mv $(stack path --local-doc-root) public/docs"
   - "mv $(stack path --local-hpc-root) public/hpc"
-  - "./sanitize_docs.sh public/docs"
+  - "./pages/sanitize.sh public"
   - "curl -o public/docs/badge.svg https://img.shields.io/badge/haddock-$(date +%Y/%m/%d)-blue.svg"
   - "curl -o public/hpc/badge.svg https://img.shields.io/badge/test%20coverage-$(date +%Y/%m/%d)-orange.svg"
   tags:
