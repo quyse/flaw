@@ -7,14 +7,23 @@ License: MIT
 module Flaw.UI.ScrollBox
 	( ScrollBox(..)
 	, newScrollBox
+	, ScrollBar(..)
+	, newScrollBar
+	, newVerticalScrollBar
+	, newHorizontalScrollBar
+	, processScrollBarEvent
 	) where
 
 import Control.Concurrent.STM
+import Control.Monad
+import Data.Maybe
 
 import Flaw.Graphics
+import Flaw.Graphics.Canvas
 import Flaw.Input.Mouse
 import Flaw.Math
 import Flaw.UI
+import Flaw.UI.Drawer
 
 data ScrollBox = ScrollBox
 	{ scrollBoxElement :: !SomeScrollable
@@ -88,3 +97,174 @@ instance Element ScrollBox where
 	unfocusElement ScrollBox
 		{ scrollBoxElement = SomeScrollable element
 		} = unfocusElement element
+
+data ScrollBar = ScrollBar
+	{ scrollBarScrollBox :: !ScrollBox
+	, scrollBarDirection :: {-# UNPACK #-} !(Vec2 Metric)
+	, scrollBarSizeVar :: {-# UNPACK #-} !(TVar Size)
+	, scrollBarLastMousePositionVar :: {-# UNPACK #-} !(TVar (Maybe Position))
+	, scrollBarPressedVar :: {-# UNPACK #-} !(TVar Bool)
+	}
+
+newScrollBar :: Vec2 Metric -> ScrollBox -> STM ScrollBar
+newScrollBar direction scrollBox = do
+	sizeVar <- newTVar $ Vec2 0 0
+	lastMousePositionVar <- newTVar Nothing
+	pressedVar <- newTVar False
+	return ScrollBar
+		{ scrollBarScrollBox = scrollBox
+		, scrollBarDirection = direction
+		, scrollBarSizeVar = sizeVar
+		, scrollBarLastMousePositionVar = lastMousePositionVar
+		, scrollBarPressedVar = pressedVar
+		}
+
+newVerticalScrollBar :: ScrollBox -> STM ScrollBar
+newVerticalScrollBar = newScrollBar $ Vec2 0 1
+
+newHorizontalScrollBar :: ScrollBox -> STM ScrollBar
+newHorizontalScrollBar = newScrollBar $ Vec2 1 0
+
+instance Element ScrollBar where
+
+	layoutElement ScrollBar
+		{ scrollBarSizeVar = sizeVar
+		} = writeTVar sizeVar
+
+	dabElement ScrollBar
+		{ scrollBarSizeVar = sizeVar
+		} (Vec2 x y) = if x < 0 || y < 0 then return False else do
+		Vec2 sx sy <- readTVar sizeVar
+		return $ x < sx && y < sy
+
+	renderElement scrollBar@ScrollBar
+		{ scrollBarSizeVar = barSizeVar
+		, scrollBarLastMousePositionVar = lastMousePositionVar
+		, scrollBarPressedVar = pressedVar
+		} Drawer
+		{ drawerCanvas = canvas
+		, drawerStyles = DrawerStyles
+			{ drawerFlatStyleVariant = StyleVariant
+				{ styleVariantNormalStyle = flatNormalStyle
+				}
+			, drawerRaisedStyleVariant = StyleVariant
+				{ styleVariantNormalStyle = raisedNormalStyle
+				, styleVariantMousedStyle = raisedMousedStyle
+				, styleVariantPressedStyle = raisedPressedStyle
+				}
+			}
+		} (Vec2 px py) = do
+		Vec2 sx sy <- readTVar barSizeVar
+		piece <- scrollBarPiece scrollBar
+		moused <- isJust <$> readTVar lastMousePositionVar
+		pressed <- readTVar pressedVar
+		let pieceStyle = if pressed then raisedPressedStyle else if moused then raisedMousedStyle else raisedNormalStyle
+		return $ do
+			-- render border
+			drawBorderedRectangle canvas
+				(Vec4 px (px + 1) (px + sx - 1) (px + sx))
+				(Vec4 py (py + 1) (py + sy - 1) (py + sy))
+				(styleFillColor flatNormalStyle) (styleBorderColor flatNormalStyle)
+			case piece of
+				Just ScrollBarPiece
+					{ scrollBarPieceRect = pieceRect
+					} -> let Vec4 ppx ppy pqx pqy = pieceRect + Vec4 px py px py in
+					-- render piece
+					drawBorderedRectangle canvas
+						(Vec4 ppx (ppx + 1) (pqx - 1) pqx)
+						(Vec4 ppy (ppy + 1) (pqy - 1) pqy)
+						(styleFillColor pieceStyle) (styleBorderColor pieceStyle)
+				Nothing -> return ()
+
+	processInputEvent scrollBar@ScrollBar
+		{ scrollBarScrollBox = ScrollBox
+			{ scrollBoxScrollVar = scrollVar
+			}
+		, scrollBarLastMousePositionVar = lastMousePositionVar
+		, scrollBarPressedVar = pressedVar
+		} inputEvent _inputState = case inputEvent of
+		MouseInputEvent mouseEvent -> case mouseEvent of
+			MouseDownEvent LeftMouseButton -> do
+				writeTVar pressedVar True
+				return True
+			MouseUpEvent LeftMouseButton -> do
+				writeTVar pressedVar False
+				return True
+			RawMouseMoveEvent _x _y z -> do
+				piece <- scrollBarPiece scrollBar
+				case piece of
+					Just ScrollBarPiece
+						{ scrollBarPieceOffsetMultiplier = offsetMultiplier
+						} -> do
+						modifyTVar' scrollVar (+ signum offsetMultiplier * vecFromScalar (floor (z * (-15))))
+						return True
+					Nothing -> return False
+			CursorMoveEvent x y -> do
+				pressed <- readTVar pressedVar
+				when pressed $ do
+					maybeLastMousePosition <- readTVar lastMousePositionVar
+					case maybeLastMousePosition of
+						Just lastMousePosition -> do
+							piece <- scrollBarPiece scrollBar
+							case piece of
+								Just ScrollBarPiece
+									{ scrollBarPieceOffsetMultiplier = offsetMultiplier
+									} -> do
+									modifyTVar' scrollVar (+ (Vec2 x y - lastMousePosition) * offsetMultiplier)
+								Nothing -> return ()
+						Nothing -> return ()
+				writeTVar lastMousePositionVar $ Just $ Vec2 x y
+				return True
+			_ -> return False
+		MouseLeaveEvent -> do
+			writeTVar lastMousePositionVar Nothing
+			writeTVar pressedVar False
+			return True
+		_ -> return False
+
+-- | Internal information about piece.
+data ScrollBarPiece = ScrollBarPiece
+	{ scrollBarPieceRect :: {-# UNPACK #-} !Rect
+	, scrollBarPieceOffsetMultiplier :: {-# UNPACK #-} !(Vec2 Metric)
+	}
+
+-- | Get scroll bar piece rect and piece offset multiplier.
+scrollBarPiece :: ScrollBar -> STM (Maybe ScrollBarPiece)
+scrollBarPiece ScrollBar
+	{ scrollBarScrollBox = ScrollBox
+		{ scrollBoxElement = SomeScrollable element
+		, scrollBoxScrollVar = scrollVar
+		, scrollBoxSizeVar = boxSizeVar
+		}
+	, scrollBarDirection = direction
+	, scrollBarSizeVar = barSizeVar
+	} = do
+	barSize@(Vec2 sx sy) <- readTVar barSizeVar
+	boxSize <- readTVar boxSizeVar
+	scrollableSize <- scrollableElementSize element
+	scroll <- readTVar scrollVar
+	let
+		padding = 2
+		contentOffset = dot scroll direction
+		boxLength = dot boxSize direction
+		contentLength = dot scrollableSize direction
+		barLength = dot barSize direction - padding * 2
+		minPieceLength = min sx sy - padding * 2
+		pieceLength = max minPieceLength $ (barLength * boxLength) `quot` contentLength
+		pieceOffset = (negate contentOffset * (barLength - pieceLength)) `quot` (contentLength - boxLength)
+		Vec2 ppx ppy = vecFromScalar padding + direction * vecFromScalar pieceOffset
+		Vec2 psx psy = vecfmap (max minPieceLength) $ direction * vecFromScalar pieceLength
+		piece = if contentLength > boxLength then
+			Just ScrollBarPiece
+				{ scrollBarPieceRect = Vec4 ppx ppy (ppx + psx) (ppy + psy)
+				, scrollBarPieceOffsetMultiplier = direction * vecFromScalar (negate $ (contentLength - boxLength) `quot` (barLength - pieceLength))
+				}
+			else Nothing
+	return piece
+
+-- | Process possibly scroll bar event.
+-- Could be used for passing scrolling events from other elements.
+processScrollBarEvent :: ScrollBar -> InputEvent -> InputState -> STM Bool
+processScrollBarEvent scrollBar inputEvent inputState = case inputEvent of
+	MouseInputEvent (RawMouseMoveEvent {}) -> processInputEvent scrollBar inputEvent inputState
+	_ -> return False

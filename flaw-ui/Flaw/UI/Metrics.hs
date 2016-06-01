@@ -57,6 +57,8 @@ data Metrics = Metrics
 	, metricsListBoxColumnHeaderHeight :: {-# UNPACK #-} !Metric
 	-- | Height of listbox item.
 	, metricsListBoxItemHeight :: {-# UNPACK #-} !Metric
+	-- | Width of scroll bar.
+	, metricsScrollBarWidth :: {-# UNPACK #-} !Metric
 	}
 
 -- | Class of something which has preferred size in metrics.

@@ -23,6 +23,7 @@ import Control.Monad
 import Control.Monad.Fix
 import qualified Data.IntMap.Strict as IM
 import qualified Data.IntSet as IS
+import Data.Maybe
 import qualified Data.Set as S
 import qualified Data.Text as T
 
@@ -97,7 +98,8 @@ data ListBoxColumnDesc v where
 
 data ListBoxContent v = ListBoxContent
 	{ listBoxContentParent :: !(ListBox v)
-	, listBoxContentWidthVar :: {-# UNPACK #-} !(TVar Metric)
+	, listBoxContentScrollBarVar :: {-# UNPACK #-} !(TVar ScrollBar)
+	, listBoxContentSizeVar :: {-# UNPACK #-} !(TVar Size)
 	, listBoxContentFocusedVar :: {-# UNPACK #-} !(TVar Bool)
 	, listBoxContentLastMousePositionVar :: {-# UNPACK #-} !(TVar (Maybe Position))
 	}
@@ -106,6 +108,7 @@ newListBox :: Metrics -> [ListBoxColumnDesc v] -> STM (ListBox v)
 newListBox metrics@Metrics
 	{ metricsListBoxColumnHeaderHeight = columnHeaderHeight
 	, metricsListBoxItemHeight = itemHeight
+	, metricsScrollBarWidth = scrollBarWidth
 	} columnDescs = do
 	panel <- newPanel False
 	listBox@ListBox
@@ -143,12 +146,14 @@ newListBox metrics@Metrics
 	pileBoxChild <- addFreeChild panel pileBox
 
 	-- content element
-	widthVar <- newTVar 0
+	scrollBarVar <- newTVar undefined
+	contentSizeVar <- newTVar $ Vec2 0 0
 	focusedVar <- newTVar False
 	lastMousePositionVar <- newTVar Nothing
 	let content = ListBoxContent
 		{ listBoxContentParent = listBox
-		, listBoxContentWidthVar = widthVar
+		, listBoxContentScrollBarVar = scrollBarVar
+		, listBoxContentSizeVar = contentSizeVar
 		, listBoxContentFocusedVar = focusedVar
 		, listBoxContentLastMousePositionVar = lastMousePositionVar
 		}
@@ -157,11 +162,19 @@ newListBox metrics@Metrics
 	scrollBox <- newScrollBox content
 	scrollBoxChild <- addFreeChild panel scrollBox
 
+	-- scroll bar
+	scrollBar <- newVerticalScrollBar scrollBox
+	scrollBarChild <- addFreeChild panel scrollBar
+
+	writeTVar scrollBarVar scrollBar
+
 	setLayoutHandler panel $ \(Vec2 sx sy) -> do
 		placeFreeChild panel pileBoxChild $ Vec2 1 1
 		layoutElement pileBox $ Vec2 (sx - 2) columnHeaderHeight
 		placeFreeChild panel scrollBoxChild $ Vec2 1 (1 + columnHeaderHeight)
-		layoutElement scrollBox $ Vec2 (sx - 2) (sy - 2 - columnHeaderHeight)
+		layoutElement scrollBox $ Vec2 (sx - 1 - scrollBarWidth) (sy - 2 - columnHeaderHeight)
+		placeFreeChild panel scrollBarChild $ Vec2 (sx - scrollBarWidth) (1 + columnHeaderHeight)
+		layoutElement scrollBar $ Vec2 scrollBarWidth (sy - 1 - columnHeaderHeight)
 
 	return listBox
 
@@ -264,53 +277,83 @@ instance Element (ListBox v) where
 	unfocusElement = unfocusElement . listBoxPanel
 
 instance Element (ListBoxContent v) where
+
 	layoutElement ListBoxContent
-		{ listBoxContentWidthVar = widthVar
-		} (Vec2 sx _sy) = writeTVar widthVar sx
-	dabElement content (Vec2 x y) = if x < 0 || y < 0 then return False else do
-		Vec2 sx sy <- scrollableElementSize content
-		return $ x < sx && y < sy
+		{ listBoxContentSizeVar = sizeVar
+		} = writeTVar sizeVar
+
+	dabElement _ _ = return True
+
 	renderElement _ _ _ = return $ return ()
+
 	processInputEvent ListBoxContent
 		{ listBoxContentParent = ListBox
 			{ listBoxItemHeight = itemHeight
+			, listBoxValuesVar = valuesVar
 			, listBoxItemsVar = itemsVar
 			, listBoxSelectedValuesVar = selectedValuesVar
 			}
+		, listBoxContentScrollBarVar = scrollBarVar
 		, listBoxContentLastMousePositionVar = lastMousePositionVar
-		} inputEvent InputState
+		} inputEvent inputState@InputState
 		{ inputStateKeyboard = keyboardState
-		} = case inputEvent of
-		KeyboardInputEvent keyboardEvent -> return False
-		MouseInputEvent mouseEvent -> case mouseEvent of
-			MouseDownEvent LeftMouseButton -> do
-				maybeLastMousePosition <- readTVar lastMousePositionVar
-				case maybeLastMousePosition of
-					Just (Vec2 _x y) -> do
-						let itemOrderIndex = y `quot` itemHeight
-						ListBoxItems _keyFunc items <- readTVar itemsVar
-						shiftLPressed <- getKeyState keyboardState KeyShiftL
-						shiftRPressed <- getKeyState keyboardState KeyShiftR
-						selectedValues <- if shiftLPressed || shiftRPressed then readTVar selectedValuesVar else return IS.empty
-						writeTVar selectedValuesVar $
-							if itemOrderIndex >= 0 && itemOrderIndex < S.size items then
-								let ListBoxItem itemIndex _keyFunc _value = S.elemAt itemOrderIndex items
-								in IS.insert itemIndex selectedValues
-							else selectedValues
-						return True
-					Nothing -> return False
-			CursorMoveEvent x y -> do
-				writeTVar lastMousePositionVar $ Just $ Vec2 x y
+		} = do
+		scrollBar <- readTVar scrollBarVar
+		processedByScrollBar <- processScrollBarEvent scrollBar inputEvent inputState
+		if processedByScrollBar then return True else case inputEvent of
+			KeyboardInputEvent keyboardEvent -> case keyboardEvent of
+				KeyDownEvent KeyDown -> do
+					moveSelection IS.findMax (+ 1)
+					return True
+				KeyDownEvent KeyUp -> do
+					moveSelection IS.findMin (+ (-1))
+					return True
+				_ -> return False
+			MouseInputEvent mouseEvent -> case mouseEvent of
+				MouseDownEvent LeftMouseButton -> do
+					maybeLastMousePosition <- readTVar lastMousePositionVar
+					case maybeLastMousePosition of
+						Just (Vec2 _x y) -> do
+							selectByItemOrderIndex $ y `quot` itemHeight
+							return True
+						Nothing -> return False
+				CursorMoveEvent x y -> do
+					writeTVar lastMousePositionVar $ Just $ Vec2 x y
+					return True
+				_ -> return False
+			MouseLeaveEvent -> do
+				writeTVar lastMousePositionVar Nothing
 				return True
-			_ -> return False
-		MouseLeaveEvent -> do
-			writeTVar lastMousePositionVar Nothing
-			return True
+			where
+				moveSelection getEdgeItemIndex adjustItemOrderIndex = do
+					selectedValues <- readTVar selectedValuesVar
+					if IS.null selectedValues then selectByItemOrderIndex 0 else do
+						values <- readTVar valuesVar
+						ListBoxItems keyFunc items <- readTVar itemsVar
+						let
+							itemIndex = getEdgeItemIndex selectedValues
+							value = fromJust $ IM.lookup itemIndex values
+							itemOrderIndex = S.findIndex (ListBoxItem itemIndex keyFunc value) items
+							itemOrderIndexToSelect = adjustItemOrderIndex itemOrderIndex
+						selectByItemOrderIndex itemOrderIndexToSelect
+				-- select by item order index, possibly unselecting currently selected items (based on shift key)
+				selectByItemOrderIndex itemOrderIndex = do
+					ListBoxItems _keyFunc items <- readTVar itemsVar
+					shiftLPressed <- getKeyState keyboardState KeyShiftL
+					shiftRPressed <- getKeyState keyboardState KeyShiftR
+					selectedValues <- if shiftLPressed || shiftRPressed then readTVar selectedValuesVar else return IS.empty
+					writeTVar selectedValuesVar $
+						if itemOrderIndex >= 0 && itemOrderIndex < S.size items then
+							let ListBoxItem itemIndex _keyFunc _value = S.elemAt itemOrderIndex items
+							in IS.insert itemIndex selectedValues
+						else selectedValues
+
 	focusElement ListBoxContent
 		{ listBoxContentFocusedVar = focusedVar
 		} = do
 		writeTVar focusedVar True
 		return True
+
 	unfocusElement ListBoxContent
 		{ listBoxContentFocusedVar = focusedVar
 		} = writeTVar focusedVar False
@@ -355,6 +398,8 @@ instance Scrollable (ListBoxContent v) where
 			in f px columns
 		ListBoxItems _keyFunc items <- readTVar itemsVar
 		let
+			renderItems y _ | y >= py + bottom = return $ return ()
+			renderItems _ [] = return $ return ()
 			renderItems y (ListBoxItem itemIndex _keyFunc value : restItems) = do
 				let selected = IS.member itemIndex selectedValues
 				let style = if selected then selectedStyle else unselectedStyle
@@ -371,19 +416,25 @@ instance Scrollable (ListBoxContent v) where
 					r
 					else r
 				(rr >>) <$> renderItems (y + itemHeight) restItems
-			renderItems _ [] = return $ return ()
-		renderItems py $ S.toAscList items
+			topOrderedIndex = top `quot` itemHeight
+			(visibleItems, firstVisibleItemOrderedIndex) = if topOrderedIndex <= 0 then (items, 0)
+				else if topOrderedIndex >= S.size items then (S.empty, 0)
+				else let
+					ListBoxItem firstVisibleItemIndex firstVisibleItemKeyFunc firstVisibleItemValue = S.elemAt topOrderedIndex items
+					-- split by special non-existent item which will be just before first item
+					in (snd $ S.split (ListBoxItem (firstVisibleItemIndex - 1) firstVisibleItemKeyFunc firstVisibleItemValue) items, topOrderedIndex)
+		renderItems (py + firstVisibleItemOrderedIndex * itemHeight) $ S.toAscList visibleItems
 
 	scrollableElementSize ListBoxContent
 		{ listBoxContentParent = ListBox
 			{ listBoxItemHeight = itemHeight
 			, listBoxValuesVar = valuesVar
 			}
-		, listBoxContentWidthVar = widthVar
+		, listBoxContentSizeVar = sizeVar
 		} = do
-		width <- readTVar widthVar
+		Vec2 sx _sy <- readTVar sizeVar
 		height <- (itemHeight *) . IM.size <$> readTVar valuesVar
-		return $ Vec2 width height
+		return $ Vec2 sx height
 
 instance Element (ListBoxColumn v) where
 
