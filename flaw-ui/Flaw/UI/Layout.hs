@@ -10,6 +10,7 @@ module Flaw.UI.Layout
 	, panelFlowLayout
 	, frameFlowLayout
 	, labeledFlowLayout
+	, checkBoxedFlowLayout
 	, elementInFlowLayout
 	) where
 
@@ -98,6 +99,41 @@ labeledFlowLayout text subLayout = do
 		{ flsLayoutHandler = lh >=> \(Vec4 px py qx qy) -> do
 			placeFreeChild parentElement labelVEChild (Vec2 px py)
 			layoutElement labelVE labelSize
+			Vec4 _subpx subpy _subqx subqy <- subLayoutHandler $ Vec4 (px + labelWidth + gap) py qx qy
+			return $ Vec4 px (max (py + labelHeight + gap) subpy) qx (min qy subqy)
+		, flsPreSize = Vec2 (max psx (labelWidth + gap + spsx)) (psy + max (labelHeight + gap) spsy)
+		}
+	return r
+
+-- | Label a sublayout with checkbox.
+-- Sublayout will be placed to the right of the checkbox.
+checkBoxedFlowLayout :: T.Text -> (CheckBox -> FlowLayoutM a) -> FlowLayoutM a
+checkBoxedFlowLayout text subLayout = do
+	-- get state
+	s@FlowLayoutState
+		{ flsMetrics = Metrics
+			{ metricsGap = gap
+			, metricsLabelSize = labelSize@(Vec2 labelWidth labelHeight)
+			}
+		, flsParentElement = SomeFreeContainer parentElement
+		, flsLayoutHandler = lh
+		, flsPreSize = Vec2 psx psy
+		} <- get
+	-- create label
+	checkBox <- lift $ newLabeledCheckBox text
+	checkBoxChild <- lift $ addFreeChild parentElement checkBox
+	-- run sub layout
+	(r, FlowLayoutState
+		{ flsLayoutHandler = subLayoutHandler
+		, flsPreSize = Vec2 spsx spsy
+		}) <- lift $ runStateT (subLayout checkBox) s
+		{ flsLayoutHandler = return
+		, flsPreSize = Vec2 0 0
+		}
+	put s
+		{ flsLayoutHandler = lh >=> \(Vec4 px py qx qy) -> do
+			placeFreeChild parentElement checkBoxChild (Vec2 px py)
+			layoutElement checkBox labelSize
 			Vec4 _subpx subpy _subqx subqy <- subLayoutHandler $ Vec4 (px + labelWidth + gap) py qx qy
 			return $ Vec4 px (max (py + labelHeight + gap) subpy) qx (min qy subqy)
 		, flsPreSize = Vec2 (max psx (labelWidth + gap + spsx)) (psy + max (labelHeight + gap) spsy)

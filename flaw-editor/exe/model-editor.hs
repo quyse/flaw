@@ -4,7 +4,7 @@ Description: Entry point for flaw model-editor executable.
 License: MIT
 -}
 
-{-# LANGUAGE OverloadedStrings, RankNTypes #-}
+{-# LANGUAGE OverloadedStrings, PatternSynonyms, RankNTypes #-}
 
 module Main(main) where
 
@@ -12,6 +12,8 @@ import Control.Concurrent.STM
 import Control.Exception
 import Control.Monad
 import Control.Monad.IO.Class
+import Control.Monad.State.Strict
+import Data.Bits
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.Text as T
@@ -73,8 +75,24 @@ data EditorState = EditorState
 	, editorStateGeometry :: !(Geometry AppGraphicsDevice)
 	, editorStateAlbedoTextureCell :: !TextureCell
 	, editorStateNormalTextureCell :: !TextureCell
+	, editorStateNormalTextureEnabled :: !Bool
+	, editorStateDiffuseTextureCell :: !TextureCell
+	, editorStateDiffuseTextureEnabled :: !Bool
+	, editorStateSpecularTextureCell :: !TextureCell
+	, editorStateSpecularTextureEnabled :: !Bool
+	, editorStateMetalnessTextureCell :: !TextureCell
+	, editorStateMetalnessTextureEnabled :: !Bool
+	, editorStateGlossinessTextureCell :: !TextureCell
+	, editorStateGlossinessTextureEnabled :: !Bool
 	, editorStateLinearFiltering :: !Bool
 	}
+
+pattern SHADER_FLAG_NORMAL_MAP = 1
+pattern SHADER_FLAG_DIFFUSE_MAP = 2
+pattern SHADER_FLAG_SPECULAR_MAP = 4
+pattern SHADER_FLAG_METALNESS_MAP = 8
+pattern SHADER_FLAG_GLOSSINESS_MAP = 16
+pattern SHADER_FLAGS_COUNT = 32
 
 getEyeDirection :: EditorState -> Float3
 getEyeDirection EditorState
@@ -164,6 +182,29 @@ main = withApp appConfig
 							else Vec3 (-1) 0 1
 				[fromIntegral (floor (x * 127) + 127 :: Int), fromIntegral (floor (y * 127) + 127 :: Int)]
 			createStaticTexture device compressedTextureInfo defaultSamplerStateInfo compressedTextureBytes
+		let newGrayTextureCell = book bk $ newTextureCell $ do
+			let
+				width = 4
+				height = 4
+				textureInfo = TextureInfo
+					{ textureWidth = width
+					, textureHeight = height
+					, textureDepth = 0
+					, textureMips = 1
+					, textureFormat = UncompressedTextureFormat
+						{ textureFormatComponents = PixelRGBA
+						, textureFormatValueType = PixelUint
+						, textureFormatPixelSize = Pixel32bit
+						, textureFormatColorSpace = StandardColorSpace
+						}
+					, textureCount = 0
+					}
+				textureBytes = B.pack $ concat $ replicate (width * height) [127, 127, 127, 255]
+			createStaticTexture device textureInfo defaultSamplerStateInfo textureBytes
+		initialDiffuseTextureCell <- newGrayTextureCell
+		initialSpecularTextureCell <- newGrayTextureCell
+		initialMetalnessTextureCell <- newGrayTextureCell
+		initialGlossinessTextureCell <- newGrayTextureCell
 		newTVarIO EditorState
 			{ editorStateEyePosition = Vec3 (-2) 0 1
 			, editorStateEyeSpeed = Vec3 0 0 0
@@ -176,6 +217,15 @@ main = withApp appConfig
 			, editorStateGeometry = sphereGeometry
 			, editorStateAlbedoTextureCell = initialAlbedoTextureCell
 			, editorStateNormalTextureCell = initialNormalTextureCell
+			, editorStateNormalTextureEnabled = False
+			, editorStateDiffuseTextureCell = initialDiffuseTextureCell
+			, editorStateDiffuseTextureEnabled = False
+			, editorStateSpecularTextureCell = initialSpecularTextureCell
+			, editorStateSpecularTextureEnabled = False
+			, editorStateMetalnessTextureCell = initialMetalnessTextureCell
+			, editorStateMetalnessTextureEnabled = False
+			, editorStateGlossinessTextureCell = initialGlossinessTextureCell
+			, editorStateGlossinessTextureEnabled = False
 			, editorStateLinearFiltering = False
 			}
 
@@ -197,8 +247,8 @@ main = withApp appConfig
 	usEye <- book bk $ createUniformStorage device ubsEye
 	usLight <- book bk $ createUniformStorage device ubsLight
 	usObject <- book bk $ createUniformStorage device ubsObject
-	-- opaque program
-	opaqueProgram <- book bk $ createProgram device $ do
+	-- opaque programs
+	opaquePrograms <- V.generateM SHADER_FLAGS_COUNT $ \shaderFlags -> book bk $ createProgram device $ do
 		let v = undefined :: VertexPNT
 		aPosition <- vertexAttribute 0 0 $ vertexPositionAttribute v
 		aNormal <- vertexAttribute 0 0 $ vertexNormalAttribute v
@@ -208,13 +258,20 @@ main = withApp appConfig
 		vertexViewNormal <- temp $ xyz__ $ mul uView $ cvec31 aNormal (constf 0)
 		rasterize (uViewProj `mul` worldPosition) $ do
 			albedo <- temp $ sample (sampler2D3f 0) aTexcoord
-			(viewTangent, viewBinormal, viewNormal) <- tangentFrame (xyz__ viewPosition) vertexViewNormal aTexcoord
-			bentNormalXY <- temp $ sample (sampler2D2f 1) aTexcoord * vecFromScalar (255 / 127) - vecFromScalar 1
-			bentNormal <- temp $ cvec21 bentNormalXY $ sqrt $ max_ 0 $ 1 - dot bentNormalXY bentNormalXY
-			resultViewNormal <- temp $ normalize $ viewTangent * xxx__ bentNormal + viewBinormal * yyy__ bentNormal + viewNormal * zzz__ bentNormal
-			let emission = 0
-			let occlusion = 1
-			outputDeferredPipelineOpaquePass (albedo * vecFromScalar emission) (cvec31 albedo occlusion) uMaterial resultViewNormal
+			resultViewNormal <- if (shaderFlags .&. SHADER_FLAG_NORMAL_MAP) > 0 then do
+				(viewTangent, viewBinormal, viewNormal) <- tangentFrame (xyz__ viewPosition) vertexViewNormal aTexcoord
+				bentNormalXY <- temp $ sample (sampler2D2f 1) aTexcoord * vecFromScalar (255 / 127) - vecFromScalar 1
+				bentNormal <- temp $ cvec21 bentNormalXY $ sqrt $ max_ 0 $ 1 - dot bentNormalXY bentNormalXY
+				temp $ normalize $ viewTangent * xxx__ bentNormal + viewBinormal * yyy__ bentNormal + viewNormal * zzz__ bentNormal
+				else temp $ normalize vertexViewNormal
+			let
+				emission = 0
+				occlusion = 1
+				diffuse    = if (shaderFlags .&. SHADER_FLAG_DIFFUSE_MAP    ) > 0 then sample (sampler2Df 2) aTexcoord else x_ uMaterial
+				specular   = if (shaderFlags .&. SHADER_FLAG_SPECULAR_MAP   ) > 0 then sample (sampler2Df 3) aTexcoord else y_ uMaterial
+				metalness  = if (shaderFlags .&. SHADER_FLAG_METALNESS_MAP  ) > 0 then sample (sampler2Df 4) aTexcoord else z_ uMaterial
+				glossiness = if (shaderFlags .&. SHADER_FLAG_GLOSSINESS_MAP ) > 0 then sample (sampler2Df 5) aTexcoord else w_ uMaterial
+			outputDeferredPipelineOpaquePass (albedo * vecFromScalar emission) (cvec31 albedo occlusion) (cvec1111 diffuse specular metalness glossiness) resultViewNormal
 	-- lightbulb opaque program
 	lightbulbOpaqueProgram <- book bk $ createProgram device $ do
 		let v = undefined :: VertexPNT
@@ -260,7 +317,7 @@ main = withApp appConfig
 		case eitherVertices of
 			Right vertices -> do
 				geometry <- book bk (loadPackedGeometry device =<< packGeometry (vertices :: V.Vector VertexPNT))
-				atomically $ modifyTVar' editorStateVar $ \state -> state
+				atomically $ modifyTVar' editorStateVar $ \s -> s
 					{ editorStateGeometry = geometry
 					}
 			Left err -> do
@@ -366,6 +423,9 @@ main = withApp appConfig
 			modifyTVar' editorStateVar $ \s -> s
 				{ editorStateMaterial = editorStateMaterial s * Vec4 0 1 1 1 + Vec4 value 0 0 0
 				}
+		diffuseTextureFileElement <- textureFileElement editorStateDiffuseTextureCell $ \c s -> s
+			{ editorStateDiffuseTextureCell = c
+			}
 		specularSlider <- newSlider metrics 0.01
 		setFloatValue specularSlider $ y_ initialMaterial
 		setChangeHandler specularSlider $ do
@@ -373,6 +433,9 @@ main = withApp appConfig
 			modifyTVar' editorStateVar $ \s -> s
 				{ editorStateMaterial = editorStateMaterial s * Vec4 1 0 1 1 + Vec4 0 value 0 0
 				}
+		specularTextureFileElement <- textureFileElement editorStateSpecularTextureCell $ \c s -> s
+			{ editorStateSpecularTextureCell = c
+			}
 		metalnessSlider <- newSlider metrics 0.01
 		setFloatValue metalnessSlider $ z_ initialMaterial
 		setChangeHandler metalnessSlider $ do
@@ -380,6 +443,9 @@ main = withApp appConfig
 			modifyTVar' editorStateVar $ \s -> s
 				{ editorStateMaterial = editorStateMaterial s * Vec4 1 1 0 1 + Vec4 0 0 value 0
 				}
+		metalnessTextureFileElement <- textureFileElement editorStateMetalnessTextureCell $ \c s -> s
+			{ editorStateMetalnessTextureCell = c
+			}
 		glossinessSlider <- newSlider metrics 0.01
 		setFloatValue glossinessSlider $ w_ initialMaterial
 		setChangeHandler glossinessSlider $ do
@@ -387,6 +453,9 @@ main = withApp appConfig
 			modifyTVar' editorStateVar $ \s -> s
 				{ editorStateMaterial = editorStateMaterial s * Vec4 1 1 1 0 + Vec4 0 0 0 value
 				}
+		glossinessTextureFileElement <- textureFileElement editorStateGlossinessTextureCell $ \c s -> s
+			{ editorStateGlossinessTextureCell = c
+			}
 		linearFilteringCheckBox <- newLabeledCheckBox "enable"
 		setChangeHandler linearFilteringCheckBox $ do
 			checked <- getChecked linearFilteringCheckBox
@@ -397,13 +466,47 @@ main = withApp appConfig
 			labeledFlowLayout "collada file" $ elementInFlowLayout colladaFileElement
 			labeledFlowLayout "collada node" $ elementInFlowLayout colladaNodeEditBox
 			labeledFlowLayout "albedo texture" $ elementInFlowLayout albedoTextureFileElement
-			labeledFlowLayout "normal texture" $ elementInFlowLayout normalTextureFileElement
+			checkBoxedFlowLayout "normal texture" $ \checkBox -> do
+				elementInFlowLayout normalTextureFileElement
+				lift $ setChangeHandler checkBox $ do
+					checked <- getChecked checkBox
+					modifyTVar' editorStateVar $ \s -> s
+						{ editorStateNormalTextureEnabled = checked
+						}
 			labeledFlowLayout "light" $ elementInFlowLayout lightIntensitySlider
 			labeledFlowLayout "ambient light" $ elementInFlowLayout ambientLightIntensitySlider
 			labeledFlowLayout "diffuse" $ elementInFlowLayout diffuseSlider
+			checkBoxedFlowLayout "diffuse texture" $ \checkBox -> do
+				elementInFlowLayout diffuseTextureFileElement
+				lift $ setChangeHandler checkBox $ do
+					checked <- getChecked checkBox
+					modifyTVar' editorStateVar $ \s -> s
+						{ editorStateDiffuseTextureEnabled = checked
+						}
 			labeledFlowLayout "specular" $ elementInFlowLayout specularSlider
+			checkBoxedFlowLayout "specular texture" $ \checkBox -> do
+				elementInFlowLayout specularTextureFileElement
+				lift $ setChangeHandler checkBox $ do
+					checked <- getChecked checkBox
+					modifyTVar' editorStateVar $ \s -> s
+						{ editorStateSpecularTextureEnabled = checked
+						}
 			labeledFlowLayout "metalness" $ elementInFlowLayout metalnessSlider
+			checkBoxedFlowLayout "metalness texture" $ \checkBox -> do
+				elementInFlowLayout metalnessTextureFileElement
+				lift $ setChangeHandler checkBox $ do
+					checked <- getChecked checkBox
+					modifyTVar' editorStateVar $ \s -> s
+						{ editorStateMetalnessTextureEnabled = checked
+						}
 			labeledFlowLayout "glossiness" $ elementInFlowLayout glossinessSlider
+			checkBoxedFlowLayout "glossiness texture" $ \checkBox -> do
+				elementInFlowLayout glossinessTextureFileElement
+				lift $ setChangeHandler checkBox $ do
+					checked <- getChecked checkBox
+					modifyTVar' editorStateVar $ \s -> s
+						{ editorStateGlossinessTextureEnabled = checked
+						}
 			labeledFlowLayout "linear filtering" $ elementInFlowLayout linearFilteringCheckBox
 		setText propertiesFrame "properties"
 		propertiesFrameChild <- addFreeChild windowPanel propertiesFrame
@@ -486,6 +589,23 @@ main = withApp appConfig
 				, editorStateNormalTextureCell = TextureCell
 					{ textureCellTexture = tNormal
 					}
+				, editorStateNormalTextureEnabled = normalTextureEnabled
+				, editorStateDiffuseTextureCell = TextureCell
+					{ textureCellTexture = tDiffuse
+					}
+				, editorStateDiffuseTextureEnabled = diffuseTextureEnabled
+				, editorStateSpecularTextureCell = TextureCell
+					{ textureCellTexture = tSpecular
+					}
+				, editorStateSpecularTextureEnabled = specularTextureEnabled
+				, editorStateMetalnessTextureCell = TextureCell
+					{ textureCellTexture = tMetalness
+					}
+				, editorStateMetalnessTextureEnabled = metalnessTextureEnabled
+				, editorStateGlossinessTextureCell = TextureCell
+					{ textureCellTexture = tGlossiness
+					}
+				, editorStateGlossinessTextureEnabled = glossinessTextureEnabled
 				, editorStateLinearFiltering = linearFiltering
 				} <- liftIO $ readTVarIO editorStateVar
 
@@ -522,12 +642,23 @@ main = withApp appConfig
 				renderClearDepth 0
 				renderDepthTestFunc DepthTestFuncGreater
 
-				renderProgram opaqueProgram
+				renderProgram $ opaquePrograms V.!
+					(   (if normalTextureEnabled then SHADER_FLAG_NORMAL_MAP else 0)
+					.|. (if diffuseTextureEnabled then SHADER_FLAG_DIFFUSE_MAP else 0)
+					.|. (if specularTextureEnabled then SHADER_FLAG_SPECULAR_MAP else 0)
+					.|. (if metalnessTextureEnabled then SHADER_FLAG_METALNESS_MAP else 0)
+					.|. (if glossinessTextureEnabled then SHADER_FLAG_GLOSSINESS_MAP else 0)
+					)
 				renderUniformStorage usObject
 				renderVertexBuffer 0 vbObject
 				renderIndexBuffer ibObject
-				renderSampler 0 tAlbedo (if linearFiltering then linearSamplerState else nullSamplerState)
-				renderSampler 1 tNormal (if linearFiltering then linearSamplerState else nullSamplerState)
+				let ss = if linearFiltering then linearSamplerState else nullSamplerState
+				renderSampler 0 tAlbedo ss
+				renderSampler 1 tNormal ss
+				renderSampler 2 tDiffuse ss
+				renderSampler 3 tSpecular ss
+				renderSampler 4 tMetalness ss
+				renderSampler 5 tGlossiness ss
 				renderUniform usObject uWorld (affineIdentity :: Float4x4)
 				renderUniform usObject uMaterial material
 				renderUploadUniformStorage usObject
