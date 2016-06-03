@@ -74,7 +74,14 @@ instance Element ScrollBox where
 		} drawer position@(Vec2 px py) = do
 		scroll@(Vec2 ox oy) <- readTVar scrollVar
 		Vec2 sx sy <- readTVar sizeVar
-		r <- renderScrollableElement element drawer (position + scroll) (Vec4 (-ox) (-oy) (sx - ox) (sy - oy))
+		Vec2 ssx ssy <- scrollableElementSize element
+		-- correct scroll if needed
+		let newScroll@(Vec2 nox noy) = Vec2
+			(min 0 $ max ox $ sx - ssx)
+			(min 0 $ max oy $ sy - ssy)
+
+		when (scroll /= newScroll) $ writeTVar scrollVar newScroll
+		r <- renderScrollableElement element drawer (position + newScroll) (Vec4 (-nox) (-noy) (sx - nox) (sy - noy))
 		return $ do
 			renderIntersectScissor $ Vec4 px py (px + sx) (py + sy)
 			r
