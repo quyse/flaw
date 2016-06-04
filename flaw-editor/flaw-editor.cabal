@@ -20,10 +20,11 @@ source-repository head
 library
   exposed-modules:
     Flaw.UI.Editor.Elements
+    Flaw.UI.Editor.FileDialog
     Flaw.UI.RenderBox
   other-modules:
   -- other-extensions:    
-  build-depends:       base, flaw-graphics, flaw-math, flaw-ui, stm
+  build-depends:       base, directory, filepath, flaw-base, flaw-graphics, flaw-math, flaw-ui, stm, text
   -- hs-source-dirs:      
   default-language:    Haskell2010
 

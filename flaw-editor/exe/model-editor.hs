@@ -36,6 +36,7 @@ import Flaw.UI
 import Flaw.UI.DefaultStyle
 import Flaw.UI.Drawer
 import Flaw.UI.Editor.Elements
+import Flaw.UI.Editor.FileDialog
 import Flaw.UI.Elements
 import Flaw.UI.Layout
 import Flaw.UI.RenderBox
@@ -106,7 +107,7 @@ getEyeDirection EditorState
 
 main :: IO ()
 main = withApp appConfig
-	{ appConfigTitle = "Flaw Model Editor"
+	{ appConfigTitle = "FLAW Model Editor"
 	, appConfigNeedDepthBuffer = False
 	} $ \window device context presenter inputManager -> withBook $ \bk -> do
 
@@ -373,15 +374,17 @@ main = withApp appConfig
 		mainWindow <- newWindow window inputManager windowPanel
 		setWindowCloseHandler mainWindow $ writeTVar exitVar True
 
+		fileDialogService <- newFileDialogService metrics windowPanel flow
+
 		-- properties frame
-		colladaFileElement <- newFileElement metrics
+		colladaFileElement <- newFileElement fileDialogService
 		colladaNodeEditBox <- newEditBox
 		setClickHandler colladaFileElement $ do
 			fileName <- getText colladaFileElement
 			nodeName <- getText colladaNodeEditBox
 			asyncRunInFlow flow $ loadColladaFile fileName nodeName
 		let textureFileElement getTextureCell setTextureCell = do
-			fileElement <- newFileElement metrics
+			fileElement <- newFileElement fileDialogService
 			setClickHandler fileElement $ do
 				fileName <- getText fileElement
 				asyncRunInFlow flow $ handle errorHandler $ do
