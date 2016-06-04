@@ -22,6 +22,7 @@ module Flaw.UI.ListBox
 import Control.Concurrent.STM
 import Control.Monad
 import Control.Monad.Fix
+import Data.Bits
 import qualified Data.IntMap.Strict as IM
 import qualified Data.IntSet as IS
 import Data.Maybe
@@ -444,24 +445,34 @@ instance Scrollable (ListBoxContent v) where
 			in f px columns
 		ListBoxItems _keyFunc items <- readTVar itemsVar
 		let
-			renderItems y _ | y >= py + bottom = return $ return ()
-			renderItems _ [] = return $ return ()
-			renderItems y (ListBoxItem itemIndex _keyFunc value : restItems) = do
-				let selected = IS.member itemIndex selectedValues
-				let style = if selected then selectedStyle else unselectedStyle
+			renderItems _i y _ | y >= py + bottom = return $ return ()
+			renderItems _i _y [] = return $ return ()
+			renderItems i y (ListBoxItem itemIndex _keyFunc value : restItems) = do
+				let
+					selected = IS.member itemIndex selectedValues
+					isOdd = (i .&. 1) > 0
+					style = if selected then selectedStyle else unselectedStyle
 				r <- (sequence_ <$>) . forM renderItemColumns $ \(x, width, renderFunc) -> do
 					r <- renderFunc value drawer (Vec2 (x + 1) (y + 1)) (Vec2 (width - 2) (itemHeight - 2)) style
 					return $ renderScope $ do
 						renderIntersectScissor $ Vec4 (x + 1) (y + 1) (x + width - 2) (y + itemHeight - 2)
 						r
-				let rr = if selected then do
-					drawBorderedRectangle canvas
-						(Vec4 (px + left) (px + left + 1) (px + right - 1) (px + right))
-						(Vec4 y (y + 1) (y + itemHeight - 1) (y + itemHeight))
-						(styleFillColor style) (styleBorderColor style)
-					r
+				let rr =
+					if selected then do
+						drawBorderedRectangle canvas
+							(Vec4 (px + left) (px + left + 1) (px + right - 1) (px + right))
+							(Vec4 y (y + 1) (y + itemHeight - 1) (y + itemHeight))
+							(styleFillColor style) (styleBorderColor style)
+						r
+					else if isOdd then do
+						let evenColor = styleFillColor selectedStyle * Vec4 1 1 1 0.05
+						drawBorderedRectangle canvas
+							(Vec4 (px + left) (px + left) (px + right) (px + right))
+							(Vec4 y y (y + itemHeight) (y + itemHeight))
+							evenColor evenColor
+						r
 					else r
-				(rr >>) <$> renderItems (y + itemHeight) restItems
+				(rr >>) <$> renderItems (i + 1) (y + itemHeight) restItems
 			topOrderedIndex = top `quot` itemHeight
 			(visibleItems, firstVisibleItemOrderedIndex) = if topOrderedIndex <= 0 then (items, 0)
 				else if topOrderedIndex >= S.size items then (S.empty, 0)
@@ -469,7 +480,7 @@ instance Scrollable (ListBoxContent v) where
 					ListBoxItem firstVisibleItemIndex firstVisibleItemKeyFunc firstVisibleItemValue = S.elemAt topOrderedIndex items
 					-- split by special non-existent item which will be just before first item
 					in (snd $ S.split (ListBoxItem (firstVisibleItemIndex - 1) firstVisibleItemKeyFunc firstVisibleItemValue) items, topOrderedIndex)
-		renderItems (py + firstVisibleItemOrderedIndex * itemHeight) $ S.toAscList visibleItems
+		renderItems firstVisibleItemOrderedIndex (py + firstVisibleItemOrderedIndex * itemHeight) $ S.toAscList visibleItems
 
 	scrollableElementSize ListBoxContent
 		{ listBoxContentParent = ListBox
