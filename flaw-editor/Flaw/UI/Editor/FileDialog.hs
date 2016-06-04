@@ -14,6 +14,7 @@ module Flaw.UI.Editor.FileDialog
 	) where
 
 import Control.Concurrent.STM
+import Control.Exception
 import Control.Monad
 import qualified Data.Text as T
 import Numeric
@@ -119,11 +120,11 @@ runFileDialog FileDialogService
 
 	let openDirectory unnormalizedPath = do
 		path <- canonicalizePath $ T.unpack unnormalizedPath
-		directoryContents <- getDirectoryContents path
+		directoryContents <- filter (/= ".") <$> getDirectoryContents path
 		entries <- forM directoryContents $ \entry -> do
 			let entryPath = path </> entry
 			isDir <- doesDirectoryExist entryPath
-			size <- if isDir then return (-1) else IO.withFile entryPath IO.ReadMode IO.hFileSize
+			size <- if isDir then return (-1) else handle (\SomeException {} -> return (-1)) $ IO.withFile entryPath IO.ReadMode IO.hFileSize
 			return FileEntry
 				{ fileEntryPath = T.pack entryPath
 				, fileEntryName = T.pack entry
