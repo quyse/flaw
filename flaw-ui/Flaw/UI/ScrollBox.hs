@@ -12,6 +12,7 @@ module Flaw.UI.ScrollBox
 	, newVerticalScrollBar
 	, newHorizontalScrollBar
 	, processScrollBarEvent
+	, ensureVisibleScrollBoxArea
 	) where
 
 import Control.Concurrent.STM
@@ -275,3 +276,22 @@ processScrollBarEvent :: ScrollBar -> InputEvent -> InputState -> STM Bool
 processScrollBarEvent scrollBar inputEvent inputState = case inputEvent of
 	MouseInputEvent (RawMouseMoveEvent {}) -> processInputEvent scrollBar inputEvent inputState
 	_ -> return False
+
+-- | Adjust scrolling so the specified area (in content coords) is visible.
+ensureVisibleScrollBoxArea :: ScrollBox -> Rect -> STM ()
+ensureVisibleScrollBoxArea ScrollBox
+	{ scrollBoxScrollVar = scrollVar
+	, scrollBoxSizeVar = sizeVar
+	} (Vec4 left top right bottom) = do
+	scroll@(Vec2 ox oy) <- readTVar scrollVar
+	Vec2 sx sy <- readTVar sizeVar
+	-- dimensions are to be adjusted independently
+	-- function to adjust one dimension
+	let
+		adjust o s a b =
+			if a + o >= 0 then
+				if b + o <= s then o
+				else s - b
+			else -a
+		newScroll = Vec2 (adjust ox sx left right) (adjust oy sy top bottom)
+	unless (scroll == newScroll) $ writeTVar scrollVar newScroll

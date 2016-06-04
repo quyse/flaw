@@ -15,6 +15,7 @@ module Flaw.UI.ListBox
 	, changeListBoxItem
 	, clearListBox
 	, reorderListBox
+	, getListBoxSelectedValues
 	, newListBoxTextColumnDesc
 	) where
 
@@ -244,6 +245,16 @@ reorderListBox ListBox
 	ListBoxItems newSortFunc $ S.fromList $ flip map (S.toList items)
 	$ \(ListBoxItem itemIndex _oldSortFunc value) -> ListBoxItem itemIndex newSortFunc value
 
+-- | Get list of selected values from list box.
+getListBoxSelectedValues :: ListBox v -> STM [v]
+getListBoxSelectedValues ListBox
+	{ listBoxValuesVar = valuesVar
+	, listBoxSelectedValuesVar = selectedValuesVar
+	} = do
+	values <- readTVar valuesVar
+	selectedValues <- readTVar selectedValuesVar
+	return $ map (fromJust . flip IM.lookup values) $ IS.toList selectedValues
+
 instance Element (ListBox v) where
 	layoutElement = layoutElement . listBoxPanel
 	dabElement = dabElement . listBoxPanel
@@ -298,7 +309,41 @@ instance Element (ListBoxContent v) where
 		} inputEvent inputState@InputState
 		{ inputStateKeyboard = keyboardState
 		} = do
-		scrollBar <- readTVar scrollBarVar
+		scrollBar@ScrollBar
+			{ scrollBarScrollBox = scrollBox@ScrollBox
+				{ scrollBoxSizeVar = boxSizeVar
+				}
+			} <- readTVar scrollBarVar
+
+		let
+			moveSelection getEdgeItemIndex adjustItemOrderIndex = do
+				selectedValues <- readTVar selectedValuesVar
+				if IS.null selectedValues then selectByItemOrderIndex 0 else do
+					values <- readTVar valuesVar
+					ListBoxItems keyFunc items <- readTVar itemsVar
+					let
+						itemIndex = getEdgeItemIndex selectedValues
+						value = fromJust $ IM.lookup itemIndex values
+						itemOrderIndex = S.findIndex (ListBoxItem itemIndex keyFunc value) items
+						itemOrderIndexToSelect = adjustItemOrderIndex itemOrderIndex
+					selectByItemOrderIndex itemOrderIndexToSelect
+			-- select by item order index, possibly unselecting currently selected items
+			selectByItemOrderIndex itemOrderIndex = do
+				ListBoxItems _keyFunc items <- readTVar itemsVar
+				when (itemOrderIndex >= 0 && itemOrderIndex < S.size items) $ do
+					shiftLPressed <- getKeyState keyboardState KeyShiftL
+					shiftRPressed <- getKeyState keyboardState KeyShiftR
+					ctrlLPressed <- getKeyState keyboardState KeyControlL
+					ctrlRPressed <- getKeyState keyboardState KeyControlR
+					-- clear selection if shift or ctrl is not pressed
+					selectedValues <- if shiftLPressed || shiftRPressed || ctrlLPressed || ctrlRPressed then readTVar selectedValuesVar else return IS.empty
+					writeTVar selectedValuesVar $
+						let ListBoxItem itemIndex _keyFunc _value = S.elemAt itemOrderIndex items
+						in IS.insert itemIndex selectedValues
+					-- ensure selected item is visible
+					let itemY = itemOrderIndex * itemHeight
+					ensureVisibleScrollBoxArea scrollBox $ Vec4 0 itemY 0 (itemY + itemHeight)
+
 		processedByScrollBar <- processScrollBarEvent scrollBar inputEvent inputState
 		if processedByScrollBar then return True else case inputEvent of
 			KeyboardInputEvent keyboardEvent -> case keyboardEvent of
@@ -307,6 +352,22 @@ instance Element (ListBoxContent v) where
 					return True
 				KeyDownEvent KeyUp -> do
 					moveSelection IS.findMin (+ (-1))
+					return True
+				KeyDownEvent KeyPageDown -> do
+					Vec2 _sx sy <- readTVar boxSizeVar
+					ListBoxItems _keyFunc items <- readTVar itemsVar
+					moveSelection IS.findMax $ \i -> min (S.size items - 1) $ i + sy `quot` itemHeight
+					return True
+				KeyDownEvent KeyPageUp -> do
+					Vec2 _sx sy <- readTVar boxSizeVar
+					moveSelection IS.findMin $ \i -> max 0 $ i - sy `quot` itemHeight
+					return True
+				KeyDownEvent KeyHome -> do
+					selectByItemOrderIndex 0
+					return True
+				KeyDownEvent KeyEnd -> do
+					ListBoxItems _keyFunc items <- readTVar itemsVar
+					unless (S.null items) $ selectByItemOrderIndex (S.size items - 1)
 					return True
 				_ -> return False
 			MouseInputEvent mouseEvent -> case mouseEvent of
@@ -324,29 +385,6 @@ instance Element (ListBoxContent v) where
 			MouseLeaveEvent -> do
 				writeTVar lastMousePositionVar Nothing
 				return True
-			where
-				moveSelection getEdgeItemIndex adjustItemOrderIndex = do
-					selectedValues <- readTVar selectedValuesVar
-					if IS.null selectedValues then selectByItemOrderIndex 0 else do
-						values <- readTVar valuesVar
-						ListBoxItems keyFunc items <- readTVar itemsVar
-						let
-							itemIndex = getEdgeItemIndex selectedValues
-							value = fromJust $ IM.lookup itemIndex values
-							itemOrderIndex = S.findIndex (ListBoxItem itemIndex keyFunc value) items
-							itemOrderIndexToSelect = adjustItemOrderIndex itemOrderIndex
-						selectByItemOrderIndex itemOrderIndexToSelect
-				-- select by item order index, possibly unselecting currently selected items (based on shift key)
-				selectByItemOrderIndex itemOrderIndex = do
-					ListBoxItems _keyFunc items <- readTVar itemsVar
-					shiftLPressed <- getKeyState keyboardState KeyShiftL
-					shiftRPressed <- getKeyState keyboardState KeyShiftR
-					selectedValues <- if shiftLPressed || shiftRPressed then readTVar selectedValuesVar else return IS.empty
-					writeTVar selectedValuesVar $
-						if itemOrderIndex >= 0 && itemOrderIndex < S.size items then
-							let ListBoxItem itemIndex _keyFunc _value = S.elemAt itemOrderIndex items
-							in IS.insert itemIndex selectedValues
-						else selectedValues
 
 	focusElement ListBoxContent
 		{ listBoxContentFocusedVar = focusedVar
@@ -518,12 +556,18 @@ instance Element (ListBoxColumn v) where
 			return True
 		_ -> return False
 
-newListBoxTextColumnDesc :: T.Text -> (v -> T.Text) -> STM (ListBoxColumnDesc v)
-newListBoxTextColumnDesc title keyFunc = do
+-- | Description of most normal column: text column title, item is shown as text.
+newListBoxTextColumnDesc
+	:: Ord k
+	=> T.Text -- ^ Column title.
+	-> (v -> k) -- ^ Key function, returns key to sort by.
+	-> (v -> T.Text) -- ^ Display text function, returns text to display for item.
+	-> STM (ListBoxColumnDesc v)
+newListBoxTextColumnDesc title keyFunc textFunc = do
 	label <- newTextLabel
 	setText label title
 	return ListBoxColumnDesc
 		{ listBoxColumnDescVisual = SomeVisual label
 		, listBoxColumnDescKeyFunc = keyFunc
-		, listBoxColumnDescRenderFunc = \value drawer position size style -> return $ renderLabel (keyFunc value) fontScriptUnknown LabelStyleText drawer position size style
+		, listBoxColumnDescRenderFunc = \value drawer position size style -> return $ renderLabel (textFunc value) fontScriptUnknown LabelStyleText drawer position size style
 		}
