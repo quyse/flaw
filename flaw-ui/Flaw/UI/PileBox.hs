@@ -7,6 +7,7 @@ License: MIT
 module Flaw.UI.PileBox
 	( PileBox(..)
 	, PileBoxItem(..)
+	, PileBoxItemDesc(..)
 	, newPileBox
 	) where
 
@@ -25,7 +26,7 @@ data PileBox = PileBox
 	, pileBoxElementsPanel :: !Panel
 	, pileBoxItems :: [PileBoxItem]
 	, pileBoxItemsChildren :: [FreeContainerChild Panel]
-	, pileBoxGripWidth :: !Metric
+	, pileBoxGripWidth :: {-# UNPACK #-} !Metric
 	, pileBoxHeightVar :: !(TVar Metric)
 	}
 
@@ -33,25 +34,32 @@ data PileBoxItem = PileBoxItem
 	{ pileBoxItemParent :: !PileBox
 	, pileBoxItemElement :: !SomeElement
 	, pileBoxItemElementChild :: !(FreeContainerChild Panel)
-	, pileBoxItemWidthVar :: !(TVar Metric)
-	, pileBoxItemLastMousePositionVar :: !(TVar (Maybe Position))
-	, pileBoxItemPressedVar :: !(TVar Bool)
+	, pileBoxItemWidthVar :: {-# UNPACK #-} !(TVar Metric)
+	, pileBoxItemLastMousePositionVar :: {-# UNPACK #-} !(TVar (Maybe Position))
+	, pileBoxItemPressedVar :: {-# UNPACK #-} !(TVar Bool)
 	}
 
-newPileBox :: Metrics -> [SomeElement] -> STM PileBox
+data PileBoxItemDesc = PileBoxItemDesc
+	{ pileBoxItemDescElement :: !SomeElement
+	, pileBoxItemDescWidth :: {-# UNPACK #-} !Metric
+	}
+
+newPileBox :: Metrics -> [PileBoxItemDesc] -> STM PileBox
 newPileBox Metrics
-	{ metricsPileBoxElementWidth = elementWidth
-	, metricsPileBoxGripWidth = gripWidth
-	} elements = mfix $ \pileBox -> do
+	{ metricsPileBoxGripWidth = gripWidth
+	} itemDescs = mfix $ \pileBox -> do
 
 	-- create main panel
 	panel <- newPanel False
 
 	-- create elements panel and add elements to it
 	elementsPanel <- newPanel False
-	(items, itemsChildren) <- (unzip <$>) . forM elements $ \e@(SomeElement element) -> do
+	(items, itemsChildren) <- (unzip <$>) . forM itemDescs $ \PileBoxItemDesc
+		{ pileBoxItemDescElement = e@(SomeElement element)
+		, pileBoxItemDescWidth = itemWidth
+		}-> do
 		elementChild <- addFreeChild elementsPanel element
-		widthVar <- newTVar elementWidth
+		widthVar <- newTVar itemWidth
 		lastMousePositionVar <- newTVar Nothing
 		pressedVar <- newTVar False
 		let item = PileBoxItem

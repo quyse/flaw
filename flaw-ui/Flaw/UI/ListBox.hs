@@ -93,6 +93,7 @@ data ListBoxColumn v = ListBoxColumn
 data ListBoxColumnDesc v where
 	ListBoxColumnDesc :: Ord k =>
 		{ listBoxColumnDescVisual :: !SomeVisual
+		, listBoxColumnDescWidth :: {-# UNPACK #-} !Metric
 		, listBoxColumnDescKeyFunc :: !(v -> k)
 		, listBoxColumnDescRenderFunc :: !(forall c d. Context c d => v -> Drawer d -> Position -> Size -> Style -> STM (Render c ()))
 		} -> ListBoxColumnDesc v
@@ -143,7 +144,14 @@ newListBox metrics@Metrics
 			}
 
 	-- pile box for column headers
-	pileBox <- newPileBox metrics $ map SomeElement columns
+	pileBox <- newPileBox metrics $ flip map columns $ \column@ListBoxColumn
+		{ listBoxColumnDesc = ListBoxColumnDesc
+			{ listBoxColumnDescWidth = columnWidth
+			}
+		} -> PileBoxItemDesc
+		{ pileBoxItemDescElement = SomeElement column
+		, pileBoxItemDescWidth = columnWidth
+		}
 	pileBoxChild <- addFreeChild panel pileBox
 
 	-- content element
@@ -560,14 +568,16 @@ instance Element (ListBoxColumn v) where
 newListBoxTextColumnDesc
 	:: Ord k
 	=> T.Text -- ^ Column title.
+	-> Metric -- ^ Column width.
 	-> (v -> k) -- ^ Key function, returns key to sort by.
 	-> (v -> T.Text) -- ^ Display text function, returns text to display for item.
 	-> STM (ListBoxColumnDesc v)
-newListBoxTextColumnDesc title keyFunc textFunc = do
+newListBoxTextColumnDesc title width keyFunc textFunc = do
 	label <- newTextLabel
 	setText label title
 	return ListBoxColumnDesc
 		{ listBoxColumnDescVisual = SomeVisual label
+		, listBoxColumnDescWidth = width
 		, listBoxColumnDescKeyFunc = keyFunc
 		, listBoxColumnDescRenderFunc = \value drawer position size style -> return $ renderLabel (textFunc value) fontScriptUnknown LabelStyleText drawer position size style
 		}

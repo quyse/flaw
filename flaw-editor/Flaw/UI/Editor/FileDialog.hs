@@ -74,6 +74,7 @@ runFileDialog FileDialogService
 		, metricsFrameClient = frameClient
 		, metricsButtonSize = buttonSize@(Vec2 buttonWidth buttonHeight)
 		, metricsEditBoxHeight = editBoxHeight
+		, metricsLabelSize = Vec2 labelWidth _labelHeight
 		, metricsListBoxColumnHeaderHeight = columnHeaderHeight
 		, metricsListBoxItemHeight = itemHeight
 		}
@@ -94,9 +95,10 @@ runFileDialog FileDialogService
 	dirPathLabelVE <- newVisualElement dirPathLabel
 	dirPathLabelVEChild <- addFreeChild panel dirPathLabelVE
 
-	nameColumn <- newListBoxTextColumnDesc "name" fileEntryName fileEntryName
-	sizeColumn <- newListBoxTextColumnDesc "size" fileEntrySize (T.pack . showSize . fileEntrySize)
-	listBox <- newListBox metrics [nameColumn, sizeColumn]
+	listBox <- do
+		nameColumnDesc <- newListBoxTextColumnDesc "name" (labelWidth * 2) fileEntryName fileEntryName
+		sizeColumnDesc <- newListBoxTextColumnDesc "size" labelWidth fileEntrySize (T.pack . showSize . fileEntrySize)
+		newListBox metrics [nameColumnDesc, sizeColumnDesc]
 	reorderListBox listBox fileEntryName
 	listBoxChild <- addFreeChild panel listBox
 
@@ -116,7 +118,7 @@ runFileDialog FileDialogService
 		placeFreeChild panel cancelButtonChild $ Vec2 (sx - bigGap - buttonWidth) (sy - bigGap - buttonHeight)
 
 	layoutElement frame $ xy__ frameClient + zw__ frameClient
-		+ Vec2 ((bigGap * 2 + buttonWidth * 2 + gap) * 2) (bigGap * 2 + columnHeaderHeight + itemHeight * 10 + buttonHeight + gap)
+		+ Vec2 ((bigGap * 2 + buttonWidth * 2 + gap) * 2) (bigGap * 2 + columnHeaderHeight + itemHeight * 15 + buttonHeight + gap)
 
 	let openDirectory unnormalizedPath = do
 		path <- canonicalizePath $ T.unpack unnormalizedPath

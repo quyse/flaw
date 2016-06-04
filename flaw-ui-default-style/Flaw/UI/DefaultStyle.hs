@@ -40,7 +40,6 @@ defaultStyleMetrics = Metrics
 	, metricsTitleHeight = 25
 	, metricsSliderPieceWidth = 10
 	, metricsSliderHeight = 20
-	, metricsPileBoxElementWidth = 80
 	, metricsPileBoxGripWidth = 6
 	, metricsListBoxColumnHeaderHeight = 20
 	, metricsListBoxItemHeight = 20
