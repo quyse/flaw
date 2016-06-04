@@ -159,7 +159,7 @@ runFileDialog FileDialogService
 
 	asyncRunInFlow flow . openDirectory =<< readTVar pathVar
 
-	bringFreeChildOnTop parentPanel frameChild
+	focusFreeChild parentPanel frameChild
 
 showSize :: Integer -> String
 showSize size

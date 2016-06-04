@@ -168,6 +168,8 @@ class Element a => FreeContainer a where
 	placeFreeChildRelatively :: a -> FreeContainerChild a -> Int2 -> STM ()
 	-- | Bring element to the end of render list (in order to render on top of everything).
 	bringFreeChildOnTop :: a -> FreeContainerChild a -> STM ()
+	-- | Focus child element.
+	focusFreeChild :: a -> FreeContainerChild a -> STM ()
 
 data SomeFreeContainer where
 	SomeFreeContainer :: FreeContainer fc => fc -> SomeFreeContainer

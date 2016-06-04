@@ -367,6 +367,26 @@ instance FreeContainer Panel where
 		{ panelChildrenRenderOrderVar = childrenRenderOrderVar
 		} child = modifyTVar' childrenRenderOrderVar $ (++ [child]) . delete child
 
+	focusFreeChild Panel
+		{ panelFocusedChildVar = focusedChildVar
+		} child@PanelChild
+		{ panelChildIndex = childIndex
+		, panelChildElement = SomeElement element
+		} = do
+		focusedChild <- readTVar focusedChildVar
+		case focusedChild of
+			Just PanelChild
+				{ panelChildIndex = focusedChildIndex
+				, panelChildElement = SomeElement focusedElement
+				} -> unless (childIndex == focusedChildIndex) $ do
+				focusAccepted <- focusElement element
+				when focusAccepted $ do
+					unfocusElement focusedElement
+					writeTVar focusedChildVar $ Just child
+			Nothing -> do
+				focusAccepted <- focusElement element
+				when focusAccepted $ writeTVar focusedChildVar $ Just child
+
 -- | Helper function, trying to focus first child in a list accepting the focus.
 -- Writes index of a child accepted focus to panel.
 focusSomeChild :: Panel -> [PanelChild] -> STM Bool
