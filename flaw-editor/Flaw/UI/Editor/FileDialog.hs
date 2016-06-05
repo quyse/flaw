@@ -95,11 +95,12 @@ runFileDialog FileDialogService
 	dirPathLabelVE <- newVisualElement dirPathLabel
 	dirPathLabelVEChild <- addFreeChild panel dirPathLabelVE
 
+	let fileNameSortKeyFunc = T.toCaseFold . fileEntryName
 	listBox <- do
-		nameColumnDesc <- newListBoxTextColumnDesc "name" (labelWidth * 2) fileEntryName fileEntryName
+		nameColumnDesc <- newListBoxTextColumnDesc "name" (labelWidth * 2) fileNameSortKeyFunc fileEntryName
 		sizeColumnDesc <- newListBoxTextColumnDesc "size" labelWidth fileEntrySize (T.pack . showSize . fileEntrySize)
 		newListBox metrics [nameColumnDesc, sizeColumnDesc]
-	reorderListBox listBox fileEntryName
+	reorderListBox listBox fileNameSortKeyFunc
 	listBoxChild <- addFreeChild panel listBox
 
 	okButton <- newLabeledButton "ok"
