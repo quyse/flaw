@@ -138,7 +138,7 @@ runFileDialog FileDialogService
 			clearListBox listBox
 			forM_ entries $ void . addListBoxItem listBox
 
-	setClickHandler okButton $ do
+	setActionHandler okButton $ do
 		entries <- getListBoxSelectedValues listBox
 		case entries of
 			[e] -> do
@@ -154,7 +154,7 @@ runFileDialog FileDialogService
 						writeTVar pathVar $ T.pack $ takeDirectory $ T.unpack path
 						handler $ Just path
 			_ -> return ()
-	setClickHandler cancelButton $ do
+	setActionHandler cancelButton $ do
 		removeFreeChild parentPanel frameChild
 		handler Nothing
 

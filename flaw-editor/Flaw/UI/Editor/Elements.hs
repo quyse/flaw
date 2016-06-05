@@ -25,7 +25,7 @@ import Flaw.UI.Panel
 data FileElement = FileElement
 	{ fileElementPanel :: !Panel
 	, fileElementEditBox :: !EditBox
-	, fileElementClickHandlerVar :: {-# UNPACK #-} !(TVar (STM ()))
+	, fileElementActionHandlerVar :: {-# UNPACK #-} !(TVar (STM ()))
 	}
 
 newFileElement :: FileDialogService -> STM FileElement
@@ -44,7 +44,7 @@ newFileElement service@FileDialogService
 	setDefaultElement panel loadButton
 	setButtonDefault loadButton
 
-	clickHandlerVar <- newTVar $ return ()
+	actionHandlerVar <- newTVar $ return ()
 
 	setLayoutHandler panel $ \(Vec2 sx sy) -> do
 		placeFreeChild panel editBoxChild $ Vec2 0 0
@@ -54,19 +54,19 @@ newFileElement service@FileDialogService
 		placeFreeChild panel loadButtonChild $ Vec2 (sx - buttonWidth + sy) 0
 		layoutElement loadButton $ Vec2 (buttonWidth - sy) sy
 
-	setClickHandler browseButton $ runFileDialog service FileDialogConfig
+	setActionHandler browseButton $ runFileDialog service FileDialogConfig
 		{ fileDialogConfigTitle = "browse file"
 		} $ \maybeFileName -> case maybeFileName of
 		Just fileName -> do
 			setText editBox fileName
-			join $ readTVar clickHandlerVar
+			join $ readTVar actionHandlerVar
 		Nothing -> return ()
-	setClickHandler loadButton $ join $ readTVar clickHandlerVar
+	setActionHandler loadButton $ join $ readTVar actionHandlerVar
 
 	return FileElement
 		{ fileElementPanel = panel
 		, fileElementEditBox = editBox
-		, fileElementClickHandlerVar = clickHandlerVar
+		, fileElementActionHandlerVar = actionHandlerVar
 		}
 
 instance Element FileElement where
@@ -83,8 +83,8 @@ instance HasText FileElement where
 	setTextScript = setTextScript . fileElementEditBox
 	getText = getText . fileElementEditBox
 
-instance HasClickHandler FileElement where
-	setClickHandler = writeTVar . fileElementClickHandlerVar
+instance HasActionHandler FileElement where
+	setActionHandler = writeTVar . fileElementActionHandlerVar
 
 instance HasPreferredSize FileElement where
 	preferredSize Metrics

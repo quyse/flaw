@@ -21,7 +21,7 @@ module Flaw.UI
 	, AlignX(..), AlignY(..)
 	, HasAlignment(..)
 	, HasPassword(..)
-	, HasClickHandler(..)
+	, HasActionHandler(..)
 	, HasChangeHandler(..)
 	, HasChecked(..)
 	, HasFloatValue(..)
@@ -132,8 +132,10 @@ data AlignY = AlignTop | AlignMiddle | AlignBottom
 class HasAlignment a where
 	setAlignment :: a -> AlignX -> AlignY -> STM ()
 
-class HasClickHandler a where
-	setClickHandler :: a -> STM () -> STM ()
+-- | Class of elements having action handler.
+-- Action means click for buttons, double click for listboxes and so on.
+class HasActionHandler a where
+	setActionHandler :: a -> STM () -> STM ()
 
 class HasChangeHandler a where
 	setChangeHandler :: a -> STM () -> STM ()

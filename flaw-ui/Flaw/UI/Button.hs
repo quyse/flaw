@@ -31,7 +31,7 @@ data Button = Button
 	, buttonFocusedVar :: !(TVar Bool)
 	, buttonMousedVar :: !(TVar Bool)
 	, buttonPressedVar :: !(TVar Bool)
-	, buttonClickHandlerVar :: !(TVar (STM ()))
+	, buttonActionHandlerVar :: !(TVar (STM ()))
 	, buttonDefaultVar :: !(TVar Bool)
 	, buttonCancelVar :: !(TVar Bool)
 	}
@@ -42,7 +42,7 @@ newButton visual = do
 	focusedVar <- newTVar False
 	mousedVar <- newTVar False
 	pressedVar <- newTVar False
-	clickHandlerVar <- newTVar $ return ()
+	actionHandlerVar <- newTVar $ return ()
 	defaultVar <- newTVar False
 	cancelVar <- newTVar False
 	return Button
@@ -51,7 +51,7 @@ newButton visual = do
 		, buttonFocusedVar = focusedVar
 		, buttonMousedVar = mousedVar
 		, buttonPressedVar = pressedVar
-		, buttonClickHandlerVar = clickHandlerVar
+		, buttonActionHandlerVar = actionHandlerVar
 		, buttonDefaultVar = defaultVar
 		, buttonCancelVar = cancelVar
 		}
@@ -129,7 +129,7 @@ instance Element Button where
 	processInputEvent Button
 		{ buttonMousedVar = mousedVar
 		, buttonPressedVar = pressedVar
-		, buttonClickHandlerVar = clickHandlerVar
+		, buttonActionHandlerVar = actionHandlerVar
 		, buttonCancelVar = cancelVar
 		} inputEvent _inputState = case inputEvent of
 		KeyboardInputEvent keyboardEvent -> case keyboardEvent of
@@ -168,7 +168,7 @@ instance Element Button where
 			writeTVar pressedVar False
 			return True
 		where
-			click = join $ readTVar clickHandlerVar
+			click = join $ readTVar actionHandlerVar
 			isPressKey key = case key of
 				KeyReturn -> return True
 				KeySpace -> return True
@@ -188,7 +188,5 @@ instance Element Button where
 		writeTVar focusedVar False
 		writeTVar pressedVar False
 
-instance HasClickHandler Button where
-	setClickHandler Button
-		{ buttonClickHandlerVar = clickHandlerVar
-		} clickHandler = writeTVar clickHandlerVar clickHandler
+instance HasActionHandler Button where
+	setActionHandler = writeTVar . buttonActionHandlerVar

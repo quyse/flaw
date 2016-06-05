@@ -379,13 +379,13 @@ main = withApp appConfig
 		-- properties frame
 		colladaFileElement <- newFileElement fileDialogService
 		colladaNodeEditBox <- newEditBox
-		setClickHandler colladaFileElement $ do
+		setActionHandler colladaFileElement $ do
 			fileName <- getText colladaFileElement
 			nodeName <- getText colladaNodeEditBox
 			asyncRunInFlow flow $ loadColladaFile fileName nodeName
 		let textureFileElement getTextureCell setTextureCell = do
 			fileElement <- newFileElement fileDialogService
-			setClickHandler fileElement $ do
+			setActionHandler fileElement $ do
 				fileName <- getText fileElement
 				asyncRunInFlow flow $ handle errorHandler $ do
 					cell@TextureCell
