@@ -149,6 +149,8 @@ runFileDialog FileDialogService
 					if isDir then openDirectory path
 					else atomically $ do
 						removeFreeChild parentPanel frameChild
+						-- save path to file for later use
+						writeTVar pathVar $ T.pack $ takeDirectory $ T.unpack path
 						handler $ Just path
 			_ -> return ()
 	setClickHandler cancelButton $ do
