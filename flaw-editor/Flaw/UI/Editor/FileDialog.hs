@@ -103,7 +103,8 @@ runFileDialog FileDialogService
 	reorderListBox listBox fileNameSortKeyFunc
 	listBoxChild <- addFreeChild panel listBox
 
-	okButton <- newLabeledButton "ok"
+	okButtonLabel <- newLabel LabelStyleButton
+	okButton <- newButton okButtonLabel
 	layoutElement okButton buttonSize
 	okButtonChild <- addFreeChild panel okButton
 	cancelButton <- newLabeledButton "cancel"
@@ -120,6 +121,14 @@ runFileDialog FileDialogService
 
 	layoutElement frame $ xy__ frameClient + zw__ frameClient
 		+ Vec2 ((bigGap * 2 + buttonWidth * 2 + gap) * 2) (bigGap * 2 + columnHeaderHeight + itemHeight * 15 + buttonHeight + gap)
+
+	setChangeHandler listBox $ do
+		entries <- getListBoxSelectedValues listBox
+		setText okButtonLabel $ case entries of
+			[FileEntry
+				{ fileEntrySize = size
+				}] -> if size >= 0 then "choose" else "open"
+			_ -> ""
 
 	let openDirectory unnormalizedPath = do
 		path <- canonicalizePath $ T.unpack unnormalizedPath

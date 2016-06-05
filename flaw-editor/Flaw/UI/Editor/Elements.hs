@@ -55,7 +55,7 @@ newFileElement service@FileDialogService
 		layoutElement loadButton $ Vec2 (buttonWidth - sy) sy
 
 	setActionHandler browseButton $ runFileDialog service FileDialogConfig
-		{ fileDialogConfigTitle = "browse file"
+		{ fileDialogConfigTitle = "choose file"
 		} $ \maybeFileName -> case maybeFileName of
 		Just fileName -> do
 			setText editBox fileName
