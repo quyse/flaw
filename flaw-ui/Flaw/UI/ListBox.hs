@@ -57,6 +57,8 @@ data ListBox v = ListBox
 	, listBoxNextItemIndexVar :: !(TVar Int)
 	-- | Columns.
 	, listBoxColumns :: [ListBoxColumn v]
+	-- | Change handler.
+	, listBoxChangeHandlerVar :: {-# UNPACK #-} !(TVar (STM ()))
 	}
 
 -- | Handle for list box item.
@@ -133,6 +135,7 @@ newListBox metrics@Metrics
 		itemsVar <- newTVar $ ListBoxItems (const (0 :: Int)) S.empty
 		selectedValuesVar <- newTVar IS.empty
 		nextItemIndexVar <- newTVar 0
+		changeHandlerVar <- newTVar $ return ()
 		return ListBox
 			{ listBoxPanel = panel
 			, listBoxColumnHeaderHeight = columnHeaderHeight
@@ -142,6 +145,7 @@ newListBox metrics@Metrics
 			, listBoxSelectedValuesVar = selectedValuesVar
 			, listBoxNextItemIndexVar = nextItemIndexVar
 			, listBoxColumns = columns
+			, listBoxChangeHandlerVar = changeHandlerVar
 			}
 
 	-- pile box for column headers
@@ -208,6 +212,7 @@ removeListBoxItem ListBox
 	{ listBoxValuesVar = valuesVar
 	, listBoxItemsVar = itemsVar
 	, listBoxSelectedValuesVar = selectedValuesVar
+	, listBoxChangeHandlerVar = changeHandlerVar
 	} (ListBoxItemHandle itemIndex) = do
 	values <- readTVar valuesVar
 	case IM.lookup itemIndex values of
@@ -216,7 +221,10 @@ removeListBoxItem ListBox
 			modifyTVar' itemsVar $ \(ListBoxItems keyFunc items) ->
 				ListBoxItems keyFunc $ S.delete (ListBoxItem itemIndex keyFunc value) items
 		Nothing -> return ()
-	modifyTVar' selectedValuesVar $ IS.delete itemIndex
+	selectedValues <- readTVar selectedValuesVar
+	when (IS.member itemIndex selectedValues) $ do
+		writeTVar selectedValuesVar $ IS.delete itemIndex selectedValues
+		join $ readTVar changeHandlerVar
 
 -- | Change list item by handle.
 -- List item's handle remains valid.
@@ -224,6 +232,8 @@ changeListBoxItem :: ListBox v -> ListBoxItemHandle v -> v -> STM ()
 changeListBoxItem ListBox
 	{ listBoxValuesVar = valuesVar
 	, listBoxItemsVar = itemsVar
+	, listBoxSelectedValuesVar = selectedValuesVar
+	, listBoxChangeHandlerVar = changeHandlerVar
 	} (ListBoxItemHandle itemIndex) newValue = do
 	values <- readTVar valuesVar
 	case IM.lookup itemIndex values of
@@ -233,6 +243,8 @@ changeListBoxItem ListBox
 				ListBoxItems keyFunc
 				$ S.insert (ListBoxItem itemIndex keyFunc newValue)
 				$ S.delete (ListBoxItem itemIndex keyFunc oldValue) items
+			selectedValues <- readTVar selectedValuesVar
+			when (IS.member itemIndex selectedValues) $ join $ readTVar changeHandlerVar
 		Nothing -> return ()
 
 -- | Remove all items from list box.
@@ -241,10 +253,13 @@ clearListBox ListBox
 	{ listBoxValuesVar = valuesVar
 	, listBoxItemsVar = itemsVar
 	, listBoxSelectedValuesVar = selectedValuesVar
+	, listBoxChangeHandlerVar = changeHandlerVar
 	} = do
 	writeTVar valuesVar IM.empty
 	modifyTVar' itemsVar $ \(ListBoxItems keyFunc _items) -> ListBoxItems keyFunc S.empty
+	selectionWasEmpty <- IS.null <$> readTVar selectedValuesVar
 	writeTVar selectedValuesVar IS.empty
+	unless selectionWasEmpty $ join $ readTVar changeHandlerVar
 
 -- | Reorder list box using new sort function.
 reorderListBox :: Ord k => ListBox v -> (v -> k) -> STM ()
@@ -296,6 +311,9 @@ instance Element (ListBox v) where
 	focusElement = focusElement . listBoxPanel
 	unfocusElement = unfocusElement . listBoxPanel
 
+instance HasChangeHandler (ListBox v) where
+	setChangeHandler = writeTVar . listBoxChangeHandlerVar
+
 instance Element (ListBoxContent v) where
 
 	layoutElement ListBoxContent
@@ -312,6 +330,7 @@ instance Element (ListBoxContent v) where
 			, listBoxValuesVar = valuesVar
 			, listBoxItemsVar = itemsVar
 			, listBoxSelectedValuesVar = selectedValuesVar
+			, listBoxChangeHandlerVar = changeHandlerVar
 			}
 		, listBoxContentScrollBarVar = scrollBarVar
 		, listBoxContentLastMousePositionVar = lastMousePositionVar
@@ -352,6 +371,8 @@ instance Element (ListBoxContent v) where
 					-- ensure selected item is visible
 					let itemY = itemOrderIndex * itemHeight
 					ensureVisibleScrollBoxArea scrollBox $ Vec4 0 itemY 0 (itemY + itemHeight)
+					-- call change handler
+					join $ readTVar changeHandlerVar
 
 		processedByScrollBar <- processScrollBarEvent scrollBar inputEvent inputState
 		if processedByScrollBar then return True else case inputEvent of
