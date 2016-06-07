@@ -130,9 +130,6 @@ variables:
     flaw-social
     flaw-websocket-client
     flaw-window
-  INTEGERSIMPLE_CONFIG_FIX: >-
-    powershell
-    "Add-Content stack.yaml \"extra-deps: [cereal-text-0.1.0.1]\""
   INTEGERSIMPLE_FLAGS_WINDOWS: >-
     --ghc-variant integersimple
     --flag text:integer-simple
@@ -163,7 +160,6 @@ linux:
 windows:
   script:
   - "%FIX_TH_WINDOWS%"
-  - "%INTEGERSIMPLE_CONFIG_FIX%"
   - "mkdir flaw-windows\\bin"
   - "stack --no-terminal build --test --copy-bins --local-bin-path flaw-windows/bin %INTEGERSIMPLE_FLAGS_WINDOWS% %PACKAGES_WINDOWS%"
   artifacts:
