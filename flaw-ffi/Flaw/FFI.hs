@@ -35,12 +35,12 @@ unwrapEnum (EnumWrapper a) = toEnum a
 -- | Generate enum data type based on names and numbers.
 genEnum :: TypeQ -> String -> [(String, Int)] -> Q [Dec]
 genEnum underlyingType typeName es = do
-	let dataCons = [NormalC (mkName eName) [] |  (eName, _) <- es]
-	let dataDec = DataD [] (mkName typeName) [] dataCons [''Show, ''Eq, ''Ord]
+	dataDec <- dataD (sequence []) (mkName typeName) [] Nothing [normalC (mkName eName) [] |  (eName, _) <- es] (sequence [ [t| Show |], [t| Eq |], [t| Ord |] ])
 	p <- newName "p"
-	let fromEnumDec = FunD 'fromEnum [Clause [VarP p] (NormalB $ CaseE (VarE p) [Match (ConP (mkName eName) []) (NormalB $ LitE $ IntegerL $ fromIntegral eNum) [] | (eName, eNum) <- es]) []]
-	let toEnumDec = FunD 'toEnum [Clause [VarP p] (NormalB $ CaseE (VarE p) $ [Match (LitP $ IntegerL $ fromIntegral eNum) (NormalB $ ConE (mkName eName)) [] | (eName, eNum) <- es] ++ [Match WildP (NormalB $ ConE $ mkName $ fst $ head es) []]) []]
-	let enumDec = InstanceD [] (AppT (ConT ''Enum) (ConT $ mkName typeName)) [toEnumDec, fromEnumDec]
+	enumDec <- instanceD (sequence []) [t| Enum $(conT $ mkName typeName) |]
+		[ funD 'toEnum [clause [varP p] (normalB $ caseE (varE p) $ [match (litP $ integerL $ fromIntegral eNum) (normalB $ conE (mkName eName)) [] | (eName, eNum) <- es] ++ [match wildP (normalB $ conE $ mkName $ fst $ head es) []]) []]
+		, funD 'fromEnum [clause [varP p] (normalB $ caseE (varE p) [match (conP (mkName eName) []) (normalB $ litE $ integerL $ fromIntegral eNum) [] | (eName, eNum) <- es]) []]
+		]
 	storableDecs <- [d|
 		instance Storable $(conT $ mkName typeName) where
 			sizeOf _ = sizeOf (undefined :: $(underlyingType))
@@ -143,10 +143,10 @@ processFields typeName fs = pf [| 0 |] fs where
 		return (f : nextFields, nextEndExp)
 	pf prevEndExp [] = return ([], prevEndExp)
 
-dataFieldDec :: Field -> Q (Name, Strict, Type)
+dataFieldDec :: Field -> Q (Name, Bang, Type)
 dataFieldDec field = do
 	ft <- fieldType field
-	return (fieldName field, NotStrict, ft)
+	return (fieldName field, Bang NoSourceUnpackedness NoSourceStrictness, ft)
 
 -- | Generate struct data type.
 genStruct :: String -> [(TypeQ, String)] -> Q [Dec]
@@ -156,7 +156,7 @@ genStruct typeName fs = genStructWithArrays typeName [(t, n, 0) | (t, n) <- fs]
 genStructWithArrays :: String -> [(TypeQ, String, Int)] -> Q [Dec]
 genStructWithArrays typeName fs = do
 	(fields, endExp) <- processFields typeName fs
-	dataDec <- dataD (return []) (mkName typeName) [] [recC (mkName typeName) $ map dataFieldDec fields] [''Show]
+	dataDec <- dataD (return []) (mkName typeName) [] Nothing [recC (mkName typeName) $ map dataFieldDec fields] (sequence [ [t| Show |] ])
 	fieldsDecs <- concat <$> mapM (sequence . fieldDecs) fields
 	let sizeOfName = mkName $ "struct_sizeOf_" ++ typeName
 	let alignmentName = mkName $ "struct_alignment_" ++ typeName
@@ -188,7 +188,7 @@ genStructWithEndUnion :: String -> [(TypeQ, String, Int)] -> Int -> [(String, Ty
 genStructWithEndUnion typeName hfs selectorIndex ufs = do
 	(headerFields, headerEndExp) <- processFields typeName hfs
 	unionFields <- mapM (\(_ufe, uft, ufn) -> processField typeName uft ufn 0 headerEndExp) ufs
-	dataDec <- dataD (return []) (mkName typeName) [] [recC (mkName $ typeName ++ "_" ++ fieldNameStr unionField) $ map dataFieldDec $ headerFields ++ [unionField] | unionField <- unionFields] [''Show]
+	dataDec <- dataD (return []) (mkName typeName) [] Nothing [recC (mkName $ typeName ++ "_" ++ fieldNameStr unionField) $ map dataFieldDec $ headerFields ++ [unionField] | unionField <- unionFields] (sequence [ [t| Show |] ])
 	headerFieldsDecs <- concat <$> mapM (sequence . fieldDecs) headerFields
 	unionFieldsDecs <- concat <$> mapM (sequence . fieldDecs) unionFields
 	let sizeOfName = mkName $ "struct_sizeOf_" ++ typeName

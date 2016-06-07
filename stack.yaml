@@ -1,4 +1,4 @@
-resolver: lts-6.0
+resolver: nightly-2016-06-07
 
 packages:
 - flaw-al
@@ -45,7 +45,7 @@ packages:
 - flaw-window
 
 extra-deps:
-- cereal-text-0.1.0.1
+- cereal-text-0.1.0.2
 
 ghc-options:
   "*": -O3 -threaded -with-rtsopts=-N -Wall -fno-warn-unsupported-calling-conventions -fno-warn-tabs

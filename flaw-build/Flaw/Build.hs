@@ -192,8 +192,8 @@ genEmbed :: Name -> Q [Dec]
 genEmbed dn = do
 	info <- reify dn
 	case info of
-		TyConI (DataD dataContext dataName tvbs cons _derivings) -> process dataContext dataName tvbs cons
-		TyConI (NewtypeD dataContext dataName tvbs con _derivings) -> process dataContext dataName tvbs [con]
+		TyConI (DataD dataContext dataName tvbs _mkind cons _derivings) -> process dataContext dataName tvbs cons
+		TyConI (NewtypeD dataContext dataName tvbs _mkind con _derivings) -> process dataContext dataName tvbs [con]
 		_ -> fail $ show ("unsupported declaration for embedding", info)
 	where
 	process dataContext dataName tvbs cons = do
