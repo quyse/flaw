@@ -46,7 +46,7 @@ packages:
 # sdl2 fork without heavy dependencies
 - location:
     git: https://github.com/quyse/sdl2.git
-    commit: cc66bf8d7bd1ca5bb01712d7a890dee647e1f351
+    commit: 3faecd7f63f8a18300d4caaf3735d7b3a5039d1b
   extra-dep: true
 
 extra-deps:
