@@ -32,7 +32,7 @@ executable model-editor
   main-is:             model-editor.hs
   other-modules:
   hs-source-dirs:      exe
-  -- other-extensions:    
   build-depends:       base, bytestring, flaw-app, flaw-asset-dxt, flaw-base, flaw-collada, flaw-editor, flaw-graphics, flaw-input, flaw-math, flaw-ui, flaw-ui-default-style, flaw-visual, flaw-window, mtl, stm, text, transformers, vector
-  -- hs-source-dirs:      
+  if os(windows)
+    ld-options:          -Wl,--subsystem,windows
   default-language:    Haskell2010
