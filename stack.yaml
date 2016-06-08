@@ -43,6 +43,11 @@ packages:
 - flaw-websocket-client
 - flaw-websocket-server
 - flaw-window
+# sdl2 fork without heavy dependencies
+- location:
+    git: https://github.com/quyse/sdl2.git
+    commit: cc66bf8d7bd1ca5bb01712d7a890dee647e1f351
+  extra-dep: true
 
 extra-deps:
 - cereal-text-0.1.0.1
