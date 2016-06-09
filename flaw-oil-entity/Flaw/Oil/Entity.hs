@@ -23,6 +23,7 @@ module Flaw.Oil.Entity
 	, registerEntityType
 	, pullEntityManager
 	, getEntityVar
+	, newEntityVar
 	, readEntityVar
 	, readSomeEntityVar
 	, writeEntityVar
@@ -31,6 +32,7 @@ module Flaw.Oil.Entity
 import Control.Concurrent.STM
 import Control.Exception
 import Control.Monad
+import Crypto.Random.EntropyPool
 import qualified Data.ByteString as B
 import Data.IORef
 import Data.List
@@ -96,12 +98,22 @@ class Typeable a => Entity a where
 	-- Parameter is not used and can be 'undefined'.
 	getEntityTypeId :: a -> EntityTypeId
 
+	-- | Deserialize entity's data.
+	deserializeEntity :: (B.ByteString -> IO B.ByteString) -> IO (Maybe a)
+	-- default implementation simply deserializes main value.
+	default deserializeEntity :: S.Serialize a => (B.ByteString -> IO B.ByteString) -> IO (Maybe a)
+	deserializeEntity f = do
+		value <- f B.empty
+		return $ case S.decode value of
+			Left _e -> Nothing
+			Right r -> Just r
+
 	-- | Serialize entity's data.
 	serializeEntity
 		:: a -- ^ Entity to serialize.
 		-> (B.ByteString -> B.ByteString -> IO ()) -- ^ Write record function accepting key suffix and value.
 		-> IO ()
-	-- default implementation just serializes entity into main value.
+	-- default implementation simply serializes entity into main value.
 	default serializeEntity :: S.Serialize a => a -> (B.ByteString -> B.ByteString -> IO ()) -> IO ()
 	serializeEntity a f = f B.empty $ S.encode a
 
@@ -114,6 +126,7 @@ data NullEntity = NullEntity deriving Typeable
 
 instance Entity NullEntity where
 	getEntityTypeId _ = EntityTypeId $ B.replicate ENTITY_TYPE_ID_SIZE 0
+	deserializeEntity _ = return $ Just NullEntity
 	serializeEntity _ _ = return ()
 
 -- | Entity manager based on client repo.
@@ -121,6 +134,8 @@ data EntityManager = EntityManager
 	{ entityManagerFlow :: !Flow
 	, entityManagerClientRepo :: !ClientRepo
 	, entityManagerPushAction :: !(IO ())
+	-- | Entropy pool to generate new entity ids.
+	, entityManagerEntropyPool :: !EntropyPool
 	, entityManagerNextTagRef :: {-# UNPACK #-} !(IORef Int)
 	, entityManagerCacheRef :: {-# UNPACK #-} !(IORef (M.Map EntityId CachedEntity))
 	-- | Deserialization functions.
@@ -144,6 +159,7 @@ data CachedEntity = CachedEntity
 newEntityManager :: ClientRepo -> IO () -> IO (EntityManager, IO ())
 newEntityManager clientRepo pushAction = withSpecialBook $ \bk -> do
 	flow <- book bk newFlow
+	entropyPool <- createEntropyPool
 	nextTagRef <- newIORef 0
 	cacheRef <- newIORef M.empty
 	deserializatorsRef <- newIORef M.empty
@@ -153,6 +169,7 @@ newEntityManager clientRepo pushAction = withSpecialBook $ \bk -> do
 		{ entityManagerFlow = flow
 		, entityManagerClientRepo = clientRepo
 		, entityManagerPushAction = pushAction
+		, entityManagerEntropyPool = entropyPool
 		, entityManagerNextTagRef = nextTagRef
 		, entityManagerCacheRef = cacheRef
 		, entityManagerDeserializatorsRef = deserializatorsRef
@@ -168,8 +185,8 @@ registerEntityType EntityManager
 	} entityTypeId deserializator = asyncRunInFlow flow $ modifyIORef' deserializatorsRef $ M.insert entityTypeId deserializator
 
 -- | Deserialize entity.
-deserializeEntity :: EntityManager -> EntityId -> IO SomeEntity
-deserializeEntity EntityManager
+deserializeSomeEntity :: EntityManager -> EntityId -> IO SomeEntity
+deserializeSomeEntity EntityManager
 	{ entityManagerClientRepo = clientRepo
 	, entityManagerDeserializatorsRef = deserializatorsRef
 	} (EntityId entityIdBytes) = do
@@ -200,7 +217,7 @@ pullEntityManager entityManager@EntityManager
 				maybeEntityVar <- deRefWeak weak
 				case maybeEntityVar of
 					Just entityVar -> do
-						entity <- deserializeEntity entityManager entityId
+						entity <- deserializeSomeEntity entityManager entityId
 						atomically $ do
 							value@EntityValue
 								{ entityValueDirty = dirty
@@ -248,37 +265,54 @@ scheduleEntityManagerPush EntityManager
 			-- run push action
 			pushAction
 
+cacheEntity :: EntityManager -> EntityId -> SomeEntity -> IO (EntityVar a)
+cacheEntity entityManager@EntityManager
+	{ entityManagerFlow = flow
+	, entityManagerNextTagRef = nextTagRef
+	, entityManagerCacheRef = cacheRef
+	} entityId initialEntity = do
+	-- create new var
+	tag <- atomicModifyIORef' nextTagRef $ \nextVarId -> (nextVarId + 1, nextVarId)
+	entityVar <- newTVarIO EntityValue
+		{ entityValueEntity = initialEntity
+		, entityValueDirty = False
+		}
+	-- put it into cache
+	weak <- mkWeakTVar entityVar $ weakFinalizer tag
+	modifyIORef' cacheRef $ M.insert entityId CachedEntity
+		{ cachedEntityTag = tag
+		, cachedEntityWeak = weak
+		}
+	return $ EntityVar
+		{ entityVarEntityManager = entityManager
+		, entityVarEntityId = entityId
+		, entityVarValueVar = entityVar
+		}
+	where
+		-- finalizer for weak references
+		weakFinalizer tag = atomically $ asyncRunInFlow flow $ do
+			cache <- readIORef cacheRef
+			case M.lookup entityId cache of
+				Just CachedEntity
+					{ cachedEntityTag = t
+					} -> when (tag == t) $ writeIORef cacheRef $ M.delete entityId cache
+				Nothing -> return ()
+
 -- | Get repo var for a given entity.
 getEntityVar :: Entity a => EntityManager -> EntityPtr a -> IO (EntityVar a)
 getEntityVar entityManager@EntityManager
 	{ entityManagerFlow = flow
-	, entityManagerNextTagRef = nextTagRef
 	, entityManagerCacheRef = cacheRef
 	} (EntityPtr entityId) = runInFlow flow $ do
 
 	cache <- readIORef cacheRef
 
-	-- function to create new entity var
-	let newEntityVar = do
+	-- function to create new cached entity var
+	let cacheExistingEntityVar = do
 		-- get initial value of entity
-		initialEntity <- deserializeEntity entityManager entityId
-		-- create new var
-		tag <- atomicModifyIORef' nextTagRef $ \nextVarId -> (nextVarId + 1, nextVarId)
-		entityVar <- newTVarIO EntityValue
-			{ entityValueEntity = initialEntity
-			, entityValueDirty = False
-			}
-		-- put it into cache
-		weak <- mkWeakTVar entityVar $ weakFinalizer tag
-		writeIORef cacheRef $ M.insert entityId CachedEntity
-			{ cachedEntityTag = tag
-			, cachedEntityWeak = weak
-			} cache
-		return $ EntityVar
-			{ entityVarEntityManager = entityManager
-			, entityVarEntityId = entityId
-			, entityVarValueVar = entityVar
-			}
+		initialEntity <- deserializeSomeEntity entityManager entityId
+		-- create new entity var
+		cacheEntity entityManager entityId initialEntity
 
 	-- check if there's cached entity
 	case M.lookup entityId cache of
@@ -296,19 +330,21 @@ getEntityVar entityManager@EntityManager
 					, entityVarValueVar = entityVar
 					}
 				-- otherwise cached var has been garbage collected
-				Nothing -> newEntityVar
+				Nothing -> cacheExistingEntityVar
 		-- otherwise there's no cached var
-		Nothing -> newEntityVar
+		Nothing -> cacheExistingEntityVar
 
-	where
-		-- finalizer for weak references
-		weakFinalizer tag = atomically $ asyncRunInFlow flow $ do
-			cache <- readIORef cacheRef
-			case M.lookup entityId cache of
-				Just CachedEntity
-					{ cachedEntityTag = t
-					} -> when (tag == t) $ writeIORef cacheRef $ M.delete entityId cache
-				Nothing -> return ()
+-- | Generate entity id and create new entity var.
+-- Generated entity is "empty", i.e. contains NullEntity.
+newEntityVar :: EntityManager -> IO (EntityVar a)
+newEntityVar entityManager@EntityManager
+	{ entityManagerFlow = flow
+	, entityManagerEntropyPool = entropyPool
+	} = runInFlow flow $ do
+	-- generate entity id
+	entityIdBytes <- getEntropyFrom entropyPool ENTITY_ID_SIZE
+	-- create cached entity var
+	cacheEntity entityManager (EntityId entityIdBytes) (SomeEntity NullEntity)
 
 -- | Read entity var type safely.
 -- If repo var contains entity of wrong type, throws RepoVarWrongTypeException.
