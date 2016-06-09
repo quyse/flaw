@@ -79,6 +79,7 @@ Linux is the main development platform. It also considered the only "server" pla
 | `flaw-network` | Some network socket implementations (WIP) | ✔ | ✔ | ✔ | ✔ |
 | `flaw-oil` | Reimplementation of [Oil protocol](https://github.com/quyse/oil) | ✔ | ✔ | ✔ |   |
 | `flaw-oil-client` | Simple command-line client for Oil protocol | ✔ | ✔ | ✔ |   |
+| `flaw-oil-entity` | Editable entities over Oil protocol | ✔ | ✔ | ✔ |   |
 | `flaw-oil-server` | Server for Oil protocol | ✔ |   |   |   |
 | `flaw-physics` | General interface for physics simulation | ✔ | ✔ | ✔ | ✔ |
 | `flaw-sdl` | Integration with SDL 2 | ✔ |   | ✔ |   |
