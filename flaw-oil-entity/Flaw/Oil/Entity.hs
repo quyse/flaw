@@ -99,14 +99,14 @@ class Typeable a => Entity a where
 	getEntityTypeId :: a -> EntityTypeId
 
 	-- | Deserialize entity's data.
-	deserializeEntity :: Monad m => (B.ByteString -> m B.ByteString) -> m (Maybe a)
+	deserializeEntity :: Monad m => (B.ByteString -> m B.ByteString) -> m a
 	-- default implementation simply deserializes main value.
-	default deserializeEntity :: (S.Serialize a, Monad m) => (B.ByteString -> m B.ByteString) -> m (Maybe a)
+	default deserializeEntity :: (S.Serialize a, Monad m) => (B.ByteString -> m B.ByteString) -> m a
 	deserializeEntity f = do
 		value <- f B.empty
 		return $ case S.decode value of
-			Left _e -> Nothing
-			Right r -> Just r
+			Left e -> error e
+			Right r -> r
 
 	-- | Serialize entity's data.
 	serializeEntity :: Monad m
@@ -122,12 +122,12 @@ class Typeable a => Entity a where
 		:: a -- ^ Current entity value.
 		-> B.ByteString -- ^ Key suffix of changed record.
 		-> B.ByteString -- ^ New value of changed record.
-		-> Maybe a
+		-> a
 	-- by default simply ignore changes to non-empty suffixes, and re-deserialize entity otherwise
 	processEntityChange oldEntity changedKeySuffix newValue =
 		if B.null changedKeySuffix then
 			runIdentity $ deserializeEntity $ \keySuffix -> return $ if B.null keySuffix then newValue else B.empty
-		else Just oldEntity
+		else oldEntity
 
 -- | Container for any entity.
 data SomeEntity where
@@ -138,8 +138,9 @@ data NullEntity = NullEntity deriving Typeable
 
 instance Entity NullEntity where
 	getEntityTypeId _ = EntityTypeId $ B.replicate ENTITY_TYPE_ID_SIZE 0
-	deserializeEntity _ = return $ Just NullEntity
+	deserializeEntity _ = return NullEntity
 	serializeEntity _ _ = return ()
+	processEntityChange NullEntity _ _ = NullEntity
 
 -- | Entity manager based on client repo.
 data EntityManager = EntityManager
@@ -260,9 +261,9 @@ pullEntityManager entityManager@EntityManager
 									{ entityValueEntity = newSomeEntity
 									}
 							else do
-								let newSomeEntity = maybe (SomeEntity NullEntity) SomeEntity $ processEntityChange entity recordKeySuffix $ if B.null recordKeySuffix then recordValueSuffix else recordValue
+								let newEntity = processEntityChange entity recordKeySuffix $ if B.null recordKeySuffix then recordValueSuffix else recordValue
 								writeTVar entityVar entityValue
-									{ entityValueEntity = newSomeEntity
+									{ entityValueEntity = SomeEntity newEntity
 									}
 								return $ return ()
 				Nothing ->
@@ -404,19 +405,19 @@ writeEntityVarRecord EntityVar
 	entityValue@EntityValue
 		{ entityValueEntity = SomeEntity entity
 		} <- readTVar entityValueVar
-	let maybeNewEntity = processEntityChange entity recordKeySuffix recordNewValue
-	case maybeNewEntity of
-		Just newEntity -> do
-			writeTVar entityValueVar $! entityValue
-				{ entityValueEntity = SomeEntity newEntity
-				}
-			-- make change to record
-			modifyTVar' dirtyRecordsVar $ M.insert (entityIdBytes <> recordKeySuffix) $ if B.null recordKeySuffix then let
-				EntityTypeId entityTypeIdBytes = getEntityTypeId newEntity
-				in entityTypeIdBytes <> recordNewValue else recordNewValue
-			-- schedule push
-			scheduleEntityManagerPush entityManager
-		Nothing -> throwSTM EntityVarWrongChangeException
+	let newEntity = processEntityChange entity recordKeySuffix recordNewValue
+	writeTVar entityValueVar $! entityValue
+		{ entityValueEntity = SomeEntity newEntity
+		}
+	-- make change to record
+	let newRecordValue =
+		if B.null recordKeySuffix then let
+			EntityTypeId entityTypeIdBytes = getEntityTypeId newEntity
+			in entityTypeIdBytes <> recordNewValue
+		else recordNewValue
+	modifyTVar' dirtyRecordsVar $ M.insert (entityIdBytes <> recordKeySuffix) newRecordValue
+	-- schedule push
+	scheduleEntityManagerPush entityManager
 
 data EntityException
 	= EntityVarWrongTypeException
