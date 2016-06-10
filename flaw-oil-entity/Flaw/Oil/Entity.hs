@@ -2,6 +2,40 @@
 Module: Flaw.Oil.Entity
 Description: Entity level of Oil.
 License: MIT
+
+Entity is a special typeclass of objects which can be stored in Oil repo, edited in Oil editor,
+and transmitted via Oil protocol.
+
+Entity can be serialized into series of key-value records, and deserialized from them.
+Each entity instance is identified by 'EntityId', and this entity id is a prefix for every
+database record of entity. In other words, all records related to a given entity are key-prefixed
+with entity id. Part of record's key after entity id is called /key suffix/ of record.
+
+Every entity instance has a main record: that's a record with key equal to entity id
+(in other words, with null key suffix). Existence of entity instance is determined by
+correctness of main record. If there's no main record or its value is incorrect,
+entity instance doesn't exist.
+
+Value of valid main record always starts with fixed-length /entity type id/, which determines
+Haskell type of entity. After entity type id there could be other data, depending on type.
+
+Values of all entity's records constitute entity's data. The only exception is main record:
+entity's data includes only part of the value after entity type id.
+
+Entities can be accessed through means of an additional layer before low-level Oil protocols, namely 'EntityManager'.
+'EntityManager' performs conversion between raw records and 'Entity' values and provides caching via 'EntityVar's.
+
+'EntityVar' is a container for entity value. 'EntityManager' ensures that all alive 'EntityVar's contains up-to-date values
+(using weak references to vars). 'EntityVar' also allows for changing a value of an entity's record,
+and automatically transmits that change into repo.
+
+Due to various implementation constraints, not every operation can be done in 'STM' monad. Specifically:
+
+* Creation of new 'EntityVar' (which includes generating new 'EntityId') or getting an entity var for an existing entity
+runs in 'IO' monad.
+
+* Reading entity value from 'EntityVar' or writing record value runs in 'STM' monad.
+
 -}
 
 {-# LANGUAGE DefaultSignatures, GADTs, GeneralizedNewtypeDeriving, PatternSynonyms #-}
@@ -69,7 +103,7 @@ instance S.Serialize EntityTypeId where
 
 -- | Entity "pointer" is a typed entity id.
 -- Doesn't keep a reference to cached entity.
--- You can read or write entity by repo pointer in IO monad.
+-- You can read or write entity by entity pointer in IO monad.
 newtype EntityPtr a = EntityPtr EntityId deriving S.Serialize
 
 -- | Entity var, stores cached entity.
@@ -329,7 +363,7 @@ cacheEntity entityManager@EntityManager
 					} -> when (tag == t) $ writeIORef cacheRef $ M.delete entityId cache
 				Nothing -> return ()
 
--- | Get repo var for a given entity.
+-- | Get entity var for a given entity.
 getEntityVar :: Entity a => EntityManager -> EntityPtr a -> IO (EntityVar a)
 getEntityVar entityManager@EntityManager
 	{ entityManagerFlow = flow
@@ -378,7 +412,7 @@ newEntityVar entityManager@EntityManager
 	cacheEntity entityManager (EntityId entityIdBytes) (SomeEntity NullEntity)
 
 -- | Read entity var type safely.
--- If repo var contains entity of wrong type, throws EntityVarWrongTypeException.
+-- If entity var contains entity of wrong type, throws EntityVarWrongTypeException.
 readEntityVar :: Entity a => EntityVar a -> STM a
 readEntityVar var = do
 	SomeEntity entity <- readSomeEntityVar var
