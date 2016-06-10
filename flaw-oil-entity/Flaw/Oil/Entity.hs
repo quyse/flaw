@@ -69,6 +69,7 @@ import Control.Exception
 import Control.Monad
 import Crypto.Random.EntropyPool
 import qualified Data.ByteString as B
+import Data.Default
 import Data.Functor.Identity
 import Data.IORef
 import qualified Data.Map.Strict as M
@@ -126,6 +127,9 @@ newtype SomeEntityPtr a = SomeEntityPtr EntityId deriving S.Serialize
 newtype SomeEntityVar = SomeEntityVar (TVar SomeEntity)
 
 -- | Class of repo entity.
+-- Entity should be able to deserialize from any data.
+-- It must not throw exceptions. It's free to ignore invalid data
+-- and/or provide some default values instead.
 class Typeable a => Entity a where
 
 	-- | Return type id of entity.
@@ -135,11 +139,11 @@ class Typeable a => Entity a where
 	-- | Deserialize entity's data.
 	deserializeEntity :: Monad m => (B.ByteString -> m B.ByteString) -> m a
 	-- default implementation simply deserializes main value.
-	default deserializeEntity :: (S.Serialize a, Monad m) => (B.ByteString -> m B.ByteString) -> m a
+	default deserializeEntity :: (S.Serialize a, Default a, Monad m) => (B.ByteString -> m B.ByteString) -> m a
 	deserializeEntity f = do
 		value <- f B.empty
 		return $ case S.decode value of
-			Left e -> error e
+			Left _e -> def
 			Right r -> r
 
 	-- | Serialize entity's data.
