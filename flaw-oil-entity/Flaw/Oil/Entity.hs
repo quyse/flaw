@@ -38,21 +38,25 @@ runs in 'IO' monad.
 
 -}
 
-{-# LANGUAGE DefaultSignatures, GADTs, GeneralizedNewtypeDeriving, PatternSynonyms #-}
+{-# LANGUAGE DefaultSignatures, GADTs, GeneralizedNewtypeDeriving, PatternSynonyms, TemplateHaskell #-}
 
 module Flaw.Oil.Entity
 	( EntityId(..)
 	, pattern ENTITY_ID_SIZE
+	, nullEntityId
 	, EntityTypeId(..)
 	, pattern ENTITY_TYPE_ID_SIZE
+	, nullEntityTypeId
 	, EntityPtr(..)
 	, EntityVar(..)
 	, SomeEntityPtr(..)
 	, SomeEntityVar(..)
 	, Entity(..)
+	, BasicEntity(..)
 	, SomeEntity(..)
 	, NullEntity(..)
 	, EntityManager(..)
+	, Deserializator
 	, newEntityManager
 	, registerEntityType
 	, pullEntityManager
@@ -61,32 +65,52 @@ module Flaw.Oil.Entity
 	, readEntityVar
 	, readSomeEntityVar
 	, writeEntityVarRecord
+	, writeBasicEntityVar
 	, EntityException(..)
+	, hashTextToEntityTypeId
 	) where
 
 import Control.Concurrent.STM
 import Control.Exception
 import Control.Monad
-import Crypto.Random.EntropyPool
+import qualified Crypto.Hash as C
+import qualified Crypto.Random.EntropyPool as C
+import qualified Data.ByteArray as BA
+import qualified Data.ByteArray.Encoding as BA
 import qualified Data.ByteString as B
 import Data.Default
-import Data.Functor.Identity
 import Data.IORef
 import qualified Data.Map.Strict as M
 import Data.Monoid
 import qualified Data.Serialize as S
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
 import Data.Typeable
+import Language.Haskell.TH
+import qualified Language.Haskell.TH.Syntax as TH
 import System.Mem.Weak
 
 import Flaw.Book
+import Flaw.Build
 import Flaw.Flow
 import Flaw.Oil.ClientRepo
 
 -- | Entity id.
 newtype EntityId = EntityId B.ByteString deriving (Eq, Ord)
 
+instance Show EntityId where
+	show (EntityId entityIdBytes) = "EntityId \"" <> T.unpack (T.decodeUtf8 $ BA.convertToBase BA.Base64 entityIdBytes) <> "\""
+
+instance Default EntityId where
+	def = nullEntityId
+
 -- | Entity id length in bytes.
-pattern ENTITY_ID_SIZE = 16
+pattern ENTITY_ID_SIZE = 20
+
+-- | Null entity id.
+{-# NOINLINE nullEntityId #-}
+nullEntityId :: EntityId
+nullEntityId = EntityId $ B.replicate ENTITY_ID_SIZE 0
 
 instance S.Serialize EntityId where
 	put (EntityId bytes) = S.putByteString bytes
@@ -96,7 +120,12 @@ instance S.Serialize EntityId where
 newtype EntityTypeId = EntityTypeId B.ByteString deriving (Eq, Ord)
 
 -- | Entity type id length in bytes.
-pattern ENTITY_TYPE_ID_SIZE = 16
+pattern ENTITY_TYPE_ID_SIZE = 20
+
+-- | Null entity type id.
+{-# NOINLINE nullEntityTypeId #-}
+nullEntityTypeId :: EntityTypeId
+nullEntityTypeId = EntityTypeId $ B.replicate ENTITY_TYPE_ID_SIZE 0
 
 instance S.Serialize EntityTypeId where
 	put (EntityTypeId bytes) = S.putByteString bytes
@@ -105,7 +134,7 @@ instance S.Serialize EntityTypeId where
 -- | Entity "pointer" is a typed entity id.
 -- Doesn't keep a reference to cached entity.
 -- You can read or write entity by entity pointer in IO monad.
-newtype EntityPtr a = EntityPtr EntityId deriving S.Serialize
+newtype EntityPtr a = EntityPtr EntityId deriving (S.Serialize, Default)
 
 -- | Entity var, stores cached entity.
 -- Entity manager keeps updating the var until it GC'ed.
@@ -132,28 +161,24 @@ newtype SomeEntityVar = SomeEntityVar (TVar SomeEntity)
 -- and/or provide some default values instead.
 class Typeable a => Entity a where
 
+	{-# MINIMAL getEntityTypeId #-}
+
 	-- | Return type id of entity.
 	-- Parameter is not used and can be 'undefined'.
 	getEntityTypeId :: a -> EntityTypeId
 
-	-- | Deserialize entity's data.
-	deserializeEntity :: Monad m => (B.ByteString -> m B.ByteString) -> m a
-	-- default implementation simply deserializes main value.
-	default deserializeEntity :: (S.Serialize a, Default a, Monad m) => (B.ByteString -> m B.ByteString) -> m a
-	deserializeEntity f = do
-		value <- f B.empty
-		return $ case S.decode value of
-			Left _e -> def
-			Right r -> r
-
 	-- | Serialize entity's data.
-	serializeEntity :: Monad m
-		=> a -- ^ Entity to serialize.
-		-> (B.ByteString -> B.ByteString -> m ()) -- ^ Write record function accepting key suffix and value.
-		-> m ()
-	-- default implementation simply serializes entity into main value.
-	default serializeEntity :: (S.Serialize a, Monad m) => a -> (B.ByteString -> B.ByteString -> m ()) -> m ()
-	serializeEntity a f = f B.empty $ S.encode a
+	serializeEntity
+		:: a -- ^ Entity to serialize.
+		-> (B.ByteString -> B.ByteString -> IO ()) -- ^ Write record function accepting key suffix and value.
+		-> IO ()
+	default serializeEntity :: BasicEntity a => a -> (B.ByteString -> B.ByteString -> IO ()) -> IO ()
+	serializeEntity a f = f B.empty $ serializeBasicEntity a
+
+	-- | Deserialize entity's data.
+	deserializeEntity :: (B.ByteString -> IO B.ByteString) -> IO a
+	default deserializeEntity :: BasicEntity a => (B.ByteString -> IO B.ByteString) -> IO a
+	deserializeEntity f = deserializeBasicEntity <$> f B.empty
 
 	-- | Process change in entity's data.
 	processEntityChange
@@ -161,11 +186,22 @@ class Typeable a => Entity a where
 		-> B.ByteString -- ^ Key suffix of changed record.
 		-> B.ByteString -- ^ New value of changed record.
 		-> a
-	-- by default simply ignore changes to non-empty suffixes, and re-deserialize entity otherwise
-	processEntityChange oldEntity changedKeySuffix newValue =
-		if B.null changedKeySuffix then
-			runIdentity $ deserializeEntity $ \keySuffix -> return $ if B.null keySuffix then newValue else B.empty
-		else oldEntity
+	default processEntityChange :: BasicEntity a => a -> B.ByteString -> B.ByteString -> a
+	processEntityChange oldEntity changedKeySuffix newValue = if B.null changedKeySuffix then deserializeBasicEntity newValue else oldEntity
+
+-- | Basic entity is an entity consisting of main record only.
+class Entity a => BasicEntity a where
+	-- | Serialize basic entity into main record's value.
+	serializeBasicEntity :: a -> B.ByteString
+	default serializeBasicEntity :: S.Serialize a => a -> B.ByteString
+	serializeBasicEntity = S.encode
+
+	-- | Deserialize basic entity from main record's value.
+	deserializeBasicEntity :: B.ByteString -> a
+	default deserializeBasicEntity :: (S.Serialize a, Default a) => B.ByteString -> a
+	deserializeBasicEntity bytes = case S.decode bytes of
+		Left _e -> def
+		Right r -> r
 
 -- | Container for any entity.
 data SomeEntity where
@@ -175,7 +211,7 @@ data SomeEntity where
 data NullEntity = NullEntity deriving Typeable
 
 instance Entity NullEntity where
-	getEntityTypeId _ = EntityTypeId $ B.replicate ENTITY_TYPE_ID_SIZE 0
+	getEntityTypeId _ = nullEntityTypeId
 	deserializeEntity _ = return NullEntity
 	serializeEntity _ _ = return ()
 	processEntityChange NullEntity _ _ = NullEntity
@@ -184,13 +220,17 @@ instance Entity NullEntity where
 data EntityManager = EntityManager
 	{ entityManagerFlow :: !Flow
 	, entityManagerClientRepo :: !ClientRepo
+	-- | Push action, signal that client repo has client-side changes.
+	-- Any actions with client repo must be synchronized with entity manager,
+	-- so they must be performed either via entity manager flow,
+	-- or synchronously in this push action.
 	, entityManagerPushAction :: !(IO ())
 	-- | Entropy pool to generate new entity ids.
-	, entityManagerEntropyPool :: !EntropyPool
+	, entityManagerEntropyPool :: !C.EntropyPool
 	, entityManagerNextTagRef :: {-# UNPACK #-} !(IORef Int)
 	, entityManagerCacheRef :: {-# UNPACK #-} !(IORef (M.Map EntityId CachedEntity))
 	-- | Deserialization functions.
-	, entityManagerDeserializatorsRef :: {-# UNPACK #-} !(IORef (M.Map EntityTypeId Deserializator))
+	, entityManagerDeserializatorsVar :: {-# UNPACK #-} !(TVar (M.Map EntityTypeId Deserializator))
 	-- | Dirty entities.
 	, entityManagerDirtyRecordsVar :: {-# UNPACK #-} !(TVar (M.Map B.ByteString B.ByteString))
 	-- | Is push scheduled?
@@ -207,13 +247,16 @@ data CachedEntity = CachedEntity
 	}
 
 -- | Initialize entity manager.
-newEntityManager :: ClientRepo -> IO () -> IO (EntityManager, IO ())
+newEntityManager
+	:: ClientRepo -- ^ Underlying client repo.
+	-> IO () -- ^ Push action.
+	-> IO (EntityManager, IO ())
 newEntityManager clientRepo pushAction = withSpecialBook $ \bk -> do
 	flow <- book bk newFlow
-	entropyPool <- createEntropyPool
+	entropyPool <- C.createEntropyPool
 	nextTagRef <- newIORef 0
 	cacheRef <- newIORef M.empty
-	deserializatorsRef <- newIORef M.empty
+	deserializatorsVar <- newTVarIO M.empty
 	dirtyRecordsVar <- newTVarIO M.empty
 	pushScheduledVar <- newTVarIO False
 	return EntityManager
@@ -223,7 +266,7 @@ newEntityManager clientRepo pushAction = withSpecialBook $ \bk -> do
 		, entityManagerEntropyPool = entropyPool
 		, entityManagerNextTagRef = nextTagRef
 		, entityManagerCacheRef = cacheRef
-		, entityManagerDeserializatorsRef = deserializatorsRef
+		, entityManagerDeserializatorsVar = deserializatorsVar
 		, entityManagerDirtyRecordsVar = dirtyRecordsVar
 		, entityManagerPushScheduledVar = pushScheduledVar
 		}
@@ -231,20 +274,19 @@ newEntityManager clientRepo pushAction = withSpecialBook $ \bk -> do
 -- | Register entity type.
 registerEntityType :: EntityManager -> EntityTypeId -> Deserializator -> STM ()
 registerEntityType EntityManager
-	{ entityManagerFlow = flow
-	, entityManagerDeserializatorsRef = deserializatorsRef
-	} entityTypeId deserializator = asyncRunInFlow flow $ modifyIORef' deserializatorsRef $ M.insert entityTypeId deserializator
+	{ entityManagerDeserializatorsVar = deserializatorsVar
+	} entityTypeId deserializator = modifyTVar' deserializatorsVar $ M.insert entityTypeId deserializator
 
 -- | Deserialize entity.
 deserializeSomeEntity :: EntityManager -> EntityId -> IO SomeEntity
 deserializeSomeEntity EntityManager
 	{ entityManagerClientRepo = clientRepo
-	, entityManagerDeserializatorsRef = deserializatorsRef
+	, entityManagerDeserializatorsVar = deserializatorsVar
 	} (EntityId entityIdBytes) = do
 	mainValue <- clientRepoGetValue clientRepo entityIdBytes
 	if B.length mainValue >= ENTITY_TYPE_ID_SIZE then do
 		let (entityTypeId, mainValueSuffix) = B.splitAt ENTITY_TYPE_ID_SIZE mainValue
-		deserializators <- readIORef deserializatorsRef
+		deserializators <- readTVarIO deserializatorsVar
 		case M.lookup (EntityTypeId entityTypeId) deserializators of
 			Just deserializator -> deserializator $ \keySuffix ->
 				if B.null keySuffix then return mainValueSuffix
@@ -335,12 +377,14 @@ scheduleEntityManagerPush EntityManager
 			-- run push action
 			pushAction
 
-cacheEntity :: EntityManager -> EntityId -> SomeEntity -> IO (EntityVar a)
+cacheEntity :: EntityManager -> EntityId -> IO (EntityVar a)
 cacheEntity entityManager@EntityManager
 	{ entityManagerFlow = flow
 	, entityManagerNextTagRef = nextTagRef
 	, entityManagerCacheRef = cacheRef
-	} entityId initialEntity = do
+	} entityId = do
+	-- get initial value of entity
+	initialEntity <- deserializeSomeEntity entityManager entityId
 	-- create new var
 	tag <- atomicModifyIORef' nextTagRef $ \nextVarId -> (nextVarId + 1, nextVarId)
 	entityVar <- newTVarIO EntityValue
@@ -368,20 +412,16 @@ cacheEntity entityManager@EntityManager
 				Nothing -> return ()
 
 -- | Get entity var for a given entity.
-getEntityVar :: Entity a => EntityManager -> EntityPtr a -> IO (EntityVar a)
+getEntityVar :: Entity a => EntityManager -> EntityId -> IO (EntityVar a)
 getEntityVar entityManager@EntityManager
 	{ entityManagerFlow = flow
 	, entityManagerCacheRef = cacheRef
-	} (EntityPtr entityId) = runInFlow flow $ do
+	} entityId = runInFlow flow $ do
 
 	cache <- readIORef cacheRef
 
 	-- function to create new cached entity var
-	let cacheExistingEntityVar = do
-		-- get initial value of entity
-		initialEntity <- deserializeSomeEntity entityManager entityId
-		-- create new entity var
-		cacheEntity entityManager entityId initialEntity
+	let cacheExistingEntityVar = cacheEntity entityManager entityId
 
 	-- check if there's cached entity
 	case M.lookup entityId cache of
@@ -405,15 +445,23 @@ getEntityVar entityManager@EntityManager
 
 -- | Generate entity id and create new entity var.
 -- Generated entity is "empty", i.e. contains NullEntity.
-newEntityVar :: EntityManager -> IO (EntityVar a)
+newEntityVar :: Entity a => EntityManager -> IO (EntityVar a)
 newEntityVar entityManager@EntityManager
 	{ entityManagerFlow = flow
+	, entityManagerClientRepo = clientRepo
+	, entityManagerPushAction = pushAction
 	, entityManagerEntropyPool = entropyPool
-	} = runInFlow flow $ do
-	-- generate entity id
-	entityIdBytes <- getEntropyFrom entropyPool ENTITY_ID_SIZE
-	-- create cached entity var
-	cacheEntity entityManager (EntityId entityIdBytes) (SomeEntity NullEntity)
+	} = runInFlow flow $ f undefined where
+	f :: Entity a => a -> IO (EntityVar a)
+	f u = do
+		-- generate entity id
+		entityIdBytes <- C.getEntropyFrom entropyPool ENTITY_ID_SIZE
+		-- write entity type id
+		let EntityTypeId entityTypeIdBytes = getEntityTypeId u
+		clientRepoChange clientRepo entityIdBytes entityTypeIdBytes
+		pushAction
+		-- create cached entity var
+		cacheEntity entityManager (EntityId entityIdBytes)
 
 -- | Read entity var type safely.
 -- If entity var contains entity of wrong type, throws EntityVarWrongTypeException.
@@ -457,9 +505,25 @@ writeEntityVarRecord EntityVar
 	-- schedule push
 	scheduleEntityManagerPush entityManager
 
+-- | Write basic entity into entity var.
+writeBasicEntityVar :: BasicEntity a => EntityVar a -> a -> STM ()
+writeBasicEntityVar entityVar = writeEntityVarRecord entityVar B.empty . serializeBasicEntity
+
 data EntityException
 	= EntityVarWrongTypeException
-	| EntityVarWrongChangeException
 	deriving Show
 
 instance Exception EntityException
+
+-- | Handy function to generate compile-time entity type id out of text.
+hashTextToEntityTypeId :: T.Text -> Q Exp
+hashTextToEntityTypeId str = do
+	-- add hash as top decl
+	cnt <- runIO $ atomicModifyIORef TH.counter $ \c -> (c + 1, c)
+	n <- newName $ "entityTypeIdHash_" <> show cnt
+	TH.addTopDecls =<< sequence
+		[ pragInlD n NoInline FunLike AllPhases
+		, sigD n [t| EntityTypeId |]
+		, valD (varP n) (normalB [| EntityTypeId $(embedExp (BA.convert (C.hash (T.encodeUtf8 str) :: C.Digest C.SHA1) :: B.ByteString)) |]) []
+		]
+	varE n
