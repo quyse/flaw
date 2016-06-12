@@ -38,6 +38,9 @@ verify f m = do
 	r <- m
 	unless (f r) failTest
 
+mustThrow :: (Eq e, Exception e) => e -> IO a -> IO ()
+mustThrow e io = handle (\ee -> unless (e == ee) failTest) $ void io
+
 data TestException
 	= WaitForSyncTimedOut
 	deriving Show
@@ -61,7 +64,7 @@ session sessionName f = handle (\e -> print ("session failed" :: String, session
 		entityManager <- book bk $ newEntityManager clientRepo $ atomically $ writeTVar syncScheduledVar True
 
 		-- register deserializators
-		atomically $ forM_ basicEntityDeserializators $ uncurry $ registerEntityType entityManager
+		registerBasicEntityDeserializators entityManager
 
 		let sync = do
 			-- pull
@@ -138,6 +141,11 @@ main = do
 		clientWaitAndSync c1
 		verify (== 5) $ atomically $ readEntityVar intVar1
 		verify (== 5) $ atomically $ readEntityVar intVar2
+
+		ptrVar1 <- newEntityVar $ clientEntityManager c1 :: IO (EntityVar EntityId)
+		mustThrow EntityVarWrongTypeException $ atomically $ readEntityVar ptrVar1
+		atomically $ writeBasicEntityVar ptrVar1 intEntityId
+		verify (== intEntityId) $ atomically $ readEntityVar ptrVar1
 
 	testFailed <- readIORef testFailedRef
 	when testFailed exitFailure

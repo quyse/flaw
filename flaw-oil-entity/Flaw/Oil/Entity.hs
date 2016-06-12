@@ -56,7 +56,7 @@ module Flaw.Oil.Entity
 	, SomeEntity(..)
 	, NullEntity(..)
 	, EntityManager(..)
-	, Deserializator
+	, Deserializator(..)
 	, newEntityManager
 	, registerEntityType
 	, pullEntityManager
@@ -134,7 +134,7 @@ instance S.Serialize EntityTypeId where
 -- | Entity "pointer" is a typed entity id.
 -- Doesn't keep a reference to cached entity.
 -- You can read or write entity by entity pointer in IO monad.
-newtype EntityPtr a = EntityPtr EntityId deriving (S.Serialize, Default)
+newtype EntityPtr a = EntityPtr EntityId deriving (Eq, Ord, S.Serialize, Default, Show)
 
 -- | Entity var, stores cached entity.
 -- Entity manager keeps updating the var until it GC'ed.
@@ -166,19 +166,6 @@ class Typeable a => Entity a where
 	-- | Return type id of entity.
 	-- Parameter is not used and can be 'undefined'.
 	getEntityTypeId :: a -> EntityTypeId
-
-	-- | Serialize entity's data.
-	serializeEntity
-		:: a -- ^ Entity to serialize.
-		-> (B.ByteString -> B.ByteString -> IO ()) -- ^ Write record function accepting key suffix and value.
-		-> IO ()
-	default serializeEntity :: BasicEntity a => a -> (B.ByteString -> B.ByteString -> IO ()) -> IO ()
-	serializeEntity a f = f B.empty $ serializeBasicEntity a
-
-	-- | Deserialize entity's data.
-	deserializeEntity :: (B.ByteString -> IO B.ByteString) -> IO a
-	default deserializeEntity :: BasicEntity a => (B.ByteString -> IO B.ByteString) -> IO a
-	deserializeEntity f = deserializeBasicEntity <$> f B.empty
 
 	-- | Process change in entity's data.
 	processEntityChange
@@ -212,8 +199,6 @@ data NullEntity = NullEntity deriving Typeable
 
 instance Entity NullEntity where
 	getEntityTypeId _ = nullEntityTypeId
-	deserializeEntity _ = return NullEntity
-	serializeEntity _ _ = return ()
 	processEntityChange NullEntity _ _ = NullEntity
 
 -- | Entity manager based on client repo.
@@ -230,15 +215,15 @@ data EntityManager = EntityManager
 	, entityManagerNextTagRef :: {-# UNPACK #-} !(IORef Int)
 	, entityManagerCacheRef :: {-# UNPACK #-} !(IORef (M.Map EntityId CachedEntity))
 	-- | Deserialization functions.
-	, entityManagerDeserializatorsVar :: {-# UNPACK #-} !(TVar (M.Map EntityTypeId Deserializator))
+	, entityManagerDeserializatorsRef :: {-# UNPACK #-} !(IORef (M.Map EntityTypeId Deserializator))
 	-- | Dirty entities.
 	, entityManagerDirtyRecordsVar :: {-# UNPACK #-} !(TVar (M.Map B.ByteString B.ByteString))
 	-- | Is push scheduled?
 	, entityManagerPushScheduledVar :: {-# UNPACK #-} !(TVar Bool)
 	}
 
--- | Type of deserialization function.
-type Deserializator = (B.ByteString -> IO B.ByteString) -> IO SomeEntity
+-- | Deserializator function type.
+newtype Deserializator = Deserializator ((M.Map EntityTypeId Deserializator) -> B.ByteString -> SomeEntity)
 
 -- | Entity in cache.
 data CachedEntity = CachedEntity
@@ -256,7 +241,7 @@ newEntityManager clientRepo pushAction = withSpecialBook $ \bk -> do
 	entropyPool <- C.createEntropyPool
 	nextTagRef <- newIORef 0
 	cacheRef <- newIORef M.empty
-	deserializatorsVar <- newTVarIO M.empty
+	deserializatorsRef <- newIORef M.empty
 	dirtyRecordsVar <- newTVarIO M.empty
 	pushScheduledVar <- newTVarIO False
 	return EntityManager
@@ -266,31 +251,33 @@ newEntityManager clientRepo pushAction = withSpecialBook $ \bk -> do
 		, entityManagerEntropyPool = entropyPool
 		, entityManagerNextTagRef = nextTagRef
 		, entityManagerCacheRef = cacheRef
-		, entityManagerDeserializatorsVar = deserializatorsVar
+		, entityManagerDeserializatorsRef = deserializatorsRef
 		, entityManagerDirtyRecordsVar = dirtyRecordsVar
 		, entityManagerPushScheduledVar = pushScheduledVar
 		}
 
 -- | Register entity type.
-registerEntityType :: EntityManager -> EntityTypeId -> Deserializator -> STM ()
+registerEntityType :: EntityManager -> EntityTypeId -> Deserializator -> IO ()
 registerEntityType EntityManager
-	{ entityManagerDeserializatorsVar = deserializatorsVar
-	} entityTypeId deserializator = modifyTVar' deserializatorsVar $ M.insert entityTypeId deserializator
+	{ entityManagerDeserializatorsRef = deserializatorsRef
+	} entityTypeId = modifyIORef' deserializatorsRef . M.insert entityTypeId
 
 -- | Deserialize entity.
 deserializeSomeEntity :: EntityManager -> EntityId -> IO SomeEntity
 deserializeSomeEntity EntityManager
 	{ entityManagerClientRepo = clientRepo
-	, entityManagerDeserializatorsVar = deserializatorsVar
+	, entityManagerDeserializatorsRef = deserializatorsRef
 	} (EntityId entityIdBytes) = do
 	mainValue <- clientRepoGetValue clientRepo entityIdBytes
 	if B.length mainValue >= ENTITY_TYPE_ID_SIZE then do
 		let (entityTypeId, mainValueSuffix) = B.splitAt ENTITY_TYPE_ID_SIZE mainValue
-		deserializators <- readTVarIO deserializatorsVar
+		deserializators <- readIORef deserializatorsRef
 		case M.lookup (EntityTypeId entityTypeId) deserializators of
-			Just deserializator -> deserializator $ \keySuffix ->
-				if B.null keySuffix then return mainValueSuffix
-				else clientRepoGetValue clientRepo $ entityIdBytes <> keySuffix
+			Just (Deserializator deserializator) -> case deserializator deserializators mainValueSuffix of
+				SomeEntity baseEntity -> do
+					let f entity key = if key == entityIdBytes then return entity else processEntityChange entity key <$> clientRepoGetValue clientRepo key
+					entity <- foldM f baseEntity =<< clientRepoGetKeysPrefixed clientRepo entityIdBytes
+					return $ SomeEntity entity
 			Nothing -> return $ SomeEntity NullEntity
 	else return $ SomeEntity NullEntity
 
@@ -479,39 +466,67 @@ readSomeEntityVar EntityVar
 	} = entityValueEntity <$> readTVar valueVar
 
 -- | Write record for entity var.
+-- Current entity in the var must be of the correct type.
 writeEntityVarRecord :: Entity a => EntityVar a -> B.ByteString -> B.ByteString -> STM ()
-writeEntityVarRecord EntityVar
+writeEntityVarRecord entityVar@EntityVar
 	{ entityVarEntityManager = entityManager@EntityManager
 		{ entityManagerDirtyRecordsVar = dirtyRecordsVar
 		}
 	, entityVarEntityId = EntityId entityIdBytes
 	, entityVarValueVar = entityValueVar
 	} recordKeySuffix recordNewValue = do
-	-- modify entity
+	-- get entity
 	entityValue@EntityValue
 		{ entityValueEntity = SomeEntity entity
 		} <- readTVar entityValueVar
-	let newEntity = processEntityChange entity recordKeySuffix recordNewValue
-	writeTVar entityValueVar $! entityValue
-		{ entityValueEntity = SomeEntity newEntity
-		}
-	-- make change to record
-	let newRecordValue =
-		if B.null recordKeySuffix then let
-			EntityTypeId entityTypeIdBytes = getEntityTypeId newEntity
-			in entityTypeIdBytes <> recordNewValue
-		else recordNewValue
-	modifyTVar' dirtyRecordsVar $ M.insert (entityIdBytes <> recordKeySuffix) newRecordValue
+	-- check that current entity is the same as entity var underlying type
+	let
+		castEntityForVar :: (Typeable a, Typeable b) => EntityVar a -> b -> Maybe a
+		castEntityForVar _ = cast
+	case castEntityForVar entityVar entity of
+		-- if entity is of the same type
+		Just entityOfVarType -> do
+			-- simply apply the change
+			let newEntity = processEntityChange entityOfVarType recordKeySuffix recordNewValue
+			-- write to var
+			writeTVar entityValueVar $! entityValue
+				{ entityValueEntity = SomeEntity newEntity
+				}
+			-- write record
+			let newRecordValue =
+				if B.null recordKeySuffix then let
+					EntityTypeId entityTypeIdBytes = getEntityTypeId newEntity
+					in entityTypeIdBytes <> recordNewValue
+				else recordNewValue
+			modifyTVar' dirtyRecordsVar $ M.insert (entityIdBytes <> recordKeySuffix) newRecordValue
+		-- else entity is of another type
+		Nothing -> throwSTM EntityVarWrongTypeException
 	-- schedule push
 	scheduleEntityManagerPush entityManager
 
 -- | Write basic entity into entity var.
+-- Entity is replaced completely. Var may contain entity of wrong type prior to operation.
 writeBasicEntityVar :: BasicEntity a => EntityVar a -> a -> STM ()
-writeBasicEntityVar entityVar = writeEntityVarRecord entityVar B.empty . serializeBasicEntity
+writeBasicEntityVar EntityVar
+	{ entityVarEntityManager = entityManager@EntityManager
+		{ entityManagerDirtyRecordsVar = dirtyRecordsVar
+		}
+	, entityVarEntityId = EntityId entityIdBytes
+	, entityVarValueVar = entityValueVar
+	} newEntity = do
+	-- modify var
+	modifyTVar' entityValueVar $ \entityValue -> entityValue
+		{ entityValueEntity = SomeEntity newEntity
+		}
+	-- write record
+	let EntityTypeId entityTypeIdBytes = getEntityTypeId newEntity
+	modifyTVar' dirtyRecordsVar $ M.insert entityIdBytes $ entityTypeIdBytes <> serializeBasicEntity newEntity
+	-- schedule push
+	scheduleEntityManagerPush entityManager
 
 data EntityException
 	= EntityVarWrongTypeException
-	deriving Show
+	deriving (Eq, Show)
 
 instance Exception EntityException
 
