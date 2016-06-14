@@ -56,7 +56,10 @@ module Flaw.Oil.Entity
 	, SomeEntity(..)
 	, NullEntity(..)
 	, EntityManager(..)
-	, Deserializator(..)
+	, GetEntity
+	, getBaseEntityGetter
+	, Deserializator
+	, SomeBaseEntityGetter(..)
 	, newEntityManager
 	, registerEntityType
 	, pullEntityManager
@@ -73,6 +76,7 @@ module Flaw.Oil.Entity
 import Control.Concurrent.STM
 import Control.Exception
 import Control.Monad
+import Control.Monad.Reader
 import qualified Crypto.Hash as C
 import qualified Crypto.Random.EntropyPool as C
 import qualified Data.ByteArray as BA
@@ -117,7 +121,7 @@ instance S.Serialize EntityId where
 	get = EntityId <$> S.getBytes ENTITY_ID_SIZE
 
 -- | Entity type id.
-newtype EntityTypeId = EntityTypeId B.ByteString deriving (Eq, Ord)
+newtype EntityTypeId = EntityTypeId B.ByteString deriving (Eq, Ord, Monoid, Show)
 
 -- | Entity type id length in bytes.
 pattern ENTITY_TYPE_ID_SIZE = 20
@@ -125,7 +129,7 @@ pattern ENTITY_TYPE_ID_SIZE = 20
 -- | Null entity type id.
 {-# NOINLINE nullEntityTypeId #-}
 nullEntityTypeId :: EntityTypeId
-nullEntityTypeId = EntityTypeId $ B.replicate ENTITY_TYPE_ID_SIZE 0
+nullEntityTypeId = EntityTypeId B.empty
 
 instance S.Serialize EntityTypeId where
 	put (EntityTypeId bytes) = S.putByteString bytes
@@ -195,7 +199,7 @@ data SomeEntity where
 	SomeEntity :: Entity a => a -> SomeEntity
 
 -- | Null entity, used when no entity could be deserialized.
-data NullEntity = NullEntity deriving Typeable
+data NullEntity = NullEntity deriving (Typeable, Show)
 
 instance Entity NullEntity where
 	getEntityTypeId _ = nullEntityTypeId
@@ -222,8 +226,19 @@ data EntityManager = EntityManager
 	, entityManagerPushScheduledVar :: {-# UNPACK #-} !(TVar Bool)
 	}
 
+-- | Monad for deserializing entities.
+type GetEntity = ReaderT (S.Get SomeBaseEntityGetter) S.Get
+
+-- | Deserialize entity type and get entity getter for this type.
+getBaseEntityGetter :: GetEntity SomeBaseEntityGetter
+getBaseEntityGetter = lift =<< ask
+
 -- | Deserializator function type.
-newtype Deserializator = Deserializator ((M.Map EntityTypeId Deserializator) -> B.ByteString -> SomeEntity)
+type Deserializator = GetEntity SomeBaseEntityGetter
+
+-- | Getter for base entity.
+data SomeBaseEntityGetter where
+	SomeBaseEntityGetter :: Entity a => S.Get a -> SomeBaseEntityGetter
 
 -- | Entity in cache.
 data CachedEntity = CachedEntity
@@ -262,24 +277,35 @@ registerEntityType EntityManager
 	{ entityManagerDeserializatorsRef = deserializatorsRef
 	} entityTypeId = modifyIORef' deserializatorsRef . M.insert entityTypeId
 
+getRootGetter :: EntityManager -> IO (S.Get SomeBaseEntityGetter)
+getRootGetter EntityManager
+	{ entityManagerDeserializatorsRef = deserializatorsRef
+	} = do
+	deserializators <- readIORef deserializatorsRef
+	let rootGetter = do
+		firstEntityTypeId <- S.get
+		case M.lookup firstEntityTypeId deserializators of
+			Just deserializator -> runReaderT deserializator rootGetter
+			Nothing -> fail "unknown entity type id"
+	return rootGetter
+
 -- | Deserialize entity.
 deserializeSomeEntity :: EntityManager -> EntityId -> IO SomeEntity
-deserializeSomeEntity EntityManager
+deserializeSomeEntity entityManager@EntityManager
 	{ entityManagerClientRepo = clientRepo
-	, entityManagerDeserializatorsRef = deserializatorsRef
 	} (EntityId entityIdBytes) = do
 	mainValue <- clientRepoGetValue clientRepo entityIdBytes
-	if B.length mainValue >= ENTITY_TYPE_ID_SIZE then do
-		let (entityTypeId, mainValueSuffix) = B.splitAt ENTITY_TYPE_ID_SIZE mainValue
-		deserializators <- readIORef deserializatorsRef
-		case M.lookup (EntityTypeId entityTypeId) deserializators of
-			Just (Deserializator deserializator) -> case deserializator deserializators mainValueSuffix of
-				SomeEntity baseEntity -> do
-					let f entity key = if key == entityIdBytes then return entity else processEntityChange entity key <$> clientRepoGetValue clientRepo key
-					entity <- foldM f baseEntity =<< clientRepoGetKeysPrefixed clientRepo entityIdBytes
-					return $ SomeEntity entity
-			Nothing -> return $ SomeEntity NullEntity
-	else return $ SomeEntity NullEntity
+	rootGetter <- getRootGetter entityManager
+	let eitherReturnResult = flip S.runGet mainValue $ do
+		SomeBaseEntityGetter baseEntityGetter <- rootGetter
+		baseEntity <- baseEntityGetter
+		return $ do
+			let f entity key = if key == entityIdBytes then return entity else processEntityChange entity key <$> clientRepoGetValue clientRepo key
+			entity <- foldM f baseEntity =<< clientRepoGetKeysPrefixed clientRepo entityIdBytes
+			return $ SomeEntity entity
+	case eitherReturnResult of
+		Left _ -> return $ SomeEntity NullEntity
+		Right returnResult -> returnResult
 
 -- | Provide entity manager with changes pulled from remote repo.
 pullEntityManager :: EntityManager -> [(B.ByteString, B.ByteString)] -> STM ()
@@ -288,55 +314,79 @@ pullEntityManager entityManager@EntityManager
 	, entityManagerClientRepo = clientRepo
 	, entityManagerCacheRef = cacheRef
 	, entityManagerDirtyRecordsVar = dirtyRecordsVar
-	} changes = asyncRunInFlow flow $ forM_ (filter ((>= ENTITY_ID_SIZE) . B.length) $ map fst changes) $ \recordKey -> do
-	-- get entity id
-	let
-		(entityIdBytes, recordKeySuffix) = B.splitAt ENTITY_ID_SIZE recordKey
-		entityId = EntityId entityIdBytes
-	-- get cached entity
-	cache <- readIORef cacheRef
-	case M.lookup entityId cache of
-		Just CachedEntity
-			{ cachedEntityWeak = weak
-			} -> do
-			maybeEntityVar <- deRefWeak weak
-			case maybeEntityVar of
-				Just entityVar -> do
-					-- note that changes from pull info contain server value,
-					-- i.e. it doesn't include non-pushed-yet changes on client side
-					-- so we need to read real value from client repo
-					recordValue <- clientRepoGetValue clientRepo recordKey
-					join $ atomically $ do
-						-- update entity only if record is not dirty
-						dirtyRecords <- readTVar dirtyRecordsVar
-						if M.member recordKey dirtyRecords then return $ return ()
-						else do
-							entityValue@EntityValue
-								{ entityValueEntity = SomeEntity entity
-								} <- readTVar entityVar
-							-- get new entity type id (of course it's valid only in case of main record)
-							let (newEntityTypeIdBytes, recordValueSuffix) = B.splitAt ENTITY_TYPE_ID_SIZE recordValue
-							-- if entity type has changed
-							if B.null recordKeySuffix && getEntityTypeId entity /= EntityTypeId newEntityTypeIdBytes then return $ do
-								-- re-deserialize it completely
-								-- we have to do it via two STM transactions. between these transactions
-								-- the only thing which can happen is user will write something into entity var (not changing a type)
-								-- it will be useless anyway, and typed entity var will have to be re-typed at least
-								-- so hopefully it's ok to do two transactions
-								newSomeEntity <- deserializeSomeEntity entityManager entityId
-								atomically $ writeTVar entityVar entityValue
-									{ entityValueEntity = newSomeEntity
-									}
+	} changes = asyncRunInFlow flow $ do
+	rootGetter <- getRootGetter entityManager
+	forM_ (filter ((>= ENTITY_ID_SIZE) . B.length) $ map fst changes) $ \recordKey -> do
+		-- get entity id
+		let
+			(entityIdBytes, recordKeySuffix) = B.splitAt ENTITY_ID_SIZE recordKey
+			entityId = EntityId entityIdBytes
+		-- get cached entity
+		cache <- readIORef cacheRef
+		case M.lookup entityId cache of
+			Just CachedEntity
+				{ cachedEntityWeak = weak
+				} -> do
+				maybeEntityVar <- deRefWeak weak
+				case maybeEntityVar of
+					Just entityVar -> do
+						-- note that changes from pull info contain server value,
+						-- i.e. it doesn't include non-pushed-yet changes on client side
+						-- so we need to read real value from client repo
+						recordValue <- clientRepoGetValue clientRepo recordKey
+						join $ atomically $ do
+							-- update entity only if record is not dirty
+							dirtyRecords <- readTVar dirtyRecordsVar
+							if M.member recordKey dirtyRecords then return $ return ()
 							else do
-								let newEntity = processEntityChange entity recordKeySuffix $ if B.null recordKeySuffix then recordValueSuffix else recordValue
-								writeTVar entityVar entityValue
-									{ entityValueEntity = SomeEntity newEntity
-									}
-								return $ return ()
-				Nothing ->
-					-- expired cached entity, remove it
-					writeIORef cacheRef $ M.delete entityId cache
-		Nothing -> return ()
+								entityValue@EntityValue
+									{ entityValueEntity = SomeEntity entity
+									} <- readTVar entityVar
+								-- if it's main record
+								if B.null recordKeySuffix then do
+									-- get new entity type id
+									let getter = do
+										SomeBaseEntityGetter baseEntityGetter <- rootGetter
+										let
+											f :: Entity a => S.Get a -> a -> EntityTypeId
+											f _ = getEntityTypeId
+										let newEntityTypeId = f baseEntityGetter undefined
+										-- if entity type id hasn't changed, simply process change
+										if getEntityTypeId entity == newEntityTypeId then do
+											newValueSuffix <- S.getBytes =<< S.remaining
+											return $ do
+												writeTVar entityVar entityValue
+													{ entityValueEntity = SomeEntity $ processEntityChange entity B.empty newValueSuffix
+													}
+												return $ return ()
+										else return $ return $ do
+											-- re-deserialize it completely
+											-- we have to do it via two STM transactions. between these transactions
+											-- the only thing which can happen is user will write something into entity var (not changing a type)
+											-- it will be useless anyway, and typed entity var will have to be re-typed at least
+											-- so hopefully it's ok to do two transactions
+											newSomeEntity <- deserializeSomeEntity entityManager entityId
+											atomically $ writeTVar entityVar entityValue
+												{ entityValueEntity = newSomeEntity
+												}
+									case S.runGet getter recordValue of
+										Right stm -> stm
+										Left _e -> do
+											writeTVar entityVar entityValue
+												{ entityValueEntity = SomeEntity NullEntity
+												}
+											return $ return ()
+								-- else it's non-main record
+								else do
+									-- simply process change
+									writeTVar entityVar entityValue
+										{ entityValueEntity = SomeEntity $ processEntityChange entity recordKeySuffix recordValue
+										}
+									return $ return ()
+					Nothing ->
+						-- expired cached entity, remove it
+						writeIORef cacheRef $ M.delete entityId cache
+			Nothing -> return ()
 
 scheduleEntityManagerPush :: EntityManager -> STM ()
 scheduleEntityManagerPush EntityManager

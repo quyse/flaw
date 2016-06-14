@@ -22,7 +22,7 @@ library
     Flaw.Oil.Entity
     Flaw.Oil.Entity.Basic
   other-modules:
-  build-depends:       base, bytestring, cereal, cereal-text, containers, cryptonite, data-default, flaw-base, flaw-build, flaw-oil, memory, stm, template-haskell, text
+  build-depends:       base, bytestring, cereal, cereal-text, containers, cryptonite, data-default, flaw-base, flaw-build, flaw-oil, memory, mtl, stm, template-haskell, text
   default-language:    Haskell2010
 
 test-suite entity-test
