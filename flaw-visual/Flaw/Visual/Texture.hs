@@ -9,6 +9,7 @@ License: MIT
 module Flaw.Visual.Texture
 	( PackedTexture(..)
 	, loadTexture
+	, convertTextureToLinearRG
 	, emitTextureAsset
 	, emitDxtCompressedTextureAsset
 	, loadTextureAsset
@@ -17,12 +18,18 @@ module Flaw.Visual.Texture
 import Codec.Picture
 import Codec.Picture.Types
 import Control.Exception
+import Control.Monad
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
+import qualified Data.ByteString.Unsafe as B
 import qualified Data.Serialize as S
+import Data.Word
+import Foreign.Marshal.Alloc
+import Foreign.Ptr
 import Foreign.Storable
 import GHC.Generics(Generic)
 import Language.Haskell.TH
+import System.IO.Unsafe
 
 import Flaw.Asset.Texture.Dxt
 import Flaw.Build
@@ -113,6 +120,84 @@ loadTexture bytes = do
 	case decodeImage bytes of
 		Right dynamicImage -> loadDynamicImage dynamicImage
 		Left err -> fail err
+
+-- | Convert texture from whatever format to linear RG.
+-- Useful for normal map textures.
+-- Actual standard->linear conversion is not happening,
+-- it's presumed that texture data is in linear space already.
+convertTextureToLinearRG :: PackedTexture -> Maybe PackedTexture
+convertTextureToLinearRG packedTexture = case packedTexture of
+	-- texture is uncompressed RG: just ensure linear color space
+	PackedTexture
+		{ packedTextureInfo = info@TextureInfo
+			{ textureFormat = format@UncompressedTextureFormat
+				{ textureFormatComponents = PixelRG
+				}
+			}
+		} -> Just packedTexture
+		{ packedTextureInfo = info
+			{ textureFormat = format
+				{ textureFormatColorSpace = LinearColorSpace
+				}
+			}
+		}
+	-- texture is compressed RG: just ensure linear color space
+	PackedTexture
+		{ packedTextureInfo = info@TextureInfo
+			{ textureFormat = format@CompressedTextureFormat
+				{ textureFormatCompression = compression
+				}
+			}
+		} | compression == TextureCompressionBC5 || compression == TextureCompressionBC5Signed -> Just packedTexture
+		{ packedTextureInfo = info
+			{ textureFormat = format
+				{ textureFormatColorSpace = LinearColorSpace
+				}
+			}
+		}
+	-- texture is uncompressed RGB or RGBA
+	PackedTexture
+		{ packedTextureBytes = bytes
+		, packedTextureInfo = info@TextureInfo
+			{ textureFormat = format@UncompressedTextureFormat
+				{ textureFormatComponents = components
+				, textureFormatPixelSize = pixelSize
+				}
+			}
+		} -> let
+		newBytes inSize outSize = unsafePerformIO $ B.unsafeUseAsCStringLen bytes $ \(ptr, len) -> do
+			let pixelsCount = len `quot` inSize
+			let newLen = pixelsCount * outSize
+			newPtr <- mallocBytes newLen
+			let loop typedPtr typedNewPtr i = when (i < pixelsCount) $ do
+				pixel <- peek typedPtr
+				poke typedNewPtr pixel
+				loop (typedPtr `plusPtr` inSize) (typedNewPtr `plusPtr` (sizeOf pixel)) $ i + 1
+			case outSize of
+				2 -> loop (castPtr ptr :: Ptr Word16) (castPtr newPtr) 0
+				4 -> loop (castPtr ptr :: Ptr Word32) (castPtr newPtr) 0
+				8 -> loop (castPtr ptr :: Ptr Word64) (castPtr newPtr) 0
+				_ -> undefined -- cannot happen
+			B.unsafePackMallocCStringLen (newPtr, newLen)
+		newTexture inSize outSize outPixelSize = packedTexture
+			{ packedTextureBytes = newBytes inSize outSize
+			, packedTextureInfo = info
+				{ textureFormat = format
+					{ textureFormatComponents = PixelRG
+					, textureFormatPixelSize = outPixelSize
+					, textureFormatColorSpace = LinearColorSpace
+					}
+				}
+			}
+		in case (components, pixelSize) of
+			(PixelRGB, Pixel24bit) -> Just $ newTexture 3 2 Pixel16bit
+			(PixelRGB, Pixel96bit) -> Just $ newTexture 12 8 Pixel64bit
+			(PixelRGBA, Pixel32bit) -> Just $ newTexture 4 2 Pixel16bit
+			(PixelRGBA, Pixel64bit) -> Just $ newTexture 8 4 Pixel32bit
+			(PixelRGBA, Pixel128bit) -> Just $ newTexture 16 8 Pixel64bit
+			_ -> Nothing
+	-- others are unsupported
+	_ -> Nothing
 
 emitTextureAsset :: FilePath -> Q B.ByteString
 emitTextureAsset fileName = do

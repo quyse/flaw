@@ -23,6 +23,7 @@ import Flaw.App
 import Flaw.Asset.Collada
 import Flaw.Asset.Texture.Dxt
 import Flaw.Book
+import Flaw.Exception
 import Flaw.Flow
 import Flaw.Graphics
 import Flaw.Graphics.Program
@@ -324,12 +325,16 @@ main = withApp appConfig
 			Left err -> do
 				putStrLn $ T.unpack err
 
-	let loadTextureFile fileName = do
+	let loadTextureFile fileName isNormalTexture = do
 		bytes <- B.readFile $ T.unpack fileName
+		loadedTexture <- loadTexture bytes
 		PackedTexture
 			{ packedTextureBytes = textureBytes
 			, packedTextureInfo = textureInfo
-			} <- loadTexture bytes
+			} <- if isNormalTexture then case convertTextureToLinearRG loadedTexture of
+			Just t -> return t
+			Nothing -> throwIO $ DescribeFirstException ("failed to convert texture to RG" :: T.Text)
+			else return loadedTexture
 		(compressedTextureInfo, compressedTextureBytes) <- dxtCompressTexture textureInfo textureBytes
 		createStaticTexture device compressedTextureInfo defaultSamplerStateInfo compressedTextureBytes
 
@@ -383,7 +388,7 @@ main = withApp appConfig
 			fileName <- getText colladaFileElement
 			nodeName <- getText colladaNodeEditBox
 			asyncRunInFlow flow $ loadColladaFile fileName nodeName
-		let textureFileElement getTextureCell setTextureCell = do
+		let genericTextureFileElement isNormalTexture getTextureCell setTextureCell = do
 			fileElement <- newFileElement fileDialogService
 			setActionHandler fileElement $ do
 				fileName <- getText fileElement
@@ -392,16 +397,19 @@ main = withApp appConfig
 						{ textureCellBook = cellBook
 						} <- getTextureCell <$> readTVarIO editorStateVar
 					freePreviousTexture <- releaseBook cellBook
-					texture <- book cellBook $ loadTextureFile fileName
+					texture <- book cellBook $ loadTextureFile fileName isNormalTexture
 					atomically $ modifyTVar' editorStateVar $ setTextureCell cell
 						{ textureCellTexture = texture
 						}
 					freePreviousTexture
 			return fileElement
+		let
+			textureFileElement = genericTextureFileElement False
+			rgTextureFileElement = genericTextureFileElement True
 		albedoTextureFileElement <- textureFileElement editorStateAlbedoTextureCell $ \c s -> s
 			{ editorStateAlbedoTextureCell = c
 			}
-		normalTextureFileElement <- textureFileElement editorStateNormalTextureCell $ \c s -> s
+		normalTextureFileElement <- rgTextureFileElement editorStateNormalTextureCell $ \c s -> s
 			{ editorStateNormalTextureCell = c
 			}
 		lightIntensitySlider <- newSlider metrics 0.01

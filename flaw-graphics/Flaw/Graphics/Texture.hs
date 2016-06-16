@@ -37,7 +37,7 @@ data TextureFormat
 		{ textureFormatCompression :: !TextureCompression
 		, textureFormatColorSpace :: !ColorSpace
 		}
-	deriving (Generic, Show)
+	deriving (Eq, Generic, Show)
 
 instance S.Serialize TextureFormat
 
@@ -47,7 +47,7 @@ data PixelComponents
 	| PixelRG
 	| PixelRGB
 	| PixelRGBA
-	deriving (Generic, Show)
+	deriving (Eq, Generic, Show)
 
 instance S.Serialize PixelComponents
 
@@ -56,7 +56,7 @@ data PixelValueType
 	= PixelUntyped
 	| PixelUint
 	| PixelFloat
-	deriving (Generic, Show)
+	deriving (Eq, Generic, Show)
 
 instance S.Serialize PixelValueType
 
@@ -69,7 +69,7 @@ data PixelSize
 	| Pixel64bit
 	| Pixel96bit
 	| Pixel128bit
-	deriving (Generic, Show)
+	deriving (Eq, Ord, Generic, Show)
 
 instance S.Serialize PixelSize
 
@@ -97,7 +97,7 @@ data TextureCompression
 	| TextureCompressionBC5
 	-- | RG signed (128 bit, simply two BC4 blocks)
 	| TextureCompressionBC5Signed
-	deriving (Generic, Show)
+	deriving (Eq, Generic, Show)
 
 instance S.Serialize TextureCompression
 
@@ -105,7 +105,7 @@ instance S.Serialize TextureCompression
 data ColorSpace
 	= LinearColorSpace
 	| StandardColorSpace
-	deriving (Generic, Show)
+	deriving (Eq, Generic, Show)
 
 instance S.Serialize ColorSpace
 
