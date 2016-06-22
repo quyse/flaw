@@ -15,7 +15,6 @@ import qualified Data.ByteString as B
 import Data.Default
 import Data.Int
 import Data.Monoid
-import qualified Data.Serialize as S
 import Data.Serialize.Text()
 import qualified Data.Text as T
 import Data.Word
@@ -73,25 +72,20 @@ registerBasicEntityDeserializators :: EntityManager -> IO ()
 registerBasicEntityDeserializators entityManager = do
 	-- register EntityPtr's deserializator
 	registerEntityType entityManager entityPtrFirstEntityTypeId $ do
-		SomeBaseEntityGetter underlyingBaseEntityGetter <- getBaseEntityGetter
-		return $ SomeBaseEntityGetter $ do
-			bytes <- S.getBytes =<< S.remaining
-			let
-				setType :: Entity a => S.Get a -> EntityPtr a
-				setType _ = deserializeBasicEntity bytes
-			return $ setType underlyingBaseEntityGetter
+		SomeEntity underlyingBaseEntity <- getRootBaseEntity
+		let
+			setType :: Entity a => a -> EntityPtr a
+			setType _ = EntityPtr nullEntityId
+		return $ SomeEntity $ setType underlyingBaseEntity
 
 	-- register basic entities
-	f (undefined :: EntityId)
-	f (undefined :: Int32)
-	f (undefined :: Int64)
-	f (undefined :: Word32)
-	f (undefined :: Word64)
-	f (undefined :: Integer)
-	f (undefined :: B.ByteString)
-	f (undefined :: T.Text)
+	f (def :: EntityId)
+	f (def :: Int32)
+	f (def :: Int64)
+	f (def :: Word32)
+	f (def :: Word64)
+	f (def :: Integer)
+	f (def :: B.ByteString)
+	f (def :: T.Text)
 	where
-		f :: BasicEntity a => a -> IO ()
-		f a = registerEntityType entityManager (getEntityTypeId a) $ return $ SomeBaseEntityGetter $ q a <$> (S.getBytes =<< S.remaining)
-		q :: BasicEntity a => a -> B.ByteString -> a
-		q _ = deserializeBasicEntity
+		f a = registerEntityType entityManager (getEntityTypeId a) $ return $ SomeEntity a

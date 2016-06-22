@@ -57,9 +57,8 @@ module Flaw.Oil.Entity
 	, NullEntity(..)
 	, EntityManager(..)
 	, GetEntity
-	, getBaseEntityGetter
+	, getRootBaseEntity
 	, Deserializator
-	, SomeBaseEntityGetter(..)
 	, newEntityManager
 	, registerEntityType
 	, pullEntityManager
@@ -227,18 +226,14 @@ data EntityManager = EntityManager
 	}
 
 -- | Monad for deserializing entities.
-type GetEntity = ReaderT (S.Get SomeBaseEntityGetter) S.Get
+type GetEntity = ReaderT (S.Get SomeEntity) S.Get
 
 -- | Deserialize entity type and get entity getter for this type.
-getBaseEntityGetter :: GetEntity SomeBaseEntityGetter
-getBaseEntityGetter = lift =<< ask
+getRootBaseEntity :: GetEntity SomeEntity
+getRootBaseEntity = lift =<< ask
 
 -- | Deserializator function type.
-type Deserializator = GetEntity SomeBaseEntityGetter
-
--- | Getter for base entity.
-data SomeBaseEntityGetter where
-	SomeBaseEntityGetter :: Entity a => S.Get a -> SomeBaseEntityGetter
+type Deserializator = GetEntity SomeEntity
 
 -- | Entity in cache.
 data CachedEntity = CachedEntity
@@ -277,7 +272,7 @@ registerEntityType EntityManager
 	{ entityManagerDeserializatorsRef = deserializatorsRef
 	} entityTypeId = modifyIORef' deserializatorsRef . M.insert entityTypeId
 
-getRootGetter :: EntityManager -> IO (S.Get SomeBaseEntityGetter)
+getRootGetter :: EntityManager -> IO (S.Get SomeEntity)
 getRootGetter EntityManager
 	{ entityManagerDeserializatorsRef = deserializatorsRef
 	} = do
@@ -297,10 +292,12 @@ deserializeSomeEntity entityManager@EntityManager
 	mainValue <- clientRepoGetValue clientRepo entityIdBytes
 	rootGetter <- getRootGetter entityManager
 	let eitherReturnResult = flip S.runGet mainValue $ do
-		SomeBaseEntityGetter baseEntityGetter <- rootGetter
-		baseEntity <- baseEntityGetter
+		SomeEntity baseEntity <- rootGetter
+		mainValueSuffix <- S.getBytes =<< S.remaining
 		return $ do
-			let f entity key = if key == entityIdBytes then return entity else processEntityChange entity key <$> clientRepoGetValue clientRepo key
+			let f entity key = processEntityChange entity (B.drop (B.length entityIdBytes) key) <$>
+				if key == entityIdBytes then return mainValueSuffix
+				else clientRepoGetValue clientRepo key
 			entity <- foldM f baseEntity =<< clientRepoGetKeysPrefixed clientRepo entityIdBytes
 			return $ SomeEntity entity
 	case eitherReturnResult of
@@ -346,13 +343,9 @@ pullEntityManager entityManager@EntityManager
 								if B.null recordKeySuffix then do
 									-- get new entity type id
 									let getter = do
-										SomeBaseEntityGetter baseEntityGetter <- rootGetter
-										let
-											f :: Entity a => S.Get a -> a -> EntityTypeId
-											f _ = getEntityTypeId
-										let newEntityTypeId = f baseEntityGetter undefined
+										SomeEntity baseEntity <- rootGetter
 										-- if entity type id hasn't changed, simply process change
-										if getEntityTypeId entity == newEntityTypeId then do
+										if getEntityTypeId entity == getEntityTypeId baseEntity then do
 											newValueSuffix <- S.getBytes =<< S.remaining
 											return $ do
 												writeTVar entityVar entityValue
