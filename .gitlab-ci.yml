@@ -219,6 +219,7 @@ linux-arm:
 
 itch:
   stage: deploy
+  environment: itch
   dependencies:
   - linux
   - windows
@@ -238,6 +239,7 @@ itch:
 
 pages:
   stage: deploy
+  environment: pages
   dependencies: []
   script:
   - "stack --no-terminal build --test --haddock --coverage $PACKAGES_LINUX"
