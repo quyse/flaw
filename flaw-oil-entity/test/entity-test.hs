@@ -15,6 +15,7 @@ import Control.Exception
 import Control.Monad
 import Data.Int
 import Data.IORef
+import qualified Data.Map.Strict as M
 import Data.Word
 import System.Exit
 import System.IO.Unsafe
@@ -182,6 +183,26 @@ main = do
 		mustThrow EntityVarWrongTypeException $ void $ atomically $ readEntityVar ptrVar1
 		-- was incorrectly typed, now correct
 		verify (== EntityPtr intEntityId) $ atomically $ readEntityVar ptrVar3
+
+		-- test map
+		mapVar <- newEntityVar $ clientEntityManager c1 :: IO (EntityVar (M.Map (EntityPtr Word32) (EntityPtr Int32)))
+		verify (== M.empty) $ atomically $ readEntityVar mapVar
+		-- insert
+		ptr <- atomically $ readEntityVar ptrVar3
+		atomically $ writeInsertMapEntityVar mapVar (EntityPtr intEntityId) ptr
+		verify (== M.fromList [(EntityPtr intEntityId, ptr)]) $ atomically $ readEntityVar mapVar
+		-- sync
+		clientWaitAndSync c1
+		clientSync c2
+		mapVar2 <- getEntityVar (clientEntityManager c2) $ entityVarEntityId mapVar :: IO (EntityVar (M.Map (EntityPtr Word32) (EntityPtr Int32)))
+		verify (== M.fromList [(EntityPtr intEntityId, ptr)]) $ atomically $ readEntityVar mapVar2
+		-- delete
+		atomically $ writeDeleteMapEntityVar mapVar2 (EntityPtr intEntityId)
+		verify (== M.empty) $ atomically $ readEntityVar mapVar2
+		-- sync
+		clientWaitAndSync c2
+		clientSync c1
+		verify (== M.empty) $ atomically $ readEntityVar mapVar
 
 	testFailed <- readIORef testFailedRef
 	when testFailed exitFailure

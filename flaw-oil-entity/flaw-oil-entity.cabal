@@ -29,5 +29,5 @@ test-suite entity-test
   type:                exitcode-stdio-1.0
   main-is:             entity-test.hs
   hs-source-dirs:      test
-  build-depends:       base, flaw-base, flaw-oil, flaw-oil-entity, stm
+  build-depends:       base, containers, flaw-base, flaw-oil, flaw-oil-entity, stm
   default-language:    Haskell2010

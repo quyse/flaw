@@ -54,13 +54,18 @@ module Flaw.Oil.Entity
 	, Entity(..)
 	, BasicEntity(..)
 	, SomeEntity(..)
+	, SomeBasicEntity(..)
+	, SomeBasicOrdEntity(..)
 	, NullEntity(..)
 	, EntityManager(..)
 	, GetEntity
 	, getRootBaseEntity
-	, Deserializator
+	, getRootBaseBasicEntity
+	, getRootBaseBasicOrdEntity
 	, newEntityManager
 	, registerEntityType
+	, registerBasicEntityType
+	, registerBasicOrdEntityType
 	, pullEntityManager
 	, getEntityVar
 	, newEntityVar
@@ -171,6 +176,11 @@ class Typeable a => Entity a where
 	getEntityTypeId :: a -> EntityTypeId
 
 	-- | Process change in entity's data.
+	-- Changes of one specific record (with fixed key) constitutes a group.
+	-- Changes to different records are commutative.
+	-- Must not throw exceptions.
+	-- Invalid values must be processed as well as valid,
+	-- keeping all the laws above, possibly recording some error state into entity.
 	processEntityChange
 		:: a -- ^ Current entity value.
 		-> B.ByteString -- ^ Key suffix of changed record.
@@ -197,6 +207,14 @@ class Entity a => BasicEntity a where
 data SomeEntity where
 	SomeEntity :: Entity a => a -> SomeEntity
 
+-- | Container for basic entity.
+data SomeBasicEntity where
+	SomeBasicEntity :: BasicEntity a => a -> SomeBasicEntity
+
+-- | Container for basic ordered entity.
+data SomeBasicOrdEntity where
+	SomeBasicOrdEntity :: (BasicEntity a, Ord a) => a -> SomeBasicOrdEntity
+
 -- | Null entity, used when no entity could be deserialized.
 data NullEntity = NullEntity deriving (Typeable, Show)
 
@@ -217,8 +235,12 @@ data EntityManager = EntityManager
 	, entityManagerEntropyPool :: !C.EntropyPool
 	, entityManagerNextTagRef :: {-# UNPACK #-} !(IORef Int)
 	, entityManagerCacheRef :: {-# UNPACK #-} !(IORef (M.Map EntityId CachedEntity))
-	-- | Deserialization functions.
-	, entityManagerDeserializatorsRef :: {-# UNPACK #-} !(IORef (M.Map EntityTypeId Deserializator))
+	-- | Entity deserialization functions.
+	, entityManagerDeserializatorsRef :: {-# UNPACK #-} !(IORef (M.Map EntityTypeId (GetEntity SomeEntity)))
+	-- | Basic entity deserialization functions.
+	, entityManagerBasicDeserializatorsRef :: {-# UNPACK #-} !(IORef (M.Map EntityTypeId (GetEntity SomeBasicEntity)))
+	-- | Basic ordered entity deserialization functions.
+	, entityManagerBasicOrdDeserializatorsRef :: {-# UNPACK #-} !(IORef (M.Map EntityTypeId (GetEntity SomeBasicOrdEntity)))
 	-- | Dirty entities.
 	, entityManagerDirtyRecordsVar :: {-# UNPACK #-} !(TVar (M.Map B.ByteString B.ByteString))
 	-- | Is push scheduled?
@@ -226,14 +248,25 @@ data EntityManager = EntityManager
 	}
 
 -- | Monad for deserializing entities.
-type GetEntity = ReaderT (S.Get SomeEntity) S.Get
+type GetEntity = ReaderT GetEntityState S.Get
 
--- | Deserialize entity type and get entity getter for this type.
+data GetEntityState = GetEntityState
+	{ getEntityStateGetter :: !(S.Get SomeEntity)
+	, getEntityStateBasicGetter :: !(S.Get SomeBasicEntity)
+	, getEntityStateBasicOrdGetter :: !(S.Get SomeBasicOrdEntity)
+	}
+
+-- | Deserialize entity type and get base entity for this type.
 getRootBaseEntity :: GetEntity SomeEntity
-getRootBaseEntity = lift =<< ask
+getRootBaseEntity = lift . getEntityStateGetter =<< ask
 
--- | Deserializator function type.
-type Deserializator = GetEntity SomeEntity
+-- | Deserialize entity type and get basic base entity for this type.
+getRootBaseBasicEntity :: GetEntity SomeBasicEntity
+getRootBaseBasicEntity = lift . getEntityStateBasicGetter =<< ask
+
+-- | Deserialize entity type and get basic ordered base entity for this type.
+getRootBaseBasicOrdEntity :: GetEntity SomeBasicOrdEntity
+getRootBaseBasicOrdEntity = lift . getEntityStateBasicOrdGetter =<< ask
 
 -- | Entity in cache.
 data CachedEntity = CachedEntity
@@ -252,6 +285,8 @@ newEntityManager clientRepo pushAction = withSpecialBook $ \bk -> do
 	nextTagRef <- newIORef 0
 	cacheRef <- newIORef M.empty
 	deserializatorsRef <- newIORef M.empty
+	basicDeserializatorsRef <- newIORef M.empty
+	basicOrdDeserializatorsRef <- newIORef M.empty
 	dirtyRecordsVar <- newTVarIO M.empty
 	pushScheduledVar <- newTVarIO False
 	return EntityManager
@@ -262,27 +297,60 @@ newEntityManager clientRepo pushAction = withSpecialBook $ \bk -> do
 		, entityManagerNextTagRef = nextTagRef
 		, entityManagerCacheRef = cacheRef
 		, entityManagerDeserializatorsRef = deserializatorsRef
+		, entityManagerBasicDeserializatorsRef = basicDeserializatorsRef
+		, entityManagerBasicOrdDeserializatorsRef = basicOrdDeserializatorsRef
 		, entityManagerDirtyRecordsVar = dirtyRecordsVar
 		, entityManagerPushScheduledVar = pushScheduledVar
 		}
 
 -- | Register entity type.
-registerEntityType :: EntityManager -> EntityTypeId -> Deserializator -> IO ()
+registerEntityType :: EntityManager -> EntityTypeId -> (GetEntity SomeEntity) -> IO ()
 registerEntityType EntityManager
 	{ entityManagerDeserializatorsRef = deserializatorsRef
 	} entityTypeId = modifyIORef' deserializatorsRef . M.insert entityTypeId
 
-getRootGetter :: EntityManager -> IO (S.Get SomeEntity)
-getRootGetter EntityManager
+-- | Register basic entity type.
+registerBasicEntityType :: EntityManager -> EntityTypeId -> (GetEntity SomeBasicEntity) -> IO ()
+registerBasicEntityType entityManager@EntityManager
+	{ entityManagerBasicDeserializatorsRef = basicDeserializatorsRef
+	} entityTypeId deserializator = do
+	modifyIORef' basicDeserializatorsRef $ M.insert entityTypeId deserializator
+	registerEntityType entityManager entityTypeId $ do
+		SomeBasicEntity entity <- deserializator
+		return $ SomeEntity entity
+
+-- | Register basic ordered entity type.
+registerBasicOrdEntityType :: EntityManager -> EntityTypeId -> (GetEntity SomeBasicOrdEntity) -> IO ()
+registerBasicOrdEntityType entityManager@EntityManager
+	{ entityManagerBasicOrdDeserializatorsRef = basicOrdDeserializatorsRef
+	} entityTypeId deserializator = do
+	modifyIORef' basicOrdDeserializatorsRef $ M.insert entityTypeId deserializator
+	registerBasicEntityType entityManager entityTypeId $ do
+		SomeBasicOrdEntity entity <- deserializator
+		return $ SomeBasicEntity entity
+
+internalGetEntityState :: EntityManager -> IO GetEntityState
+internalGetEntityState EntityManager
 	{ entityManagerDeserializatorsRef = deserializatorsRef
+	, entityManagerBasicDeserializatorsRef = basicDeserializatorsRef
+	, entityManagerBasicOrdDeserializatorsRef = basicOrdDeserializatorsRef
 	} = do
 	deserializators <- readIORef deserializatorsRef
-	let rootGetter = do
-		firstEntityTypeId <- S.get
-		case M.lookup firstEntityTypeId deserializators of
-			Just deserializator -> runReaderT deserializator rootGetter
-			Nothing -> fail "unknown entity type id"
-	return rootGetter
+	basicDeserializators <- readIORef basicDeserializatorsRef
+	basicOrdDeserializators <- readIORef basicOrdDeserializatorsRef
+	let
+		f :: M.Map EntityTypeId (GetEntity a) -> S.Get a
+		f ds = do
+			firstEntityTypeId <- S.get
+			case M.lookup firstEntityTypeId ds of
+				Just deserializator -> runReaderT deserializator s
+				Nothing -> fail "unknown entity type id"
+		s = GetEntityState
+			{ getEntityStateGetter = f deserializators
+			, getEntityStateBasicGetter = f basicDeserializators
+			, getEntityStateBasicOrdGetter = f basicOrdDeserializators
+			}
+	return s
 
 -- | Deserialize entity.
 deserializeSomeEntity :: EntityManager -> EntityId -> IO SomeEntity
@@ -290,9 +358,9 @@ deserializeSomeEntity entityManager@EntityManager
 	{ entityManagerClientRepo = clientRepo
 	} (EntityId entityIdBytes) = do
 	mainValue <- clientRepoGetValue clientRepo entityIdBytes
-	rootGetter <- getRootGetter entityManager
+	getEntity <- getEntityStateGetter <$> internalGetEntityState entityManager
 	let eitherReturnResult = flip S.runGet mainValue $ do
-		SomeEntity baseEntity <- rootGetter
+		SomeEntity baseEntity <- getEntity
 		mainValueSuffix <- S.getBytes =<< S.remaining
 		return $ do
 			let f entity key = processEntityChange entity (B.drop (B.length entityIdBytes) key) <$>
@@ -312,7 +380,7 @@ pullEntityManager entityManager@EntityManager
 	, entityManagerCacheRef = cacheRef
 	, entityManagerDirtyRecordsVar = dirtyRecordsVar
 	} changes = asyncRunInFlow flow $ do
-	rootGetter <- getRootGetter entityManager
+	getEntity <- getEntityStateGetter <$> internalGetEntityState entityManager
 	forM_ (filter ((>= ENTITY_ID_SIZE) . B.length) $ map fst changes) $ \recordKey -> do
 		-- get entity id
 		let
@@ -343,7 +411,7 @@ pullEntityManager entityManager@EntityManager
 								if B.null recordKeySuffix then do
 									-- get new entity type id
 									let getter = do
-										SomeEntity baseEntity <- rootGetter
+										SomeEntity baseEntity <- getEntity
 										-- if entity type id hasn't changed, simply process change
 										if getEntityTypeId entity == getEntityTypeId baseEntity then do
 											newValueSuffix <- S.getBytes =<< S.remaining
