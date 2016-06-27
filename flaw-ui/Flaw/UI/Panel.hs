@@ -25,16 +25,17 @@ import Flaw.Math
 import Flaw.UI
 
 data Panel = Panel
-	{ panelChildrenVar :: !(TVar (S.Set PanelChild))
-	, panelChildIndexVar :: !(TVar Int)
-	, panelChildrenRenderOrderVar :: !(TVar [PanelChild])
-	, panelLayoutHandlerVar :: !(TVar (Size -> STM ()))
-	, panelSizeVar :: !(TVar Size)
+	{ panelChildrenVar :: {-# UNPACK #-} !(TVar (S.Set PanelChild))
+	, panelChildIndexVar :: {-# UNPACK #-} !(TVar Int)
+	, panelChildrenRenderOrderVar :: {-# UNPACK #-} !(TVar [PanelChild])
+	, panelLayoutHandlerVar :: {-# UNPACK #-} !(TVar (Size -> STM ()))
+	, panelSizeVar :: {-# UNPACK #-} !(TVar Size)
 	, panelStickyFocus :: !Bool
-	, panelFocusedChildVar :: !(TVar (Maybe PanelChild))
-	, panelLastMousedChildVar :: !(TVar (Maybe PanelChild))
-	, panelDefaultElementVar :: !(TVar (Maybe SomeElement))
-	, panelCancelElementVar :: !(TVar (Maybe SomeElement))
+	, panelFocusedChildVar :: {-# UNPACK #-} !(TVar (Maybe PanelChild))
+	, panelLastMousedChildVar :: {-# UNPACK #-} !(TVar (Maybe PanelChild))
+	, panelDefaultElementVar :: {-# UNPACK #-} !(TVar (Maybe SomeElement))
+	, panelCancelElementVar :: {-# UNPACK #-} !(TVar (Maybe SomeElement))
+	, panelCommitHandlerVar :: {-# UNPACK #-} !(TVar (Bool -> STM Bool))
 	}
 
 data PanelChild = PanelChild
@@ -54,6 +55,7 @@ newPanel stickyFocus = do
 	lastMousedChildVar <- newTVar Nothing
 	defaultElementVar <- newTVar Nothing
 	cancelElementVar <- newTVar Nothing
+	commitHandlerVar <- newTVar $ const $ return False
 	return Panel
 		{ panelChildrenVar = childrenVar
 		, panelChildIndexVar = childIndexVar
@@ -65,6 +67,7 @@ newPanel stickyFocus = do
 		, panelLastMousedChildVar = lastMousedChildVar
 		, panelDefaultElementVar = defaultElementVar
 		, panelCancelElementVar = cancelElementVar
+		, panelCommitHandlerVar = commitHandlerVar
 		}
 
 instance Eq PanelChild where
@@ -141,6 +144,7 @@ instance Element Panel where
 		, panelLastMousedChildVar = lastMousedChildVar
 		, panelDefaultElementVar = defaultElementVar
 		, panelCancelElementVar = cancelElementVar
+		, panelCommitHandlerVar = commitHandlerVar
 		} inputEvent inputState@InputState
 		{ inputStateKeyboard = keyboardState
 		, inputStateMouse = mouseState
@@ -150,14 +154,20 @@ instance Element Panel where
 			-- own processing: handle tab-moving focus, default and cancel elements
 			let tryPassToDefaultElement = do
 				defaultElement <- readTVar defaultElementVar
-				case defaultElement of
+				processed <- case defaultElement of
 					Just (SomeElement element) -> processInputEvent element inputEvent inputState
 					Nothing -> return False
+				if processed then return True else do
+					commitHandler <- readTVar commitHandlerVar
+					commitHandler True
 			let tryPassToCancelElement = do
 				cancelElement <- readTVar cancelElementVar
-				case cancelElement of
+				processed <- case cancelElement of
 					Just (SomeElement element) -> processInputEvent element inputEvent inputState
 					Nothing -> return False
+				if processed then return True else do
+					commitHandler <- readTVar commitHandlerVar
+					commitHandler False
 			let ownProcessEvent = case keyboardEvent of
 				KeyDownEvent KeyTab -> do
 					focusedChild <- readTVar focusedChildVar
@@ -289,6 +299,7 @@ instance Element Panel where
 
 	unfocusElement Panel
 		{ panelFocusedChildVar = focusedChildVar
+		, panelCommitHandlerVar = commitHandlerVar
 		} = do
 		focusedChild <- readTVar focusedChildVar
 		case focusedChild of
@@ -298,6 +309,8 @@ instance Element Panel where
 				unfocusElement element
 				writeTVar focusedChildVar Nothing
 			Nothing -> return ()
+		commitHandler <- readTVar commitHandlerVar
+		void $ commitHandler True
 
 instance FreeContainer Panel where
 
@@ -411,3 +424,6 @@ instance DefaultActionRedirector Panel where
 	setCancelElement Panel
 		{ panelCancelElementVar = cancelElementVar
 		} element = writeTVar cancelElementVar $ Just $ SomeElement element
+
+instance HasCommitHandler Panel where
+	setCommitHandler = writeTVar . panelCommitHandlerVar

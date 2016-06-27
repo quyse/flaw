@@ -32,6 +32,7 @@ module Flaw.UI
 	, DraggableInFreeContainer(..)
 	, SomeFreeChild(..)
 	, DefaultActionRedirector(..)
+	, HasCommitHandler(..)
 	, Focusable(..)
 	, Scrollable(..)
 	, SomeScrollable(..)
@@ -193,6 +194,12 @@ data SomeFreeChild where
 class Element a => DefaultActionRedirector a where
 	setDefaultElement :: Element e => a -> e -> STM ()
 	setCancelElement :: Element e => a -> e -> STM ()
+
+-- | Class of element which has commit handler.
+-- Commit handler is a handler called when change made in elements
+-- must be commited or cancelled.
+class Element a => HasCommitHandler a where
+	setCommitHandler :: a -> (Bool -> STM Bool) -> STM ()
 
 class Element a => Focusable a where
 	isFocused :: a -> STM Bool
