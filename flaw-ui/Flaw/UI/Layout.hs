@@ -12,6 +12,7 @@ module Flaw.UI.Layout
 	, labeledFlowLayout
 	, checkBoxedFlowLayout
 	, elementInFlowLayout
+	, elementWithSizeInFlowLayout
 	) where
 
 import Control.Concurrent.STM
@@ -144,17 +145,24 @@ checkBoxedFlowLayout text subLayout = do
 -- Adds gap after element.
 elementInFlowLayout :: (Element e, HasPreferredSize e) => e -> FlowLayoutM ()
 elementInFlowLayout element = do
+	FlowLayoutState
+		{ flsMetrics = metrics
+		} <- get
+	elementWithSizeInFlowLayout element (preferredSize metrics element)
+
+-- | Place explicitly sized element in layout.
+-- Adds gap after element.
+elementWithSizeInFlowLayout :: Element e => e -> Size -> FlowLayoutM ()
+elementWithSizeInFlowLayout element (Vec2 epsx epsy) = do
 	-- get state
 	s@FlowLayoutState
-		{ flsMetrics = metrics@Metrics
+		{ flsMetrics = Metrics
 			{ metricsGap = gap
 			}
 		, flsParentElement = SomeFreeContainer parentElement
 		, flsLayoutHandler = lh
 		, flsPreSize = Vec2 psx psy
 		} <- get
-	-- get preferred size
-	let Vec2 epsx epsy = preferredSize metrics element
 	-- add to container
 	elementChild <- lift $ addFreeChild parentElement element
 	put s
