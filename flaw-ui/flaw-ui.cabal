@@ -24,7 +24,6 @@ library
     Flaw.UI.CheckBox
     Flaw.UI.Drawer
     Flaw.UI.EditBox
-    Flaw.UI.Elements
     Flaw.UI.Frame
     Flaw.UI.Label
     Flaw.UI.Layout

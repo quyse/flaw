@@ -19,10 +19,14 @@ import Control.Concurrent.STM
 import Control.Monad.State.Strict
 import qualified Data.Text as T
 
-import Flaw.UI
-import Flaw.UI.Elements
 import Flaw.Math
+import Flaw.UI
+import Flaw.UI.CheckBox
+import Flaw.UI.Frame
+import Flaw.UI.Label
 import Flaw.UI.Metrics
+import Flaw.UI.Panel
+import Flaw.UI.VisualElement
 
 data FlowLayoutState = FlowLayoutState
 	{ flsMetrics :: !Metrics
