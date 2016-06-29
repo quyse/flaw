@@ -4,7 +4,7 @@ Description: Class for defining layout to edit entities.
 License: MIT
 -}
 
-{-# LANGUAGE DefaultSignatures, FlexibleContexts, FlexibleInstances, GADTs, TypeFamilies, TypeOperators #-}
+{-# LANGUAGE DefaultSignatures, FlexibleContexts, FlexibleInstances, TypeFamilies, TypeOperators #-}
 
 module Flaw.UI.Editor.Editable
 	( EditableLayoutState(..)
@@ -21,11 +21,13 @@ import Flaw.Book
 import Flaw.Flow
 import Flaw.Oil.Entity
 import Flaw.UI.Layout
+import Flaw.UI.Popup
 
 data EditableLayoutState = EditableLayoutState
 	{ elsFlow :: !Flow
 	, elsBook :: !Book
 	, elsEntityManager :: !EntityManager
+	, elsPopupService :: !PopupService
 	}
 
 type EditableLayoutM = ReaderT EditableLayoutState FlowLayoutM

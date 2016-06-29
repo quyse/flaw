@@ -12,6 +12,7 @@ module Flaw.UI.Editor.Editable.Basic
 	) where
 
 import Control.Concurrent.STM
+import Control.Monad.Reader
 import Control.Monad.State.Strict
 import qualified Data.Text as T
 
@@ -25,10 +26,12 @@ import Flaw.UI.Panel
 instance Editable T.Text where
 	editableTypeName _ = "Text"
 	editableConstructorName _ = "Text"
-	editableLayout setter = lift $ do
+	editableLayout setter = ReaderT $ \EditableLayoutState
+		{ elsPopupService = popupService
+		} -> do
 		currentValueVar <- lift $ newTVar T.empty
 		panel <- lift $ newPanel False
-		editBox <- lift $ newEditBox
+		editBox <- lift $ newEditBox popupService
 		_editBoxChild <- lift $ addFreeChild panel editBox
 		lift $ setLayoutHandler panel $ layoutElement editBox
 		FlowLayoutState
