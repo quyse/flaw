@@ -159,7 +159,7 @@ instance Element Panel where
 					Nothing -> return False
 				if processed then return True else do
 					commitHandler <- readTVar commitHandlerVar
-					commitHandler True
+					commitHandler CommitAccept
 			let tryPassToCancelElement = do
 				cancelElement <- readTVar cancelElementVar
 				processed <- case cancelElement of
@@ -167,7 +167,7 @@ instance Element Panel where
 					Nothing -> return False
 				if processed then return True else do
 					commitHandler <- readTVar commitHandlerVar
-					commitHandler False
+					commitHandler CommitCancel
 			let ownProcessEvent = case keyboardEvent of
 				KeyDownEvent KeyTab -> do
 					focusedChild <- readTVar focusedChildVar
@@ -310,7 +310,7 @@ instance Element Panel where
 				writeTVar focusedChildVar Nothing
 			Nothing -> return ()
 		commitHandler <- readTVar commitHandlerVar
-		void $ commitHandler True
+		void $ commitHandler CommitLostFocus
 
 instance FreeContainer Panel where
 

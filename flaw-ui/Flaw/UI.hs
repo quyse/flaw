@@ -33,6 +33,7 @@ module Flaw.UI
 	, SomeFreeChild(..)
 	, DefaultActionRedirector(..)
 	, HasCommitHandler(..)
+	, CommitReason(..)
 	, Focusable(..)
 	, Scrollable(..)
 	, SomeScrollable(..)
@@ -199,7 +200,14 @@ class Element a => DefaultActionRedirector a where
 -- Commit handler is a handler called when change made in elements
 -- must be commited or cancelled.
 class Element a => HasCommitHandler a where
-	setCommitHandler :: a -> (Bool -> STM Bool) -> STM ()
+	setCommitHandler :: a -> (CommitReason -> STM Bool) -> STM ()
+
+-- | Reason for commit handler.
+data CommitReason
+	= CommitAccept -- ^ User pressed Enter key.
+	| CommitCancel -- ^ User pressed Esc key.
+	| CommitLostFocus -- ^ Element lost focus.
+	deriving Eq
 
 class Element a => Focusable a where
 	isFocused :: a -> STM Bool

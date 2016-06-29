@@ -35,8 +35,8 @@ instance Editable T.Text where
 			{ flsMetrics = metrics
 			} <- get
 		elementWithSizeInFlowLayout panel (preferredSize metrics editBox)
-		lift $ setCommitHandler panel $ \commit -> do
-			if commit then do
+		lift $ setCommitHandler panel $ \commitReason -> do
+			if commitReason == CommitAccept || commitReason == CommitLostFocus then do
 				value <- getText editBox
 				currentValue <- readTVar currentValueVar
 				when (value /= currentValue) $ do
