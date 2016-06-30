@@ -27,14 +27,11 @@ import Flaw.Input.Mouse
 import Flaw.Math
 import Flaw.UI
 import Flaw.UI.Drawer
-import Flaw.UI.Menu
 import Flaw.UI.Metrics
-import Flaw.UI.Popup
 
 -- | Edit box.
 data EditBox = EditBox
-	{ editBoxPopupService :: !PopupService
-	, editBoxTextVar :: !(TVar T.Text)
+	{ editBoxTextVar :: !(TVar T.Text)
 	, editBoxTextScriptVar :: !(TVar FontScript)
 	, editBoxPasswordModeVar :: !(TVar Bool)
 	-- | Start and end position of selection.
@@ -54,11 +51,10 @@ data DelayedOp
 	= EmptyDelayedOp
 	| SetSelectionEndDelayedOp
 	| SetSelectionDelayedOp
-	| ContextMenuDelayedOp
 	deriving (Eq, Ord)
 
-newEditBox :: PopupService -> STM EditBox
-newEditBox popupService = do
+newEditBox :: STM EditBox
+newEditBox = do
 	textVar <- newTVar T.empty
 	textScriptVar <- newTVar fontScriptUnknown
 	passwordModeVar <- newTVar False
@@ -71,8 +67,7 @@ newEditBox popupService = do
 	blinkVar <- newTVar 0
 	delayedOpVar <- newTVar EmptyDelayedOp
 	return EditBox
-		{ editBoxPopupService = popupService
-		, editBoxTextVar = textVar
+		{ editBoxTextVar = textVar
 		, editBoxTextScriptVar = textScriptVar
 		, editBoxPasswordModeVar = passwordModeVar
 		, editBoxSelectionVar = selectionVar
@@ -102,8 +97,7 @@ instance Element EditBox where
 	elementMouseCursor _ = return MouseCursorIBeam
 
 	renderElement EditBox
-		{ editBoxPopupService = popupService
-		, editBoxTextVar = textVar
+		{ editBoxTextVar = textVar
 		, editBoxTextScriptVar = textScriptVar
 		, editBoxPasswordModeVar = passwordModeVar
 		, editBoxSelectionVar = selectionVar
@@ -246,15 +240,6 @@ instance Element EditBox where
 							Just (_, floatingCursor) -> do
 								writeTVar selectionVar (floatingCursor, floatingCursor)
 								writeTVar blinkVar 0 -- reset blink
-							Nothing -> return ()
-						writeTVar delayedOpVar EmptyDelayedOp
-					ContextMenuDelayedOp -> do
-						case maybeLastMousePosition of
-							Just (Vec2 mx my) -> newPopupMenu popupService (Vec2 (px + mx) (py + my)) $ Menu
-								[ MenuItemCommand "cut" $ return ()
-								, MenuItemCommand "copy" $ return ()
-								, MenuItemCommand "paste" $ return ()
-								]
 							Nothing -> return ()
 						writeTVar delayedOpVar EmptyDelayedOp
 
@@ -401,9 +386,6 @@ instance Element EditBox where
 					writeTVar mousePressedVar True
 					return True
 				else return False
-			MouseDownEvent RightMouseButton -> do
-				setDelayedOp ContextMenuDelayedOp
-				return True
 			MouseUpEvent LeftMouseButton -> do
 				writeTVar mousePressedVar False
 				return True

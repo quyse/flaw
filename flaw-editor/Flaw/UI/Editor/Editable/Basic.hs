@@ -26,12 +26,10 @@ import Flaw.UI.Panel
 instance Editable T.Text where
 	editableTypeName _ = "Text"
 	editableConstructorName _ = "Text"
-	editableLayout setter = ReaderT $ \EditableLayoutState
-		{ elsPopupService = popupService
-		} -> do
+	editableLayout setter = ReaderT $ \EditableLayoutState {} -> do
 		currentValueVar <- lift $ newTVar T.empty
 		panel <- lift $ newPanel False
-		editBox <- lift $ newEditBox popupService
+		editBox <- lift $ newEditBox
 		_editBoxChild <- lift $ addFreeChild panel editBox
 		lift $ setLayoutHandler panel $ layoutElement editBox
 		FlowLayoutState

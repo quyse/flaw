@@ -21,7 +21,6 @@ import Flaw.UI.EditBox
 import Flaw.UI.Editor.FileDialog
 import Flaw.UI.Metrics
 import Flaw.UI.Panel
-import Flaw.UI.Popup
 
 data FileElement = FileElement
 	{ fileElementPanel :: !Panel
@@ -29,14 +28,14 @@ data FileElement = FileElement
 	, fileElementActionHandlerVar :: {-# UNPACK #-} !(TVar (STM ()))
 	}
 
-newFileElement :: FileDialogService -> PopupService -> STM FileElement
+newFileElement :: FileDialogService -> STM FileElement
 newFileElement service@FileDialogService
 	{ fileDialogServiceMetrics = Metrics
 		{ metricsButtonSize = Vec2 buttonWidth _buttonHeight
 		}
-	} popupService = do
+	} = do
 	panel <- newPanel False
-	editBox <- newEditBox popupService
+	editBox <- newEditBox
 	editBoxChild <- addFreeChild panel editBox
 	browseButton <- newLabeledButton "..."
 	browseButtonChild <- addFreeChild panel browseButton

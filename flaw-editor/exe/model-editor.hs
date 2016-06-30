@@ -45,7 +45,6 @@ import Flaw.UI.Editor.Elements
 import Flaw.UI.Editor.FileDialog
 import Flaw.UI.Layout
 import Flaw.UI.Panel
-import Flaw.UI.Popup
 import Flaw.UI.RenderBox
 import Flaw.UI.Slider
 import Flaw.UI.Window
@@ -467,15 +466,13 @@ main = withApp appConfig
 		mainWindow <- newWindow window inputManager windowPanel
 		setWindowCloseHandler mainWindow $ writeTVar exitVar True
 
-		popupService <- newPopupService metrics windowPanel
-
 		fileDialogService <- newFileDialogService metrics windowPanel flow
 
 		initialEditorState <- readTVar editorStateVar
 
 		-- properties frame
-		colladaFileElement <- newFileElement fileDialogService popupService
-		colladaNodeEditBox <- newEditBox popupService
+		colladaFileElement <- newFileElement fileDialogService
+		colladaNodeEditBox <- newEditBox
 		do
 			let actionHandler = do
 				fileName <- getText colladaFileElement
@@ -492,7 +489,7 @@ main = withApp appConfig
 			unless (T.null initialFileName || T.null initialNodeName) actionHandler
 
 		let genericTextureFileElement isNormalTexture getTextureCell setTextureCell = do
-			fileElement <- newFileElement fileDialogService popupService
+			fileElement <- newFileElement fileDialogService
 			let actionHandler = do
 				fileName <- getText fileElement
 				asyncRunInFlow flow $ handle errorHandler $ do
