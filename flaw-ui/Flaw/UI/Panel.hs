@@ -97,18 +97,16 @@ instance Element Panel where
 		else do
 			Vec2 sx sy <- readTVar sizeVar
 			if px >= sx || py >= sy then return False
-			else do
-				children <- readTVar childrenVar
-				let
-					dabChildren (PanelChild
-						{ panelChildElement = SomeElement element
-						, panelChildPositionVar = childPositionVar
-						} : restChildren) = do
-						childPosition <- readTVar childPositionVar
-						r <- dabElement element $ point - childPosition
-						if r then return True else dabChildren restChildren
-					dabChildren [] = return False
-				dabChildren $ S.toDescList children
+			else let
+				dabChildren (PanelChild
+					{ panelChildElement = SomeElement element
+					, panelChildPositionVar = childPositionVar
+					} : restChildren) = do
+					childPosition <- readTVar childPositionVar
+					r <- dabElement element $ point - childPosition
+					if r then return True else dabChildren restChildren
+				dabChildren [] = return False
+				in dabChildren . S.toDescList =<< readTVar childrenVar
 
 	elementMouseCursor Panel
 		{ panelLastMousedChildVar = lastMousedChildVar

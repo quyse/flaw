@@ -31,17 +31,17 @@ import qualified Flaw.Window as W
 
 data Window = Window
 	{ windowNativeWindow :: !SomeNativeWindow
-	, windowEventsChan :: !(TChan W.WindowEvent)
-	, windowKeyboardEventsChan :: !(TChan KeyboardEvent)
+	, windowEventsChan :: {-# UNPACK #-} !(TChan W.WindowEvent)
+	, windowKeyboardEventsChan :: {-# UNPACK #-} !(TChan KeyboardEvent)
 	, windowKeyboardState :: !KeyboardState
-	, windowMouseEventsChan :: !(TChan MouseEvent)
+	, windowMouseEventsChan :: {-# UNPACK #-} !(TChan MouseEvent)
 	, windowMouseState :: !MouseState
 	, windowElement :: !SomeElement
-	, windowSizeVar :: !(TVar Int2)
-	, windowCloseHandlerVar :: !(TVar (STM ()))
-	, windowDestroyHandlerVar :: !(TVar (STM ()))
-	, windowActionsQueue :: !(TQueue (IO ()))
-	, windowMouseCursorVar :: !(TVar MouseCursor)
+	, windowSizeVar :: {-# UNPACK #-} !(TVar Int2)
+	, windowCloseHandlerVar :: {-# UNPACK #-} !(TVar (STM ()))
+	, windowDestroyHandlerVar :: {-# UNPACK #-} !(TVar (STM ()))
+	, windowActionsQueue :: {-# UNPACK #-} !(TQueue (IO ()))
+	, windowMouseCursorVar :: {-# UNPACK #-} !(TVar MouseCursor)
 	}
 
 data SomeNativeWindow where
@@ -140,15 +140,17 @@ processWindow Window
 				W.DestroyWindowEvent -> join $ readTVar destroyHandlerVar
 				W.ResizeWindowEvent width height -> updateLayout $ Vec2 width height
 				_ -> return ()
+		-- event handling
+		let handleEvent event = void $ processInputEvent element event inputState
 		-- keyboard events
 		let processKeyboardEvent = do
 			keyboardEvent <- readTChan keyboardEventsChan
-			_ <- processInputEvent element (KeyboardInputEvent keyboardEvent) inputState
+			handleEvent (KeyboardInputEvent keyboardEvent)
 			applyInputEvent keyboardState keyboardEvent
 		-- mouse events
 		let processMouseEvent = do
 			mouseEvent <- readTChan mouseEventsChan
-			_ <- processInputEvent element (MouseInputEvent mouseEvent) inputState
+			handleEvent (MouseInputEvent mouseEvent)
 			applyInputEvent mouseState mouseEvent
 		let processSomeEvent = orElse processWindowEvent (orElse processKeyboardEvent processMouseEvent)
 		join $ atomically $ orElse (processSomeEvent >> return process) (return $ return ())

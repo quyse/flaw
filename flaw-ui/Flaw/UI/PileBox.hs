@@ -24,10 +24,10 @@ import Flaw.UI.Panel
 data PileBox = PileBox
 	{ pileBoxPanel :: !Panel
 	, pileBoxElementsPanel :: !Panel
-	, pileBoxItems :: [PileBoxItem]
-	, pileBoxItemsChildren :: [FreeContainerChild Panel]
+	, pileBoxItems :: ![PileBoxItem]
+	, pileBoxItemsChildren :: ![FreeContainerChild Panel]
 	, pileBoxGripWidth :: {-# UNPACK #-} !Metric
-	, pileBoxHeightVar :: !(TVar Metric)
+	, pileBoxHeightVar :: {-# UNPACK #-} !(TVar Metric)
 	}
 
 data PileBoxItem = PileBoxItem
