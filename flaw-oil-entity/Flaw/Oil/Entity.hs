@@ -38,7 +38,7 @@ runs in 'IO' monad.
 
 -}
 
-{-# LANGUAGE DefaultSignatures, GADTs, GeneralizedNewtypeDeriving, PatternSynonyms, TemplateHaskell #-}
+{-# LANGUAGE DefaultSignatures, GADTs, GeneralizedNewtypeDeriving, PatternSynonyms, TemplateHaskell, TypeFamilies, TypeOperators #-}
 
 module Flaw.Oil.Entity
 	( EntityId(..)
@@ -73,6 +73,9 @@ module Flaw.Oil.Entity
 	, readSomeEntityVar
 	, writeEntityVarRecord
 	, writeBasicEntityVar
+	, EntityHistoryChan(..)
+	, entityVarHistory
+	, readEntityHistoryChan
 	, EntityException(..)
 	, hashTextToEntityTypeId
 	) where
@@ -145,7 +148,7 @@ instance S.Serialize EntityTypeId where
 newtype EntityPtr a = EntityPtr EntityId deriving (Eq, Ord, S.Serialize, Default, Show)
 
 -- | Entity var, stores cached entity.
--- Entity manager keeps updating the var until it GC'ed.
+-- Entity manager keeps updating the var until it's GC'ed.
 data EntityVar a = EntityVar
 	{ entityVarEntityManager :: !EntityManager
 	, entityVarEntityId :: !EntityId
@@ -153,9 +156,54 @@ data EntityVar a = EntityVar
 	}
 
 -- | Entity value, stored in entity var.
-newtype EntityValue = EntityValue
-	{ entityValueEntity :: SomeEntity
+data EntityValue = EntityValue
+	{ entityValueEntity :: !SomeEntity
+	, entityValueHistoryVar :: {-# UNPACK #-} !(TVar EntityHistory)
 	}
+
+-- | This is basically own implementation for broadcast `TChan`.
+data EntityHistory where
+	EntityHistoryEnd :: EntityHistory
+	EntityHistoryChange :: Entity a =>
+		{ entityHistoryEntity :: !a
+		, entityHistoryChange :: !(EntityChange a)
+		, entityHistoryNextVar :: {-# UNPACK #-} !(TVar EntityHistory)
+		} -> EntityHistory
+	EntityHistoryTypeChange :: Entity a =>
+		{ entityHistoryEntity :: !a
+		, entityHistoryNextVar :: {-# UNPACK #-} !(TVar EntityHistory)
+		} -> EntityHistory
+
+writeEntityChange :: Entity a => TVar EntityValue -> a -> EntityChange a -> STM ()
+writeEntityChange valueVar entity change = do
+	nextHistoryVar <- newTVar EntityHistoryEnd
+	entityValue@EntityValue
+		{ entityValueHistoryVar = historyVar
+		} <- readTVar valueVar
+	writeTVar historyVar EntityHistoryChange
+		{ entityHistoryEntity = entity
+		, entityHistoryChange = change
+		, entityHistoryNextVar = nextHistoryVar
+		}
+	writeTVar valueVar entityValue
+		{ entityValueEntity = SomeEntity entity
+		, entityValueHistoryVar = nextHistoryVar
+		}
+
+writeEntityTypeChange :: Entity a => TVar EntityValue -> a -> STM ()
+writeEntityTypeChange valueVar entity = do
+	nextHistoryVar <- newTVar EntityHistoryEnd
+	entityValue@EntityValue
+		{ entityValueHistoryVar = historyVar
+		} <- readTVar valueVar
+	writeTVar historyVar EntityHistoryTypeChange
+		{ entityHistoryEntity = entity
+		, entityHistoryNextVar = nextHistoryVar
+		}
+	writeTVar valueVar entityValue
+		{ entityValueEntity = SomeEntity entity
+		, entityValueHistoryVar = nextHistoryVar
+		}
 
 -- | Untyped entity pointer.
 newtype SomeEntityPtr a = SomeEntityPtr EntityId deriving S.Serialize
@@ -171,6 +219,10 @@ class Typeable a => Entity a where
 
 	{-# MINIMAL getEntityTypeId #-}
 
+	-- | Type representing change to entity.
+	type EntityChange a :: *
+	type EntityChange a = a
+
 	-- | Return type id of entity.
 	-- Parameter is not used and can be 'undefined'.
 	getEntityTypeId :: a -> EntityTypeId
@@ -185,12 +237,23 @@ class Typeable a => Entity a where
 		:: a -- ^ Current entity value.
 		-> B.ByteString -- ^ Key suffix of changed record.
 		-> B.ByteString -- ^ New value of changed record.
+		-> (a, EntityChange a)
+	default processEntityChange :: BasicEntity a => a -> B.ByteString -> B.ByteString -> (a, EntityChange a)
+	processEntityChange oldEntity changedKeySuffix newValue =
+		if B.null changedKeySuffix then
+			let newEntity = deserializeBasicEntity newValue in (newEntity, newEntity)
+		else (oldEntity, oldEntity)
+
+	-- | Apply change to get new entity.
+	applyEntityChange
+		:: EntityChange a -- ^ Entity change.
+		-> a -- ^ Current entity value.
 		-> a
-	default processEntityChange :: BasicEntity a => a -> B.ByteString -> B.ByteString -> a
-	processEntityChange oldEntity changedKeySuffix newValue = if B.null changedKeySuffix then deserializeBasicEntity newValue else oldEntity
+	default applyEntityChange :: EntityChange a ~ a => a -> a -> a
+	applyEntityChange = const
 
 -- | Basic entity is an entity consisting of main record only.
-class Entity a => BasicEntity a where
+class (Entity a, EntityChange a ~ a) => BasicEntity a where
 	-- | Serialize basic entity into main record's value.
 	serializeBasicEntity :: a -> B.ByteString
 	default serializeBasicEntity :: S.Serialize a => a -> B.ByteString
@@ -220,7 +283,7 @@ data NullEntity = NullEntity deriving (Typeable, Show)
 
 instance Entity NullEntity where
 	getEntityTypeId _ = nullEntityTypeId
-	processEntityChange NullEntity _ _ = NullEntity
+	processEntityChange NullEntity _ _ = (NullEntity, NullEntity)
 
 -- | Entity manager based on client repo.
 data EntityManager = EntityManager
@@ -363,7 +426,7 @@ deserializeSomeEntity entityManager@EntityManager
 		SomeEntity baseEntity <- getEntity
 		mainValueSuffix <- S.getBytes =<< S.remaining
 		return $ do
-			let f entity key = processEntityChange entity (B.drop (B.length entityIdBytes) key) <$>
+			let f entity key = fst . processEntityChange entity (B.drop (B.length entityIdBytes) key) <$>
 				if key == entityIdBytes then return mainValueSuffix
 				else clientRepoGetValue clientRepo key
 			entity <- foldM f baseEntity =<< clientRepoGetKeysPrefixed clientRepo entityIdBytes
@@ -416,9 +479,8 @@ pullEntityManager entityManager@EntityManager
 										if getEntityTypeId entity == getEntityTypeId baseEntity then do
 											newValueSuffix <- S.getBytes =<< S.remaining
 											return $ do
-												writeTVar entityVar entityValue
-													{ entityValueEntity = SomeEntity $ processEntityChange entity B.empty newValueSuffix
-													}
+												let (newEntity, entityChange) = processEntityChange entity B.empty newValueSuffix
+												writeEntityChange entityVar newEntity entityChange
 												return $ return ()
 										else return $ return $ do
 											-- re-deserialize it completely
@@ -426,10 +488,8 @@ pullEntityManager entityManager@EntityManager
 											-- the only thing which can happen is user will write something into entity var (not changing a type)
 											-- it will be useless anyway, and typed entity var will have to be re-typed at least
 											-- so hopefully it's ok to do two transactions
-											newSomeEntity <- deserializeSomeEntity entityManager entityId
-											atomically $ writeTVar entityVar entityValue
-												{ entityValueEntity = newSomeEntity
-												}
+											SomeEntity newEntity <- deserializeSomeEntity entityManager entityId
+											atomically $ writeEntityTypeChange entityVar newEntity
 									case S.runGet getter recordValue of
 										Right stm -> stm
 										Left _e -> do
@@ -440,9 +500,8 @@ pullEntityManager entityManager@EntityManager
 								-- else it's non-main record
 								else do
 									-- simply process change
-									writeTVar entityVar entityValue
-										{ entityValueEntity = SomeEntity $ processEntityChange entity recordKeySuffix recordValue
-										}
+									let (newEntity, entityChange) = processEntityChange entity recordKeySuffix recordValue
+									writeEntityChange entityVar newEntity entityChange
 									return $ return ()
 					Nothing ->
 						-- expired cached entity, remove it
@@ -485,8 +544,10 @@ cacheEntity entityManager@EntityManager
 	initialEntity <- deserializeSomeEntity entityManager entityId
 	-- create new var
 	tag <- atomicModifyIORef' nextTagRef $ \nextVarId -> (nextVarId + 1, nextVarId)
+	historyVar <- newTVarIO EntityHistoryEnd
 	entityVar <- newTVarIO EntityValue
 		{ entityValueEntity = initialEntity
+		, entityValueHistoryVar = historyVar
 		}
 	-- put it into cache
 	weak <- mkWeakTVar entityVar $ weakFinalizer tag
@@ -562,13 +623,13 @@ newEntityVar entityManager@EntityManager
 		cacheEntity entityManager (EntityId entityIdBytes)
 
 -- | Read entity var type safely.
--- If entity var contains entity of wrong type, throws EntityVarWrongTypeException.
+-- If entity var contains entity of wrong type, throws EntityWrongTypeException.
 readEntityVar :: Entity a => EntityVar a -> STM a
 readEntityVar var = do
 	SomeEntity entity <- readSomeEntityVar var
 	case cast entity of
 		Just correctEntity -> return correctEntity
-		Nothing -> throwSTM EntityVarWrongTypeException
+		Nothing -> throwSTM EntityWrongTypeException
 
 -- | Read untyped entity var.
 readSomeEntityVar :: EntityVar a -> STM SomeEntity
@@ -587,7 +648,7 @@ writeEntityVarRecord entityVar@EntityVar
 	, entityVarValueVar = entityValueVar
 	} recordKeySuffix recordNewValue = do
 	-- get entity
-	entityValue@EntityValue
+	EntityValue
 		{ entityValueEntity = SomeEntity entity
 		} <- readTVar entityValueVar
 	-- check that current entity is the same as entity var underlying type
@@ -598,11 +659,9 @@ writeEntityVarRecord entityVar@EntityVar
 		-- if entity is of the same type
 		Just entityOfVarType -> do
 			-- simply apply the change
-			let newEntity = processEntityChange entityOfVarType recordKeySuffix recordNewValue
+			let (newEntity, entityChange) = processEntityChange entityOfVarType recordKeySuffix recordNewValue
 			-- write to var
-			writeTVar entityValueVar $! entityValue
-				{ entityValueEntity = SomeEntity newEntity
-				}
+			writeEntityChange entityValueVar newEntity entityChange
 			-- write record
 			let newRecordValue =
 				if B.null recordKeySuffix then let
@@ -611,7 +670,7 @@ writeEntityVarRecord entityVar@EntityVar
 				else recordNewValue
 			modifyTVar' dirtyRecordsVar $ M.insert (entityIdBytes <> recordKeySuffix) newRecordValue
 		-- else entity is of another type
-		Nothing -> throwSTM EntityVarWrongTypeException
+		Nothing -> throwSTM EntityWrongTypeException
 	-- schedule push
 	scheduleEntityManagerPush entityManager
 
@@ -626,17 +685,59 @@ writeBasicEntityVar EntityVar
 	, entityVarValueVar = entityValueVar
 	} newEntity = do
 	-- modify var
-	modifyTVar' entityValueVar $ \entityValue -> entityValue
-		{ entityValueEntity = SomeEntity newEntity
-		}
+	writeEntityChange entityValueVar newEntity newEntity
 	-- write record
 	let EntityTypeId entityTypeIdBytes = getEntityTypeId newEntity
 	modifyTVar' dirtyRecordsVar $ M.insert entityIdBytes $ entityTypeIdBytes <> serializeBasicEntity newEntity
 	-- schedule push
 	scheduleEntityManagerPush entityManager
 
+-- | Entity history chan is a stream of changes to entity.
+newtype EntityHistoryChan a = EntityHistoryChan (TVar (TVar EntityHistory))
+
+-- | Get entity's history chan.
+entityVarHistory :: Typeable a => EntityVar a -> STM (EntityHistoryChan a)
+entityVarHistory EntityVar
+	{ entityVarValueVar = valueVar
+	} = do
+	EntityValue
+		{ entityValueEntity = SomeEntity entity
+		, entityValueHistoryVar = historyVar
+		} <- readTVar valueVar
+	-- check that entity is of correct type
+	let
+		f :: a -> STM (EntityHistoryChan a)
+		f _ = EntityHistoryChan <$> newTVar historyVar
+	case cast entity of
+		Just castedEntity -> f castedEntity
+		Nothing -> throwSTM EntityWrongTypeException
+
+-- | Get history event.
+-- Retries if no history event available.
+-- Throws `EntityWrongTypeException` on type change events,
+-- or if entity is of wrong type.
+readEntityHistoryChan :: Typeable a => EntityHistoryChan a -> STM (a, EntityChange a)
+readEntityHistoryChan (EntityHistoryChan chanVar) = do
+	historyVar <- readTVar chanVar
+	history <- readTVar historyVar
+	case history of
+		EntityHistoryEnd -> retry
+		EntityHistoryChange
+			{ entityHistoryEntity = entity
+			, entityHistoryChange = change
+			, entityHistoryNextVar = nextHistoryVar
+			} -> let
+			f :: Maybe (a :~: b) -> a -> EntityChange a -> STM (b, EntityChange b)
+			f q e ec = case q of
+				Just Refl -> do
+					writeTVar chanVar nextHistoryVar
+					return (e, ec)
+				Nothing -> throwSTM EntityWrongTypeException
+			in f eqT entity change
+		EntityHistoryTypeChange {} -> throwSTM EntityWrongTypeException
+
 data EntityException
-	= EntityVarWrongTypeException
+	= EntityWrongTypeException
 	deriving (Eq, Show)
 
 instance Exception EntityException

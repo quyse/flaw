@@ -155,11 +155,11 @@ main = do
 		-- wrongly typed var
 		do
 			ptrVar2 <- getEntityVar (clientEntityManager c1) $ entityVarEntityId ptrVar1 :: IO (EntityVar Word32)
-			mustThrow EntityVarWrongTypeException $ void $ atomically $ readEntityVar ptrVar2
+			mustThrow EntityWrongTypeException $ void $ atomically $ readEntityVar ptrVar2
 
 		-- wrongly typed EntityPtr var, first client
 		ptrVar3 <- getEntityVar (clientEntityManager c1) $ entityVarEntityId ptrVar1 :: IO (EntityVar (EntityPtr Int32))
-		mustThrow EntityVarWrongTypeException $ void $ atomically $ readEntityVar ptrVar3
+		mustThrow EntityWrongTypeException $ void $ atomically $ readEntityVar ptrVar3
 
 		clientWaitAndSync c1
 		clientSync c2
@@ -171,16 +171,16 @@ main = do
 		-- change of type through second client
 		do
 			ptrVar5 <- getEntityVar (clientEntityManager c2) $ entityVarEntityId ptrVar1 :: IO (EntityVar (EntityPtr Int32))
-			mustThrow EntityVarWrongTypeException $ void $ atomically $ readEntityVar ptrVar5
+			mustThrow EntityWrongTypeException $ void $ atomically $ readEntityVar ptrVar5
 			atomically $ writeBasicEntityVar ptrVar5 $ EntityPtr intEntityId
-			mustThrow EntityVarWrongTypeException $ void $ atomically $ readEntityVar ptrVar4
+			mustThrow EntityWrongTypeException $ void $ atomically $ readEntityVar ptrVar4
 			verify (== EntityPtr intEntityId) $ atomically $ readEntityVar ptrVar5
 
 		-- transfer change of type into first client
 		clientWaitAndSync c2
 		clientSync c1
 		-- was correctly typed, now incorrect
-		mustThrow EntityVarWrongTypeException $ void $ atomically $ readEntityVar ptrVar1
+		mustThrow EntityWrongTypeException $ void $ atomically $ readEntityVar ptrVar1
 		-- was incorrectly typed, now correct
 		verify (== EntityPtr intEntityId) $ atomically $ readEntityVar ptrVar3
 

@@ -4,7 +4,7 @@ Description: Basic instances of 'Entity' typeclass.
 License: MIT
 -}
 
-{-# LANGUAGE OverloadedStrings, TemplateHaskell #-}
+{-# LANGUAGE OverloadedStrings, TemplateHaskell, TypeFamilies #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Flaw.Oil.Entity.Basic
@@ -80,15 +80,23 @@ mapFirstEntityTypeId :: EntityTypeId
 mapFirstEntityTypeId = $(hashTextToEntityTypeId "Map")
 
 instance (Ord k, BasicEntity k, BasicEntity v) => Entity (M.Map k v) where
+	type EntityChange (M.Map k v) = Maybe (k, Maybe v)
 	getEntityTypeId = f undefined undefined where
 		f :: (Entity k, Entity v) => k -> v -> M.Map k v -> EntityTypeId
 		f uk uv _ = mapFirstEntityTypeId <> getEntityTypeId uk <> getEntityTypeId uv
-	processEntityChange oldEntity keyBytes valueBytes = resultEntity where
-		resultEntity = if B.null keyBytes || B.head keyBytes /= 0 then oldEntity else newEntity
+	processEntityChange oldEntity keyBytes valueBytes = result where
+		result = if B.null keyBytes || B.head keyBytes /= 0 then (oldEntity, Nothing) else (newEntity, change)
 		newEntity = operation oldEntity
-		operation = if B.null valueBytes then M.delete key else M.insert key value
+		(operation, change) =
+			if B.null valueBytes then (M.delete key, Just (key, Nothing))
+			else (M.insert key value, Just (key, Just value))
 		key = deserializeBasicEntity $ B.drop 1 keyBytes
 		value = deserializeBasicEntity $ B.drop 1 valueBytes
+	applyEntityChange mc m = case mc of
+		Just (k, mv) -> case mv of
+			Just v -> M.insert k v m
+			Nothing -> M.delete k m
+		Nothing -> m
 
 writeInsertMapEntityVar :: (Ord k, BasicEntity k, BasicEntity v) => EntityVar (M.Map k v) -> k -> v -> STM ()
 writeInsertMapEntityVar var key value = writeEntityVarRecord var (B.singleton 0 <> serializeBasicEntity key) (B.singleton 0 <> serializeBasicEntity value)
@@ -126,4 +134,5 @@ registerBasicEntityDeserializators entityManager = do
 	f (def :: B.ByteString)
 	f (def :: T.Text)
 	where
+		f :: (BasicEntity a, Ord a) => a -> IO ()
 		f a = registerBasicOrdEntityType entityManager (getEntityTypeId a) $ return $ SomeBasicOrdEntity a
