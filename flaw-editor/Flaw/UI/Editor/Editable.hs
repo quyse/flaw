@@ -68,7 +68,12 @@ class GenericEditableValue f where
 -- datatype metadata
 instance (G.Datatype c, GenericEditableConstructor f) => GenericEditableDatatype (G.M1 G.D c f) where
 	genericEditableDatatypeName = T.pack . G.datatypeName
-	genericEditableDatatypeLayout setter = (. G.unM1) <$> genericEditableConstructorLayout (\f -> setter $ G.M1 . f . G.unM1)
+	genericEditableDatatypeLayout setter = wu $ \u -> do
+		lift $ titleInFlowLayout $ genericEditableDatatypeName u
+		(. G.unM1) <$> genericEditableConstructorLayout (\f -> setter $ G.M1 . f . G.unM1)
+		where
+			wu :: (f p -> EditableLayoutM (f p -> STM ())) -> EditableLayoutM (f p -> STM ())
+			wu f = f undefined
 	{-# INLINEABLE genericEditableDatatypeLayout #-}
 
 -- constructor metadata
