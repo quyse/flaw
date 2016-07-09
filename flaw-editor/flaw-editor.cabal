@@ -30,6 +30,36 @@ library
   -- hs-source-dirs:      
   default-language:    Haskell2010
 
+executable flaw-editor
+  main-is:             editor.hs
+  other-modules:
+  hs-source-dirs:      exe
+  build-depends:
+    base
+    , bytestring
+    , flaw-app
+    , flaw-asset-dxt
+    , flaw-base
+    , flaw-collada
+    , flaw-editor
+    , flaw-graphics
+    , flaw-input
+    , flaw-math
+    , flaw-oil
+    , flaw-oil-entity
+    , flaw-ui
+    , flaw-ui-default-style
+    , flaw-visual
+    , flaw-window
+    , http-client
+    , optparse-applicative
+    , stm
+    , text
+    , vector
+  if os(windows)
+    ld-options:          -Wl,--subsystem,windows
+  default-language:    Haskell2010
+
 executable model-editor
   main-is:             model-editor.hs
   other-modules:
