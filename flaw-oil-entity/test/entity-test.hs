@@ -65,7 +65,8 @@ session sessionName f = handle (\e -> print ("session failed" :: String, session
 	f $ do
 		clientRepo <- book bk $ openClientRepo ":memory:"
 		syncScheduledVar <- newTVarIO False
-		entityManager <- book bk $ newEntityManager clientRepo $ atomically $ writeTVar syncScheduledVar True
+		flow <- book bk newFlow
+		entityManager <- newEntityManager flow clientRepo $ atomically $ writeTVar syncScheduledVar True
 
 		-- register deserializators
 		registerBasicEntityDeserializators entityManager

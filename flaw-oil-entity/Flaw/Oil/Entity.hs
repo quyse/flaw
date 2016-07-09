@@ -101,7 +101,6 @@ import Language.Haskell.TH
 import qualified Language.Haskell.TH.Syntax as TH
 import System.Mem.Weak
 
-import Flaw.Book
 import Flaw.Build
 import Flaw.Flow
 import Flaw.Oil.ClientRepo
@@ -287,12 +286,13 @@ instance Entity NullEntity where
 
 -- | Entity manager based on client repo.
 data EntityManager = EntityManager
-	{ entityManagerFlow :: !Flow
+	{
+	-- | Every client repo operation must be performed in this flow,
+	-- even not performed by entity manager itself.
+	  entityManagerFlow :: !Flow
 	, entityManagerClientRepo :: !ClientRepo
 	-- | Push action, signal that client repo has client-side changes.
-	-- Any actions with client repo must be synchronized with entity manager,
-	-- so they must be performed either via entity manager flow,
-	-- or synchronously in this push action.
+	-- Called by entity manager in the flow.
 	, entityManagerPushAction :: !(IO ())
 	-- | Entropy pool to generate new entity ids.
 	, entityManagerEntropyPool :: !C.EntropyPool
@@ -339,11 +339,11 @@ data CachedEntity = CachedEntity
 
 -- | Initialize entity manager.
 newEntityManager
-	:: ClientRepo -- ^ Underlying client repo.
+	:: Flow -- ^ Flow to run operations in.
+	-> ClientRepo -- ^ Underlying client repo.
 	-> IO () -- ^ Push action.
-	-> IO (EntityManager, IO ())
-newEntityManager clientRepo pushAction = withSpecialBook $ \bk -> do
-	flow <- book bk newFlow
+	-> IO EntityManager
+newEntityManager flow clientRepo pushAction = do
 	entropyPool <- C.createEntropyPool
 	nextTagRef <- newIORef 0
 	cacheRef <- newIORef M.empty
