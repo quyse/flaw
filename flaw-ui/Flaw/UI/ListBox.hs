@@ -575,7 +575,7 @@ instance Scrollable (ListBoxContent v) where
 							(styleFillColor style) (styleBorderColor style)
 						r
 					else if isOdd then do
-						let evenColor = styleFillColor selectedStyle * Vec4 1 1 1 0.05
+						let evenColor = styleFillColor selectedUnfocusedStyle * Vec4 1 1 1 0.05
 						drawBorderedRectangle canvas
 							(Vec4 (px + left) (px + left) (px + right) (px + right))
 							(Vec4 y y (y + itemHeight) (y + itemHeight))
