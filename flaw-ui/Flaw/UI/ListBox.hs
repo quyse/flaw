@@ -552,10 +552,12 @@ instance Scrollable (ListBoxContent v) where
 				((x, width, column) :) <$> f (x + width) restColumns
 			f _ [] = return []
 			in f px columns
+
 		ListBoxItems _keyFunc items <- readTVar itemsVar
+
 		let
-			renderItems _i y _ | y >= py + bottom = return $ return ()
-			renderItems _i _y [] = return $ return ()
+			renderItems _i y _ | y >= py + bottom = return (IS.empty, return ())
+			renderItems _i _y [] = return (IS.empty, return ())
 			renderItems i y (ListBoxItem itemIndex _keyFunc value : restItems) = do
 				let
 					selected = IS.member itemIndex selectedValues
@@ -567,7 +569,7 @@ instance Scrollable (ListBoxContent v) where
 					return $ renderScope $ do
 						renderIntersectScissor $ Vec4 (x + 1) (y + 1) (x + width - 2) (y + itemHeight - 2)
 						r
-				let rr =
+				let itemRender =
 					if selected then do
 						drawBorderedRectangle canvas
 							(Vec4 (px + left) (px + left + 1) (px + right - 1) (px + right))
@@ -582,15 +584,25 @@ instance Scrollable (ListBoxContent v) where
 							evenColor evenColor
 						r
 					else r
-				(rr >>) <$> renderItems (i + 1) (y + itemHeight) restItems
+				(visibleItemIndices, restItemsRender) <- renderItems (i + 1) (y + itemHeight) restItems
+				return (IS.insert itemIndex visibleItemIndices, itemRender >> restItemsRender)
 			topOrderedIndex = top `quot` itemHeight
-			(visibleItems, firstVisibleItemOrderedIndex) = if topOrderedIndex <= 0 then (items, 0)
+			(visibleItems, firstVisibleItemOrderedIndex) =
+				if topOrderedIndex <= 0 then (items, 0)
 				else if topOrderedIndex >= S.size items then (S.empty, 0)
 				else let
 					ListBoxItem firstVisibleItemIndex firstVisibleItemKeyFunc firstVisibleItemValue = S.elemAt topOrderedIndex items
 					-- split by special non-existent item which will be just before first item
 					in (snd $ S.split (ListBoxItem (firstVisibleItemIndex - 1) firstVisibleItemKeyFunc firstVisibleItemValue) items, topOrderedIndex)
-		renderItems firstVisibleItemOrderedIndex (py + firstVisibleItemOrderedIndex * itemHeight) $ S.toAscList visibleItems
+
+		(visibleItemIndices, itemsRender) <- renderItems firstVisibleItemOrderedIndex (py + firstVisibleItemOrderedIndex * itemHeight) $ S.toAscList visibleItems
+
+		-- filter out invisible items from column caches
+		forM_ columns $ \ListBoxColumn
+			{ listBoxColumnElementsCacheVar = elementsCacheVar
+			} -> modifyTVar' elementsCacheVar $ IM.filterWithKey $ \itemIndex _element -> IS.member itemIndex visibleItemIndices
+
+		return itemsRender
 
 	scrollableElementSize ListBoxContent
 		{ listBoxContentParent = ListBox
