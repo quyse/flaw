@@ -8,7 +8,9 @@ License: MIT
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Flaw.Oil.Entity.Basic
-	( writeInsertMapEntityVar
+	( writeInsertSetEntityVar
+	, writeDeleteSetEntityVar
+	, writeInsertMapEntityVar
 	, writeDeleteMapEntityVar
 	, registerBasicEntityDeserializators
 	) where
@@ -20,6 +22,7 @@ import Data.Int
 import qualified Data.Map.Strict as M
 import Data.Monoid
 import Data.Serialize.Text()
+import qualified Data.Set as S
 import qualified Data.Text as T
 import Data.Word
 
@@ -74,6 +77,33 @@ instance Entity a => BasicEntity (EntityPtr a) where
 	serializeBasicEntity (EntityPtr underlyingEntityId) = serializeBasicEntity underlyingEntityId
 	deserializeBasicEntity = EntityPtr . deserializeBasicEntity
 
+-- Set
+
+setFirstEntityTypeId :: EntityTypeId
+setFirstEntityTypeId = $(hashTextToEntityTypeId "Set")
+
+instance (Ord a, BasicEntity a) => Entity (S.Set a) where
+	type EntityChange (S.Set a) = Maybe (a, Bool)
+	getEntityTypeId = f undefined where
+		f :: (Entity a) => a -> S.Set a -> EntityTypeId
+		f u _ = setFirstEntityTypeId <> getEntityTypeId u
+	processEntityChange oldEntity keyBytes valueBytes = result where
+		result = if B.null keyBytes || B.head keyBytes /= 0 then (oldEntity, Nothing) else (newEntity, change)
+		newEntity = operation oldEntity
+		(operation, change) =
+			if B.null valueBytes then (S.delete key, Just (key, False))
+			else (S.insert key, Just (key, True))
+		key = deserializeBasicEntity $ B.drop 1 keyBytes
+	applyEntityChange sc s = case sc of
+		Just (k, f) -> (if f then S.insert else S.delete) k s
+		Nothing -> s
+
+writeInsertSetEntityVar :: (Ord a, BasicEntity a) => EntityVar (S.Set a) -> a -> STM ()
+writeInsertSetEntityVar var value = writeEntityVarRecord var (B.singleton 0 <> serializeBasicEntity value) (B.singleton 1)
+
+writeDeleteSetEntityVar :: (Ord a, BasicEntity a) => EntityVar (S.Set a) -> a -> STM ()
+writeDeleteSetEntityVar var value = writeEntityVarRecord var (B.singleton 0 <> serializeBasicEntity value) B.empty
+
 -- Map
 
 mapFirstEntityTypeId :: EntityTypeId
@@ -114,6 +144,14 @@ registerBasicEntityDeserializators entityManager = do
 			setType :: a -> EntityPtr a
 			setType _ = EntityPtr nullEntityId
 		return $ SomeBasicOrdEntity $ setType underlyingBaseEntity
+
+	-- register Set's deserializator
+	registerEntityType entityManager setFirstEntityTypeId $ do
+		SomeBasicOrdEntity underlyingBaseEntity <- getRootBaseBasicOrdEntity
+		let
+			setType :: a -> S.Set a
+			setType _ = S.empty
+		return $ SomeEntity $ setType underlyingBaseEntity
 
 	-- register Map's deserializator
 	registerEntityType entityManager mapFirstEntityTypeId $ do

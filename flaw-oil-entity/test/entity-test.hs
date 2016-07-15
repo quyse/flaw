@@ -16,6 +16,7 @@ import Control.Monad
 import Data.Int
 import Data.IORef
 import qualified Data.Map.Strict as M
+import qualified Data.Set as S
 import Data.Word
 import System.Exit
 import System.IO.Unsafe
@@ -189,6 +190,25 @@ main = do
 		mustThrow EntityWrongTypeException $ void $ atomically $ readEntityVar ptrVar1
 		-- was incorrectly typed, now correct
 		verify (== EntityPtr intEntityId) $ atomically $ readEntityVar ptrVar3
+
+		-- test set
+		setVar <- newEntityVar $ clientEntityManager c1 :: IO (EntityVar (S.Set (EntityPtr Word32)))
+		verify (== S.empty) $ atomically $ readEntityVar setVar
+		-- insert
+		atomically $ writeInsertSetEntityVar setVar (EntityPtr intEntityId)
+		verify (== S.fromList [EntityPtr intEntityId]) $ atomically $ readEntityVar setVar
+		-- sync
+		clientWaitAndSync c1
+		clientSync c2
+		setVar2 <- getEntityVar (clientEntityManager c2) $ entityVarEntityId setVar :: IO (EntityVar (S.Set (EntityPtr Word32)))
+		verify (== S.fromList [EntityPtr intEntityId]) $ atomically $ readEntityVar setVar2
+		-- delete
+		atomically $ writeDeleteSetEntityVar setVar2 (EntityPtr intEntityId)
+		verify (== S.empty) $ atomically $ readEntityVar setVar2
+		-- sync
+		clientWaitAndSync c2
+		clientSync c1
+		verify (== S.empty) $ atomically $ readEntityVar setVar
 
 		-- test map
 		mapVar <- newEntityVar $ clientEntityManager c1 :: IO (EntityVar (M.Map (EntityPtr Word32) (EntityPtr Int32)))
