@@ -26,6 +26,7 @@ import Flaw.Oil.ClientRepo
 import Flaw.Oil.ServerRepo
 import Flaw.Oil.Entity
 import Flaw.Oil.Entity.Basic
+import Flaw.Oil.Entity.Tag
 import Flaw.Oil.Repo
 
 {-# NOINLINE testFailedRef #-}
@@ -97,6 +98,10 @@ session sessionName f = handle (\e -> print ("session failed" :: String, session
 
 main :: IO ()
 main = do
+	-- assumptions
+	verify (== (20 :: Int)) $ return ENTITY_TYPE_ID_SIZE -- must be equal to SHA-1 hash size
+	verify (== (ENTITY_TYPE_ID_SIZE :: Int)) $ return ENTITY_TAG_ID_SIZE -- must be equal to type id size
+
 	session "main" $ \newClient -> do
 
 		c1 <- newClient

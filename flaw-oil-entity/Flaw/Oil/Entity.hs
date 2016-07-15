@@ -84,9 +84,7 @@ import Control.Concurrent.STM
 import Control.Exception
 import Control.Monad
 import Control.Monad.Reader
-import qualified Crypto.Hash as C
 import qualified Crypto.Random.EntropyPool as C
-import qualified Data.ByteArray as BA
 import qualified Data.ByteArray.Encoding as BA
 import qualified Data.ByteString as B
 import Data.Default
@@ -98,12 +96,11 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import Data.Typeable
 import Language.Haskell.TH
-import qualified Language.Haskell.TH.Syntax as TH
 import System.Mem.Weak
 
-import Flaw.Build
 import Flaw.Flow
 import Flaw.Oil.ClientRepo
+import Flaw.Oil.Entity.Internal
 
 -- | Entity id.
 newtype EntityId = EntityId B.ByteString deriving (Eq, Ord)
@@ -744,13 +741,4 @@ instance Exception EntityException
 
 -- | Handy function to generate compile-time entity type id out of text.
 hashTextToEntityTypeId :: T.Text -> Q Exp
-hashTextToEntityTypeId str = do
-	-- add hash as top decl
-	cnt <- runIO $ atomicModifyIORef TH.counter $ \c -> (c + 1, c)
-	n <- newName $ "entityTypeIdHash_" <> show cnt
-	TH.addTopDecls =<< sequence
-		[ pragInlD n NoInline FunLike AllPhases
-		, sigD n [t| EntityTypeId |]
-		, valD (varP n) (normalB [| EntityTypeId $(embedExp (BA.convert (C.hash (T.encodeUtf8 str) :: C.Digest C.SHA1) :: B.ByteString)) |]) []
-		]
-	varE n
+hashTextToEntityTypeId = hashTextDecl "entityTypeIdHash_" [t| EntityTypeId |] $ \e -> [| EntityTypeId $e |]
