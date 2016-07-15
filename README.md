@@ -29,7 +29,7 @@ This project is mostly a playground for absolutely crazy ideas. Surely if someon
 
 * Visual effects (deferred rendering, materials, lighting, shadowing, etc)
 * High-level GUI framework made from scratch (i.e. neither using native GUIs nor frameworks like Qt)
-* Tools
+* Real-time collaborative asset editor ([doc](docs/editor.md))
 
 ## Experiments
 
@@ -39,7 +39,6 @@ This project is mostly a playground for absolutely crazy ideas. Surely if someon
 
 * TH-generated bindings for scripting languages
 * Type-safe multiplayer framework
-* Real-time collaborative asset editor
 
 ## Packages and platform support
 
