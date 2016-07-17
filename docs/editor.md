@@ -46,8 +46,25 @@ There's a special type of entities - entity tag. Entity tag is an entity too, bu
 
 ## Editing
 
+### Project
+
+Local connection settings for editor like remote repo url, path to local repo, username/password/certificate for authentication are stored in a so-called project file. Project also includes list of enabled repo plugins with their configurations.
+
 ### Authentication
 
 Currently authentication is not implemented and up to the server. For example, you can leverage `nginx` caching web server to check client's certificate and reject unauthenticated requests to `oild`.
 
-No discretionary access control is implemented. If user has write access to repo, they can change any record without limitations. It means that every user must be trusted. In case of misbehavior repo history can be used to restore data.
+There is no discretionary access control. If user has write access to repo, they can change any record without limitations. It means that every user must be trusted. In case of misbehavior repo history can be used to recover data.
+
+### Sessions
+
+Once editor is connected to remote repo, it creates or uses existing session. Session is a special entity storing workspace settings and some identification of a user. Editor automatically updates session object. Also editor creates `Editing` tags for objects for which user have a subeditor opened or in any other sense "is about to change" the entity. Editing tags are discovered and shown by editors providing users with information about other users' actions.
+
+## Repo Plugins
+
+Users can locally enable additional functionality per repo represented as repo plugins. Repo plugin is a pluggable handler for all records in repo. It got triggered for every change to repo and is free to use its own database of any sort to process or analize repo data.
+
+Possible examples of repo plugins:
+
+* Reference Database collects information on entities referencing each other, and for example is able to find all entities referencing a given entity. Also is able to do garbage collection, i.e. remove all unreferenced entities.
+* Full Text Search indexes all entities' text data and allows user to quickly look for an entity by typing string in. May have settings for language or stemming rules.
