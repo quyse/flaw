@@ -14,6 +14,7 @@ module Flaw.Graphics.Vulkan.FFI
 	, VkResult(..)
 	, VkStructureType(..)
 	, VkFlags
+	, VkBool32
 	-- * allocation
 	, VkSystemAllocationScope(..)
 	, VkInternalAllocationType(..)
@@ -23,14 +24,28 @@ module Flaw.Graphics.Vulkan.FFI
 	, FN_vkInternalAllocationNotification
 	, FN_vkInternalFreeNotification
 	, VkAllocationCallbacks(..)
-	-- * instances
+	-- * instance
 	, VkInstance
 	, VkApplicationInfo(..)
 	, VkInstanceCreateFlags
 	, VkInstanceCreateInfo(..)
 	, vkCreateInstance
+	, vkDestroyInstance
+	, vkGetInstanceProcAddr
+	, vkGetInstanceProc
+	-- * device
+	, VkPhysicalDevice
+	, FN_vkEnumeratePhysicalDevices
+	, VkPhysicalDeviceType(..)
+	, VkDeviceSize
+	, VkSampleCountFlags
+	, VkPhysicalDeviceLimits(..)
+	, VkPhysicalDeviceSparseProperties(..)
+	, VkPhysicalDeviceProperties(..)
+	, FN_vkGetPhysicalDeviceProperties
 	) where
 
+import Data.Int
 import Data.Word
 import Foreign.C.Types
 import Foreign.Ptr
@@ -158,6 +173,8 @@ genEnum [t|Word32|] "VkStructureType"
 	]
 
 type VkFlags = Word32
+type VkBool32 = Word32
+
 
 -- allocation
 
@@ -188,7 +205,8 @@ genStruct "VkAllocationCallbacks"
 	, ([t|FunPtr FN_vkInternalFreeNotification|], "pfnInternalFree")
 	]
 
--- instances
+
+-- instance
 
 vkDefineHandle "VkInstance"
 
@@ -220,3 +238,177 @@ foreign import VKAPI_CALL safe vkCreateInstance
 	-> Ptr VkAllocationCallbacks
 	-> Ptr VkInstance
 	-> IO Word32 -- VkResult
+
+foreign import VKAPI_CALL safe vkDestroyInstance
+	:: VkInstance
+	-> Ptr VkAllocationCallbacks
+	-> IO ()
+
+foreign import VKAPI_CALL safe vkGetInstanceProcAddr
+	:: VkInstance
+	-> Ptr CChar
+	-> IO (FunPtr (IO ()))
+
+
+-- device
+
+vkDefineHandle "VkPhysicalDevice"
+
+type FN_vkEnumeratePhysicalDevices
+	=  VkInstance
+	-> Ptr Word32
+	-> Ptr VkPhysicalDevice
+	-> IO Word32 -- VkResult
+
+genEnum [t|Word32|] "VkPhysicalDeviceType"
+	[ ("VK_PHYSICAL_DEVICE_TYPE_OTHER", 0)
+	, ("VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU", 1)
+	, ("VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU", 2)
+	, ("VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU", 3)
+	, ("VK_PHYSICAL_DEVICE_TYPE_CPU", 4)
+	]
+
+type VkDeviceSize = Word64
+type VkSampleCountFlags = VkFlags
+
+genStruct "VkPhysicalDeviceLimits"
+	[ ([t|Word32|], "maxImageDimension1D")
+	, ([t|Word32|], "maxImageDimension2D")
+	, ([t|Word32|], "maxImageDimension3D")
+	, ([t|Word32|], "maxImageDimensionCube")
+	, ([t|Word32|], "maxImageArrayLayers")
+	, ([t|Word32|], "maxTexelBufferElements")
+	, ([t|Word32|], "maxUniformBufferRange")
+	, ([t|Word32|], "maxStorageBufferRange")
+	, ([t|Word32|], "maxPushConstantsSize")
+	, ([t|Word32|], "maxMemoryAllocationCount")
+	, ([t|Word32|], "maxSamplerAllocationCount")
+	, ([t|VkDeviceSize|], "bufferImageGranularity")
+	, ([t|VkDeviceSize|], "sparseAddressSpaceSize")
+	, ([t|Word32|], "maxBoundDescriptorSets")
+	, ([t|Word32|], "maxPerStageDescriptorSamplers")
+	, ([t|Word32|], "maxPerStageDescriptorUniformBuffers")
+	, ([t|Word32|], "maxPerStageDescriptorStorageBuffers")
+	, ([t|Word32|], "maxPerStageDescriptorSampledImages")
+	, ([t|Word32|], "maxPerStageDescriptorStorageImages")
+	, ([t|Word32|], "maxPerStageDescriptorInputAttachments")
+	, ([t|Word32|], "maxPerStageResources")
+	, ([t|Word32|], "maxDescriptorSetSamplers")
+	, ([t|Word32|], "maxDescriptorSetUniformBuffers")
+	, ([t|Word32|], "maxDescriptorSetUniformBuffersDynamic")
+	, ([t|Word32|], "maxDescriptorSetStorageBuffers")
+	, ([t|Word32|], "maxDescriptorSetStorageBuffersDynamic")
+	, ([t|Word32|], "maxDescriptorSetSampledImages")
+	, ([t|Word32|], "maxDescriptorSetStorageImages")
+	, ([t|Word32|], "maxDescriptorSetInputAttachments")
+	, ([t|Word32|], "maxVertexInputAttributes")
+	, ([t|Word32|], "maxVertexInputBindings")
+	, ([t|Word32|], "maxVertexInputAttributeOffset")
+	, ([t|Word32|], "maxVertexInputBindingStride")
+	, ([t|Word32|], "maxVertexOutputComponents")
+	, ([t|Word32|], "maxTessellationGenerationLevel")
+	, ([t|Word32|], "maxTessellationPatchSize")
+	, ([t|Word32|], "maxTessellationControlPerVertexInputComponents")
+	, ([t|Word32|], "maxTessellationControlPerVertexOutputComponents")
+	, ([t|Word32|], "maxTessellationControlPerPatchOutputComponents")
+	, ([t|Word32|], "maxTessellationControlTotalOutputComponents")
+	, ([t|Word32|], "maxTessellationEvaluationInputComponents")
+	, ([t|Word32|], "maxTessellationEvaluationOutputComponents")
+	, ([t|Word32|], "maxGeometryShaderInvocations")
+	, ([t|Word32|], "maxGeometryInputComponents")
+	, ([t|Word32|], "maxGeometryOutputComponents")
+	, ([t|Word32|], "maxGeometryOutputVertices")
+	, ([t|Word32|], "maxGeometryTotalOutputComponents")
+	, ([t|Word32|], "maxFragmentInputComponents")
+	, ([t|Word32|], "maxFragmentOutputAttachments")
+	, ([t|Word32|], "maxFragmentDualSrcAttachments")
+	, ([t|Word32|], "maxFragmentCombinedOutputResources")
+	, ([t|Word32|], "maxComputeSharedMemorySize")
+	, ([t|Word32|], "maxComputeWorkGroupCount0")
+	, ([t|Word32|], "maxComputeWorkGroupCount1")
+	, ([t|Word32|], "maxComputeWorkGroupCount2")
+	, ([t|Word32|], "maxComputeWorkGroupInvocations")
+	, ([t|Word32|], "maxComputeWorkGroupSize0")
+	, ([t|Word32|], "maxComputeWorkGroupSize1")
+	, ([t|Word32|], "maxComputeWorkGroupSize2")
+	, ([t|Word32|], "subPixelPrecisionBits")
+	, ([t|Word32|], "subTexelPrecisionBits")
+	, ([t|Word32|], "mipmapPrecisionBits")
+	, ([t|Word32|], "maxDrawIndexedIndexValue")
+	, ([t|Word32|], "maxDrawIndirectCount")
+	, ([t|Float|], "maxSamplerLodBias")
+	, ([t|Float|], "maxSamplerAnisotropy")
+	, ([t|Word32|], "maxViewports")
+	, ([t|Word32|], "maxViewportDimensions0")
+	, ([t|Word32|], "maxViewportDimensions1")
+	, ([t|Float|], "viewportBoundsRange0")
+	, ([t|Float|], "viewportBoundsRange1")
+	, ([t|Word32|], "viewportSubPixelBits")
+	, ([t|CSize|], "minMemoryMapAlignment")
+	, ([t|VkDeviceSize|], "minTexelBufferOffsetAlignment")
+	, ([t|VkDeviceSize|], "minUniformBufferOffsetAlignment")
+	, ([t|VkDeviceSize|], "minStorageBufferOffsetAlignment")
+	, ([t|Int32|], "minTexelOffset")
+	, ([t|Word32|], "maxTexelOffset")
+	, ([t|Int32|], "minTexelGatherOffset")
+	, ([t|Word32|], "maxTexelGatherOffset")
+	, ([t|Float|], "minInterpolationOffset")
+	, ([t|Float|], "maxInterpolationOffset")
+	, ([t|Word32|], "subPixelInterpolationOffsetBits")
+	, ([t|Word32|], "maxFramebufferWidth")
+	, ([t|Word32|], "maxFramebufferHeight")
+	, ([t|Word32|], "maxFramebufferLayers")
+	, ([t|VkSampleCountFlags|], "framebufferColorSampleCounts")
+	, ([t|VkSampleCountFlags|], "framebufferDepthSampleCounts")
+	, ([t|VkSampleCountFlags|], "framebufferStencilSampleCounts")
+	, ([t|VkSampleCountFlags|], "framebufferNoAttachmentsSampleCounts")
+	, ([t|Word32|], "maxColorAttachments")
+	, ([t|VkSampleCountFlags|], "sampledImageColorSampleCounts")
+	, ([t|VkSampleCountFlags|], "sampledImageIntegerSampleCounts")
+	, ([t|VkSampleCountFlags|], "sampledImageDepthSampleCounts")
+	, ([t|VkSampleCountFlags|], "sampledImageStencilSampleCounts")
+	, ([t|VkSampleCountFlags|], "storageImageSampleCounts")
+	, ([t|Word32|], "maxSampleMaskWords")
+	, ([t|VkBool32|], "timestampComputeAndGraphics")
+	, ([t|Float|], "timestampPeriod")
+	, ([t|Word32|], "maxClipDistances")
+	, ([t|Word32|], "maxCullDistances")
+	, ([t|Word32|], "maxCombinedClipAndCullDistances")
+	, ([t|Word32|], "discreteQueuePriorities")
+	, ([t|Float|], "pointSizeRange0")
+	, ([t|Float|], "pointSizeRange1")
+	, ([t|Float|], "lineWidthRange0")
+	, ([t|Float|], "lineWidthRange1")
+	, ([t|Float|], "pointSizeGranularity")
+	, ([t|Float|], "lineWidthGranularity")
+	, ([t|VkBool32|], "strictLines")
+	, ([t|VkBool32|], "standardSampleLocations")
+	, ([t|VkDeviceSize|], "optimalBufferCopyOffsetAlignment")
+	, ([t|VkDeviceSize|], "optimalBufferCopyRowPitchAlignment")
+	, ([t|VkDeviceSize|], "nonCoherentAtomSize")
+	]
+
+genStruct "VkPhysicalDeviceSparseProperties"
+	[ ([t|VkBool32|], "residencyStandard2DBlockShape")
+	, ([t|VkBool32|], "residencyStandard2DMultisampleBlockShape")
+	, ([t|VkBool32|], "residencyStandard3DBlockShape")
+	, ([t|VkBool32|], "residencyAlignedMipSize")
+	, ([t|VkBool32|], "residencyNonResidentStrict")
+	]
+
+genStructWithArrays "VkPhysicalDeviceProperties"
+	[ ([t|Word32|], "apiVersion", 0)
+	, ([t|Word32|], "driverVersion", 0)
+	, ([t|Word32|], "vendorID", 0)
+	, ([t|Word32|], "deviceID", 0)
+	, ([t|VkPhysicalDeviceType|], "deviceType", 0)
+	, ([t|CChar|], "deviceName", 256 {-VK_MAX_PHYSICAL_DEVICE_NAME_SIZE-})
+	, ([t|Word8|], "pipelineCacheUUID", 16 {-VK_UUID_SIZE-})
+	, ([t|VkPhysicalDeviceLimits|], "limits", 0)
+	, ([t|VkPhysicalDeviceSparseProperties|], "sparseProperties", 0)
+	]
+
+type FN_vkGetPhysicalDeviceProperties
+	=  VkPhysicalDevice
+	-> Ptr VkPhysicalDeviceProperties
+	-> IO ()
