@@ -88,6 +88,7 @@ Linux is the main development platform. It also considered the only "server" pla
 | `flaw-ui` | UI library using `flaw-graphics` for rendering | ✔ | ✔ | ✔ |   |
 | `flaw-ui-default-style` | Hardcoded "default" UI styles | ✔ | ✔ | ✔ |   |
 | `flaw-visual` | High-level rendering techniques | ✔ | ✔ | ✔ |   |
+| `flaw-vulkan` | Vulkan integration - implementation of `flaw-graphics` interface | ✔ |   |   |   |
 | `flaw-websocket-client` | Websocket client library |   |   |   | ✔ |
 | `flaw-websocket-server` | Websocket server library | ✔ |   |   |   |
 | `flaw-window` | Windowing platform bindings and graphics support | ✔ | ✔ | ✔ | ✔ |

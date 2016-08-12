@@ -42,6 +42,7 @@ variables:
     flaw-ui
     flaw-ui-default-style
     flaw-visual
+    flaw-vulkan
     flaw-websocket-server
     flaw-window
   PACKAGES_WINDOWS: >-
