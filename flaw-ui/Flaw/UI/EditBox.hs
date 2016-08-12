@@ -4,6 +4,8 @@ Description: One-line edit box.
 License: MIT
 -}
 
+{-# LANGUAGE OverloadedStrings #-}
+
 module Flaw.UI.EditBox
 	( EditBox(..)
 	, newEditBox

@@ -31,7 +31,6 @@ import qualified Data.Text as T
 
 import Flaw.Graphics
 import Flaw.Graphics.Canvas
-import Flaw.Graphics.Font
 import Flaw.Input.Keyboard
 import Flaw.Input.Mouse
 import Flaw.Math
@@ -42,7 +41,11 @@ import Flaw.UI.Metrics
 import Flaw.UI.Panel
 import Flaw.UI.PileBox
 import Flaw.UI.ScrollBox
+import Flaw.UI.VisualElement
 
+-- | `ListBox` is an extendable element allowing user to work with multiple items.
+-- It creates and caches temporary element for every cell, sends input events
+-- and renders them as a scrollable list efficiently.
 data ListBox v = ListBox
 	{ listBoxPanel :: !Panel
 	, listBoxColumnHeaderHeight :: {-# UNPACK #-} !Metric
@@ -87,9 +90,10 @@ data ListBoxItems v where
 data ListBoxColumn v = ListBoxColumn
 	{ listBoxColumnParent :: !(ListBox v)
 	, listBoxColumnDesc :: !(ListBoxColumnDesc v)
-	, listBoxColumnWidthVar :: !(TVar Metric)
-	, listBoxColumnMousedVar :: !(TVar Bool)
-	, listBoxColumnPressedVar :: !(TVar Bool)
+	, listBoxColumnElementsCacheVar :: {-# UNPACK #-} !(TVar (IM.IntMap SomeElement))
+	, listBoxColumnWidthVar :: {-# UNPACK #-} !(TVar Metric)
+	, listBoxColumnMousedVar :: {-# UNPACK #-} !(TVar Bool)
+	, listBoxColumnPressedVar :: {-# UNPACK #-} !(TVar Bool)
 	}
 
 -- | Immutable column descrition.
@@ -98,7 +102,7 @@ data ListBoxColumnDesc v where
 		{ listBoxColumnDescVisual :: !SomeVisual
 		, listBoxColumnDescWidth :: {-# UNPACK #-} !Metric
 		, listBoxColumnDescKeyFunc :: !(v -> k)
-		, listBoxColumnDescRenderFunc :: !(forall c d. Context c d => v -> Drawer d -> Position -> Size -> Style -> STM (Render c ()))
+		, listBoxColumnDescElementFunc :: !(v -> STM SomeElement)
 		} -> ListBoxColumnDesc v
 
 data ListBoxContent v = ListBoxContent
@@ -107,6 +111,7 @@ data ListBoxContent v = ListBoxContent
 	, listBoxContentSizeVar :: {-# UNPACK #-} !(TVar Size)
 	, listBoxContentFocusedVar :: {-# UNPACK #-} !(TVar Bool)
 	, listBoxContentLastMousePositionVar :: {-# UNPACK #-} !(TVar (Maybe Position))
+	, listBoxContentLastMousedCellVar :: {-# UNPACK #-} !(TVar (Maybe (Int, Int)))
 	}
 
 newListBox :: Metrics -> [ListBoxColumnDesc v] -> STM (ListBox v)
@@ -120,12 +125,14 @@ newListBox metrics@Metrics
 		{ listBoxColumns = columns
 		} <- mfix $ \listBox -> do
 		columns <- forM columnDescs $ \columnDesc -> do
+			elementsCacheVar <- newTVar IM.empty
 			widthVar <- newTVar 0
 			mousedVar <- newTVar False
 			pressedVar <- newTVar False
 			return ListBoxColumn
 				{ listBoxColumnParent = listBox
 				, listBoxColumnDesc = columnDesc
+				, listBoxColumnElementsCacheVar = elementsCacheVar
 				, listBoxColumnWidthVar = widthVar
 				, listBoxColumnMousedVar = mousedVar
 				, listBoxColumnPressedVar = pressedVar
@@ -164,12 +171,14 @@ newListBox metrics@Metrics
 	contentSizeVar <- newTVar $ Vec2 0 0
 	focusedVar <- newTVar False
 	lastMousePositionVar <- newTVar Nothing
+	lastMousedCellVar <- newTVar Nothing
 	let content = ListBoxContent
 		{ listBoxContentParent = listBox
 		, listBoxContentScrollBarVar = scrollBarVar
 		, listBoxContentSizeVar = contentSizeVar
 		, listBoxContentFocusedVar = focusedVar
 		, listBoxContentLastMousePositionVar = lastMousePositionVar
+		, listBoxContentLastMousedCellVar = lastMousedCellVar
 		}
 
 	-- scroll box
@@ -330,10 +339,12 @@ instance Element (ListBoxContent v) where
 			, listBoxValuesVar = valuesVar
 			, listBoxItemsVar = itemsVar
 			, listBoxSelectedValuesVar = selectedValuesVar
+			, listBoxColumns = columns
 			, listBoxChangeHandlerVar = changeHandlerVar
 			}
 		, listBoxContentScrollBarVar = scrollBarVar
 		, listBoxContentLastMousePositionVar = lastMousePositionVar
+		, listBoxContentLastMousedCellVar = lastMousedCellVar
 		} inputEvent inputState@InputState
 		{ inputStateKeyboard = keyboardState
 		} = do
@@ -373,48 +384,128 @@ instance Element (ListBoxContent v) where
 					ensureVisibleScrollBoxArea scrollBox $ Vec4 0 itemY 0 (itemY + itemHeight)
 					-- call change handler
 					join $ readTVar changeHandlerVar
+			getCellElement (itemIndex, columnIndex) = do
+				let ListBoxColumn
+					{ listBoxColumnElementsCacheVar = elementsCacheVar
+					} = columns !! columnIndex
+				IM.lookup itemIndex <$> readTVar elementsCacheVar
+			passInputEventToLastMousedCell = do
+				maybeLastMousedCell <- readTVar lastMousedCellVar
+				case maybeLastMousedCell of
+					Just lastMousedCell -> do
+						maybeCellElement <- getCellElement lastMousedCell
+						case maybeCellElement of
+							Just (SomeElement cellElement) -> processInputEvent cellElement inputEvent inputState
+							Nothing -> return False
+					Nothing -> return False
 
 		processedByScrollBar <- processScrollBarEvent scrollBar inputEvent inputState
-		if processedByScrollBar then return True else case inputEvent of
-			KeyboardInputEvent keyboardEvent -> case keyboardEvent of
-				KeyDownEvent KeyDown -> do
-					moveSelection IS.findMax (+ 1)
+		if processedByScrollBar then return True else do
+			processedByContainer <- case inputEvent of
+				KeyboardInputEvent keyboardEvent -> case keyboardEvent of
+					KeyDownEvent KeyDown -> do
+						moveSelection IS.findMax (+ 1)
+						return True
+					KeyDownEvent KeyUp -> do
+						moveSelection IS.findMin (+ (-1))
+						return True
+					KeyDownEvent KeyPageDown -> do
+						Vec2 _sx sy <- readTVar boxSizeVar
+						ListBoxItems _keyFunc items <- readTVar itemsVar
+						moveSelection IS.findMax $ \i -> min (S.size items - 1) $ i + sy `quot` itemHeight
+						return True
+					KeyDownEvent KeyPageUp -> do
+						Vec2 _sx sy <- readTVar boxSizeVar
+						moveSelection IS.findMin $ \i -> max 0 $ i - sy `quot` itemHeight
+						return True
+					KeyDownEvent KeyHome -> do
+						selectByItemOrderIndex 0
+						return True
+					KeyDownEvent KeyEnd -> do
+						ListBoxItems _keyFunc items <- readTVar itemsVar
+						unless (S.null items) $ selectByItemOrderIndex (S.size items - 1)
+						return True
+					_ -> return False
+				MouseInputEvent mouseEvent -> case mouseEvent of
+					MouseDownEvent LeftMouseButton -> do
+						maybeLastMousePosition <- readTVar lastMousePositionVar
+						case maybeLastMousePosition of
+							Just (Vec2 _x y) -> do
+								selectByItemOrderIndex $ y `quot` itemHeight
+								return True
+							Nothing -> return False
+					CursorMoveEvent x y -> do
+						writeTVar lastMousePositionVar $ Just $ Vec2 x y
+						return True
+					_ -> return False
+				MouseLeaveEvent -> do
+					writeTVar lastMousePositionVar Nothing
 					return True
-				KeyDownEvent KeyUp -> do
-					moveSelection IS.findMin (+ (-1))
-					return True
-				KeyDownEvent KeyPageDown -> do
-					Vec2 _sx sy <- readTVar boxSizeVar
-					ListBoxItems _keyFunc items <- readTVar itemsVar
-					moveSelection IS.findMax $ \i -> min (S.size items - 1) $ i + sy `quot` itemHeight
-					return True
-				KeyDownEvent KeyPageUp -> do
-					Vec2 _sx sy <- readTVar boxSizeVar
-					moveSelection IS.findMin $ \i -> max 0 $ i - sy `quot` itemHeight
-					return True
-				KeyDownEvent KeyHome -> do
-					selectByItemOrderIndex 0
-					return True
-				KeyDownEvent KeyEnd -> do
-					ListBoxItems _keyFunc items <- readTVar itemsVar
-					unless (S.null items) $ selectByItemOrderIndex (S.size items - 1)
-					return True
-				_ -> return False
-			MouseInputEvent mouseEvent -> case mouseEvent of
-				MouseDownEvent LeftMouseButton -> do
-					maybeLastMousePosition <- readTVar lastMousePositionVar
-					case maybeLastMousePosition of
-						Just (Vec2 _x y) -> do
-							selectByItemOrderIndex $ y `quot` itemHeight
-							return True
+			processedByItem <- case inputEvent of
+				MouseInputEvent mouseEvent -> case mouseEvent of
+					MouseDownEvent {} -> passInputEventToLastMousedCell
+					MouseUpEvent {} -> passInputEventToLastMousedCell
+					RawMouseMoveEvent {} -> passInputEventToLastMousedCell
+					CursorMoveEvent x y -> do
+						let (itemOrderIndex, yy) = y `quotRem` itemHeight
+						ListBoxItems _keyFunc items <- readTVar itemsVar
+						maybeMousedElementAndXAndCell <-
+							if itemOrderIndex >= 0 && itemOrderIndex < S.size items then do
+								let ListBoxItem itemIndex _keyFunc _value = S.elemAt itemOrderIndex items
+
+								-- find currently moused cell and column
+								let
+									findCell xx i (ListBoxColumn
+										{ listBoxColumnWidthVar = widthVar
+										, listBoxColumnElementsCacheVar = elementsCacheVar
+										} : restColumns) = do
+										width <- readTVar widthVar
+										if xx < width then do
+											elementsCache <- readTVar elementsCacheVar
+											return $ case IM.lookup itemIndex elementsCache of
+												Just mousedElement -> Just (mousedElement, xx, (itemIndex, i))
+												Nothing -> Nothing
+										else findCell (xx - width) (i + 1) restColumns
+									findCell _ _ [] = return Nothing
+
+								findCell x 0 columns
+							else return Nothing
+
+						let (maybeMousedElementAndX, maybeMousedCell) = case maybeMousedElementAndXAndCell of
+							Just (mousedElement, xx, mousedCell) -> (Just (mousedElement, xx), Just mousedCell)
+							Nothing -> (Nothing, Nothing)
+
+						-- get last moused cell
+						maybeLastMousedCell <- readTVar lastMousedCellVar
+						maybeLastMousedElement <- maybe (return Nothing) getCellElement maybeLastMousedCell
+
+						-- if current cell is not the same as before
+						when (maybeMousedCell /= maybeLastMousedCell) $ do
+							-- remember new cell
+							writeTVar lastMousedCellVar maybeMousedCell
+							-- send mouse leave event to previously moused element
+							case maybeLastMousedElement of
+								Just (SomeElement lastMousedElement) -> void $ processInputEvent lastMousedElement MouseLeaveEvent inputState
+								Nothing -> return ()
+						-- send event to currently moused element
+						case maybeMousedElementAndX of
+							Just (SomeElement mousedElement, xx) -> processInputEvent mousedElement (MouseInputEvent (CursorMoveEvent xx yy)) inputState
+							Nothing -> return False
+
+				MouseLeaveEvent -> do
+					maybeLastMousedCell <- readTVar lastMousedCellVar
+					case maybeLastMousedCell of
+						Just (lastMousedItemIndex, lastMousedColumnIndex) -> do
+							let ListBoxColumn
+								{ listBoxColumnElementsCacheVar = elementsCacheVar
+								} = columns !! lastMousedColumnIndex
+							elementsCache <- readTVar elementsCacheVar
+							case IM.lookup lastMousedItemIndex elementsCache of
+								Just (SomeElement element) -> processInputEvent element inputEvent inputState
+								Nothing -> return False
 						Nothing -> return False
-				CursorMoveEvent x y -> do
-					writeTVar lastMousePositionVar $ Just $ Vec2 x y
-					return True
 				_ -> return False
-			MouseLeaveEvent -> do
-				writeTVar lastMousePositionVar Nothing
-				return True
+			return $ processedByContainer || processedByItem
 
 	focusElement ListBoxContent
 		{ listBoxContentFocusedVar = focusedVar
@@ -428,7 +519,7 @@ instance Element (ListBoxContent v) where
 
 instance Scrollable (ListBoxContent v) where
 	renderScrollableElement ListBoxContent
-		{ listBoxContentParent = ListBox
+		{ listBoxContentParent = listBox@ListBox
 			{ listBoxItemHeight = itemHeight
 			, listBoxItemsVar = itemsVar
 			, listBoxSelectedValuesVar = selectedValuesVar
@@ -454,31 +545,31 @@ instance Scrollable (ListBoxContent v) where
 	
 		-- calculate rendering of items
 		renderItemColumns <- let
-			f x (ListBoxColumn
-				{ listBoxColumnDesc = ListBoxColumnDesc
-					{ listBoxColumnDescRenderFunc = renderFunc
-					}
-				, listBoxColumnWidthVar = widthVar
+			f x (column@ListBoxColumn
+				{ listBoxColumnWidthVar = widthVar
 				} : restColumns) = do
 				width <- readTVar widthVar
-				((x, width, renderFunc) :) <$> f (x + width) restColumns
+				((x, width, column) :) <$> f (x + width) restColumns
 			f _ [] = return []
 			in f px columns
+
 		ListBoxItems _keyFunc items <- readTVar itemsVar
+
 		let
-			renderItems _i y _ | y >= py + bottom = return $ return ()
-			renderItems _i _y [] = return $ return ()
+			renderItems _i y _ | y >= py + bottom = return (IS.empty, return ())
+			renderItems _i _y [] = return (IS.empty, return ())
 			renderItems i y (ListBoxItem itemIndex _keyFunc value : restItems) = do
 				let
 					selected = IS.member itemIndex selectedValues
 					isOdd = (i .&. 1) > 0
 					style = if selected then selectedStyle else unselectedStyle
-				r <- (sequence_ <$>) . forM renderItemColumns $ \(x, width, renderFunc) -> do
-					r <- renderFunc value drawer (Vec2 (x + 1) (y + 1)) (Vec2 (width - 2) (itemHeight - 2)) style
+				r <- (sequence_ <$>) . forM renderItemColumns $ \(x, width, column) -> do
+					SomeElement cellElement <- getItemElement listBox column value itemIndex
+					r <- renderElement cellElement drawer (Vec2 (x + 1) (y + 1))
 					return $ renderScope $ do
 						renderIntersectScissor $ Vec4 (x + 1) (y + 1) (x + width - 2) (y + itemHeight - 2)
 						r
-				let rr =
+				let itemRender =
 					if selected then do
 						drawBorderedRectangle canvas
 							(Vec4 (px + left) (px + left + 1) (px + right - 1) (px + right))
@@ -486,22 +577,32 @@ instance Scrollable (ListBoxContent v) where
 							(styleFillColor style) (styleBorderColor style)
 						r
 					else if isOdd then do
-						let evenColor = styleFillColor selectedStyle * Vec4 1 1 1 0.05
+						let evenColor = styleFillColor selectedUnfocusedStyle * Vec4 1 1 1 0.05
 						drawBorderedRectangle canvas
 							(Vec4 (px + left) (px + left) (px + right) (px + right))
 							(Vec4 y y (y + itemHeight) (y + itemHeight))
 							evenColor evenColor
 						r
 					else r
-				(rr >>) <$> renderItems (i + 1) (y + itemHeight) restItems
+				(visibleItemIndices, restItemsRender) <- renderItems (i + 1) (y + itemHeight) restItems
+				return (IS.insert itemIndex visibleItemIndices, itemRender >> restItemsRender)
 			topOrderedIndex = top `quot` itemHeight
-			(visibleItems, firstVisibleItemOrderedIndex) = if topOrderedIndex <= 0 then (items, 0)
+			(visibleItems, firstVisibleItemOrderedIndex) =
+				if topOrderedIndex <= 0 then (items, 0)
 				else if topOrderedIndex >= S.size items then (S.empty, 0)
 				else let
 					ListBoxItem firstVisibleItemIndex firstVisibleItemKeyFunc firstVisibleItemValue = S.elemAt topOrderedIndex items
 					-- split by special non-existent item which will be just before first item
 					in (snd $ S.split (ListBoxItem (firstVisibleItemIndex - 1) firstVisibleItemKeyFunc firstVisibleItemValue) items, topOrderedIndex)
-		renderItems firstVisibleItemOrderedIndex (py + firstVisibleItemOrderedIndex * itemHeight) $ S.toAscList visibleItems
+
+		(visibleItemIndices, itemsRender) <- renderItems firstVisibleItemOrderedIndex (py + firstVisibleItemOrderedIndex * itemHeight) $ S.toAscList visibleItems
+
+		-- filter out invisible items from column caches
+		forM_ columns $ \ListBoxColumn
+			{ listBoxColumnElementsCacheVar = elementsCacheVar
+			} -> modifyTVar' elementsCacheVar $ IM.filterWithKey $ \itemIndex _element -> IS.member itemIndex visibleItemIndices
+
+		return itemsRender
 
 	scrollableElementSize ListBoxContent
 		{ listBoxContentParent = ListBox
@@ -513,6 +614,31 @@ instance Scrollable (ListBoxContent v) where
 		Vec2 sx _sy <- readTVar sizeVar
 		height <- (itemHeight *) . IM.size <$> readTVar valuesVar
 		return $ Vec2 sx height
+
+-- | Get element representing item for the given column.
+-- Gets an element either from cache, or creates new one.
+getItemElement :: ListBox v -> ListBoxColumn v -> v -> Int -> STM SomeElement
+getItemElement ListBox
+	{ listBoxItemHeight = itemHeight
+	} ListBoxColumn
+	{ listBoxColumnDesc = ListBoxColumnDesc
+		{ listBoxColumnDescElementFunc = elementFunc
+		}
+	, listBoxColumnElementsCacheVar = elementsCacheVar
+	, listBoxColumnWidthVar = widthVar
+	} value itemIndex = do
+	-- get element from cache or create new
+	elementsCache <- readTVar elementsCacheVar
+	someElement@(SomeElement element) <- case IM.lookup itemIndex elementsCache of
+		Just someElement -> return someElement
+		Nothing -> do
+			someElement <- elementFunc value
+			writeTVar elementsCacheVar $! IM.insert itemIndex someElement elementsCache
+			return someElement
+	-- layout element
+	width <- readTVar widthVar
+	layoutElement element $ Vec2 (width - 2) (itemHeight - 2)
+	return someElement
 
 instance Element (ListBoxColumn v) where
 
@@ -605,11 +731,14 @@ newListBoxTextColumnDesc
 	-> (v -> T.Text) -- ^ Display text function, returns text to display for item.
 	-> STM (ListBoxColumnDesc v)
 newListBoxTextColumnDesc title width keyFunc textFunc = do
-	label <- newTextLabel
-	setText label title
+	columnLabel <- newTextLabel
+	setText columnLabel title
 	return ListBoxColumnDesc
-		{ listBoxColumnDescVisual = SomeVisual label
+		{ listBoxColumnDescVisual = SomeVisual columnLabel
 		, listBoxColumnDescWidth = width
 		, listBoxColumnDescKeyFunc = keyFunc
-		, listBoxColumnDescRenderFunc = \value drawer position size style -> return $ renderLabel (textFunc value) fontScriptUnknown LabelStyleText drawer position size style
+		, listBoxColumnDescElementFunc = \value -> do
+			cellLabel <- newTextLabel
+			setText cellLabel $ textFunc value
+			SomeElement <$> newVisualElement cellLabel
 		}

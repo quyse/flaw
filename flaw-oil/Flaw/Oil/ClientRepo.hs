@@ -12,6 +12,7 @@ module Flaw.Oil.ClientRepo
 	, clientRepoRevision
 	, clientRepoGetValue
 	, clientRepoChange
+	, clientRepoGetKeysPrefixed
 	, ClientRepoPushState(..)
 	, pushClientRepo
 	, ClientRepoPullInfo(..)
@@ -22,8 +23,9 @@ module Flaw.Oil.ClientRepo
 
 import Control.Exception
 import Control.Monad
-import Data.Int
 import qualified Data.ByteString as B
+import Data.Int
+import Data.Monoid
 import qualified Data.Text as T
 import qualified Data.Vector.Unboxed as VU
 import qualified Data.Vector.Unboxed.Mutable as VUM
@@ -315,6 +317,42 @@ clientRepoChange repo@ClientRepo
 	if statusItemId > 0 then changeKeyItemValue repo statusItemId value
 	else addKeyItem repo key value $ fromIntegral status
 	commit
+
+-- | Get all keys having the string given as a prefix.
+clientRepoGetKeysPrefixed :: ClientRepo -> B.ByteString -> IO [B.ByteString]
+clientRepoGetKeysPrefixed ClientRepo
+	{ clientRepoDb = db
+	, clientRepoStmtEnumerateKeysBegin = stmtEnumerateKeysBegin
+	, clientRepoStmtEnumerateKeysBeginEnd = stmtEnumerateKeysBeginEnd
+	} keyPrefix = sqliteTransaction db $ \_commit -> case maybeUpperBound of
+	Just upperBound -> sqliteQuery stmtEnumerateKeysBeginEnd $ \query -> do
+		sqliteBind query 1 keyPrefix
+		sqliteBind query 2 upperBound
+		process query
+	Nothing -> sqliteQuery stmtEnumerateKeysBegin $ \query -> do
+		sqliteBind query 1 keyPrefix
+		process query
+	where
+		keyPrefixLength = B.length keyPrefix
+		-- get upper bound for a query
+		-- essentially we need "prefix + 1", i.e. increment first byte from end which is < 0xFF
+		-- and set to zero all bytes after it
+		-- if the whole prefix looks like "0xFFFFFFFFFF..." then no upper bound is needed
+		maybeUpperBound = let
+			f i | i >= 0 = let b = keyPrefix `B.index` i in
+				if b < 0xFF then Just $ B.take i keyPrefix <> B.singleton (b + 1) <> B.replicate (keyPrefixLength - i - 1) 0
+				else f $ i - 1
+			f _ = Nothing
+			in f $ keyPrefixLength - 1
+		process query = let
+			step = do
+				r <- sqliteStep query
+				if r then do
+					key <- sqliteColumn query 0
+					restKeys <- step
+					return $ key : restKeys
+				else return []
+			in step
 
 -- | State of push, needed for pull.
 newtype ClientRepoPushState = ClientRepoPushState

@@ -120,6 +120,7 @@ instance Device Dx11Device where
 	nullSamplerState = Dx11NullSamplerStateId
 	nullBlendState = Dx11NullBlendStateId
 	nullDepthStencilTarget = Dx11NullDepthStencilTargetId
+	nullVertexBuffer = Dx11NullVertexBufferId
 	nullIndexBuffer = Dx11NullIndexBufferId D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST
 	nullUniformBuffer = Dx11NullUniformBufferId
 

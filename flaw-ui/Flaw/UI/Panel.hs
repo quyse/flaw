@@ -25,22 +25,24 @@ import Flaw.Math
 import Flaw.UI
 
 data Panel = Panel
-	{ panelChildrenVar :: !(TVar (S.Set PanelChild))
-	, panelChildIndexVar :: !(TVar Int)
-	, panelChildrenRenderOrderVar :: !(TVar [PanelChild])
-	, panelLayoutHandlerVar :: !(TVar (Size -> STM ()))
-	, panelSizeVar :: !(TVar Size)
+	{ panelChildrenVar :: {-# UNPACK #-} !(TVar (S.Set PanelChild))
+	, panelChildIndexVar :: {-# UNPACK #-} !(TVar Int)
+	, panelChildrenRenderOrderVar :: {-# UNPACK #-} !(TVar [PanelChild])
+	, panelLayoutHandlerVar :: {-# UNPACK #-} !(TVar (Size -> STM ()))
+	, panelSizeVar :: {-# UNPACK #-} !(TVar Size)
 	, panelStickyFocus :: !Bool
-	, panelFocusedChildVar :: !(TVar (Maybe PanelChild))
-	, panelLastMousedChildVar :: !(TVar (Maybe PanelChild))
-	, panelDefaultElementVar :: !(TVar (Maybe SomeElement))
-	, panelCancelElementVar :: !(TVar (Maybe SomeElement))
+	, panelFocusedChildVar :: {-# UNPACK #-} !(TVar (Maybe PanelChild))
+	, panelLastFocusedChildVar :: {-# UNPACK #-} !(TVar (Maybe PanelChild))
+	, panelLastMousedChildVar :: {-# UNPACK #-} !(TVar (Maybe PanelChild))
+	, panelDefaultElementVar :: {-# UNPACK #-} !(TVar (Maybe SomeElement))
+	, panelCancelElementVar :: {-# UNPACK #-} !(TVar (Maybe SomeElement))
+	, panelCommitHandlerVar :: {-# UNPACK #-} !(TVar (CommitReason -> STM Bool))
 	}
 
 data PanelChild = PanelChild
-	{ panelChildIndex :: !Int
+	{ panelChildIndex :: {-# UNPACK #-} !Int
 	, panelChildElement :: !SomeElement
-	, panelChildPositionVar :: !(TVar Position)
+	, panelChildPositionVar :: {-# UNPACK #-} !(TVar Position)
 	}
 
 newPanel :: Bool -> STM Panel
@@ -51,9 +53,11 @@ newPanel stickyFocus = do
 	layoutHandlerVar <- newTVar $ \_ -> return ()
 	sizeVar <- newTVar $ Vec2 0 0
 	focusedChildVar <- newTVar Nothing
+	lastFocusedChildVar <- newTVar Nothing
 	lastMousedChildVar <- newTVar Nothing
 	defaultElementVar <- newTVar Nothing
 	cancelElementVar <- newTVar Nothing
+	commitHandlerVar <- newTVar $ const $ return False
 	return Panel
 		{ panelChildrenVar = childrenVar
 		, panelChildIndexVar = childIndexVar
@@ -62,9 +66,11 @@ newPanel stickyFocus = do
 		, panelSizeVar = sizeVar
 		, panelStickyFocus = stickyFocus
 		, panelFocusedChildVar = focusedChildVar
+		, panelLastFocusedChildVar = lastFocusedChildVar
 		, panelLastMousedChildVar = lastMousedChildVar
 		, panelDefaultElementVar = defaultElementVar
 		, panelCancelElementVar = cancelElementVar
+		, panelCommitHandlerVar = commitHandlerVar
 		}
 
 instance Eq PanelChild where
@@ -91,18 +97,16 @@ instance Element Panel where
 		else do
 			Vec2 sx sy <- readTVar sizeVar
 			if px >= sx || py >= sy then return False
-			else do
-				children <- readTVar childrenVar
-				let
-					dabChildren (PanelChild
-						{ panelChildElement = SomeElement element
-						, panelChildPositionVar = childPositionVar
-						} : restChildren) = do
-						childPosition <- readTVar childPositionVar
-						r <- dabElement element $ point - childPosition
-						if r then return True else dabChildren restChildren
-					dabChildren [] = return False
-				dabChildren $ S.toDescList children
+			else let
+				dabChildren (PanelChild
+					{ panelChildElement = SomeElement element
+					, panelChildPositionVar = childPositionVar
+					} : restChildren) = do
+					childPosition <- readTVar childPositionVar
+					r <- dabElement element $ point - childPosition
+					if r then return True else dabChildren restChildren
+				dabChildren [] = return False
+				in dabChildren . S.toDescList =<< readTVar childrenVar
 
 	elementMouseCursor Panel
 		{ panelLastMousedChildVar = lastMousedChildVar
@@ -138,9 +142,11 @@ instance Element Panel where
 		, panelChildrenRenderOrderVar = childrenRenderOrderVar
 		, panelStickyFocus = stickyFocus
 		, panelFocusedChildVar = focusedChildVar
+		, panelLastFocusedChildVar = lastFocusedChildVar
 		, panelLastMousedChildVar = lastMousedChildVar
 		, panelDefaultElementVar = defaultElementVar
 		, panelCancelElementVar = cancelElementVar
+		, panelCommitHandlerVar = commitHandlerVar
 		} inputEvent inputState@InputState
 		{ inputStateKeyboard = keyboardState
 		, inputStateMouse = mouseState
@@ -150,34 +156,45 @@ instance Element Panel where
 			-- own processing: handle tab-moving focus, default and cancel elements
 			let tryPassToDefaultElement = do
 				defaultElement <- readTVar defaultElementVar
-				case defaultElement of
+				processed <- case defaultElement of
 					Just (SomeElement element) -> processInputEvent element inputEvent inputState
 					Nothing -> return False
+				if processed then return True else do
+					commitHandler <- readTVar commitHandlerVar
+					commitHandler CommitAccept
 			let tryPassToCancelElement = do
 				cancelElement <- readTVar cancelElementVar
-				case cancelElement of
+				processed <- case cancelElement of
 					Just (SomeElement element) -> processInputEvent element inputEvent inputState
 					Nothing -> return False
+				if processed then return True else do
+					commitHandler <- readTVar commitHandlerVar
+					commitHandler CommitCancel
+			let moveFocus back = do
+				focusedChild <- readTVar focusedChildVar
+				children <- readTVar childrenVar
+				case focusedChild of
+					Just child@PanelChild
+						{ panelChildElement = SomeElement focusedElement
+						} -> do
+						let (before, after) = S.split child children
+						focusedNewChild <- focusSomeChild panel $
+							if back then
+								S.toDescList before ++ (if stickyFocus then S.toDescList after else [])
+							else
+								S.toAscList after ++ (if stickyFocus then S.toAscList before else [])
+						when focusedNewChild $ unfocusElement focusedElement
+						return focusedNewChild
+					Nothing -> focusSomeChild panel $ (if back then S.toDescList else S.toAscList) children
 			let ownProcessEvent = case keyboardEvent of
 				KeyDownEvent KeyTab -> do
-					focusedChild <- readTVar focusedChildVar
-					children <- readTVar childrenVar
 					keyShiftLPressed <- getKeyState keyboardState KeyShiftL
 					keyShiftRPressed <- getKeyState keyboardState KeyShiftR
-					let keyShiftPressed = keyShiftLPressed || keyShiftRPressed
-					case focusedChild of
-						Just child@PanelChild
-							{ panelChildElement = SomeElement focusedElement
-							} -> do
-							let (before, after) = S.split child children
-							focusedNewChild <- focusSomeChild panel $
-								if keyShiftPressed then
-									S.toDescList before ++ (if stickyFocus then S.toDescList after else [])
-								else
-									S.toAscList after ++ (if stickyFocus then S.toAscList before else [])
-							when focusedNewChild $ unfocusElement focusedElement
-							return focusedNewChild
-						Nothing -> focusSomeChild panel $ (if keyShiftPressed then S.toDescList else S.toAscList) children
+					moveFocus $ keyShiftLPressed || keyShiftRPressed
+				KeyDownEvent KeyRight -> moveFocus False
+				KeyDownEvent KeyDown -> moveFocus False
+				KeyDownEvent KeyLeft -> moveFocus True
+				KeyDownEvent KeyUp -> moveFocus True
 				KeyDownEvent KeyReturn -> tryPassToDefaultElement
 				KeyUpEvent KeyReturn -> tryPassToDefaultElement
 				KeyDownEvent KeyEscape -> tryPassToCancelElement
@@ -220,6 +237,7 @@ instance Element Panel where
 								focusAccepted <- focusElement lastMousedChildElement
 								when focusAccepted $ do
 									writeTVar focusedChildVar lastMousedChild
+									writeTVar lastFocusedChildVar lastMousedChild
 									-- unfocus previously focused child
 									case focusedChild of
 										Just PanelChild
@@ -280,15 +298,22 @@ instance Element Panel where
 	focusElement panel@Panel
 		{ panelChildrenVar = childrenVar
 		, panelFocusedChildVar = focusedChildVar
+		, panelLastFocusedChildVar = lastFocusedChildVar
 		} = do
 		focusedChild <- readTVar focusedChildVar
 		if isNothing focusedChild then do
 			children <- readTVar childrenVar
-			focusSomeChild panel $ S.toAscList children
+			maybeLastFocusedChild <- readTVar lastFocusedChildVar
+			focusSomeChild panel $ case maybeLastFocusedChild of
+				Just lastFocusedChild -> let
+					(childrenBefore, childrenAfter) = S.split lastFocusedChild children
+					in lastFocusedChild : S.toAscList childrenAfter ++ S.toAscList childrenBefore
+				Nothing -> S.toAscList children
 		else return True
 
 	unfocusElement Panel
 		{ panelFocusedChildVar = focusedChildVar
+		, panelCommitHandlerVar = commitHandlerVar
 		} = do
 		focusedChild <- readTVar focusedChildVar
 		case focusedChild of
@@ -298,6 +323,8 @@ instance Element Panel where
 				unfocusElement element
 				writeTVar focusedChildVar Nothing
 			Nothing -> return ()
+		commitHandler <- readTVar commitHandlerVar
+		void $ commitHandler CommitLostFocus
 
 instance FreeContainer Panel where
 
@@ -334,26 +361,31 @@ instance FreeContainer Panel where
 		{ panelChildrenVar = childrenVar
 		, panelChildrenRenderOrderVar = childrenRenderOrderVar
 		, panelFocusedChildVar = focusedChildVar
+		, panelLastFocusedChildVar = lastFocusedChildVar
 		} child@PanelChild
 		{ panelChildElement = SomeElement element
 		} = do
 		children <- readTVar childrenVar
 		-- remove from children
 		let newChildren = S.delete child children
+		-- removal must happen before calling `unfocusElement` to be reentrant
+		-- because element may call `removeFreeChild` again
+		writeTVar childrenVar newChildren
+		-- remove from render order
+		modifyTVar' childrenRenderOrderVar $ delete child
 		-- if this element is focused
 		focusedChild <- readTVar focusedChildVar
 		when (focusedChild == Just child) $ do
 			-- unfocus it
+			writeTVar focusedChildVar Nothing -- before `unfocusElement` for reentrancy
 			unfocusElement element
-			writeTVar focusedChildVar Nothing
 			-- try to focus some other child, starting from next one
 			let (childrenBefore, childrenAfter) = S.split child newChildren
 			_ <- focusSomeChild panel $ S.toAscList childrenAfter ++ S.toAscList childrenBefore
 			return ()
-		-- write new children
-		writeTVar childrenVar newChildren
-		-- remove from render order
-		modifyTVar' childrenRenderOrderVar $ delete child
+		-- if this element was last-focused, forget it
+		lastFocusedChild <- readTVar lastFocusedChildVar
+		when (lastFocusedChild == Just child) $ writeTVar lastFocusedChildVar Nothing
 
 	placeFreeChild _panel PanelChild
 		{ panelChildPositionVar = childPositionVar
@@ -369,6 +401,7 @@ instance FreeContainer Panel where
 
 	focusFreeChild Panel
 		{ panelFocusedChildVar = focusedChildVar
+		, panelLastFocusedChildVar = lastFocusedChildVar
 		} child@PanelChild
 		{ panelChildIndex = childIndex
 		, panelChildElement = SomeElement element
@@ -378,20 +411,25 @@ instance FreeContainer Panel where
 			Just PanelChild
 				{ panelChildIndex = focusedChildIndex
 				, panelChildElement = SomeElement focusedElement
-				} -> unless (childIndex == focusedChildIndex) $ do
+				} -> when (childIndex /= focusedChildIndex) $ do
 				focusAccepted <- focusElement element
 				when focusAccepted $ do
-					unfocusElement focusedElement
 					writeTVar focusedChildVar $ Just child
+					writeTVar lastFocusedChildVar $ Just child
+					unfocusElement focusedElement
 			Nothing -> do
 				focusAccepted <- focusElement element
-				when focusAccepted $ writeTVar focusedChildVar $ Just child
+				when focusAccepted $ do
+					writeTVar focusedChildVar $ Just child
+					writeTVar lastFocusedChildVar $ Just child
 
 -- | Helper function, trying to focus first child in a list accepting the focus.
 -- Writes index of a child accepted focus to panel.
 focusSomeChild :: Panel -> [PanelChild] -> STM Bool
 focusSomeChild Panel
 	{ panelFocusedChildVar = focusedChildVar
+	, panelLastFocusedChildVar = lastFocusedChildVar
+	, panelStickyFocus = stickyFocus
 	} = tryToFocus where
 	tryToFocus (child@PanelChild
 		{ panelChildElement = SomeElement element
@@ -399,10 +437,10 @@ focusSomeChild Panel
 		focusAccepted <- focusElement element
 		if focusAccepted then do
 			writeTVar focusedChildVar $ Just child
+			writeTVar lastFocusedChildVar $ Just child
 			return True
 		else tryToFocus restChildren
-	tryToFocus [] = do
-		return False
+	tryToFocus [] = return stickyFocus
 
 instance DefaultActionRedirector Panel where
 	setDefaultElement Panel
@@ -411,3 +449,6 @@ instance DefaultActionRedirector Panel where
 	setCancelElement Panel
 		{ panelCancelElementVar = cancelElementVar
 		} element = writeTVar cancelElementVar $ Just $ SomeElement element
+
+instance HasCommitHandler Panel where
+	setCommitHandler = writeTVar . panelCommitHandlerVar

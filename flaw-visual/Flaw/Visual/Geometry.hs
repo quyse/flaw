@@ -10,9 +10,11 @@ module Flaw.Visual.Geometry
 	( Geometry(..)
 	, PackedGeometry(..)
 	, packGeometry
+	, packIndexedGeometry
 	, loadPackedGeometry
 	, emitGeometryAsset
 	, loadGeometryAsset
+	, indexGeometryVertices
 	) where
 
 import Control.Exception
@@ -57,8 +59,12 @@ instance S.Serialize PackedGeometry
 
 -- | Pack raw vertices.
 packGeometry :: (Ord a, Storable a) => V.Vector a -> IO PackedGeometry
-packGeometry rawVertices = do
-	(vertices, indices) <- indexVertices rawVertices
+packGeometry rawVertices = uncurry packIndexedGeometry =<< indexGeometryVertices rawVertices
+
+-- | Pack geometry with indices.
+-- Chooses indices format.
+packIndexedGeometry :: Storable a => V.Vector a -> VU.Vector Int -> IO PackedGeometry
+packIndexedGeometry vertices indices = do
 	verticesBytes <- packVector vertices
 	(isIndices32Bit, indicesBytes) <- do
 		if length vertices > 0x10000 then do
@@ -71,7 +77,7 @@ packGeometry rawVertices = do
 		{ packedGeometryVerticesBytes = verticesBytes
 		, packedGeometryIndicesBytes = indicesBytes
 		, packedGeometryIndicesCount = VG.length indices
-		, packedGeometryVertexStride = sizeOf (VG.head rawVertices)
+		, packedGeometryVertexStride = sizeOf (VG.head vertices)
 		, packedGeometryIsIndices32Bit = isIndices32Bit
 		}
 
@@ -113,8 +119,8 @@ loadGeometryAsset device bytes = case S.decode bytes of
 	Left err -> throwIO $ DescribeFirstException $ "failed to load geometry asset: " ++ err
 
 -- | Create indices for raw vertices.
-indexVertices :: (PrimMonad m, Ord a) => V.Vector a -> m (V.Vector a, VU.Vector Int)
-indexVertices vertices = do
+indexGeometryVertices :: (PrimMonad m, Ord a) => V.Vector a -> m (V.Vector a, VU.Vector Int)
+indexGeometryVertices vertices = do
 	mVertices <- VG.thaw vertices
 	VAI.sort mVertices
 	uniqueVertices <- unique mVertices

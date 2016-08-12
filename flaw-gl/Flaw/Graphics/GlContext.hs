@@ -190,6 +190,7 @@ instance Device GlContext where
 		, glDepthStencilWidth = 0
 		, glDepthStencilHeight = 0
 		}
+	nullVertexBuffer = GlVertexBufferId glNullBufferName 0
 	nullIndexBuffer = GlIndexBufferId glNullBufferName GL_UNSIGNED_SHORT
 	nullUniformBuffer = GlNullUniformBufferId
 

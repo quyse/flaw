@@ -29,7 +29,7 @@ This project is mostly a playground for absolutely crazy ideas. Surely if someon
 
 * Visual effects (deferred rendering, materials, lighting, shadowing, etc)
 * High-level GUI framework made from scratch (i.e. neither using native GUIs nor frameworks like Qt)
-* Tools
+* Real-time collaborative asset editor ([doc](docs/editor.md))
 
 ## Experiments
 
@@ -39,7 +39,6 @@ This project is mostly a playground for absolutely crazy ideas. Surely if someon
 
 * TH-generated bindings for scripting languages
 * Type-safe multiplayer framework
-* Real-time collaborative asset editor
 
 ## Packages and platform support
 
@@ -79,6 +78,7 @@ Linux is the main development platform. It also considered the only "server" pla
 | `flaw-network` | Some network socket implementations (WIP) | ✔ | ✔ | ✔ | ✔ |
 | `flaw-oil` | Reimplementation of [Oil protocol](https://github.com/quyse/oil) | ✔ | ✔ | ✔ |   |
 | `flaw-oil-client` | Simple command-line client for Oil protocol | ✔ | ✔ | ✔ |   |
+| `flaw-oil-entity` | Editable entities over Oil protocol | ✔ | ✔ | ✔ |   |
 | `flaw-oil-server` | Server for Oil protocol | ✔ |   |   |   |
 | `flaw-physics` | General interface for physics simulation | ✔ | ✔ | ✔ | ✔ |
 | `flaw-sdl` | Integration with SDL 2 | ✔ |   | ✔ |   |

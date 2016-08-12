@@ -114,6 +114,8 @@ class Device d where
 	nullBlendState :: BlendStateId d
 	-- | Null depth stencil target.
 	nullDepthStencilTarget :: DepthStencilTargetId d
+	-- | Null vertex buffer.
+	nullVertexBuffer :: VertexBufferId d
 	-- | Null index buffer.
 	nullIndexBuffer :: IndexBufferId d
 	-- | Null uniform buffer.

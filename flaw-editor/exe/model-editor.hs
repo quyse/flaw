@@ -4,7 +4,7 @@ Description: Entry point for flaw model-editor executable.
 License: MIT
 -}
 
-{-# LANGUAGE OverloadedStrings, PatternSynonyms, RankNTypes #-}
+{-# LANGUAGE DeriveGeneric, OverloadedStrings, PatternSynonyms, RankNTypes #-}
 
 module Main(main) where
 
@@ -16,13 +16,17 @@ import Control.Monad.State.Strict
 import Data.Bits
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
+import qualified Data.Serialize as S
 import qualified Data.Text as T
 import qualified Data.Vector as V
+import GHC.Generics(Generic)
+import System.IO.Unsafe
 
 import Flaw.App
 import Flaw.Asset.Collada
 import Flaw.Asset.Texture.Dxt
 import Flaw.Book
+import Flaw.Exception
 import Flaw.Flow
 import Flaw.Graphics
 import Flaw.Graphics.Program
@@ -33,13 +37,17 @@ import Flaw.Input.Mouse
 import Flaw.Math
 import Flaw.Math.Geometry
 import Flaw.UI
+import Flaw.UI.CheckBox
 import Flaw.UI.DefaultStyle
 import Flaw.UI.Drawer
+import Flaw.UI.EditBox
 import Flaw.UI.Editor.Elements
 import Flaw.UI.Editor.FileDialog
-import Flaw.UI.Elements
 import Flaw.UI.Layout
+import Flaw.UI.Panel
 import Flaw.UI.RenderBox
+import Flaw.UI.Slider
+import Flaw.UI.Window
 import Flaw.Visual
 import Flaw.Visual.Geometry
 import Flaw.Visual.Geometry.Basic
@@ -53,7 +61,48 @@ import Flaw.Window
 data TextureCell = TextureCell
 	{ textureCellBook :: !Book
 	, textureCellTexture :: !(TextureId AppGraphicsDevice)
+	, textureCellFileName :: !T.Text
 	}
+
+instance S.Serialize TextureCell where
+	put = S.put . textureCellFileName
+	get = do
+		fileName <- S.get
+		return TextureCell
+			{ textureCellBook = dummyBook
+			, textureCellTexture = nullTexture
+			, textureCellFileName = fileName
+			}
+
+data GeometryCell = GeometryCell
+	{ geometryCellGeometry :: !(Geometry AppGraphicsDevice)
+	, geometryCellFileName :: !T.Text
+	, geometryCellNodeName :: !T.Text
+	}
+
+instance S.Serialize GeometryCell where
+	put GeometryCell
+		{ geometryCellFileName = fileName
+		, geometryCellNodeName = nodeName
+		} = do
+		S.put fileName
+		S.put nodeName
+	get = do
+		fileName <- S.get
+		nodeName <- S.get
+		return GeometryCell
+			{ geometryCellGeometry = Geometry
+				{ geometryVertexBuffer = nullVertexBuffer
+				, geometryIndexBuffer = nullIndexBuffer
+				, geometryIndicesCount = 0
+				}
+			, geometryCellFileName = fileName
+			, geometryCellNodeName = nodeName
+			}
+
+{-# NOINLINE dummyBook #-}
+dummyBook :: Book
+dummyBook = unsafePerformIO newBook
 
 newTextureCell :: IO (TextureId AppGraphicsDevice, IO ()) -> IO (TextureCell, IO ())
 newTextureCell createTexture = withSpecialBook $ \bk -> do
@@ -62,6 +111,7 @@ newTextureCell createTexture = withSpecialBook $ \bk -> do
 	return TextureCell
 		{ textureCellBook = cellBook
 		, textureCellTexture = cellTexture
+		, textureCellFileName = T.empty
 		}
 
 data EditorState = EditorState
@@ -73,7 +123,7 @@ data EditorState = EditorState
 	, editorStateLightPosition :: !Float3
 	, editorStateLightColor :: !Float3
 	, editorStateAmbientLightColor :: !Float3
-	, editorStateGeometry :: !(Geometry AppGraphicsDevice)
+	, editorStateGeometryCell :: !GeometryCell
 	, editorStateAlbedoTextureCell :: !TextureCell
 	, editorStateNormalTextureCell :: !TextureCell
 	, editorStateNormalTextureEnabled :: !Bool
@@ -86,7 +136,9 @@ data EditorState = EditorState
 	, editorStateGlossinessTextureCell :: !TextureCell
 	, editorStateGlossinessTextureEnabled :: !Bool
 	, editorStateLinearFiltering :: !Bool
-	}
+	} deriving Generic
+
+instance S.Serialize EditorState
 
 pattern SHADER_FLAG_NORMAL_MAP = 1
 pattern SHADER_FLAG_DIFFUSE_MAP = 2
@@ -126,6 +178,45 @@ main = withApp appConfig
 			}
 			where p = Vec3 (cos alpha * cos beta) (sin alpha * cos beta) (sin beta)
 		loadPackedGeometry device =<< packGeometry (sphereVertices f 16 16)
+
+	let configFileName = "config.bin"
+
+	-- template editor state
+	configData <- handle (\SomeException {} -> return B.empty) $ B.readFile configFileName
+	let nullTextureCell = TextureCell
+		{ textureCellTexture = nullTexture
+		, textureCellBook = dummyBook
+		, textureCellFileName = T.empty
+		}
+	let templateEditorState = case S.decode configData of
+		Left _ -> EditorState
+			{ editorStateEyePosition = Vec3 (-2) 0 1
+			, editorStateEyeSpeed = Vec3 0 0 0
+			, editorStateEyeAlpha = 0
+			, editorStateEyeBeta = 0
+			, editorStateMaterial = Vec4 0.2 0.5 0 0.4
+			, editorStateLightPosition = Vec3 (-2) 2 2
+			, editorStateLightColor = vecFromScalar 10
+			, editorStateAmbientLightColor = vecFromScalar 0.01
+			, editorStateGeometryCell = GeometryCell
+				{ geometryCellGeometry = sphereGeometry
+				, geometryCellFileName = T.empty
+				, geometryCellNodeName = T.empty
+				}
+			, editorStateAlbedoTextureCell = nullTextureCell
+			, editorStateNormalTextureCell = nullTextureCell
+			, editorStateNormalTextureEnabled = False
+			, editorStateDiffuseTextureCell = nullTextureCell
+			, editorStateDiffuseTextureEnabled = False
+			, editorStateSpecularTextureCell = nullTextureCell
+			, editorStateSpecularTextureEnabled = False
+			, editorStateMetalnessTextureCell = nullTextureCell
+			, editorStateMetalnessTextureEnabled = False
+			, editorStateGlossinessTextureCell = nullTextureCell
+			, editorStateGlossinessTextureEnabled = False
+			, editorStateLinearFiltering = False
+			}
+		Right es -> es
 
 	-- editor state
 	editorStateVar <- do
@@ -206,28 +297,18 @@ main = withApp appConfig
 		initialSpecularTextureCell <- newGrayTextureCell
 		initialMetalnessTextureCell <- newGrayTextureCell
 		initialGlossinessTextureCell <- newGrayTextureCell
-		newTVarIO EditorState
-			{ editorStateEyePosition = Vec3 (-2) 0 1
-			, editorStateEyeSpeed = Vec3 0 0 0
-			, editorStateEyeAlpha = 0
-			, editorStateEyeBeta = 0
-			, editorStateMaterial = Vec4 0.2 0.5 0 0.4
-			, editorStateLightPosition = Vec3 (-2) 2 2
-			, editorStateLightColor = vecFromScalar 10
-			, editorStateAmbientLightColor = vecFromScalar 0.01
-			, editorStateGeometry = sphereGeometry
+		newTVarIO templateEditorState
+			{ editorStateGeometryCell = GeometryCell
+				{ geometryCellGeometry = sphereGeometry
+				, geometryCellFileName = T.empty
+				, geometryCellNodeName = T.empty
+				}
 			, editorStateAlbedoTextureCell = initialAlbedoTextureCell
 			, editorStateNormalTextureCell = initialNormalTextureCell
-			, editorStateNormalTextureEnabled = False
 			, editorStateDiffuseTextureCell = initialDiffuseTextureCell
-			, editorStateDiffuseTextureEnabled = False
 			, editorStateSpecularTextureCell = initialSpecularTextureCell
-			, editorStateSpecularTextureEnabled = False
 			, editorStateMetalnessTextureCell = initialMetalnessTextureCell
-			, editorStateMetalnessTextureEnabled = False
 			, editorStateGlossinessTextureCell = initialGlossinessTextureCell
-			, editorStateGlossinessTextureEnabled = False
-			, editorStateLinearFiltering = False
 			}
 
 	-- render pipeline
@@ -262,6 +343,8 @@ main = withApp appConfig
 			resultViewNormal <- if (shaderFlags .&. SHADER_FLAG_NORMAL_MAP) > 0 then do
 				(viewTangent, viewBinormal, viewNormal) <- tangentFrame (xyz__ viewPosition) vertexViewNormal aTexcoord
 				bentNormalXY <- temp $ sample (sampler2D2f 1) aTexcoord * vecFromScalar (255 / 127) - vecFromScalar 1
+				--bentNormalXY <- temp $ (sample (sampler2D2f 1) aTexcoord * vecFromScalar (255 / 127) - vecFromScalar 1) * cvec11 0 0
+				--bentNormalXY <- temp $ (sample (sampler2D2f 1) aTexcoord * vecFromScalar (255 / 127) - vecFromScalar 1) * vecFromScalar 0 + (cvec11 (128 / 255) (127 / 255) * vecFromScalar (255 / 127) - vecFromScalar 1)
 				bentNormal <- temp $ cvec21 bentNormalXY $ sqrt $ max_ 0 $ 1 - dot bentNormalXY bentNormalXY
 				temp $ normalize $ viewTangent * xxx__ bentNormal + viewBinormal * yyy__ bentNormal + viewNormal * zzz__ bentNormal
 				else temp $ normalize vertexViewNormal
@@ -318,18 +401,27 @@ main = withApp appConfig
 		case eitherVertices of
 			Right vertices -> do
 				geometry <- book bk (loadPackedGeometry device =<< packGeometry (vertices :: V.Vector VertexPNT))
-				atomically $ modifyTVar' editorStateVar $ \s -> s
-					{ editorStateGeometry = geometry
+				atomically $ modifyTVar' editorStateVar $ \s@EditorState
+					{ editorStateGeometryCell = geometryCell
+					} -> s
+					{ editorStateGeometryCell = geometryCell
+						{ geometryCellGeometry = geometry
+						, geometryCellFileName = fileName
+						, geometryCellNodeName = elementId
+						}
 					}
-			Left err -> do
-				putStrLn $ T.unpack err
+			Left err -> putStrLn $ T.unpack err
 
-	let loadTextureFile fileName = do
+	let loadTextureFile fileName isNormalTexture = do
 		bytes <- B.readFile $ T.unpack fileName
+		loadedTexture <- loadTexture bytes
 		PackedTexture
 			{ packedTextureBytes = textureBytes
 			, packedTextureInfo = textureInfo
-			} <- loadTexture bytes
+			} <- if isNormalTexture then case convertTextureToLinearRG loadedTexture of
+			Just t -> return t
+			Nothing -> throwIO $ DescribeFirstException ("failed to convert texture to RG" :: T.Text)
+			else return loadedTexture
 		(compressedTextureInfo, compressedTextureBytes) <- dxtCompressTexture textureInfo textureBytes
 		createStaticTexture device compressedTextureInfo defaultSamplerStateInfo compressedTextureBytes
 
@@ -376,49 +468,73 @@ main = withApp appConfig
 
 		fileDialogService <- newFileDialogService metrics windowPanel flow
 
+		initialEditorState <- readTVar editorStateVar
+
 		-- properties frame
 		colladaFileElement <- newFileElement fileDialogService
 		colladaNodeEditBox <- newEditBox
-		setActionHandler colladaFileElement $ do
-			fileName <- getText colladaFileElement
-			nodeName <- getText colladaNodeEditBox
-			asyncRunInFlow flow $ loadColladaFile fileName nodeName
-		let textureFileElement getTextureCell setTextureCell = do
+		do
+			let actionHandler = do
+				fileName <- getText colladaFileElement
+				nodeName <- getText colladaNodeEditBox
+				asyncRunInFlow flow $ loadColladaFile fileName nodeName
+			setActionHandler colladaFileElement actionHandler
+			-- load initial geometry
+			let GeometryCell
+				{ geometryCellFileName = initialFileName
+				, geometryCellNodeName = initialNodeName
+				} = editorStateGeometryCell templateEditorState
+			setText colladaFileElement initialFileName
+			setText colladaNodeEditBox initialNodeName
+			unless (T.null initialFileName || T.null initialNodeName) actionHandler
+
+		let genericTextureFileElement isNormalTexture getTextureCell setTextureCell = do
 			fileElement <- newFileElement fileDialogService
-			setActionHandler fileElement $ do
+			let actionHandler = do
 				fileName <- getText fileElement
 				asyncRunInFlow flow $ handle errorHandler $ do
 					cell@TextureCell
 						{ textureCellBook = cellBook
 						} <- getTextureCell <$> readTVarIO editorStateVar
 					freePreviousTexture <- releaseBook cellBook
-					texture <- book cellBook $ loadTextureFile fileName
+					texture <- book cellBook $ loadTextureFile fileName isNormalTexture
 					atomically $ modifyTVar' editorStateVar $ setTextureCell cell
 						{ textureCellTexture = texture
+						, textureCellFileName = fileName
 						}
 					freePreviousTexture
+			setActionHandler fileElement actionHandler
+			-- load initial texture
+			let TextureCell
+				{ textureCellFileName = initialFileName
+				} = getTextureCell templateEditorState
+			setText fileElement initialFileName
+			unless (T.null initialFileName) actionHandler
 			return fileElement
+		let
+			textureFileElement = genericTextureFileElement False
+			rgTextureFileElement = genericTextureFileElement True
 		albedoTextureFileElement <- textureFileElement editorStateAlbedoTextureCell $ \c s -> s
 			{ editorStateAlbedoTextureCell = c
 			}
-		normalTextureFileElement <- textureFileElement editorStateNormalTextureCell $ \c s -> s
+		normalTextureFileElement <- rgTextureFileElement editorStateNormalTextureCell $ \c s -> s
 			{ editorStateNormalTextureCell = c
 			}
 		lightIntensitySlider <- newSlider metrics 0.01
-		setFloatValue lightIntensitySlider 0.5
+		setFloatValue lightIntensitySlider $ 0.1 * x_ (editorStateLightColor initialEditorState)
 		setChangeHandler lightIntensitySlider $ do
 			value <- getFloatValue lightIntensitySlider
 			modifyTVar' editorStateVar $ \s -> s
 				{ editorStateLightColor = vecFromScalar $ value * 10
 				}
 		ambientLightIntensitySlider <- newSlider metrics 0.01
-		setFloatValue ambientLightIntensitySlider 0.1
+		setFloatValue ambientLightIntensitySlider $ 10 * x_ (editorStateAmbientLightColor initialEditorState)
 		setChangeHandler ambientLightIntensitySlider $ do
 			value <- getFloatValue ambientLightIntensitySlider
 			modifyTVar' editorStateVar $ \s -> s
 				{ editorStateAmbientLightColor = vecFromScalar $ value * 0.1
 				}
-		initialMaterial <- editorStateMaterial <$> readTVar editorStateVar
+		let initialMaterial = editorStateMaterial initialEditorState
 		diffuseSlider <- newSlider metrics 0.01
 		setFloatValue diffuseSlider $ x_ initialMaterial
 		setChangeHandler diffuseSlider $ do
@@ -460,6 +576,7 @@ main = withApp appConfig
 			{ editorStateGlossinessTextureCell = c
 			}
 		linearFilteringCheckBox <- newLabeledCheckBox "enable"
+		setChecked linearFilteringCheckBox $ editorStateLinearFiltering initialEditorState
 		setChangeHandler linearFilteringCheckBox $ do
 			checked <- getChecked linearFilteringCheckBox
 			modifyTVar' editorStateVar $ \s -> s
@@ -471,6 +588,7 @@ main = withApp appConfig
 			labeledFlowLayout "albedo texture" $ elementInFlowLayout albedoTextureFileElement
 			checkBoxedFlowLayout "normal texture" $ \checkBox -> do
 				elementInFlowLayout normalTextureFileElement
+				lift $ setChecked checkBox $ editorStateNormalTextureEnabled initialEditorState
 				lift $ setChangeHandler checkBox $ do
 					checked <- getChecked checkBox
 					modifyTVar' editorStateVar $ \s -> s
@@ -481,6 +599,7 @@ main = withApp appConfig
 			labeledFlowLayout "diffuse" $ elementInFlowLayout diffuseSlider
 			checkBoxedFlowLayout "diffuse texture" $ \checkBox -> do
 				elementInFlowLayout diffuseTextureFileElement
+				lift $ setChecked checkBox $ editorStateDiffuseTextureEnabled initialEditorState
 				lift $ setChangeHandler checkBox $ do
 					checked <- getChecked checkBox
 					modifyTVar' editorStateVar $ \s -> s
@@ -489,6 +608,7 @@ main = withApp appConfig
 			labeledFlowLayout "specular" $ elementInFlowLayout specularSlider
 			checkBoxedFlowLayout "specular texture" $ \checkBox -> do
 				elementInFlowLayout specularTextureFileElement
+				lift $ setChecked checkBox $ editorStateSpecularTextureEnabled initialEditorState
 				lift $ setChangeHandler checkBox $ do
 					checked <- getChecked checkBox
 					modifyTVar' editorStateVar $ \s -> s
@@ -497,6 +617,7 @@ main = withApp appConfig
 			labeledFlowLayout "metalness" $ elementInFlowLayout metalnessSlider
 			checkBoxedFlowLayout "metalness texture" $ \checkBox -> do
 				elementInFlowLayout metalnessTextureFileElement
+				lift $ setChecked checkBox $ editorStateMetalnessTextureEnabled initialEditorState
 				lift $ setChangeHandler checkBox $ do
 					checked <- getChecked checkBox
 					modifyTVar' editorStateVar $ \s -> s
@@ -505,6 +626,7 @@ main = withApp appConfig
 			labeledFlowLayout "glossiness" $ elementInFlowLayout glossinessSlider
 			checkBoxedFlowLayout "glossiness texture" $ \checkBox -> do
 				elementInFlowLayout glossinessTextureFileElement
+				lift $ setChecked checkBox $ editorStateGlossinessTextureEnabled initialEditorState
 				lift $ setChangeHandler checkBox $ do
 					checked <- getChecked checkBox
 					modifyTVar' editorStateVar $ \s -> s
@@ -581,10 +703,12 @@ main = withApp appConfig
 				, editorStateLightPosition = lightPosition
 				, editorStateLightColor = lightColor
 				, editorStateAmbientLightColor = ambientLightColor
-				, editorStateGeometry = Geometry
-					{ geometryVertexBuffer = vbObject
-					, geometryIndexBuffer = ibObject
-					, geometryIndicesCount = icObject
+				, editorStateGeometryCell = GeometryCell
+					{ geometryCellGeometry = Geometry
+						{ geometryVertexBuffer = vbObject
+						, geometryIndexBuffer = ibObject
+						, geometryIndicesCount = icObject
+						}
 					}
 				, editorStateAlbedoTextureCell = TextureCell
 					{ textureCellTexture = tAlbedo
@@ -723,6 +847,9 @@ main = withApp appConfig
 
 		exit <- atomically $ readTVar exitVar
 		when exit exitApp
+
+	-- save config
+	B.writeFile configFileName . S.encode =<< readTVarIO editorStateVar
 
 errorHandler :: SomeException -> IO ()
 errorHandler = print

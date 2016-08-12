@@ -24,14 +24,15 @@ library
     Flaw.UI.CheckBox
     Flaw.UI.Drawer
     Flaw.UI.EditBox
-    Flaw.UI.Elements
     Flaw.UI.Frame
     Flaw.UI.Label
     Flaw.UI.Layout
     Flaw.UI.ListBox
+    Flaw.UI.Menu
     Flaw.UI.Metrics
     Flaw.UI.Panel
     Flaw.UI.PileBox
+    Flaw.UI.Popup
     Flaw.UI.ScrollBox
     Flaw.UI.Slider
     Flaw.UI.VisualElement

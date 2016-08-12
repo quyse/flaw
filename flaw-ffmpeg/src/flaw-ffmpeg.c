@@ -297,8 +297,12 @@ int flaw_ffmpeg_openEncoder(AVStream* stream)
 AVStream* flaw_ffmpeg_copyOutputStream(AVFormatContext* ctx, AVStream* copyFromStream)
 {
 	AVStream* stream = avformat_new_stream(ctx, copyFromStream->codec->codec);
-	if(!stream || avcodec_copy_context(stream->codec, copyFromStream->codec) != 0)
-		return NULL;
+	if(!stream) return NULL;
+	AVCodecParameters* params = avcodec_parameters_alloc();
+	int r =
+		avcodec_parameters_from_context(params, copyFromStream->codec) >= 0 &&
+		avcodec_parameters_to_context(stream->codec, params) == 0;
+	avcodec_parameters_free(&params);
 	stream->codec->codec_tag = 0;
 	if(ctx->oformat->flags & AVFMT_GLOBALHEADER)
 		stream->codec->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
