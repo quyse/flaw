@@ -332,4 +332,4 @@ invokeSdlWindowSystem ws io = do
 
 type InvokeCallback = IO ()
 foreign import ccall "wrapper" wrapInvokeCallback :: InvokeCallback -> IO (FunPtr InvokeCallback)
-foreign import ccall "dynamic" unwrapInvokeCallback :: FunPtr InvokeCallback -> InvokeCallback
+foreign import ccall safe "dynamic" unwrapInvokeCallback :: FunPtr InvokeCallback -> InvokeCallback
