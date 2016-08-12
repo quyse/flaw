@@ -15,6 +15,7 @@ module Flaw.Build
 	, packList
 	, packVector
 	, unpackVector
+	, embedCStringExp
 	, genEmbed
 	) where
 
@@ -23,12 +24,15 @@ import qualified Data.ByteString as B
 import qualified Data.ByteString.Unsafe as B
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
 import qualified Data.Vector as V
 import qualified Data.Vector.Generic as VG
 import qualified Data.Vector.Storable as VS
+import Foreign.C.Types
 import Foreign.Marshal.Array
 import Foreign.Ptr
 import Foreign.Storable
+import qualified GHC.Ptr as GHC
 import Language.Haskell.TH
 import Language.Haskell.TH.Syntax(addDependentFile)
 import System.IO.Unsafe
@@ -164,6 +168,10 @@ unpackVector bytes = wu $ \u -> B.unsafeUseAsCStringLen bytes $ \(ptr, len) -> V
 	where
 		wu :: (a -> IO (v a)) -> IO (v a)
 		wu m = m undefined
+
+-- | Null-terminated string literal (of type Ptr CChar).
+embedCStringExp :: String -> Q Exp
+embedCStringExp str = [| GHC.Ptr $(litE $ stringPrimL $ B.unpack (T.encodeUtf8 $ T.pack str) ++ [0]) :: Ptr CChar |]
 
 -- | Generate Embed instance for ADT.
 {- Example:
