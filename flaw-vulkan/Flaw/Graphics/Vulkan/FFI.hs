@@ -15,6 +15,7 @@ module Flaw.Graphics.Vulkan.FFI
 	, VkStructureType(..)
 	, VkFlags
 	, VkBool32
+	, VkExtent3D(..)
 	-- * allocation
 	, VkSystemAllocationScope(..)
 	, VkInternalAllocationType(..)
@@ -33,7 +34,7 @@ module Flaw.Graphics.Vulkan.FFI
 	, vkDestroyInstance
 	, vkGetInstanceProcAddr
 	, vkGetInstanceProc
-	-- * device
+	-- * physical device
 	, VkPhysicalDevice
 	, FN_vkEnumeratePhysicalDevices
 	, VkPhysicalDeviceType(..)
@@ -43,6 +44,18 @@ module Flaw.Graphics.Vulkan.FFI
 	, VkPhysicalDeviceSparseProperties(..)
 	, VkPhysicalDeviceProperties(..)
 	, FN_vkGetPhysicalDeviceProperties
+	, VkPhysicalDeviceFeatures(..)
+	, FN_vkGetPhysicalDeviceFeatures
+	, VkQueueFlags
+	, VkQueueFamilyProperties(..)
+	, FN_vkGetPhysicalDeviceQueueFamilyProperties
+	-- * device
+	, VkDevice
+	, VkDeviceCreateFlags
+	, VkDeviceQueueCreateFlags
+	, VkDeviceQueueCreateInfo(..)
+	, VkDeviceCreateInfo(..)
+	, FN_vkCreateDevice
 	) where
 
 import Data.Int
@@ -63,7 +76,7 @@ import Flaw.Graphics.Vulkan.FFI.TH
 
 -- version
 pattern VK_API_VERSION :: Word32
-pattern VK_API_VERSION = 400017
+pattern VK_API_VERSION = 0x400018 -- 1.0.24
 
 
 -- general
@@ -76,25 +89,25 @@ genEnum [t|Word32|] "VkResult"
 	, ("VK_EVENT_SET", 3)
 	, ("VK_EVENT_RESET", 4)
 	, ("VK_INCOMPLETE", 5)
-	, ("VK_ERROR_OUT_OF_HOST_MEMORY", -1)
-	, ("VK_ERROR_OUT_OF_DEVICE_MEMORY", -2)
-	, ("VK_ERROR_INITIALIZATION_FAILED", -3)
-	, ("VK_ERROR_DEVICE_LOST", -4)
-	, ("VK_ERROR_MEMORY_MAP_FAILED", -5)
-	, ("VK_ERROR_LAYER_NOT_PRESENT", -6)
-	, ("VK_ERROR_EXTENSION_NOT_PRESENT", -7)
-	, ("VK_ERROR_FEATURE_NOT_PRESENT", -8)
-	, ("VK_ERROR_INCOMPATIBLE_DRIVER", -9)
-	, ("VK_ERROR_TOO_MANY_OBJECTS", -10)
-	, ("VK_ERROR_FORMAT_NOT_SUPPORTED", -11)
-	, ("VK_ERROR_FRAGMENTED_POOL", -12)
-	, ("VK_ERROR_SURFACE_LOST_KHR", -1000000000)
-	, ("VK_ERROR_NATIVE_WINDOW_IN_USE_KHR", -1000000001)
+	, ("VK_ERROR_OUT_OF_HOST_MEMORY", 0x100000000 - 1)
+	, ("VK_ERROR_OUT_OF_DEVICE_MEMORY", 0x100000000 - 2)
+	, ("VK_ERROR_INITIALIZATION_FAILED", 0x100000000 - 3)
+	, ("VK_ERROR_DEVICE_LOST", 0x100000000 - 4)
+	, ("VK_ERROR_MEMORY_MAP_FAILED", 0x100000000 - 5)
+	, ("VK_ERROR_LAYER_NOT_PRESENT", 0x100000000 - 6)
+	, ("VK_ERROR_EXTENSION_NOT_PRESENT", 0x100000000 - 7)
+	, ("VK_ERROR_FEATURE_NOT_PRESENT", 0x100000000 - 8)
+	, ("VK_ERROR_INCOMPATIBLE_DRIVER", 0x100000000 - 9)
+	, ("VK_ERROR_TOO_MANY_OBJECTS", 0x100000000 - 10)
+	, ("VK_ERROR_FORMAT_NOT_SUPPORTED", 0x100000000 - 11)
+	, ("VK_ERROR_FRAGMENTED_POOL", 0x100000000 - 12)
+	, ("VK_ERROR_SURFACE_LOST_KHR", 0x100000000 - 1000000000)
+	, ("VK_ERROR_NATIVE_WINDOW_IN_USE_KHR", 0x100000000 - 1000000001)
 	, ("VK_SUBOPTIMAL_KHR", 1000001003)
-	, ("VK_ERROR_OUT_OF_DATE_KHR", -1000001004)
-	, ("VK_ERROR_INCOMPATIBLE_DISPLAY_KHR", -1000003001)
-	, ("VK_ERROR_VALIDATION_FAILED_EXT", -1000011001)
-	, ("VK_ERROR_INVALID_SHADER_NV", -1000012000)
+	, ("VK_ERROR_OUT_OF_DATE_KHR", 0x100000000 - 1000001004)
+	, ("VK_ERROR_INCOMPATIBLE_DISPLAY_KHR", 0x100000000 - 1000003001)
+	, ("VK_ERROR_VALIDATION_FAILED_EXT", 0x100000000 - 1000011001)
+	, ("VK_ERROR_INVALID_SHADER_NV", 0x100000000 - 1000012000)
 	]
 
 
@@ -175,6 +188,12 @@ genEnum [t|Word32|] "VkStructureType"
 type VkFlags = Word32
 type VkBool32 = Word32
 
+genStruct "VkExtent3D"
+	[ ([t|Word32|], "width")
+	, ([t|Word32|], "height")
+	, ([t|Word32|], "depth")
+	]
+
 
 -- allocation
 
@@ -250,7 +269,7 @@ foreign import VKAPI_CALL safe vkGetInstanceProcAddr
 	-> IO (FunPtr (IO ()))
 
 
--- device
+-- physical device
 
 vkDefineHandle "VkPhysicalDevice"
 
@@ -412,3 +431,117 @@ type FN_vkGetPhysicalDeviceProperties
 	=  VkPhysicalDevice
 	-> Ptr VkPhysicalDeviceProperties
 	-> IO ()
+
+genStruct "VkPhysicalDeviceFeatures"
+	[ ([t|VkBool32|], "robustBufferAccess")
+	, ([t|VkBool32|], "fullDrawIndexUint32")
+	, ([t|VkBool32|], "imageCubeArray")
+	, ([t|VkBool32|], "independentBlend")
+	, ([t|VkBool32|], "geometryShader")
+	, ([t|VkBool32|], "tessellationShader")
+	, ([t|VkBool32|], "sampleRateShading")
+	, ([t|VkBool32|], "dualSrcBlend")
+	, ([t|VkBool32|], "logicOp")
+	, ([t|VkBool32|], "multiDrawIndirect")
+	, ([t|VkBool32|], "drawIndirectFirstInstance")
+	, ([t|VkBool32|], "depthClamp")
+	, ([t|VkBool32|], "depthBiasClamp")
+	, ([t|VkBool32|], "fillModeNonSolid")
+	, ([t|VkBool32|], "depthBounds")
+	, ([t|VkBool32|], "wideLines")
+	, ([t|VkBool32|], "largePoints")
+	, ([t|VkBool32|], "alphaToOne")
+	, ([t|VkBool32|], "multiViewport")
+	, ([t|VkBool32|], "samplerAnisotropy")
+	, ([t|VkBool32|], "textureCompressionETC2")
+	, ([t|VkBool32|], "textureCompressionASTC_LDR")
+	, ([t|VkBool32|], "textureCompressionBC")
+	, ([t|VkBool32|], "occlusionQueryPrecise")
+	, ([t|VkBool32|], "pipelineStatisticsQuery")
+	, ([t|VkBool32|], "vertexPipelineStoresAndAtomics")
+	, ([t|VkBool32|], "fragmentStoresAndAtomics")
+	, ([t|VkBool32|], "shaderTessellationAndGeometryPointSize")
+	, ([t|VkBool32|], "shaderImageGatherExtended")
+	, ([t|VkBool32|], "shaderStorageImageExtendedFormats")
+	, ([t|VkBool32|], "shaderStorageImageMultisample")
+	, ([t|VkBool32|], "shaderStorageImageReadWithoutFormat")
+	, ([t|VkBool32|], "shaderStorageImageWriteWithoutFormat")
+	, ([t|VkBool32|], "shaderUniformBufferArrayDynamicIndexing")
+	, ([t|VkBool32|], "shaderSampledImageArrayDynamicIndexing")
+	, ([t|VkBool32|], "shaderStorageBufferArrayDynamicIndexing")
+	, ([t|VkBool32|], "shaderStorageImageArrayDynamicIndexing")
+	, ([t|VkBool32|], "shaderClipDistance")
+	, ([t|VkBool32|], "shaderCullDistance")
+	, ([t|VkBool32|], "shaderFloat64")
+	, ([t|VkBool32|], "shaderInt64")
+	, ([t|VkBool32|], "shaderInt16")
+	, ([t|VkBool32|], "shaderResourceResidency")
+	, ([t|VkBool32|], "shaderResourceMinLod")
+	, ([t|VkBool32|], "sparseBinding")
+	, ([t|VkBool32|], "sparseResidencyBuffer")
+	, ([t|VkBool32|], "sparseResidencyImage2D")
+	, ([t|VkBool32|], "sparseResidencyImage3D")
+	, ([t|VkBool32|], "sparseResidency2Samples")
+	, ([t|VkBool32|], "sparseResidency4Samples")
+	, ([t|VkBool32|], "sparseResidency8Samples")
+	, ([t|VkBool32|], "sparseResidency16Samples")
+	, ([t|VkBool32|], "sparseResidencyAliased")
+	, ([t|VkBool32|], "variableMultisampleRate")
+	, ([t|VkBool32|], "inheritedQueries")
+	]
+
+type FN_vkGetPhysicalDeviceFeatures
+	=  VkPhysicalDevice
+	-> Ptr VkPhysicalDeviceFeatures
+	-> IO ()
+
+type VkQueueFlags = VkFlags
+
+genStruct "VkQueueFamilyProperties"
+	[ ([t|VkQueueFlags|], "queueFlags")
+	, ([t|Word32|], "queueCount")
+	, ([t|Word32|], "timestampValidBits")
+	, ([t|VkExtent3D|], "minImageTransferGranularity")
+	]
+
+type FN_vkGetPhysicalDeviceQueueFamilyProperties
+	=  VkPhysicalDevice
+	-> Ptr Word32
+	-> Ptr VkQueueFamilyProperties
+	-> IO ()
+
+-- device
+
+vkDefineHandle "VkDevice"
+
+type VkDeviceCreateFlags = VkFlags
+type VkDeviceQueueCreateFlags = VkFlags
+
+genStruct "VkDeviceQueueCreateInfo"
+	[ ([t|VkStructureType|], "sType")
+	, ([t|Ptr ()|], "pNext")
+	, ([t|VkDeviceQueueCreateFlags|], "flags")
+	, ([t|Word32|], "queueFamilyIndex")
+	, ([t|Word32|], "queueCount")
+	, ([t|Ptr Float|], "pQueuePriorities")
+	]
+
+genStruct "VkDeviceCreateInfo"
+	[ ([t|VkStructureType|], "sType")
+	, ([t|Ptr ()|], "pNext")
+	, ([t|VkDeviceCreateFlags|], "flags")
+	, ([t|Word32|], "queueCreateInfoCount")
+	, ([t|Ptr VkDeviceQueueCreateInfo|], "pQueueCreateInfos")
+	, ([t|Word32|], "enabledLayerCount")
+	, ([t|Ptr (Ptr CChar)|], "ppEnabledLayerNames")
+	, ([t|Word32|], "enabledExtensionCount")
+	, ([t|Ptr (Ptr CChar)|], "ppEnabledExtensionNames")
+	, ([t|Ptr VkPhysicalDeviceFeatures|], "pEnabledFeatures")
+	]
+
+type FN_vkCreateDevice
+	=  VkPhysicalDevice
+	-> Ptr VkDeviceCreateInfo
+	-> Ptr VkAllocationCallbacks
+	-> Ptr VkDevice
+	-> IO Word32 -- VkResult

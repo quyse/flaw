@@ -36,6 +36,9 @@ data VulkanSystem = VulkanSystem
 	{ vulkanSystemInstance :: {-# UNPACK #-} !VkInstance
 	, vulkanSystem_vkEnumeratePhysicalDevices :: !FN_vkEnumeratePhysicalDevices
 	, vulkanSystem_vkGetPhysicalDeviceProperties :: !FN_vkGetPhysicalDeviceProperties
+	, vulkanSystem_vkGetPhysicalDeviceFeatures :: !FN_vkGetPhysicalDeviceFeatures
+	, vulkanSystem_vkGetPhysicalDeviceQueueFamilyProperties :: !FN_vkGetPhysicalDeviceQueueFamilyProperties
+	, vulkanSystem_vkCreateDevice :: !FN_vkCreateDevice
 	}
 
 initVulkanSystem :: T.Text -> IO (VulkanSystem, IO ())
@@ -73,15 +76,19 @@ initVulkanSystem appName = withSpecialBook $ \bk -> do
 	VulkanSystem inst
 		<$> $(vkGetInstanceProc "vkEnumeratePhysicalDevices")
 		<*> $(vkGetInstanceProc "vkGetPhysicalDeviceProperties")
+		<*> $(vkGetInstanceProc "vkGetPhysicalDeviceFeatures")
+		<*> $(vkGetInstanceProc "vkGetPhysicalDeviceQueueFamilyProperties")
+		<*> $(vkGetInstanceProc "vkCreateDevice")
 
 instance System VulkanSystem where
-	data DeviceId VulkanSystem = VulkanDeviceId VkPhysicalDevice
+	newtype DeviceId VulkanSystem = VulkanDeviceId VkPhysicalDevice
 	data DisplayId VulkanSystem = VulkanDisplayId
 	data DisplayModeId VulkanSystem = VulkanDisplayModeId
 	getInstalledDevices VulkanSystem
 		{ vulkanSystemInstance = inst
 		, vulkanSystem_vkEnumeratePhysicalDevices = vkEnumeratePhysicalDevices
 		, vulkanSystem_vkGetPhysicalDeviceProperties = vkGetPhysicalDeviceProperties
+		, vulkanSystem_vkGetPhysicalDeviceQueueFamilyProperties = vkGetPhysicalDeviceQueueFamilyProperties
 		} = withSpecialBook $ \_bk -> do
 		physicalDevices <- with 0 $ \devicesCountPtr -> do
 			vulkanCheckResult $ vkEnumeratePhysicalDevices inst devicesCountPtr nullPtr
@@ -108,4 +115,4 @@ instance System VulkanSystem where
 vulkanCheckResult :: IO Word32 -> IO ()
 vulkanCheckResult io = do
 	r <- io
-	unless (r == 0 {- VK_SUCCESS -}) $ throwIO $ DescribeFirstException ("Vulkan error: " ++ show r)
+	unless (r == 0 {- VK_SUCCESS -}) $ throwIO $ DescribeFirstException ("Vulkan error: " ++ show (toEnum (fromIntegral r) :: VkResult))
