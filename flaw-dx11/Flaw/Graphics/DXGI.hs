@@ -17,7 +17,6 @@ module Flaw.Graphics.DXGI
 	) where
 
 import Control.Exception
-import Control.Monad
 import Data.Ratio
 import qualified Data.Text as T
 import Foreign.Marshal.Alloc

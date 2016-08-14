@@ -1,4 +1,4 @@
-resolver: lts-6.11
+resolver: nightly-2016-06-12
 
 packages:
 - flaw-al
@@ -48,13 +48,13 @@ packages:
 # sdl2 fork without heavy dependencies
 - location:
     git: https://github.com/quyse/sdl2.git
-    commit: 3faecd7f63f8a18300d4caaf3735d7b3a5039d1b
+    commit: cc66bf8d7bd1ca5bb01712d7a890dee647e1f351
   extra-dep: true
 
 extra-deps:
 - cereal-text-0.1.0.2
 
 ghc-options:
-  "*": -O3 -threaded -with-rtsopts=-N -Wall -fno-warn-unsupported-calling-conventions -fno-warn-tabs
+  "*": -O3 -threaded -Wall -fno-warn-unsupported-calling-conventions -fno-warn-tabs
 
 rebuild-ghc-options: true

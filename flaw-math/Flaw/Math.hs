@@ -113,14 +113,14 @@ fmap return $ do
 	vecDecs <- fmap concat $ forM [1..maxVecDimension] $ \dim -> do
 		let dimStr = [intToDigit dim]
 		let dataName = mkName $ "Vec" ++ dimStr
-		let dataDec = familyKindD dataFam dataName [PlainTV tvA] StarT
+		let dataDec = dataFamilyD dataName [PlainTV tvA] (Just StarT)
 		let packFuncDec = sigD (mkName $ "vec" ++ dimStr) $ foldr (\a b -> [t| $a -> $b |]) [t| $(conT dataName) $(varT tvA) |] $ replicate dim $ varT tvA
 		let unpackFuncDec = sigD (mkName $ "unvec" ++ dimStr) [t| $(conT dataName) $(varT tvA) -> $(foldl appT (tupleT dim) $ replicate dim $ varT tvA) |]
 		return [dataDec, packFuncDec, unpackFuncDec]
 	matDecs <- fmap concat $ forM matDimensions $ \(dimN, dimM) -> do
 		let dimStr = [intToDigit dimN, 'x', intToDigit dimM]
 		let dataName = mkName $ "Mat" ++ dimStr
-		let dataDec = familyKindD dataFam dataName [PlainTV tvA] StarT
+		let dataDec = dataFamilyD dataName [PlainTV tvA] (Just StarT)
 		let packFuncDec = sigD (mkName $ "mat" ++ dimStr) $ foldr (\a b -> [t| $a -> $b |]) (appT (conT dataName) (varT tvA)) $ replicate (dimN * dimM) $ varT tvA
 		let unpackFuncDec = sigD (mkName $ "unmat" ++ dimStr) [t| $(conT dataName) $(varT tvA) -> $(foldl appT (tupleT (dimN * dimM)) $ replicate (dimN * dimM) $ varT tvA) |]
 		return [dataDec, packFuncDec, unpackFuncDec]
@@ -132,17 +132,24 @@ class VectorizedFunctor f where
 	vecfmap :: (Vectorized a, Vectorized b) => (a -> b) -> f a -> f b
 
 -- Pattern synonyms for vectors and matrices.
--- TH doesn't support pattern synonyms yet (https://ghc.haskell.org/trac/ghc/ticket/8761), so doing it manually :(
+-- Support for pattern synonyms in TH is landed in GHC, but not in 8.0 (https://ghc.haskell.org/trac/ghc/ticket/8761), so doing it manually :(
+pattern Vec1 :: Vectorized a => a -> Vec1 a
 pattern Vec1 x <- (unvec1 -> x) where Vec1 x = vec1 x
+pattern Vec2 :: Vectorized a => a -> a -> Vec2 a
 pattern Vec2 x y <- (unvec2 -> (x, y)) where Vec2 x y = vec2 x y
+pattern Vec3 :: Vectorized a => a -> a -> a -> Vec3 a
 pattern Vec3 x y z <- (unvec3 -> (x, y, z)) where Vec3 x y z = vec3 x y z
+pattern Vec4 :: Vectorized a => a -> a -> a -> a -> Vec4 a
 pattern Vec4 x y z w <- (unvec4 -> (x, y, z, w)) where Vec4 x y z w = vec4 x y z w
+pattern Mat3x3 :: Vectorized a => a -> a -> a -> a -> a -> a -> a -> a -> a -> Mat3x3 a
 pattern Mat3x3 m11 m12 m13 m21 m22 m23 m31 m32 m33
 	<- (unmat3x3 -> (m11, m12, m13, m21, m22, m23, m31, m32, m33)) where
 	Mat3x3 m11 m12 m13 m21 m22 m23 m31 m32 m33 = mat3x3 m11 m12 m13 m21 m22 m23 m31 m32 m33
+pattern Mat3x4 :: Vectorized a => a -> a -> a -> a -> a -> a -> a -> a -> a -> a -> a -> a -> Mat3x4 a
 pattern Mat3x4 m11 m12 m13 m14 m21 m22 m23 m24 m31 m32 m33 m34
 	<- (unmat3x4 -> (m11, m12, m13, m14, m21, m22, m23, m24, m31, m32, m33, m34)) where
 	Mat3x4 m11 m12 m13 m14 m21 m22 m23 m24 m31 m32 m33 m34 = mat3x4 m11 m12 m13 m14 m21 m22 m23 m24 m31 m32 m33 m34
+pattern Mat4x4 :: Vectorized a => a -> a -> a -> a -> a -> a -> a -> a -> a -> a -> a -> a -> a -> a -> a -> a -> Mat4x4 a
 pattern Mat4x4 m11 m12 m13 m14 m21 m22 m23 m24 m31 m32 m33 m34 m41 m42 m43 m44
 	<- (unmat4x4 -> (m11, m12, m13, m14, m21, m22, m23, m24, m31, m32, m33, m34, m41, m42, m43, m44)) where
 	Mat4x4 m11 m12 m13 m14 m21 m22 m23 m24 m31 m32 m33 m34 m41 m42 m43 m44 = mat4x4 m11 m12 m13 m14 m21 m22 m23 m24 m31 m32 m33 m34 m41 m42 m43 m44
@@ -202,7 +209,7 @@ forM [(len, maxComp) | len <- [1..4], maxComp <- [1..4]] $ \(len, maxComp) -> do
 	let genSig variant = do
 		sigD (mkName $ variant ++ "__") [t| $(varT tvV) -> $(conT resultTypeName) $(varT tvV) |]
 	classD (sequence [ [t| $(conT $ mkName $ "Vec" ++ [toUpper c]) $(varT tvV) |] | c <- components])
-		className [PlainTV tvV] [] $ familyKindD typeFam resultTypeName [PlainTV tvV] StarT : map genSig variants
+		className [PlainTV tvV] [] $ openTypeFamilyD resultTypeName [PlainTV tvV] (KindSig StarT) Nothing : map genSig variants
 
 -- Things per math type.
 fmap concat $ mapM (uncurry mathTypeVectorizedDecls) mathTypeNamesWithPrefix
@@ -655,6 +662,7 @@ class (Vectorized a, Floating a) => Quaternionized a where
 	quat :: Vec4 a -> Quat a
 	unquat :: Quat a -> Vec4 a
 
+pattern Quat :: Quaternionized a => Vec4 a -> Quat a
 pattern Quat v <- (unquat -> v) where Quat v = quat v
 
 -- | Conjugation.
@@ -670,7 +678,7 @@ fmap concat $ forM mathQuaternionTypeNamesWithPrefix $ \(mathTypeName, mathTypeP
 
 	-- Quaternionized instance
 	quaternionizedInstance <- instanceD (sequence []) [t| Quaternionized $elemType |] =<< addInlines
-		[ newtypeInstD (sequence []) ''Quat [elemType] (normalC conName [fmap (\t -> (NotStrict, t)) [t| Vec4 $elemType |]]) [''Generic]
+		[ newtypeInstD (sequence []) ''Quat [elemType] Nothing (normalC conName [fmap (\t -> (Bang NoSourceUnpackedness NoSourceStrictness, t)) [t| Vec4 $elemType |]]) (sequence [ [t| Generic |] ])
 		, funD 'quat [clause [varP v] (normalB [| $(conE conName) $(varE v) |]) []]
 		, funD 'unquat [clause [conP conName [varP v]] (normalB $ varE v) []]
 		]

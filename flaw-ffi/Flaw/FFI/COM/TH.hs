@@ -66,7 +66,7 @@ processMethod interfaceName mt mn prevEndExp = do
 		, methodMake = varE makeName
 		, methodTopDecs = topDecs
 		, methodClassDecs = classDecs
-		, methodField = return (fieldName, NotStrict, ConT functionTypeName)
+		, methodField = return (fieldName, Bang NoSourceUnpackedness NoSourceStrictness, ConT functionTypeName)
 		}
 
 processMethods :: String -> ExpQ -> [(TypeQ, String)] -> Q [Method]
@@ -84,7 +84,7 @@ getInterfaceChain [nameStr] = do
 	maybeParentFieldName <- lookupValueName $ "pd_" ++ nameStr
 	case maybeParentFieldName of
 		Just parentFieldName -> do
-			VarI _ (AppT (AppT ArrowT _) (ConT parentName)) _ _ <- reify parentFieldName
+			VarI _ (AppT (AppT ArrowT _) (ConT parentName)) _ <- reify parentFieldName
 			parents <- getInterfaceChain [nameBase parentName]
 			return $ nameStr : parents
 		Nothing -> return [nameStr]
@@ -124,14 +124,14 @@ genCOMInterface interfaceNameStr iid parentInterfaceNames ms = do
 			parentDecs <- mapM parentDec =<< getInterfaceChain parentInterfaceNames
 			return
 				( [| sizeOfCOMVirtualTable (undefined :: $(conT $ mkName firstParentInterfaceNameStr)) |]
-				, [return (parentFieldName, NotStrict, ConT $ mkName firstParentInterfaceNameStr)]
+				, [return (parentFieldName, Bang NoSourceUnpackedness NoSourceStrictness, ConT $ mkName firstParentInterfaceNameStr)]
 				, [bindS (varP parentParamName) [| peekCOMVirtualTable (castPtr $(varE thisParamName)) $(varE vtParamName) |]]
 				, [return (parentFieldName, VarE parentParamName)]
 				, parentDecs
 				)
 		[] -> return ([| 0 |], [], [], [], [])
 	methods <- processMethods interfaceNameStr beginExp ms
-	dataDec <- dataD (return []) interfaceName [] [recC interfaceName $ return (thisName, NotStrict, AppT (ConT ''Ptr) $ ConT interfaceName) : parentFields ++ map methodField methods] []
+	dataDec <- dataD (return []) interfaceName [] Nothing [recC interfaceName $ return (thisName, Bang NoSourceUnpackedness NoSourceStrictness, AppT (ConT ''Ptr) $ ConT interfaceName) : parentFields ++ map methodField methods] (sequence [])
 
 	-- instance COMInterface IInterface
 	let mp1 method = do

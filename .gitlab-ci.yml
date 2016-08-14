@@ -3,6 +3,8 @@ before_script:
 - git submodule update
 
 variables:
+  # flaw-social, flaw-websocket-server removed from PACKAGES_LINUX
+  # they depend on wai-routes which's not in GHC8 snapshot yet
   PACKAGES_LINUX: >-
     flaw-al
     flaw-app
@@ -37,13 +39,11 @@ variables:
     flaw-physics
     flaw-sdl
     flaw-sl
-    flaw-social
     flaw-sqlite
     flaw-ui
     flaw-ui-default-style
     flaw-visual
     flaw-vulkan
-    flaw-websocket-server
     flaw-window
   PACKAGES_WINDOWS: >-
     flaw-al
@@ -142,9 +142,7 @@ variables:
     --flag scientific:integer-simple
   FIX_TH_WINDOWS: >-
     powershell
-    "Add-Content flaw-asset-dxt\flaw-asset-dxt.cabal \"  extra-ghci-libraries: all\";
-    Add-Content flaw-font-fthb\flaw-font-fthb.cabal \"  extra-ghci-libraries: all\";
-    Add-Content flaw-lua-refimpl\flaw-lua-refimpl.cabal \"  extra-ghci-libraries: all\""
+    "Add-Content flaw-font-fthb\flaw-font-fthb.cabal \"  extra-ghci-libraries: all\""
 
 linux:
   script:
@@ -192,7 +190,8 @@ osx:
   except:
   - arm
 
-web:
+# temporary disabled because of ghcjs' brokeness
+.web:
   script:
   - "stack --no-terminal --compiler ghcjs-0.2.0_ghc-7.10.3 build --test $PACKAGES_WEB"
   tags:

@@ -90,7 +90,7 @@ instance (S.Serialize ai1, S.Serialize ai2, Eq ai1, Hashable ai1) => S.Serialize
 instance (Embed ai1, Embed ai2) => Embed (RemapAssetPackContainer ai1 ai2) where
 	embedExp (RemapAssetPackContainer ids) = [| RemapAssetPackContainer $ HM.fromList $(embedExp $ HM.toList ids) |]
 
-newRemapAssetPackBuilder :: AssetPack ap => AssetPackBuilder ap -> (ai -> B.ByteString -> AssetId ap) -> IO (AssetPackBuilder (RemapAssetPack ap ai))
+newRemapAssetPackBuilder :: AssetPackBuilder ap -> (ai -> B.ByteString -> AssetId ap) -> IO (AssetPackBuilder (RemapAssetPack ap ai))
 newRemapAssetPackBuilder assetPackBuilder remap = do
 	idsVar <- newTVarIO HM.empty
 	return $ RemapAssetPackBuilder assetPackBuilder remap idsVar
@@ -98,7 +98,7 @@ newRemapAssetPackBuilder assetPackBuilder remap = do
 finalizeRemapAssetPackBuilder :: AssetPackBuilder (RemapAssetPack ap ai) -> IO (RemapAssetPackContainer ai (AssetId ap))
 finalizeRemapAssetPackBuilder (RemapAssetPackBuilder _assetPackBuilder _remap idsVar) = RemapAssetPackContainer <$> readTVarIO idsVar
 
-loadRemapAssetPack :: (AssetPack ap, AssetId ap ~ ai2) => RemapAssetPackContainer ai1 ai2 -> ap -> RemapAssetPack ap ai1
+loadRemapAssetPack :: AssetId ap ~ ai2 => RemapAssetPackContainer ai1 ai2 -> ap -> RemapAssetPack ap ai1
 loadRemapAssetPack (RemapAssetPackContainer ids) assetPack = RemapAssetPack assetPack ids
 
 handler :: (Typeable ai, Show ai) => ai -> SomeException -> IO a

@@ -5,6 +5,7 @@ License: MIT
 -}
 
 {-# LANGUAGE GADTs, PatternSynonyms, TypeFamilies #-}
+{-# OPTIONS_GHC -fno-warn-missing-pattern-synonym-signatures #-}
 
 module Flaw.Window.Win32
 	( Win32WindowSystem()

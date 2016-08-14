@@ -5,6 +5,7 @@ License: MIT
 -}
 
 {-# LANGUAGE PatternSynonyms #-}
+{-# OPTIONS_GHC -fno-warn-missing-pattern-synonym-signatures #-}
 
 module Flaw.Media.FFmpeg
 	( FFmpegAVFormatContext()
@@ -195,7 +196,8 @@ ffmpegRefFrame (FFmpegAVFrame frameFPtr) = FFmpegAVFrame <$>
 
 -- | Set frame presentation timestamp.
 ffmpegSetFrameTime :: FFmpegAVFrame -> Int64 -> IO ()
-ffmpegSetFrameTime (FFmpegAVFrame frameFPtr) time = withForeignPtr frameFPtr $ \framePtr -> flaw_ffmpeg_setFrameTime framePtr time
+ffmpegSetFrameTime (FFmpegAVFrame frameFPtr) time =
+	withForeignPtr frameFPtr $ \framePtr -> flaw_ffmpeg_setFrameTime framePtr time
 
 -- | Decode packet from single stream into frames.
 ffmpegDecode :: FFmpegAVStream -> P.Producer FFmpegAVPacket IO () -> P.Producer FFmpegAVFrame IO ()

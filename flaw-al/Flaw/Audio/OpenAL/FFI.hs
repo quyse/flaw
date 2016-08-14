@@ -5,6 +5,7 @@ License: MIT
 -}
 
 {-# LANGUAGE PatternSynonyms #-}
+{-# OPTIONS_GHC -fno-warn-missing-pattern-synonym-signatures #-}
 
 module Flaw.Audio.OpenAL.FFI
 	(
