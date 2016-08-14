@@ -3,6 +3,8 @@ before_script:
 - git submodule update
 
 variables:
+  # flaw-social, flaw-websocket-server removed from PACKAGES_LINUX
+  # they depend on wai-routes which's not in GHC8 snapshot yet
   PACKAGES_LINUX: >-
     flaw-al
     flaw-app
@@ -37,12 +39,10 @@ variables:
     flaw-physics
     flaw-sdl
     flaw-sl
-#    flaw-social # depends on wai-routes which's not in GHC8 snapshot yet
     flaw-sqlite
     flaw-ui
     flaw-ui-default-style
     flaw-visual
-#    flaw-websocket-server # depends on wai-routes which's not in GHC8 snapshot yet
     flaw-window
   PACKAGES_WINDOWS: >-
     flaw-al
