@@ -259,7 +259,7 @@ sampler slot dimension = withUndefined2 f where
 	withUndefined2 :: (s -> c -> SamplerNode s c) -> SamplerNode s c
 	withUndefined2 q = q undefined undefined
 
-sample :: (OfValueType s, OfVectorType (v c), OfVectorType (v Int32)) => SamplerNode s (v c) -> Node (v c) -> Node s
+sample :: (OfVectorType (v c), OfVectorType (v Int32)) => SamplerNode s (v c) -> Node (v c) -> Node s
 sample s c = SampleNode
 	{ sampleNodeSamplerNode = s
 	, sampleNodeCoordsNode = c
@@ -267,7 +267,7 @@ sample s c = SampleNode
 	, sampleNodeLod = SampleNodeAutoLod
 	}
 
-sampleOffset :: (OfValueType s, OfVectorType (v c), OfVectorType (v Int32)) => SamplerNode s (v c) -> Node (v c) -> Node (v Int32) -> Node s
+sampleOffset :: (OfVectorType (v c), OfVectorType (v Int32)) => SamplerNode s (v c) -> Node (v c) -> Node (v Int32) -> Node s
 sampleOffset s c o = SampleNode
 	{ sampleNodeSamplerNode = s
 	, sampleNodeCoordsNode = c
@@ -275,7 +275,7 @@ sampleOffset s c o = SampleNode
 	, sampleNodeLod = SampleNodeAutoLod
 	}
 
-sampleLod :: (OfValueType s, OfVectorType (v c), OfVectorType (v Int32)) => SamplerNode s (v c) -> Node (v c) -> Node c -> Node s
+sampleLod :: (OfVectorType (v c), OfVectorType (v Int32)) => SamplerNode s (v c) -> Node (v c) -> Node c -> Node s
 sampleLod s c l = SampleNode
 	{ sampleNodeSamplerNode = s
 	, sampleNodeCoordsNode = c
@@ -283,7 +283,7 @@ sampleLod s c l = SampleNode
 	, sampleNodeLod = SampleNodeLod l
 	}
 
-sampleLodOffset :: (OfValueType s, OfVectorType (v c), OfVectorType (v Int32)) => SamplerNode s (v c) -> Node (v c) -> Node c -> Node (v Int32) -> Node s
+sampleLodOffset :: (OfVectorType (v c), OfVectorType (v Int32)) => SamplerNode s (v c) -> Node (v c) -> Node c -> Node (v Int32) -> Node s
 sampleLodOffset s c l o = SampleNode
 	{ sampleNodeSamplerNode = s
 	, sampleNodeCoordsNode = c
@@ -291,7 +291,7 @@ sampleLodOffset s c l o = SampleNode
 	, sampleNodeLod = SampleNodeLod l
 	}
 
-sampleBias :: (OfValueType s, OfVectorType (v c), OfVectorType (v Int32)) => SamplerNode s (v c) -> Node (v c) -> Node c -> Node s
+sampleBias :: (OfVectorType (v c), OfVectorType (v Int32)) => SamplerNode s (v c) -> Node (v c) -> Node c -> Node s
 sampleBias s c b = SampleNode
 	{ sampleNodeSamplerNode = s
 	, sampleNodeCoordsNode = c
@@ -299,7 +299,7 @@ sampleBias s c b = SampleNode
 	, sampleNodeLod = SampleNodeBiasLod b
 	}
 
-sampleBiasOffset :: (OfValueType s, OfVectorType (v c), OfVectorType (v Int32)) => SamplerNode s (v c) -> Node (v c) -> Node c -> Node (v Int32) -> Node s
+sampleBiasOffset :: (OfVectorType (v c), OfVectorType (v Int32)) => SamplerNode s (v c) -> Node (v c) -> Node c -> Node (v Int32) -> Node s
 sampleBiasOffset s c b o = SampleNode
 	{ sampleNodeSamplerNode = s
 	, sampleNodeCoordsNode = c
@@ -307,7 +307,7 @@ sampleBiasOffset s c b o = SampleNode
 	, sampleNodeLod = SampleNodeBiasLod b
 	}
 
-sampleGrad :: (OfValueType s, OfVectorType (v c), OfVectorType (v Int32)) => SamplerNode s (v c) -> Node (v c) -> Node (v c) -> Node (v c) -> Node s
+sampleGrad :: (OfVectorType (v c), OfVectorType (v Int32)) => SamplerNode s (v c) -> Node (v c) -> Node (v c) -> Node (v c) -> Node s
 sampleGrad s c gx gy = SampleNode
 	{ sampleNodeSamplerNode = s
 	, sampleNodeCoordsNode = c
@@ -315,7 +315,7 @@ sampleGrad s c gx gy = SampleNode
 	, sampleNodeLod = SampleNodeGradLod gx gy
 	}
 
-sampleGradOffset :: (OfValueType s, OfVectorType (v c), OfVectorType (v Int32)) => SamplerNode s (v c) -> Node (v c) -> Node (v c) -> Node (v c) -> Node (v Int32) -> Node s
+sampleGradOffset :: (OfVectorType (v c), OfVectorType (v Int32)) => SamplerNode s (v c) -> Node (v c) -> Node (v c) -> Node (v c) -> Node (v Int32) -> Node s
 sampleGradOffset s c gx gy o = SampleNode
 	{ sampleNodeSamplerNode = s
 	, sampleNodeCoordsNode = c

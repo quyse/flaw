@@ -5,6 +5,7 @@ License: MIT
 -}
 
 {-# LANGUAGE PatternSynonyms, TemplateHaskell #-}
+{-# OPTIONS_GHC -fno-warn-missing-pattern-synonym-signatures #-}
 
 module Flaw.Graphics.Font.FreeType.FFI
 	( FT_Error

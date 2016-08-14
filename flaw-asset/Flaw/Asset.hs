@@ -62,7 +62,7 @@ class AssetPack a => WebAssetPack a where
 	getWebAssetUrl :: a -> AssetId a -> IO T.Text
 
 -- | Expression for quasi-quoter for getting url from web asset pack in compile time.
-assetPackUrlQQ :: (Embed a, WebAssetPack a, IsString (AssetId a)) => a -> ExpQ
+assetPackUrlQQ :: Embed a => a -> ExpQ
 assetPackUrlQQ assetPack = [| QuasiQuoter
 	{ quoteExp = \assetId -> litE . stringL . T.unpack =<< runIO (getWebAssetUrl $(embedExp assetPack) (fromString assetId))
 	, quotePat = undefined

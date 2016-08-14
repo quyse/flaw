@@ -39,6 +39,7 @@ runs in 'IO' monad.
 -}
 
 {-# LANGUAGE DefaultSignatures, GADTs, GeneralizedNewtypeDeriving, PatternSynonyms, TemplateHaskell, TypeFamilies, TypeOperators #-}
+{-# OPTIONS_GHC -fno-warn-missing-pattern-synonym-signatures #-}
 
 module Flaw.Oil.Entity
 	( EntityId(..)
@@ -245,7 +246,7 @@ class Typeable a => Entity a where
 		:: EntityChange a -- ^ Entity change.
 		-> a -- ^ Current entity value.
 		-> a
-	default applyEntityChange :: EntityChange a ~ a => a -> a -> a
+	default applyEntityChange :: a -> a -> a
 	applyEntityChange = const
 
 -- | Basic entity is an entity consisting of main record only.
@@ -568,7 +569,7 @@ cacheEntity entityManager@EntityManager
 				Nothing -> return ()
 
 -- | Get entity var for a given entity.
-getEntityVar :: Entity a => EntityManager -> EntityId -> IO (EntityVar a)
+getEntityVar :: EntityManager -> EntityId -> IO (EntityVar a)
 getEntityVar entityManager@EntityManager
 	{ entityManagerFlow = flow
 	, entityManagerCacheRef = cacheRef

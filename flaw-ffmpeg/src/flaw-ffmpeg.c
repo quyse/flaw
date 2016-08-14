@@ -162,11 +162,6 @@ void flaw_ffmpeg_setPacketStreamIndex(AVPacket* pkt, int streamIndex)
 	pkt->stream_index = streamIndex;
 }
 
-void flaw_ffmpeg_setPacketTime(AVPacket* pkt, int64_t pts)
-{
-	pkt->pts = pts;
-}
-
 void flaw_ffmpeg_rescalePacketTime(AVStream* fromStream, AVStream* toStream, AVPacket* pkt)
 {
 	av_packet_rescale_ts(pkt, fromStream->time_base, toStream->time_base);

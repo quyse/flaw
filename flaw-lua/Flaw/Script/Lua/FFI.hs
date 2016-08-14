@@ -5,6 +5,7 @@ License: MIT
 -}
 
 {-# LANGUAGE OverloadedStrings, PatternSynonyms #-}
+{-# OPTIONS_GHC -fno-warn-missing-pattern-synonym-signatures #-}
 
 module Flaw.Script.Lua.FFI
 	( luaNewState

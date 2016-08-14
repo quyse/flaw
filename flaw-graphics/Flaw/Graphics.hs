@@ -122,7 +122,7 @@ class Device d where
 	nullUniformBuffer :: UniformBufferId d
 
 	-- | Create deferred context.
-	createDeferredContext :: Context (DeferredContext d) d => d -> IO (DeferredContext d, IO ())
+	createDeferredContext :: d -> IO (DeferredContext d, IO ())
 	createDeferredContext _ = throwIO $ DescribeFirstException "creating deferred context is not supported"
 	-- | Create static texture.
 	createStaticTexture :: d -> TextureInfo -> SamplerStateInfo -> B.ByteString -> IO (TextureId d, IO ())

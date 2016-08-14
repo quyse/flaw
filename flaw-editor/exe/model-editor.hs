@@ -5,6 +5,7 @@ License: MIT
 -}
 
 {-# LANGUAGE DeriveGeneric, OverloadedStrings, PatternSynonyms, RankNTypes #-}
+{-# OPTIONS_GHC -fno-warn-missing-pattern-synonym-signatures #-}
 
 module Main(main) where
 

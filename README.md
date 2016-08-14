@@ -42,6 +42,8 @@ This project is mostly a playground for absolutely crazy ideas. Surely if someon
 
 ## Packages and platform support
 
+FLAW has moved to GHC 8. A few packages are not compilable currently due to not updated dependencies.
+
 Here are all packages in A-Z order. Checkmark against a platform means that the package is being actually built and tested (if it has tests :D) on this platform during CI.
 
 Linux is the main development platform. It also considered the only "server" platform, hence several "server" packages are tested only on Linux, even if it's probably possible to compile and run them on Windows or OS X.

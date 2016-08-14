@@ -5,6 +5,7 @@ License: MIT
 -}
 
 {-# LANGUAGE MultiParamTypeClasses, PatternSynonyms, TypeFamilies #-}
+{-# OPTIONS_GHC -fno-warn-missing-pattern-synonym-signatures #-}
 
 module Flaw.Graphics.OpenGL.Mesa
 	( OpenGLOsMesaSystem()

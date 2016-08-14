@@ -37,12 +37,12 @@ variables:
     flaw-physics
     flaw-sdl
     flaw-sl
-    flaw-social
+#    flaw-social # depends on wai-routes which's not in GHC8 snapshot yet
     flaw-sqlite
     flaw-ui
     flaw-ui-default-style
     flaw-visual
-    flaw-websocket-server
+#    flaw-websocket-server # depends on wai-routes which's not in GHC8 snapshot yet
     flaw-window
   PACKAGES_WINDOWS: >-
     flaw-al
@@ -189,7 +189,8 @@ osx:
   except:
   - arm
 
-web:
+# temporary disabled because of ghcjs' brokeness
+.web:
   script:
   - "stack --no-terminal --compiler ghcjs-0.2.0_ghc-7.10.3 build --test $PACKAGES_WEB"
   tags:
