@@ -16,6 +16,7 @@ import Language.Haskell.TH
 import qualified Language.Haskell.TH.Syntax as TH
 
 import Flaw.Build
+import Flaw.Exception
 
 -- | Define type synonym for a pointer to anonymous type.
 vkDefineHandle :: String -> Q [Dec]
@@ -24,14 +25,26 @@ vkDefineHandle n = sequence
 	, tySynD (mkName n) [] [t| Ptr $(conT (mkName (n ++ "_T"))) |]
 	]
 
--- | Define top-level foreign wrapper and return instance function of a given name.
+-- | Define top-level foreign wrapper and return function of a given name.
 -- Function type must be prefixed with exactly "FN_".
--- Also "inst" variable must be in scope.
-vkGetInstanceProc :: String -> ExpQ
-vkGetInstanceProc n = do
+vkGetProc
+	:: ExpQ -- ^ expression for getting function by name
+	-> String -- ^ function name
+	-> ExpQ
+vkGetProc getAddrExp n = do
 	wrapperName <- newName $ "dyn_" ++ n
 	let typeName = mkName $ "FN_" ++ n
 	TH.addTopDecls =<< sequence
 		[ forImpD cCall safe "dynamic" wrapperName [t| FunPtr $(conT typeName) -> $(conT typeName) |]
 		]
-	[| $(varE wrapperName) . castFunPtr <$> $(varE $ mkName "vkGetInstanceProcAddr") $(varE $ mkName "inst") $(embedCStringExp n) |]
+	[| do
+		addr <- $getAddrExp $(embedCStringExp n)
+		if addr == nullFunPtr then throwIO $ DescribeFirstException $(litE $ stringL $ "failed to get proc " ++ n)
+		else return $ $(varE wrapperName) $ castFunPtr addr
+		|]
+
+-- | Get instance proc.
+-- Special function for system initialization.
+-- Variable name "inst" is hardcoded!
+vkGetInstanceProc :: String -> ExpQ
+vkGetInstanceProc = vkGetProc [| vkGetInstanceProcAddr $(varE $ mkName "inst") |]
