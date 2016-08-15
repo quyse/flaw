@@ -47,6 +47,7 @@ module Flaw.Graphics.Vulkan.FFI
 	, VkPhysicalDeviceFeatures(..)
 	, FN_vkGetPhysicalDeviceFeatures
 	, VkQueueFlags
+	, VkQueueFlagBits(..)
 	, VkQueueFamilyProperties(..)
 	, FN_vkGetPhysicalDeviceQueueFamilyProperties
 	-- * device
@@ -56,6 +57,10 @@ module Flaw.Graphics.Vulkan.FFI
 	, VkDeviceQueueCreateInfo(..)
 	, VkDeviceCreateInfo(..)
 	, FN_vkCreateDevice
+	, FN_vkDestroyDevice
+	-- * queue
+	, VkQueue
+	, FN_vkGetDeviceQueue
 	) where
 
 import Data.Int
@@ -497,6 +502,13 @@ type FN_vkGetPhysicalDeviceFeatures
 
 type VkQueueFlags = VkFlags
 
+genEnum [t|Word32|] "VkQueueFlagBits"
+	[ ("VK_QUEUE_GRAPHICS_BIT", 1)
+	, ("VK_QUEUE_COMPUTE_BIT", 2)
+	, ("VK_QUEUE_TRANSFER_BIT", 4)
+	, ("VK_QUEUE_SPARSE_BINDING_BIT", 8)
+	]
+
 genStruct "VkQueueFamilyProperties"
 	[ ([t|VkQueueFlags|], "queueFlags")
 	, ([t|Word32|], "queueCount")
@@ -509,6 +521,7 @@ type FN_vkGetPhysicalDeviceQueueFamilyProperties
 	-> Ptr Word32
 	-> Ptr VkQueueFamilyProperties
 	-> IO ()
+
 
 -- device
 
@@ -545,3 +558,20 @@ type FN_vkCreateDevice
 	-> Ptr VkAllocationCallbacks
 	-> Ptr VkDevice
 	-> IO Word32 -- VkResult
+
+type FN_vkDestroyDevice
+	=  VkDevice
+	-> Ptr VkAllocationCallbacks
+	-> IO ()
+
+
+-- queue
+
+vkDefineHandle "VkQueue"
+
+type FN_vkGetDeviceQueue
+	=  VkDevice
+	-> Word32
+	-> Word32
+	-> Ptr VkQueue
+	-> IO ()

@@ -4,7 +4,7 @@ Description: Vulkan graphics implementation.
 License: MIT
 -}
 
-{-# LANGUAGE OverloadedStrings, TemplateHaskell, TypeFamilies #-}
+{-# LANGUAGE TemplateHaskell, TypeFamilies #-}
 
 module Flaw.Graphics.Vulkan
 	( VulkanSystem(..)
@@ -12,10 +12,13 @@ module Flaw.Graphics.Vulkan
 	, DisplayId(..)
 	, DisplayModeId(..)
 	, initVulkanSystem
+	, VulkanDevice(..)
+	, newVulkanDevice
 	) where
 
 import Control.Exception
 import Control.Monad
+import Data.Bits
 import qualified Data.ByteString as B
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
@@ -39,10 +42,12 @@ data VulkanSystem = VulkanSystem
 	, vulkanSystem_vkGetPhysicalDeviceFeatures :: !FN_vkGetPhysicalDeviceFeatures
 	, vulkanSystem_vkGetPhysicalDeviceQueueFamilyProperties :: !FN_vkGetPhysicalDeviceQueueFamilyProperties
 	, vulkanSystem_vkCreateDevice :: !FN_vkCreateDevice
+	, vulkanSystem_vkDestroyDevice :: !FN_vkDestroyDevice
+	, vulkanSystem_vkGetDeviceQueue :: !FN_vkGetDeviceQueue
 	}
 
 initVulkanSystem :: T.Text -> IO (VulkanSystem, IO ())
-initVulkanSystem appName = withSpecialBook $ \bk -> do
+initVulkanSystem appName = describeException "failed to init Vulkan system" $ withSpecialBook $ \bk -> do
 
 	-- allocation callbacks (currently null)
 	let allocationCallbacksPtr = nullPtr
@@ -79,6 +84,8 @@ initVulkanSystem appName = withSpecialBook $ \bk -> do
 		<*> $(vkGetInstanceProc "vkGetPhysicalDeviceFeatures")
 		<*> $(vkGetInstanceProc "vkGetPhysicalDeviceQueueFamilyProperties")
 		<*> $(vkGetInstanceProc "vkCreateDevice")
+		<*> $(vkGetInstanceProc "vkDestroyDevice")
+		<*> $(vkGetInstanceProc "vkGetDeviceQueue")
 
 instance System VulkanSystem where
 	newtype DeviceId VulkanSystem = VulkanDeviceId VkPhysicalDevice
@@ -88,8 +95,7 @@ instance System VulkanSystem where
 		{ vulkanSystemInstance = inst
 		, vulkanSystem_vkEnumeratePhysicalDevices = vkEnumeratePhysicalDevices
 		, vulkanSystem_vkGetPhysicalDeviceProperties = vkGetPhysicalDeviceProperties
-		, vulkanSystem_vkGetPhysicalDeviceQueueFamilyProperties = vkGetPhysicalDeviceQueueFamilyProperties
-		} = withSpecialBook $ \_bk -> do
+		} = describeException "failed to get Vulkan installed devices" $ withSpecialBook $ \_bk -> do
 		physicalDevices <- with 0 $ \devicesCountPtr -> do
 			vulkanCheckResult $ vkEnumeratePhysicalDevices inst devicesCountPtr nullPtr
 			devicesCount <- fromIntegral <$> peek devicesCountPtr
@@ -111,6 +117,73 @@ instance System VulkanSystem where
 				, deviceDisplays = []
 				})
 	createDisplayMode _ _ _ _ = undefined
+
+data VulkanDevice = VulkanDevice
+	{ vulkanDeviceDevice :: {-# UNPACK #-} !VkDevice
+	, vulkanDeviceGraphicsQueue :: {-# UNPACK #-} !VkQueue
+	}
+
+newVulkanDevice :: VulkanSystem -> DeviceId VulkanSystem -> IO (VulkanDevice, IO ())
+newVulkanDevice VulkanSystem
+	{ vulkanSystem_vkGetPhysicalDeviceQueueFamilyProperties = vkGetPhysicalDeviceQueueFamilyProperties
+	, vulkanSystem_vkCreateDevice = vkCreateDevice
+	, vulkanSystem_vkDestroyDevice = vkDestroyDevice
+	, vulkanSystem_vkGetDeviceQueue = vkGetDeviceQueue
+	} (VulkanDeviceId physicalDevice) = describeException "failed to create Vulkan device" $ withSpecialBook $ \bk -> do
+
+	-- get info about device queues
+	queueFamilies <- with 0 $ \queueFamiliesCountPtr -> do
+		vkGetPhysicalDeviceQueueFamilyProperties physicalDevice queueFamiliesCountPtr nullPtr
+		queueFamiliesCount <- fromIntegral <$> peek queueFamiliesCountPtr
+		allocaArray queueFamiliesCount $ \queueFamiliesPtr -> do
+			vkGetPhysicalDeviceQueueFamilyProperties physicalDevice queueFamiliesCountPtr queueFamiliesPtr
+			peekArray queueFamiliesCount queueFamiliesPtr
+
+	-- find queue family supporting graphics
+	graphicsQueueIndex <- case filter ((> 0) . (.&. (fromEnum VK_QUEUE_GRAPHICS_BIT)) . fromEnum . f_VkQueueFamilyProperties_queueFlags . fst) $ zip queueFamilies [0..] of
+		(VkQueueFamilyProperties {}, i) : _ -> return i
+		[] -> throwIO $ DescribeFirstException "no queue families supporting graphics"
+
+	-- create device
+	device <- with 1 $ \queuePrioritiesPtr -> do
+		let deviceQueueCreateInfos =
+			[ VkDeviceQueueCreateInfo
+				{ f_VkDeviceQueueCreateInfo_sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO
+				, f_VkDeviceQueueCreateInfo_pNext = nullPtr
+				, f_VkDeviceQueueCreateInfo_flags = 0
+				, f_VkDeviceQueueCreateInfo_queueFamilyIndex = graphicsQueueIndex
+				, f_VkDeviceQueueCreateInfo_queueCount = 1
+				, f_VkDeviceQueueCreateInfo_pQueuePriorities = queuePrioritiesPtr
+				}
+			]
+		withArray deviceQueueCreateInfos $ \deviceQueueCreateInfoPtr -> with VkDeviceCreateInfo
+			{ f_VkDeviceCreateInfo_sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO
+			, f_VkDeviceCreateInfo_pNext = nullPtr
+			, f_VkDeviceCreateInfo_flags = 0
+			, f_VkDeviceCreateInfo_queueCreateInfoCount = fromIntegral $ length deviceQueueCreateInfos
+			, f_VkDeviceCreateInfo_pQueueCreateInfos = deviceQueueCreateInfoPtr
+			, f_VkDeviceCreateInfo_enabledLayerCount = 0
+			, f_VkDeviceCreateInfo_ppEnabledLayerNames = nullPtr
+			, f_VkDeviceCreateInfo_enabledExtensionCount = 0
+			, f_VkDeviceCreateInfo_ppEnabledExtensionNames = nullPtr
+			, f_VkDeviceCreateInfo_pEnabledFeatures = nullPtr
+			} $ \deviceCreateInfoPtr ->
+			alloca $ \devicePtr -> do
+				vulkanCheckResult $ vkCreateDevice physicalDevice deviceCreateInfoPtr nullPtr devicePtr
+				peek devicePtr
+
+	-- book finalizer
+	book bk $ return ((), vkDestroyDevice device nullPtr)
+
+	-- get queues
+	graphicsQueue <- alloca $ \queuePtr -> do
+		vkGetDeviceQueue device graphicsQueueIndex 0 queuePtr
+		peek queuePtr
+
+	return VulkanDevice
+		{ vulkanDeviceDevice = device
+		, vulkanDeviceGraphicsQueue = graphicsQueue
+		}
 
 vulkanCheckResult :: IO Word32 -> IO ()
 vulkanCheckResult io = do
