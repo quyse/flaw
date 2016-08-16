@@ -275,8 +275,8 @@ initWin32Input window@Win32Window
 								let wheelChanged = (flags .&. RI_MOUSE_WHEEL) > 0
 
 								when (lastX /= 0 || lastY /= 0 || wheelChanged) $ do
-									let wheel = if wheelChanged then f_RAWMOUSE_usButtonData mouseData else 0
-									addMouseEvent $ RawMouseMoveEvent (fromIntegral lastX) (fromIntegral lastY) (fromIntegral wheel)
+									let wheel = if wheelChanged then fromIntegral (f_RAWMOUSE_usButtonData mouseData) / 120 else 0
+									addMouseEvent $ RawMouseMoveEvent (fromIntegral lastX) (fromIntegral lastY) wheel
 
 							_ -> return ()
 			_ -> return ()
