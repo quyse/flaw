@@ -117,13 +117,7 @@ createOpenGLWin32Presenter _deviceId window@Win32Window
 		}
 	context <- createOpenGLContext programCache (invokeWin32WindowSystem ws) debug
 
-	---- set swap interval
-	--do
-	--	-- try "late swap tearing"
-	--	r <- SDL.glSetSwapInterval (-1)
-	--	when (r /= 0) $
-	--		-- didn't work, try usual vsync
-	--		void $ SDL.glSetSwapInterval 1
+	-- TODO: set swap interval
 
 	return (context, presenter)
 
