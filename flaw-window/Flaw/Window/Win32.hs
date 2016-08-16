@@ -45,7 +45,7 @@ data Win32WindowSystem = Win32WindowSystem
 
 data Win32Window = Win32Window
 	{ wWindowSystem :: Win32WindowSystem
-	, wHandle :: Ptr ()
+	, wHandle :: HWND
 	, wCallback :: FunPtr WindowCallback
 	, wUserCallbacksRef :: IORef [WindowCallback]
 	, wMessagesChan :: TChan (Word, WPARAM, LPARAM)
