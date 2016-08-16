@@ -18,6 +18,7 @@ module Flaw.Window.Win32
 	, invokeWin32WindowSystem_
 	, addWin32WindowCallback
 	, chanWin32WindowMessages
+	, getWin32WindowClientSize_unsafe
 	) where
 
 import Control.Concurrent
@@ -56,14 +57,9 @@ instance Window Win32Window where
 	setWindowTitle Win32Window { wWindowSystem = ws, wHandle = hwnd } title = invokeWin32WindowSystem_ ws $ do
 		withCWString (T.unpack title) $ \titleCString ->
 			c_setWin32WindowTitle hwnd titleCString
-	getWindowClientSize Win32Window
+	getWindowClientSize window@Win32Window
 		{ wWindowSystem = ws
-		, wHandle = hwnd
-		} = invokeWin32WindowSystem ws $ alloca $ \widthPtr -> alloca $ \heightPtr -> do
-			c_getWin32WindowClientSize hwnd widthPtr heightPtr
-			width <- peek widthPtr
-			height <- peek heightPtr
-			return (fromIntegral width, fromIntegral height)
+		} = invokeWin32WindowSystem ws $ getWin32WindowClientSize_unsafe window
 	chanWindowEvents Win32Window
 		{ wEventsChan = eventsChan
 		} = dupTChan eventsChan
@@ -217,6 +213,16 @@ chanWin32WindowMessages :: Win32Window -> STM (TChan (Word, WPARAM, LPARAM))
 chanWin32WindowMessages Win32Window
 	{ wMessagesChan = messagesChan
 	} = dupTChan messagesChan
+
+-- | Get window size, no syncronization.
+getWin32WindowClientSize_unsafe :: Win32Window -> IO (Int, Int)
+getWin32WindowClientSize_unsafe Win32Window
+	{ wHandle = hwnd
+	} = alloca $ \widthPtr -> alloca $ \heightPtr -> do
+	c_getWin32WindowClientSize hwnd widthPtr heightPtr
+	width <- peek widthPtr
+	height <- peek heightPtr
+	return (fromIntegral width, fromIntegral height)
 
 -- foreign imports
 

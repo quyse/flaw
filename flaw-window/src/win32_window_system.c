@@ -152,6 +152,7 @@ Win32WindowSystem* initWin32WindowSystem()
 
 	WNDCLASS wndClass;
 	memset(&wndClass, 0, sizeof(wndClass));
+	wndClass.style = CS_OWNDC; // for OpenGL
 	wndClass.lpfnWndProc = win32WindowWndProc;
 	wndClass.hInstance = GetModuleHandle(NULL);
 	wndClass.hIcon = LoadIcon(NULL, IDI_APPLICATION);
