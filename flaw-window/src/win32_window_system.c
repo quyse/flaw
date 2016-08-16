@@ -31,6 +31,7 @@ const LPCTSTR cursorNames[] =
 typedef struct
 {
 	HANDLE thread;
+	DWORD threadId;
 	HCURSOR cursors[sizeof(cursorNames) / sizeof(cursorNames[0])];
 } Win32WindowSystem;
 
@@ -164,6 +165,8 @@ Win32WindowSystem* initWin32WindowSystem()
 	// get thread handle
 	HANDLE currentThread = GetCurrentThread();
 	DuplicateHandle(GetCurrentProcess(), currentThread, GetCurrentProcess(), &windowSystem->thread, THREAD_SET_CONTEXT, FALSE, 0);
+	// get thread id
+	windowSystem->threadId = GetCurrentThreadId();
 
 	// load cursors
 	for(size_t i = 0; i < sizeof(cursorNames) / sizeof(cursorNames[i]); ++i)
@@ -410,5 +413,8 @@ void CALLBACK invokeWin32Callback(ULONG_PTR callback)
 
 void invokeWin32WindowSystem(Win32WindowSystem* windowSystem, void* callback)
 {
-	QueueUserAPC(invokeWin32Callback, windowSystem->thread, (ULONG_PTR)callback);
+	if(GetCurrentThreadId() == windowSystem->threadId)
+		((InvokeCallback)callback)();
+	else
+		QueueUserAPC(invokeWin32Callback, windowSystem->thread, (ULONG_PTR)callback);
 }
