@@ -26,6 +26,7 @@ import qualified SDL.Raw.Types as SDL
 import qualified SDL.Raw.Video as SDL
 
 import Flaw.BinaryCache
+import Flaw.Book
 import Flaw.Exception
 import Flaw.Graphics
 import Flaw.Graphics.GlContext
@@ -93,14 +94,15 @@ instance Presenter OpenGLSdlPresenter OpenGLSdlSystem GlContext GlContext where
 
 	presenterRender presenter@OpenGLSdlPresenter
 		{ openglPresenterWindow = SdlWindow
-			{ swHandle = windowHandle
+			{ swSystem = ws
+			, swHandle = windowHandle
 			}
 		} GlContext
 		{ glContextDesiredState = desiredContextState@GlContextState
 			{ glContextStateFrameBuffer = frameBufferRef
 			, glContextStateViewport = viewportRef
 			}
-		} f = openglInvoke presenter $ do
+		} f = invokeSdlWindowSystem ws $ do
 		-- clear state
 		glSetDefaultContextState desiredContextState
 
@@ -134,9 +136,13 @@ createOpenGLSdlPresenter :: BinaryCache c => DeviceId OpenGLSdlSystem -> SdlWind
 createOpenGLSdlPresenter _deviceId window@SdlWindow
 	{ swSystem = ws
 	, swHandle = windowHandle
-	} programCache debug = describeException "failed to create OpenGL SDL presenter" $ invokeSdlWindowSystem ws $ do
+	} programCache debug = describeException "failed to create OpenGL SDL presenter" $ withSpecialBook $ \bk -> invokeSdlWindowSystem ws $ do
 	-- create context
 	sdlContext <- checkSdlResult $ SDL.glCreateContext windowHandle
+	book bk $ return ((), invokeSdlWindowSystem ws $ do
+		SDL.glMakeCurrent windowHandle nullPtr
+		SDL.glDeleteContext sdlContext
+		)
 	-- make it current
 	checkSdlError (== 0) $ SDL.glMakeCurrent windowHandle sdlContext
 
@@ -145,7 +151,7 @@ createOpenGLSdlPresenter _deviceId window@SdlWindow
 		{ openglPresenterSdlContext = sdlContext
 		, openglPresenterWindow = window
 		}
-	context <- createOpenGLContext programCache (openglInvoke presenter) debug
+	context <- createOpenGLContext programCache (invokeSdlWindowSystem ws) debug
 
 	-- set swap interval
 	do
@@ -155,12 +161,4 @@ createOpenGLSdlPresenter _deviceId window@SdlWindow
 			-- didn't work, try usual vsync
 			void $ SDL.glSetSwapInterval 1
 
-	return ((context, presenter), openglInvoke presenter $ SDL.glDeleteContext sdlContext)
-
--- | Run in a thread of SDL window system.
-openglInvoke :: OpenGLSdlPresenter -> IO a -> IO a
-openglInvoke OpenGLSdlPresenter
-	{ openglPresenterWindow = SdlWindow
-		{ swSystem = windowSystem
-		}
-	} = invokeSdlWindowSystem windowSystem
+	return (context, presenter)
