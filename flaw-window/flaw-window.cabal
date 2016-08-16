@@ -26,24 +26,23 @@ library
   -- hs-source-dirs:      
   default-language:    Haskell2010
   include-dirs:        include
-  cc-options:          -std=c99
   if impl(ghcjs)
     exposed-modules:
       Flaw.Window.Web.Canvas
     build-depends:       flaw-js, ghcjs-base
-    js-sources:          js/flaw-window.js
+    js-sources:          src/flaw-window.js
   else
     if os(windows)
       exposed-modules:
         Flaw.Window.Win32
       build-depends:       flaw-base, flaw-ffi
-      includes:          "flaw_windows.h"
       c-sources:
-        cbits/win32_window_system.c
+        src/win32_window_system.c
+      cc-options:          -O3
       extra-libraries:
         gdi32
         ole32
     else
       exposed-modules:
         Flaw.Window.Sdl
-      build-depends:       bytestring, flaw-base, flaw-sdl, sdl2 >= 2, unordered-containers, vector
+      build-depends:       bytestring, flaw-base, flaw-sdl, sdl2, unordered-containers, vector

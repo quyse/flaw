@@ -22,6 +22,7 @@ packages:
 - flaw-gl
 - flaw-gl-mesa
 - flaw-gl-sdl
+- flaw-gl-win32
 - flaw-graphics
 - flaw-input
 - flaw-js

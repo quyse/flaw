@@ -1,4 +1,4 @@
-name:                flaw-app
+name:                flaw-gl-win32
 version:             0.1.0.0
 -- synopsis:            
 -- description:         
@@ -15,18 +15,14 @@ cabal-version:       >=1.10
 source-repository head
   type: git
   location: https://github.com/quyse/flaw.git
-  subdir: flaw-app
+  subdir: flaw-gl-win32
 
 library
   exposed-modules:
-    Flaw.App
+    Flaw.Graphics.OpenGL.Win32
   other-modules:
-  build-depends:       base, bytestring, flaw-asset, flaw-base, flaw-build, flaw-gl, flaw-graphics, flaw-input, flaw-window, template-haskell, text, time, transformers
+  build-depends:       base, flaw-base, flaw-ffi, flaw-gl, flaw-graphics, flaw-math, flaw-window, text
   default-language:    Haskell2010
-  if impl(ghcjs)
-    build-depends:       flaw-js
-  else
-    if os(windows)
-      build-depends:       flaw-dx11, flaw-gl-win32
-    else
-      build-depends:       flaw-gl-sdl
+  c-sources:
+    src/win32_gl.c
+  cc-options:          -O3

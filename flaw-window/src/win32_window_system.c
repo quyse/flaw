@@ -1,4 +1,10 @@
-#include "flaw_windows.h"
+#define STRICT
+#define WIN32_LEAN_AND_MEAN
+#define UNICODE
+#define _UNICODE
+#define _WIN32_WINNT 0x0501
+#include <windows.h>
+#include <windowsx.h>
 #include <winuser.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -25,6 +31,7 @@ const LPCTSTR cursorNames[] =
 typedef struct
 {
 	HANDLE thread;
+	DWORD threadId;
 	HCURSOR cursors[sizeof(cursorNames) / sizeof(cursorNames[0])];
 } Win32WindowSystem;
 
@@ -146,6 +153,7 @@ Win32WindowSystem* initWin32WindowSystem()
 
 	WNDCLASS wndClass;
 	memset(&wndClass, 0, sizeof(wndClass));
+	wndClass.style = CS_OWNDC; // for OpenGL
 	wndClass.lpfnWndProc = win32WindowWndProc;
 	wndClass.hInstance = GetModuleHandle(NULL);
 	wndClass.hIcon = LoadIcon(NULL, IDI_APPLICATION);
@@ -157,6 +165,8 @@ Win32WindowSystem* initWin32WindowSystem()
 	// get thread handle
 	HANDLE currentThread = GetCurrentThread();
 	DuplicateHandle(GetCurrentProcess(), currentThread, GetCurrentProcess(), &windowSystem->thread, THREAD_SET_CONTEXT, FALSE, 0);
+	// get thread id
+	windowSystem->threadId = GetCurrentThreadId();
 
 	// load cursors
 	for(size_t i = 0; i < sizeof(cursorNames) / sizeof(cursorNames[i]); ++i)
@@ -403,5 +413,8 @@ void CALLBACK invokeWin32Callback(ULONG_PTR callback)
 
 void invokeWin32WindowSystem(Win32WindowSystem* windowSystem, void* callback)
 {
-	QueueUserAPC(invokeWin32Callback, windowSystem->thread, (ULONG_PTR)callback);
+	if(GetCurrentThreadId() == windowSystem->threadId)
+		((InvokeCallback)callback)();
+	else
+		QueueUserAPC(invokeWin32Callback, windowSystem->thread, (ULONG_PTR)callback);
 }

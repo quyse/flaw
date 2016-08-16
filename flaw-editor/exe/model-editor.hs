@@ -59,13 +59,13 @@ import Flaw.Visual.ScreenQuad
 import Flaw.Visual.Texture
 import Flaw.Window
 
-data TextureCell = TextureCell
+data TextureCell d = TextureCell
 	{ textureCellBook :: !Book
-	, textureCellTexture :: !(TextureId AppGraphicsDevice)
+	, textureCellTexture :: !(TextureId d)
 	, textureCellFileName :: !T.Text
 	}
 
-instance S.Serialize TextureCell where
+instance Device d => S.Serialize (TextureCell d) where
 	put = S.put . textureCellFileName
 	get = do
 		fileName <- S.get
@@ -75,13 +75,13 @@ instance S.Serialize TextureCell where
 			, textureCellFileName = fileName
 			}
 
-data GeometryCell = GeometryCell
-	{ geometryCellGeometry :: !(Geometry AppGraphicsDevice)
+data GeometryCell d = GeometryCell
+	{ geometryCellGeometry :: !(Geometry d)
 	, geometryCellFileName :: !T.Text
 	, geometryCellNodeName :: !T.Text
 	}
 
-instance S.Serialize GeometryCell where
+instance Device d => S.Serialize (GeometryCell d) where
 	put GeometryCell
 		{ geometryCellFileName = fileName
 		, geometryCellNodeName = nodeName
@@ -105,7 +105,7 @@ instance S.Serialize GeometryCell where
 dummyBook :: Book
 dummyBook = unsafePerformIO newBook
 
-newTextureCell :: IO (TextureId AppGraphicsDevice, IO ()) -> IO (TextureCell, IO ())
+newTextureCell :: IO (TextureId d, IO ()) -> IO (TextureCell d, IO ())
 newTextureCell createTexture = withSpecialBook $ \bk -> do
 	cellBook <- book bk newDynamicBook
 	cellTexture <- book cellBook createTexture
@@ -115,7 +115,7 @@ newTextureCell createTexture = withSpecialBook $ \bk -> do
 		, textureCellFileName = T.empty
 		}
 
-data EditorState = EditorState
+data EditorState d = EditorState
 	{ editorStateEyePosition :: !Float3
 	, editorStateEyeSpeed :: !Float3
 	, editorStateEyeAlpha :: !Float
@@ -124,22 +124,22 @@ data EditorState = EditorState
 	, editorStateLightPosition :: !Float3
 	, editorStateLightColor :: !Float3
 	, editorStateAmbientLightColor :: !Float3
-	, editorStateGeometryCell :: !GeometryCell
-	, editorStateAlbedoTextureCell :: !TextureCell
-	, editorStateNormalTextureCell :: !TextureCell
+	, editorStateGeometryCell :: !(GeometryCell d)
+	, editorStateAlbedoTextureCell :: !(TextureCell d)
+	, editorStateNormalTextureCell :: !(TextureCell d)
 	, editorStateNormalTextureEnabled :: !Bool
-	, editorStateDiffuseTextureCell :: !TextureCell
+	, editorStateDiffuseTextureCell :: !(TextureCell d)
 	, editorStateDiffuseTextureEnabled :: !Bool
-	, editorStateSpecularTextureCell :: !TextureCell
+	, editorStateSpecularTextureCell :: !(TextureCell d)
 	, editorStateSpecularTextureEnabled :: !Bool
-	, editorStateMetalnessTextureCell :: !TextureCell
+	, editorStateMetalnessTextureCell :: !(TextureCell d)
 	, editorStateMetalnessTextureEnabled :: !Bool
-	, editorStateGlossinessTextureCell :: !TextureCell
+	, editorStateGlossinessTextureCell :: !(TextureCell d)
 	, editorStateGlossinessTextureEnabled :: !Bool
 	, editorStateLinearFiltering :: !Bool
 	} deriving Generic
 
-instance S.Serialize EditorState
+instance Device d => S.Serialize (EditorState d)
 
 pattern SHADER_FLAG_NORMAL_MAP = 1
 pattern SHADER_FLAG_DIFFUSE_MAP = 2
@@ -148,7 +148,7 @@ pattern SHADER_FLAG_METALNESS_MAP = 8
 pattern SHADER_FLAG_GLOSSINESS_MAP = 16
 pattern SHADER_FLAGS_COUNT = 32
 
-getEyeDirection :: EditorState -> Float3
+getEyeDirection :: EditorState d -> Float3
 getEyeDirection EditorState
 	{ editorStateEyeAlpha = eyeAlpha
 	, editorStateEyeBeta = eyeBeta

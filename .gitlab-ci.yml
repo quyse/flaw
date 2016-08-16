@@ -62,6 +62,8 @@ variables:
     flaw-font
     flaw-font-fthb
     flaw-game
+    flaw-gl
+    flaw-gl-win32
     flaw-graphics
     flaw-input
     flaw-lua
