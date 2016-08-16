@@ -4,7 +4,8 @@ Description: User input for Win32.
 License: MIT
 -}
 
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE PatternSynonyms, TemplateHaskell #-}
+{-# OPTIONS_GHC -fno-warn-missing-pattern-synonym-signatures #-}
 
 module Flaw.Input.Win32
 	( Win32InputManager()
@@ -232,7 +233,7 @@ initWin32Input window@Win32Window
 					r <- with (fromIntegral blockSize) $ \blockSizePtr -> do
 						winapi_GetRawInputData
 							(intPtrToPtr $ fromIntegral lParam)
-							0x10000003 {- RID_INPUT -}
+							RID_INPUT
 							blockPtr blockSizePtr (fromIntegral $ sizeOf (undefined :: RAWINPUTHEADER))
 					when (r > 0) $ do
 						let eventHeaderPtr = castPtr blockPtr
@@ -243,7 +244,7 @@ initWin32Input window@Win32Window
 								keyboardData <- peek $ castPtr eventDataPtr
 								let key = keyFromVKKey $ f_RAWKEYBOARD_VKey keyboardData
 								addKeyboardEvent $
-									if (f_RAWKEYBOARD_Flags keyboardData .&. 1 {- RI_KEY_BREAK -}) == 0 then
+									if (f_RAWKEYBOARD_Flags keyboardData .&. RI_KEY_BREAK) == 0 then
 										KeyDownEvent key
 									else
 										KeyUpEvent key
@@ -251,27 +252,27 @@ initWin32Input window@Win32Window
 								mouseData <- peek $ castPtr eventDataPtr
 								let flags = f_RAWMOUSE_usButtonFlags mouseData
 
-								if (flags .&. 0x0001 {- RI_MOUSE_LEFT_BUTTON_DOWN -}) > 0 then
+								if (flags .&. RI_MOUSE_LEFT_BUTTON_DOWN) > 0 then
 									addMouseEvent $ MouseDownEvent LeftMouseButton
-								else if (flags .&. 0x0002 {- RI_MOUSE_LEFT_BUTTON_UP -}) > 0 then
+								else if (flags .&. RI_MOUSE_LEFT_BUTTON_UP) > 0 then
 									addMouseEvent $ MouseUpEvent LeftMouseButton
 								else return ()
 
-								if (flags .&. 0x0004 {- RI_MOUSE_RIGHT_BUTTON_DOWN -}) > 0 then
+								if (flags .&. RI_MOUSE_RIGHT_BUTTON_DOWN) > 0 then
 									addMouseEvent $ MouseDownEvent RightMouseButton
-								else if (flags .&. 0x0008 {- RI_MOUSE_RIGHT_BUTTON_UP -}) > 0 then
+								else if (flags .&. RI_MOUSE_RIGHT_BUTTON_UP) > 0 then
 									addMouseEvent $ MouseUpEvent RightMouseButton
 								else return ()
 
-								if (flags .&. 0x0010 {- RI_MOUSE_MIDDLE_BUTTON_DOWN -}) > 0 then
+								if (flags .&. RI_MOUSE_MIDDLE_BUTTON_DOWN) > 0 then
 									addMouseEvent $ MouseDownEvent MiddleMouseButton
-								else if (flags .&. 0x0020 {- RI_MOUSE_MIDDLE_BUTTON_UP -}) > 0 then
+								else if (flags .&. RI_MOUSE_MIDDLE_BUTTON_UP) > 0 then
 									addMouseEvent $ MouseUpEvent MiddleMouseButton
 								else return ()
 
 								let lastX = f_RAWMOUSE_lLastX mouseData
 								let lastY = f_RAWMOUSE_lLastY mouseData
-								let wheelChanged = (flags .&. 0x0400 {- RI_MOUSE_WHEEL -}) > 0
+								let wheelChanged = (flags .&. RI_MOUSE_WHEEL) > 0
 
 								when (lastX /= 0 || lastY /= 0 || wheelChanged) $ do
 									let wheel = if wheelChanged then f_RAWMOUSE_usButtonData mouseData else 0
@@ -299,3 +300,13 @@ initWin32Input window@Win32Window
 	unless success $ throwIO $ DescribeFirstException "failed to register raw input"
 
 	return inputManager
+
+pattern RID_INPUT = 0x10000003
+pattern RI_KEY_BREAK = 1
+pattern RI_MOUSE_LEFT_BUTTON_DOWN = 0x0001
+pattern RI_MOUSE_LEFT_BUTTON_UP = 0x0002
+pattern RI_MOUSE_RIGHT_BUTTON_DOWN = 0x0004
+pattern RI_MOUSE_RIGHT_BUTTON_UP = 0x0008
+pattern RI_MOUSE_MIDDLE_BUTTON_DOWN = 0x0010
+pattern RI_MOUSE_MIDDLE_BUTTON_UP = 0x0020
+pattern RI_MOUSE_WHEEL = 0x0400
