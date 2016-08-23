@@ -234,7 +234,7 @@ itch:
   - "butler push osx quyse/flaw:model-editor-osx"
   tags:
   - linux
-  - x64
+  - butler
   only:
   - master
 
