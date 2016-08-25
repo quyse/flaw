@@ -21,6 +21,7 @@ import Data.IORef
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import Foreign.Marshal.Alloc
+import Foreign.Ptr
 import Foreign.Storable
 import qualified SDL.Raw.Types as SDL
 import qualified SDL.Raw.Video as SDL
@@ -92,7 +93,7 @@ instance Presenter OpenGLSdlPresenter OpenGLSdlSystem GlContext GlContext where
 	-- TODO
 	setPresenterMode _presenter _maybeMode = return ()
 
-	presenterRender presenter@OpenGLSdlPresenter
+	presenterRender OpenGLSdlPresenter
 		{ openglPresenterWindow = SdlWindow
 			{ swSystem = ws
 			, swHandle = windowHandle
@@ -140,7 +141,7 @@ createOpenGLSdlPresenter _deviceId window@SdlWindow
 	-- create context
 	sdlContext <- checkSdlResult $ SDL.glCreateContext windowHandle
 	book bk $ return ((), invokeSdlWindowSystem ws $ do
-		SDL.glMakeCurrent windowHandle nullPtr
+		void $ SDL.glMakeCurrent windowHandle nullPtr
 		SDL.glDeleteContext sdlContext
 		)
 	-- make it current
