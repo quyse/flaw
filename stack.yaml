@@ -1,4 +1,4 @@
-resolver: nightly-2016-06-12
+resolver: nightly-2016-08-24
 
 packages:
 - flaw-al
