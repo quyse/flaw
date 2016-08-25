@@ -56,6 +56,6 @@ extra-deps:
 - cereal-text-0.1.0.2
 
 ghc-options:
-  "*": -O3 -threaded -Wall -fno-warn-unsupported-calling-conventions -fno-warn-tabs
+  "*": -O3 -threaded -with-rtsopts=-N -Wall -fno-warn-unsupported-calling-conventions -fno-warn-tabs
 
 rebuild-ghc-options: true

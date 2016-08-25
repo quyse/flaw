@@ -226,12 +226,12 @@ getWin32WindowClientSize_unsafe Win32Window
 
 -- foreign imports
 
-foreign import ccall unsafe "initWin32WindowSystem" c_initWin32WindowSystem :: IO (Ptr ())
+foreign import ccall safe "initWin32WindowSystem" c_initWin32WindowSystem :: IO (Ptr ())
 foreign import ccall safe "runWin32WindowSystem" c_runWin32WindowSystem :: Ptr () -> IO ()
-foreign import ccall unsafe "shutdownWin32WindowSystem" c_shutdownWin32WindowSystem :: Ptr () -> IO ()
-foreign import ccall unsafe "stopWin32WindowSystem" c_stopWin32WindowSystem :: IO ()
-foreign import ccall unsafe "invokeWin32WindowSystem" c_invokeWin32WindowSystem :: Ptr () -> FunPtr InvokeCallback -> IO ()
-foreign import ccall unsafe "createWin32Window" c_createWin32Window
+foreign import ccall safe "shutdownWin32WindowSystem" c_shutdownWin32WindowSystem :: Ptr () -> IO ()
+foreign import ccall safe "stopWin32WindowSystem" c_stopWin32WindowSystem :: IO ()
+foreign import ccall safe "invokeWin32WindowSystem" c_invokeWin32WindowSystem :: Ptr () -> FunPtr InvokeCallback -> IO ()
+foreign import ccall safe "createWin32Window" c_createWin32Window
 	:: Ptr () -- window system handle
 	-> LPWSTR -- title
 	-> Int -> Int -- x y
@@ -241,14 +241,14 @@ foreign import ccall unsafe "createWin32Window" c_createWin32Window
 	-> IO HWND -- HWND
 foreign import ccall unsafe "setWin32WindowTitle" c_setWin32WindowTitle :: HWND -> LPWSTR -> IO ()
 foreign import ccall unsafe "getWin32WindowClientSize" c_getWin32WindowClientSize :: HWND -> Ptr CInt -> Ptr CInt -> IO ()
-foreign import ccall unsafe "destroyWin32Window" c_destroyWin32Window :: HWND -> IO ()
+foreign import ccall safe "destroyWin32Window" c_destroyWin32Window :: HWND -> IO ()
 foreign import ccall unsafe "getClipboardTextBegin" c_getClipboardTextBegin :: HWND -> Ptr HANDLE -> Ptr CInt -> IO (Ptr WCHAR)
 foreign import ccall unsafe "getClipboardTextEnd" c_getClipboardTextEnd :: HANDLE -> IO ()
 foreign import ccall unsafe "setClipboardText" c_setClipboardText :: HWND -> Ptr WCHAR -> IO ()
 foreign import ccall unsafe "setWin32WindowMouseCursor" c_setMouseCursor :: HWND -> CInt -> IO ()
 foreign import ccall unsafe "setWin32WindowMouseLock" c_setMouseLock :: HWND -> CInt -> IO ()
-foreign import ccall unsafe "updateLayeredWin32Window" c_updateLayeredWin32Window :: HWND -> IO ()
-foreign import ccall unsafe "getLayeredWin32WindowBitmapData" c_getLayeredWin32WindowBitmapData :: HWND -> Ptr (Ptr CUChar) -> Ptr CInt -> Ptr CInt -> Ptr CInt -> IO ()
+foreign import ccall safe "updateLayeredWin32Window" c_updateLayeredWin32Window :: HWND -> IO ()
+foreign import ccall safe "getLayeredWin32WindowBitmapData" c_getLayeredWin32WindowBitmapData :: HWND -> Ptr (Ptr CUChar) -> Ptr CInt -> Ptr CInt -> Ptr CInt -> IO ()
 
 -- wrappers
 
