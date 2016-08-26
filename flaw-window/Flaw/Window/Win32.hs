@@ -37,6 +37,7 @@ import Foreign.Marshal.Array
 import Foreign.Ptr
 import Foreign.Storable
 
+import Flaw.Exception
 import Flaw.Window
 import Flaw.FFI.Win32
 
@@ -156,8 +157,8 @@ internalCreateWin32Window ws title maybePosition maybeSize layered = do
 		-- create window
 		hwnd <- withCWString (T.unpack title) $ \titleCString ->
 			c_createWin32Window (wsHandle ws) titleCString left top width height callback (if layered then 1 else 0)
-		if hwnd == nullPtr then error "cannot create Win32Window"
-		else return Win32Window
+		when (hwnd == nullPtr) $ throwIO $ DescribeFirstException "cannot create Win32Window"
+		return Win32Window
 			{ wWindowSystem = ws
 			, wHandle = hwnd
 			, wCallback = callback
