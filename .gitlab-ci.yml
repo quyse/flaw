@@ -193,7 +193,7 @@ osx:
 
 web:
   script:
-  - "stack --no-terminal --compiler ghcjs-0.2.0_ghc-7.10.3 build --test $PACKAGES_WEB"
+  - "stack --no-terminal --compiler ghcjs-0.2.0_ghc-8.0.1 build --test $PACKAGES_WEB"
   tags:
   - haskellstack
   - ghcjs
