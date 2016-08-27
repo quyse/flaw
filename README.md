@@ -42,7 +42,7 @@ This project is mostly a playground for absolutely crazy ideas. Surely if someon
 
 ## Packages and platform support
 
-FLAW has moved to GHC 8. A few packages are not compilable currently due to not updated dependencies.
+FLAW has moved to GHC 8.
 
 Here are all packages in A-Z order. Checkmark against a platform means that the package is being actually built and tested (if it has tests :D) on this platform during CI.
 
