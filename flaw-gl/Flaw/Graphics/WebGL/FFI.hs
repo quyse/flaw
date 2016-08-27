@@ -5,6 +5,7 @@ License: MIT
 -}
 
 {-# LANGUAGE JavaScriptFFI, PatternSynonyms, ScopedTypeVariables #-}
+{-# OPTIONS_GHC -fno-warn-missing-pattern-synonym-signatures #-}
 
 module Flaw.Graphics.WebGL.FFI
 	(
@@ -568,6 +569,7 @@ module Flaw.Graphics.WebGL.FFI
 	, pattern GL_BROWSER_DEFAULT_WEBGL
 	) where
 
+import Control.Exception
 import qualified Data.ByteString as B
 import qualified Data.Text as T
 import Foreign.C.Types
@@ -1060,33 +1062,33 @@ glIntToOffset = id
 -- Stubs.
 
 glProgramBinary :: JS_WebGLProgram -> GLenum -> Ptr a -> GLsizei -> IO ()
-glProgramBinary = throwIO $ DescribeFirstException "glProgramBinary is not supported in WebGL"
+glProgramBinary _ _ _ _ = throwIO $ DescribeFirstException "glProgramBinary is not supported in WebGL"
 
 glGetProgramBinary :: JS_WebGLProgram -> GLsizei -> Ptr GLsizei -> Ptr GLenum -> Ptr a -> IO ()
-glGetProgramBinary = throwIO $ DescribeFirstException "glGetProgramBinary is not supported in WebGL"
+glGetProgramBinary _ _ _ _ _ = throwIO $ DescribeFirstException "glGetProgramBinary is not supported in WebGL"
 
 pattern GL_PROGRAM_BINARY_LENGTH = 0x8741
 
 glBindFragDataLocation :: JS_WebGLProgram -> GLuint -> Ptr CChar -> IO ()
-glBindFragDataLocation = throwIO $ DescribeFirstException "glBindFragDataLocation is not supported in WebGL"
+glBindFragDataLocation _ _ _ = throwIO $ DescribeFirstException "glBindFragDataLocation is not supported in WebGL"
 
 glBindFragDataLocationIndexed :: JS_WebGLProgram -> GLuint -> GLuint -> Ptr CChar -> IO ()
-glBindFragDataLocationIndexed = throwIO $ DescribeFirstException "glBindFragDataLocationIndexed is not supported in WebGL"
+glBindFragDataLocationIndexed _ _ _ _ = throwIO $ DescribeFirstException "glBindFragDataLocationIndexed is not supported in WebGL"
 
 glVertexAttribFormat :: GLuint -> GLint -> GLenum -> GLboolean -> GLuint -> IO ()
-glVertexAttribFormat = throwIO $ DescribeFirstException "glVertexAttribFormat is not supported in WebGL"
+glVertexAttribFormat _ _ _ _ _ = throwIO $ DescribeFirstException "glVertexAttribFormat is not supported in WebGL"
 
 glVertexAttribIFormat :: GLuint -> GLint -> GLenum -> GLuint -> IO ()
-glVertexAttribIFormat = throwIO $ DescribeFirstException "glVertexAttribIFormat is not supported in WebGL"
+glVertexAttribIFormat _ _ _ _ = throwIO $ DescribeFirstException "glVertexAttribIFormat is not supported in WebGL"
 
 glVertexAttribBinding :: GLuint -> GLuint -> IO ()
-glVertexAttribBinding = throwIO $ DescribeFirstException "glVertexAttribBinding is not supported in WebGL"
+glVertexAttribBinding _ _ = throwIO $ DescribeFirstException "glVertexAttribBinding is not supported in WebGL"
 
 glVertexBindingDivisor :: GLuint -> GLuint -> IO ()
-glVertexBindingDivisor = throwIO $ DescribeFirstException "glVertexBindingDivisor is not supported in WebGL"
+glVertexBindingDivisor _ _ = throwIO $ DescribeFirstException "glVertexBindingDivisor is not supported in WebGL"
 
 glBindVertexBuffer :: GLuint -> JS_WebGLBuffer -> GLintptr -> GLintptr -> IO ()
-glBindVertexBuffer = throwIO $ DescribeFirstException "glBindVertexBuffer is not supported in WebGL"
+glBindVertexBuffer _ _ _ _ = throwIO $ DescribeFirstException "glBindVertexBuffer is not supported in WebGL"
 
 
 -- Constants.

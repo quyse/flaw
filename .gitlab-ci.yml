@@ -191,8 +191,7 @@ osx:
   except:
   - arm
 
-# temporary disabled because of ghcjs' brokeness
-.web:
+web:
   script:
   - "stack --no-terminal --compiler ghcjs-0.2.0_ghc-7.10.3 build --test $PACKAGES_WEB"
   tags:
