@@ -206,7 +206,7 @@ forM [(len, maxComp) | len <- [1..4], maxComp <- [1..4]] $ \(len, maxComp) -> do
 	let resultTypeName = mkName $ "SwizzleVecResult" ++ nameSuffix
 	tvV <- newName "v"
 	let variants = filter (swizzleVariantFilter components) $ genSwizzleVariants len
-	let genSig variant = do
+	let genSig variant =
 		sigD (mkName $ variant ++ "__") [t| $(varT tvV) -> $(conT resultTypeName) $(varT tvV) |]
 	classD (sequence [ [t| $(conT $ mkName $ "Vec" ++ [toUpper c]) $(varT tvV) |] | c <- components])
 		className [PlainTV tvV] [] $ openTypeFamilyD resultTypeName [PlainTV tvV] (KindSig StarT) Nothing : map genSig variants
@@ -275,10 +275,9 @@ do
 			]
 
 		-- instance for Normalize class
-		normalizeInstance <- do
-			instanceD (sequence [ [t| Vectorized $elemType |], [t| Floating $elemType |] ]) [t| Normalize ($(conT dataName) $elemType) |] =<< addInlines
-				[ funD 'normalize [clause [varP p] (normalB [| $(varE p) * vecFromScalar (1 / norm $(varE p)) |]) []]
-				]
+		normalizeInstance <- instanceD (sequence [ [t| Vectorized $elemType |], [t| Floating $elemType |] ]) [t| Normalize ($(conT dataName) $elemType) |] =<< addInlines
+			[ funD 'normalize [clause [varP p] (normalB [| $(varE p) * vecFromScalar (1 / norm $(varE p)) |]) []]
+			]
 
 		-- instance for SwizzleVec{maxComp}{dim} class
 		swizzleVecInstances <- forM [(srcDim, maxComp) | srcDim <- [1..4], maxComp <- [1..srcDim]] $ \(srcDim, maxComp) -> do
@@ -420,7 +419,7 @@ do
 				]
 
 		-- Serialize instance
-		serializeInstance <- do
+		serializeInstance <-
 			instanceD (sequence [ [t| Vectorized $elemType |], [t| S.Serialize $elemType |] ]) [t| S.Serialize ($(conT dataName) $elemType) |] =<< addInlines
 				[ funD 'S.put [clause [conP conName $ map varP as] (normalB $ doE $ map (\a -> noBindS [| S.put $(varE a) |]) as) []]
 				, funD 'S.get [clause [] (normalB $ doE $ map (\a -> bindS (varP a) [| S.get |]) as ++ [noBindS $ [| return $(foldl appE (conE conName) $ map varE as) |] ]) []]
@@ -634,7 +633,7 @@ do
 				in if null ribits && null rjbits then varE $ mNames !! (i * dim + j) else foldl1 (\a b -> [| $a + $b |]) subDetsElems
 			-- adjugate matrix expression
 			adjExp = foldl appE (conE dataName)
-				[ if (i + j) `rem` 2 == 0 then e else [| negate $e |]
+				[ if even (i + j) then e else [| negate $e |]
 				| i <- [0..(dim - 1)]
 				, j <- [0..(dim - 1)]
 				, let e = varE $ detName (dimMask `xor` (1 `shiftL` j)) (dimMask `xor` (1 `shiftL` i))
@@ -721,7 +720,7 @@ do
 		]
 
 	-- Num instance
-	numInstance <- do
+	numInstance <-
 		instanceD (sequence [ [t| Quaternionized $elemType |] ]) [t| Num (Quat $elemType) |] =<< addInlines
 			[ funD '(+) [clause [conP 'Quat [varP av], conP 'Quat [varP bv]] (normalB [| Quat ($(varE av) + $(varE bv)) |]) []]
 			, funD '(-) [clause [conP 'Quat [varP av], conP 'Quat [varP bv]] (normalB [| Quat ($(varE av) - $(varE bv)) |]) []]

@@ -80,7 +80,7 @@ instance Element Button where
 
 	dabElement Button
 		{ buttonSizeVar = sizeVar
-		} (Vec2 x y) = do
+		} (Vec2 x y) =
 		if x < 0 || y < 0 then return False else do
 			Vec2 sx sy <- readTVar sizeVar
 			return $ x < sx && y < sy

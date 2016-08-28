@@ -241,7 +241,7 @@ main = withApp appConfig
 				} defaultSamplerStateInfo $ B.pack $ do
 				i <- [0..(height - 1)]
 				j <- [0..(width - 1)]
-				let c = if (i `quot` step + j `quot` step) `rem` 2 == 0 then 255 else 0
+				let c = if even (i `quot` step + j `quot` step) then 255 else 0
 				[c, c, c, 255]
 		initialNormalTextureCell <- book bk $ newTextureCell $ do
 			let

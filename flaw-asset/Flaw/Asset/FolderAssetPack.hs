@@ -44,7 +44,7 @@ instance AssetPack FolderAssetPack where
 #endif
 
 	newtype AssetPackBuilder FolderAssetPack = FolderAssetPackBuilder T.Text
-	putAsset (FolderAssetPackBuilder prefix) fileName asset = B.writeFile (T.unpack $ prefix <> fileName) asset
+	putAsset (FolderAssetPackBuilder prefix) fileName = B.writeFile (T.unpack $ prefix <> fileName)
 
 instance WebAssetPack FolderAssetPack where
 	getWebAssetUrl (FolderAssetPack prefix) fileName = return $ prefix <> fileName

@@ -91,13 +91,13 @@ newWindow nativeWindow inputManager element = do
 queueWindowAction :: Window -> IO () -> STM ()
 queueWindowAction Window
 	{ windowActionsQueue = actionsQueue
-	} action = writeTQueue actionsQueue action
+	} = writeTQueue actionsQueue
 
 -- | Set window close handler.
 setWindowCloseHandler :: Window -> STM () -> STM ()
 setWindowCloseHandler Window
 	{ windowCloseHandlerVar = closeHandlerVar
-	} closeHandler = writeTVar closeHandlerVar closeHandler
+	} = writeTVar closeHandlerVar
 
 -- | Run normal window processing.
 -- It's necessary to run this method regularly (usually in a frame update function).
@@ -182,8 +182,7 @@ processWindow Window
 renderWindow :: Context c d => Window -> Drawer d -> STM (Render c ())
 renderWindow Window
 	{ windowElement = SomeElement element
-	} drawer = do
-	renderElement element drawer $ Vec2 0 0
+	} drawer = renderElement element drawer $ Vec2 0 0
 
 -- | Get window size.
 getWindowSize :: Window -> STM Size

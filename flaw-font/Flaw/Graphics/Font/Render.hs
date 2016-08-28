@@ -112,26 +112,25 @@ initGlyphRenderer device subpixelMode = do
 			(dot (yw__ aCorner) (yw__ position))
 			(constf 0)
 			(constf 1)
-			) $ do
-			case subpixelMode of
-				GlyphSubpixelModeNone -> colorTarget 0 $ cvec31 (xyz__ color) (w_ color * sampleLod (sampler2Df 0) texcoord (constf 0))
-				_ -> do
-					let (dxr, dxg, dxb, dyr, dyg, dyb) = case subpixelMode of
-						GlyphSubpixelModeNone -> undefined -- GHC warning defence, meh :(
-						GlyphSubpixelModeHorizontalRGB -> (-1, 0, 1, 0, 0, 0)
-						GlyphSubpixelModeHorizontalBGR -> (1, 0, -1, 0, 0, 0)
-						GlyphSubpixelModeVerticalRGB -> (0, 0, 0, -1, 0, 1)
-						GlyphSubpixelModeVerticalBGR -> (0, 0, 0, 1, 0, -1)
-					let r = w_ color * sampleLod (sampler2Df 0) (texcoord
-						+ ddx texcoord * vecFromScalar (constf $ dxr / 3)
-						+ ddy texcoord * vecFromScalar (constf $ dyr / 3)) (constf 0)
-					let g = w_ color * sampleLod (sampler2Df 0) (texcoord
-						+ ddx texcoord * vecFromScalar (constf $ dxg / 3)
-						+ ddy texcoord * vecFromScalar (constf $ dyg / 3)) (constf 0)
-					let b = w_ color * sampleLod (sampler2Df 0) (texcoord
-						+ ddx texcoord * vecFromScalar (constf $ dxb / 3)
-						+ ddy texcoord * vecFromScalar (constf $ dyb / 3)) (constf 0)
-					dualColorTarget (cvec31 (xyz__ color) (constf 1)) (cvec1111 r g b (constf 1))
+			) $ case subpixelMode of
+			GlyphSubpixelModeNone -> colorTarget 0 $ cvec31 (xyz__ color) (w_ color * sampleLod (sampler2Df 0) texcoord (constf 0))
+			_ -> do
+				let (dxr, dxg, dxb, dyr, dyg, dyb) = case subpixelMode of
+					GlyphSubpixelModeNone -> undefined -- GHC warning defence, meh :(
+					GlyphSubpixelModeHorizontalRGB -> (-1, 0, 1, 0, 0, 0)
+					GlyphSubpixelModeHorizontalBGR -> (1, 0, -1, 0, 0, 0)
+					GlyphSubpixelModeVerticalRGB -> (0, 0, 0, -1, 0, 1)
+					GlyphSubpixelModeVerticalBGR -> (0, 0, 0, 1, 0, -1)
+				let r = w_ color * sampleLod (sampler2Df 0) (texcoord
+					+ ddx texcoord * vecFromScalar (constf $ dxr / 3)
+					+ ddy texcoord * vecFromScalar (constf $ dyr / 3)) (constf 0)
+				let g = w_ color * sampleLod (sampler2Df 0) (texcoord
+					+ ddx texcoord * vecFromScalar (constf $ dxg / 3)
+					+ ddy texcoord * vecFromScalar (constf $ dyg / 3)) (constf 0)
+				let b = w_ color * sampleLod (sampler2Df 0) (texcoord
+					+ ddx texcoord * vecFromScalar (constf $ dxb / 3)
+					+ ddy texcoord * vecFromScalar (constf $ dyb / 3)) (constf 0)
+				dualColorTarget (cvec31 (xyz__ color) (constf 1)) (cvec1111 r g b (constf 1))
 
 	buffer <- VSM.new $ capacity * 3
 
@@ -339,12 +338,11 @@ renderTextRun shapedGlyphs position color = do
 	forM_ shapedGlyphs $ \ShapedGlyph
 		{ shapedGlyphPosition = glyphPosition
 		, shapedGlyphIndex = glyphIndex
-		} -> do
-		lift $ addGlyph GlyphToRender
-			{ glyphToRenderPosition = position + glyphPosition
-			, glyphToRenderIndex = glyphIndex
-			, glyphToRenderColor = color
-			}
+		} -> lift $ addGlyph GlyphToRender
+		{ glyphToRenderPosition = position + glyphPosition
+		, glyphToRenderIndex = glyphIndex
+		, glyphToRenderColor = color
+		}
 
 -- | Shape multiple text runs and output it in RenderGlyphsM monad.
 renderTexts :: FontShaper s => s -> [(T.Text, Float4)] -> FontScript -> Float2 -> RenderTextCursorX -> RenderTextCursorY -> RenderGlyphsM c d ()

@@ -70,7 +70,7 @@ processMethod interfaceName mt mn prevEndExp = do
 		}
 
 processMethods :: String -> ExpQ -> [(TypeQ, String)] -> Q [Method]
-processMethods interfaceName firstOffsetExp ms = pm firstOffsetExp ms where
+processMethods interfaceName = pm where
 	pm prevEndExp ((mt, mn) : nms) = do
 		m <- processMethod interfaceName mt mn prevEndExp
 		nextMethods <- pm (methodEnd m) nms

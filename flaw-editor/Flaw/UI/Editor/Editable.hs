@@ -100,8 +100,8 @@ instance (G.Selector c, GenericEditableValue f) => GenericEditableSelector (G.M1
 -- selector sum metadata
 instance (GenericEditableSelector a, GenericEditableSelector b) => GenericEditableSelector (a G.:*: b) where
 	genericEditableSelectorLayout setter = do
-		update1 <- genericEditableSelectorLayout (\f -> setter $ \(a G.:*: b) -> (f a) G.:*: b)
-		update2 <- genericEditableSelectorLayout (\f -> setter $ \(a G.:*: b) -> a G.:*: (f b))
+		update1 <- genericEditableSelectorLayout (\f -> setter $ \(a G.:*: b) -> f a G.:*: b)
+		update2 <- genericEditableSelectorLayout (\f -> setter $ \(a G.:*: b) -> a G.:*: f b)
 		return $ \(a G.:*: b) -> do
 			update1 a
 			update2 b

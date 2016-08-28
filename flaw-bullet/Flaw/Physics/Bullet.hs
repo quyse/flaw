@@ -49,7 +49,7 @@ instance World BulletWorld where
 		let mass = case motion of
 			MotionStatic -> 0
 			MotionDynamic m -> m
-		pBody <- with position $ \positionPtr -> with orientation $ \orientationPtr -> do
+		pBody <- with position $ \positionPtr -> with orientation $ \orientationPtr ->
 			flaw_bullet_newRigidBody pWorld pShape (castPtr positionPtr) (castPtr orientationPtr) (coerce mass)
 		return (BulletBody pBody, flaw_bullet_freeRigidBody pWorld pBody)
 

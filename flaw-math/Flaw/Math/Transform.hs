@@ -109,7 +109,7 @@ instance Transform QuatOffset where
 		z = (m21 - m12) * kk
 		w = k * 0.5
 	{-# INLINE transformTranslation #-}
-	transformTranslation p = QuatOffset (Quat (Vec4 0 0 0 1)) p
+	transformTranslation = QuatOffset (Quat (Vec4 0 0 0 1))
 	{-# INLINE transformAxisRotation #-}
 	transformAxisRotation axis angle = QuatOffset (quatAxisRotation axis angle) (Vec3 0 0 0)
 

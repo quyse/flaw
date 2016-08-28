@@ -97,7 +97,7 @@ newFrame element Metrics
 										let dx = x - lx
 										let dy = y - ly
 										-- change position if needed
-										when (kx /= 0 || ky /= 0) $ do
+										when (kx /= 0 || ky /= 0) $
 											placeFreeChildRelatively freeContainer freeChild $ Vec2 (dx * kx) (dy * ky)
 										-- change size if needed
 										when needSizeChange $ do
@@ -182,11 +182,11 @@ data FrameResizeElement = FrameResizeElement
 instance Element FrameResizeElement where
 	layoutElement FrameResizeElement
 		{ freSizeVar = sizeVar
-		} size = writeTVar sizeVar size
+		} = writeTVar sizeVar
 
 	dabElement FrameResizeElement
 		{ freSizeVar = sizeVar
-		} (Vec2 x y) = do
+		} (Vec2 x y) =
 		if x < 0 || y < 0 then return False
 		else do
 			Vec2 sx sy <- readTVar sizeVar
@@ -203,19 +203,19 @@ instance Element FrameResizeElement where
 
 	processInputEvent FrameResizeElement
 		{ freProcessInput = processInput
-		} inputEvent inputState = processInput inputEvent inputState
+		} = processInput
 
 instance Element Frame where
 
 	layoutElement Frame
 		{ framePanel = panel
-		} size = layoutElement panel size
+		} = layoutElement panel
 
 	dabElement Frame
 		{ framePanel = Panel
 			{ panelSizeVar = sizeVar
 			}
-		} (Vec2 x y) = do
+		} (Vec2 x y) =
 		if x < 0 || y < 0 then return False
 		else do
 			Vec2 sx sy <- readTVar sizeVar
@@ -263,7 +263,7 @@ instance Element Frame where
 				(styleFillColor outerStyle) (styleBorderColor outerStyle)
 
 			-- render text
-			renderGlyphs glyphRenderer renderableFont $ do
+			renderGlyphs glyphRenderer renderableFont $
 				renderTexts fontShaper [(text, styleTextColor outerStyle)] textScript
 					(Vec2 (fromIntegral $ px + (sx - clientLeft - clientRight) `quot` 2) (fromIntegral $ py + topBorder + (clientTop - topBorder) `quot` 2))
 					RenderTextCursorCenter RenderTextCursorMiddle
@@ -279,7 +279,7 @@ instance Element Frame where
 
 	processInputEvent Frame
 		{ framePanel = panel
-		} inputEvent inputState = processInputEvent panel inputEvent inputState
+		} = processInputEvent panel
 
 	focusElement Frame
 		{ framePanel = panel
@@ -305,10 +305,10 @@ instance Element Frame where
 instance HasText Frame where
 	setText Frame
 		{ frameTextVar = textVar
-		} text = writeTVar textVar text
+		} = writeTVar textVar
 	setTextScript Frame
 		{ frameTextScriptVar = textScriptVar
-		} textScript = writeTVar textScriptVar textScript
+		} = writeTVar textScriptVar
 	getText Frame
 		{ frameTextVar = textVar
 		} = readTVar textVar

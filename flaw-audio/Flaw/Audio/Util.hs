@@ -42,7 +42,7 @@ convertSamples convert bytes = B.unsafeUseAsCStringLen bytes $ \(srcPtr, srcLen)
 		undefinedParam _ = undefined
 
 	-- get samples cound
-	let (samplesCount, r) = srcLen `quotRem` (sizeOf (undefinedParam convert))
+	let (samplesCount, r) = srcLen `quotRem` sizeOf (undefinedParam convert)
 	unless (r == 0) $ throwIO $ DescribeFirstException "size of audio samples sequence is not divisible by sample size"
 	-- allocate memory
 	destPtr <- mallocArray samplesCount

@@ -46,7 +46,7 @@ data RemapAssetPack ap ai = RemapAssetPack !ap !(HM.HashMap ai (AssetId ap))
 instance (AssetPack ap, Eq ai, Hashable ai, Typeable ai, Show ai) => AssetPack (RemapAssetPack ap ai) where
 	type AssetId (RemapAssetPack ap ai) = ai
 
-	loadAsset (RemapAssetPack assetPack ids) assetId = handle (handler assetId) $ do
+	loadAsset (RemapAssetPack assetPack ids) assetId = handle (handler assetId) $
 		case HM.lookup assetId ids of
 			Just ai -> loadAsset assetPack ai
 			Nothing -> throwIO AssetError
@@ -69,7 +69,7 @@ instance (AssetPack ap, Eq ai, Hashable ai, Typeable ai, Show ai) => AssetPack (
 		putAsset assetPackBuilder underlyingAssetId asset
 
 instance (WebAssetPack ap, Eq ai, Hashable ai, Typeable ai, Show ai) => WebAssetPack (RemapAssetPack ap ai) where
-	getWebAssetUrl (RemapAssetPack assetPack ids) assetId = handle (handler assetId) $ do
+	getWebAssetUrl (RemapAssetPack assetPack ids) assetId = handle (handler assetId) $
 		case HM.lookup assetId ids of
 			Just ai -> getWebAssetUrl assetPack ai
 			Nothing -> throwIO AssetError

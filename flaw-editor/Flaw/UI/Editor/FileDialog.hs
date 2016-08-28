@@ -145,7 +145,7 @@ runFileDialog FileDialogService
 		atomically $ do
 			setText dirPathLabel $ T.pack path
 			clearListBox listBox
-			forM_ entries $ void . addListBoxItem listBox
+			forM_ entries $ addListBoxItem listBox
 
 	setActionHandler okButton $ do
 		entries <- getListBoxSelectedValues listBox

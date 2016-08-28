@@ -44,11 +44,11 @@ instance Element RenderBox where
 
 	layoutElement RenderBox
 		{ renderBoxSizeVar = sizeVar
-		} size = writeTVar sizeVar size
+		} = writeTVar sizeVar
 
 	dabElement RenderBox
 		{ renderBoxSizeVar = sizeVar
-		} (Vec2 x y) = do
+		} (Vec2 x y) =
 		if x < 0 || y < 0 then return False
 		else do
 			Vec2 sx sy <- readTVar sizeVar

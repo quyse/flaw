@@ -63,7 +63,7 @@ instance Element CheckBox where
 
 	dabElement CheckBox
 		{ checkBoxSizeVar = sizeVar
-		} (Vec2 x y) = do
+		} (Vec2 x y) =
 		if x < 0 || y < 0 then return False
 		else do
 			Vec2 sx sy <- readTVar sizeVar
@@ -113,7 +113,7 @@ instance Element CheckBox where
 			KeyDownEvent KeySpace -> toggle
 			_ -> return False
 		MouseInputEvent (MouseDownEvent LeftMouseButton) -> toggle
-		MouseInputEvent (CursorMoveEvent {}) -> do
+		MouseInputEvent CursorMoveEvent {} -> do
 			writeTVar mousedVar True
 			return True
 		MouseLeaveEvent -> do

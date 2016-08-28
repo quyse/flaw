@@ -63,10 +63,10 @@ instance Visual Label where
 instance HasText Label where
 	setText Label
 		{ labelTextVar = textVar
-		} text = writeTVar textVar text
+		} = writeTVar textVar
 	setTextScript Label
 		{ labelTextScriptVar = textScriptVar
-		} textScript = writeTVar textScriptVar textScript
+		} = writeTVar textScriptVar
 	getText Label
 		{ labelTextVar = textVar
 		} = readTVar textVar
@@ -94,5 +94,5 @@ renderLabel text textScript style Drawer
 		AlignTop -> (fromIntegral py, RenderTextCursorTop)
 		AlignMiddle -> (fromIntegral py + fromIntegral sy * 0.5, RenderTextCursorMiddle)
 		AlignBottom -> (fromIntegral py + fromIntegral sy, RenderTextCursorBottom)
-	renderGlyphs glyphRenderer renderableFont $ do
+	renderGlyphs glyphRenderer renderableFont $
 		renderTexts fontShaper [(text, color)] textScript (Vec2 x y) cursorX cursorY

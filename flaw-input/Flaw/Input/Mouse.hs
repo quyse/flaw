@@ -50,17 +50,16 @@ instance InputDevice MouseState MouseEvent where
 	applyInputEvent MouseState
 		{ mouseStateButtons = buttonsArray
 		, mouseStateCursor = cursorVar
-		} event = do
-		case event of
-			MouseDownEvent button -> writeArray buttonsArray button True
-			MouseUpEvent button -> writeArray buttonsArray button False
-			RawMouseMoveEvent {} -> return ()
-			CursorMoveEvent x y -> writeTVar cursorVar (x, y)
+		} event = case event of
+		MouseDownEvent button -> writeArray buttonsArray button True
+		MouseUpEvent button -> writeArray buttonsArray button False
+		RawMouseMoveEvent {} -> return ()
+		CursorMoveEvent x y -> writeTVar cursorVar (x, y)
 
 getMouseButtonState :: MouseState -> MouseButton -> STM Bool
 getMouseButtonState MouseState
 	{ mouseStateButtons = buttonsArray
-	} button = readArray buttonsArray button
+	} = readArray buttonsArray
 
 getMouseCursor :: MouseState -> STM (Int, Int)
 getMouseCursor MouseState

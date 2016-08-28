@@ -166,7 +166,10 @@ instance Element ScrollBar where
 		piece <- scrollBarPiece scrollBar
 		moused <- isJust <$> readTVar lastMousePositionVar
 		pressed <- readTVar pressedVar
-		let pieceStyle = if pressed then raisedPressedStyle else if moused then raisedMousedStyle else raisedNormalStyle
+		let pieceStyle
+			| pressed = raisedPressedStyle
+			| moused = raisedMousedStyle
+			| otherwise = raisedNormalStyle
 		return $ do
 			-- render border
 			drawBorderedRectangle canvas
@@ -217,8 +220,7 @@ instance Element ScrollBar where
 							case piece of
 								Just ScrollBarPiece
 									{ scrollBarPieceOffsetMultiplier = offsetMultiplier
-									} -> do
-									modifyTVar' scrollVar (+ (Vec2 x y - lastMousePosition) * offsetMultiplier)
+									} -> modifyTVar' scrollVar (+ (Vec2 x y - lastMousePosition) * offsetMultiplier)
 								Nothing -> return ()
 						Nothing -> return ()
 				writeTVar lastMousePositionVar $ Just $ Vec2 x y
@@ -274,7 +276,7 @@ scrollBarPiece ScrollBar
 -- Could be used for passing scrolling events from other elements.
 processScrollBarEvent :: ScrollBar -> InputEvent -> InputState -> STM Bool
 processScrollBarEvent scrollBar inputEvent inputState = case inputEvent of
-	MouseInputEvent (RawMouseMoveEvent {}) -> processInputEvent scrollBar inputEvent inputState
+	MouseInputEvent RawMouseMoveEvent {} -> processInputEvent scrollBar inputEvent inputState
 	_ -> return False
 
 -- | Adjust scrolling so the specified area (in content coords) is visible.

@@ -485,7 +485,7 @@ instance Device GlContext where
 		glCheckErrors0 "bind framebuffer depth-stencil buffer"
 
 		-- get width and height of framebuffer (and check that they're equal)
-		let foldSize (n, w, h) (rw, rh) = do
+		let foldSize (n, w, h) (rw, rh) =
 			if n /= glNullTextureName then do
 				when ((rw > 0 && w /= rw) || (rh > 0 && h /= rh)) $ throwIO $ DescribeFirstException "sizes are not equal"
 				return (rw .|. w, rh .|. h)
@@ -673,7 +673,7 @@ instance Device GlContext where
 				glGetProgramiv programName GL_LINK_STATUS statusPtr
 				glCheckErrors0 "get program link status"
 				peek statusPtr
-			if status == 1 then do
+			if status == 1 then
 				-- save binary program into cache
 				when capGetProgramBinary $ do
 					len <- alloca $ \lenPtr -> do
@@ -946,7 +946,7 @@ instance Context GlContext GlContext where
 			glBindBuffer GL_UNIFORM_BUFFER bufferName
 			glBufferData_bs GL_UNIFORM_BUFFER bytes GL_DYNAMIC_DRAW
 			glCheckErrors0 "upload uniform buffer"
-		GlUniformMemoryBufferId bufferRef -> do
+		GlUniformMemoryBufferId bufferRef ->
 			-- remember buffer data
 			writeIORef bufferRef bytes
 		GlNullUniformBufferId -> throwIO $ DescribeFirstException "uploading to null uniform buffer"
@@ -963,12 +963,12 @@ instance Context GlContext GlContext where
 		} instancesCount indicesCount = do
 		glUpdateContext context
 		GlIndexBufferId indexBufferName indicesType <- readIORef indexBufferRef
-		if indexBufferName /= glNullBufferName then do
+		if indexBufferName /= glNullBufferName then
 			if instancesCount > 1 then
 				glDrawElementsInstanced GL_TRIANGLES (fromIntegral indicesCount) indicesType (glIntToOffset 0) (fromIntegral instancesCount)
 			else
 				glDrawElements GL_TRIANGLES (fromIntegral indicesCount) indicesType (glIntToOffset 0)
-		else do
+		else
 			if instancesCount > 1 then
 				glDrawArraysInstanced GL_TRIANGLES 0 (fromIntegral indicesCount) (fromIntegral instancesCount)
 			else
@@ -1374,12 +1374,11 @@ glUpdateContext context@GlContext
 				GlUniformBufferId {} -> do
 					bindBuffer glNullBufferName
 					updateActual
-				GlUniformMemoryBufferId {} -> do
-					updateActual
+				GlUniformMemoryBufferId {} -> updateActual
 				GlNullUniformBufferId -> return ()
 
 	-- bind vertex buffers if supported
-	if capVertexAttribBinding then do
+	if capVertexAttribBinding then
 		vectorSetupCond programUpdated actualVertexBuffersVector desiredVertexBuffersVector $ \i (GlVertexBufferId bufferName stride) -> do
 			glBindVertexBuffer (fromIntegral i) bufferName 0 (fromIntegral stride)
 			glCheckErrors0 "bind vertex buffer"

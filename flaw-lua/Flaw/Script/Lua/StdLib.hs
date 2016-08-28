@@ -33,7 +33,7 @@ registerNotImplementedFunc e n = registerFunc e n $ \_ ->
 	throwLuaError $ LuaError $ LuaString $ "flaw-lua stdlib: " <> n <> " is not implemented"
 
 registerValue :: LuaMonad m => LuaValue m -> T.Text -> LuaValue m -> m ()
-registerValue e n v = luaValueSet e (LuaString n) v
+registerValue e n = luaValueSet e (LuaString n)
 
 registerLuaBasicLib :: LuaMonad m => LuaValue m -> m ()
 registerLuaBasicLib env = do

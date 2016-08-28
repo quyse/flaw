@@ -135,4 +135,4 @@ gaussianWeights tapsHalfCount = weights where
 	a = 1 / (sqrt (2 * pi) * sigma)
 	b = (-1) / (2 * sigma * sigma)
 	gauss x = a * exp (b * x * x)
-	weights = map (gauss . fromIntegral) $ [(-tapsHalfCount) .. tapsHalfCount]
+	weights = map (gauss . fromIntegral) [(-tapsHalfCount) .. tapsHalfCount]

@@ -61,9 +61,7 @@ data SdlWindow = SdlWindow
 instance Window SdlWindow where
 	setWindowTitle SdlWindow
 		{ swHandle = h
-		} title = do
-		B.useAsCString (T.encodeUtf8 title) $ \titlePtr -> do
-			SDL.setWindowTitle h titlePtr
+		} title = B.useAsCString (T.encodeUtf8 title) $ SDL.setWindowTitle h
 	getWindowClientSize SdlWindow
 		{ swHandle = h
 		} = alloca $ \widthPtr -> alloca $ \heightPtr -> do
@@ -81,8 +79,7 @@ instance Window SdlWindow where
 			bytes <- B.packCString cStr
 			SDL.free $ castPtr cStr
 			return $ T.decodeUtf8 bytes
-	setWindowClipboardText _ text = do
-		B.useAsCString (T.encodeUtf8 text) $ void . SDL.setClipboardText
+	setWindowClipboardText _ text = B.useAsCString (T.encodeUtf8 text) $ void . SDL.setClipboardText
 	setWindowMouseCursor SdlWindow
 		{ swSystem = SdlWindowSystem
 			{ swsMouseCursors = mouseCursors
@@ -214,28 +211,26 @@ runSdlWindowSystem debug resultVar = withBook $ \bk -> do
 				{ SDL.windowEventEvent = eventType
 				, SDL.windowEventData1 = data1
 				, SDL.windowEventData2 = data2
-				} -> do
-				case maybeWindow of
-					Just SdlWindow
-						{ swEventsChan = eventsChan
-						} -> case eventType of
-						SDL.SDL_WINDOWEVENT_RESIZED -> atomically $ do
-							let width = fromIntegral data1
-							let height = fromIntegral data2
-							writeTChan eventsChan $ ResizeWindowEvent width height
-						SDL.SDL_WINDOWEVENT_CLOSE -> atomically $ writeTChan eventsChan CloseWindowEvent
-						_ -> return ()
-					Nothing -> return ()
+				} -> case maybeWindow of
+				Just SdlWindow
+					{ swEventsChan = eventsChan
+					} -> case eventType of
+					SDL.SDL_WINDOWEVENT_RESIZED -> atomically $ do
+						let width = fromIntegral data1
+						let height = fromIntegral data2
+						writeTChan eventsChan $ ResizeWindowEvent width height
+					SDL.SDL_WINDOWEVENT_CLOSE -> atomically $ writeTChan eventsChan CloseWindowEvent
+					_ -> return ()
+				Nothing -> return ()
 			SDL.UserEvent
 				{ SDL.userEventCode = eventCode
 				, SDL.userEventData1 = eventData
-				} -> do
+				} ->
 				if eventCode == invokeUserEventCode then do
 					let funPtr = castPtrToFunPtr eventData
 					unwrapInvokeCallback funPtr
 					freeHaskellFunPtr funPtr
-				else if eventCode == quitUserEventCode then writeIORef quitRef True
-				else return ()
+				else when (eventCode == quitUserEventCode) $ writeIORef quitRef True
 			_ -> return ()
 
 		-- check if quit flag is set
@@ -263,7 +258,7 @@ createSdlWindow ws@SdlWindowSystem
 	let (x, y) = fromMaybe (SDL.SDL_WINDOWPOS_UNDEFINED, SDL.SDL_WINDOWPOS_UNDEFINED) maybePosition
 	let (width, height) = fromMaybe (800, 600) maybeSize
 	-- create SDL window
-	windowHandle <- checkSdlResult $ withCString (T.unpack title) $ \titlePtr -> do
+	windowHandle <- checkSdlResult $ withCString (T.unpack title) $ \titlePtr ->
 		SDL.createWindow titlePtr
 			(fromIntegral x)
 			(fromIntegral y)

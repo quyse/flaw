@@ -34,7 +34,7 @@ import Flaw.Graphics.Font
 import Flaw.Graphics.Font.FreeType.FFI
 
 ftErrorCheck :: String -> FT_Error -> IO ()
-ftErrorCheck errorMessage errorCode = do
+ftErrorCheck errorMessage errorCode =
 	unless (errorCode == 0) $ fail $ show ("FreeType error", errorMessage, errorCode)
 
 newtype FreeTypeLibrary = FreeTypeLibrary FT_Library
@@ -162,7 +162,7 @@ createFreeTypeGlyphs FreeTypeFont
 		let width = bitmapWidth + halfScaleX * 2
 		let height = bitmapRows + halfScaleY * 2
 
-		blurredPixels <- do
+		blurredPixels <-
 			if halfScaleX > 0 || halfScaleY > 0 then do
 				blurredPixels <- VSM.new $ width * height
 				let fullScale = (halfScaleX * 2 + 1) * (halfScaleY * 2 + 1)

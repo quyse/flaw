@@ -84,11 +84,11 @@ instance Element EditBox where
 
 	layoutElement EditBox
 		{ editBoxSizeVar = sizeVar
-		} size = writeTVar sizeVar size
+		} = writeTVar sizeVar
 
 	dabElement EditBox
 		{ editBoxSizeVar = sizeVar
-		} (Vec2 x y) = do
+		} (Vec2 x y) =
 		if x < 0 || y < 0 then return False
 		else do
 			Vec2 sx sy <- readTVar sizeVar
@@ -144,7 +144,7 @@ instance Element EditBox where
 		let selectedStyle = if focused then selectedFocusedStyle else selectedUnfocusedStyle
 
 		-- update blinking phase (only do calculations if we are focused)
-		blink <- do
+		blink <-
 			if focused then do
 				frameTime <- readTVar frameTimeVar
 				let blinkPeriod = 1
@@ -187,15 +187,14 @@ instance Element EditBox where
 				-- cursorX + textOffsetX - sx + border + 2 < scroll < cursorX + textOffsetX - border
 				let minScroll = cursorX + textOffsetX - fromIntegral sx + border + 2
 				let maxScroll = cursorX + textOffsetX - border
-				do
-					if scroll <= minScroll then do
-						writeTVar scrollVar minScroll
-						return minScroll
-					else if scroll >= maxScroll then do
-						let newScroll = max 0 $ maxScroll - fromIntegral sx / 3
-						writeTVar scrollVar newScroll
-						return newScroll
-					else return scroll
+				if scroll <= minScroll then do
+					writeTVar scrollVar minScroll
+					return minScroll
+				else if scroll >= maxScroll then do
+					let newScroll = max 0 $ maxScroll - fromIntegral sx / 3
+					writeTVar scrollVar newScroll
+					return newScroll
+				else return scroll
 
 			let textXY@(Vec2 textX _textY) = Vec2 (fromIntegral px + 1 + textOffsetX - scroll) (fromIntegral py + 1 + (fromIntegral (sy - 2) - boxTop - boxBottom) * 0.5)
 			let selectionTop = fromIntegral (py + 1) + (fromIntegral (sy - 2) - (boxBottom - boxTop)) * 0.5
@@ -244,18 +243,16 @@ instance Element EditBox where
 						writeTVar delayedOpVar EmptyDelayedOp
 
 			-- draw selection
-			unless (T.null textSelected) $ do
-				drawBorderedRectangle canvas
-					(Vec4 (floor $ textX + selectionMinX - 1) (floor $ textX + selectionMinX) (floor $ textX + selectionMaxX + 1) (floor $ textX + selectionMaxX + 2))
-					(Vec4 (floor selectionTop) (floor $ selectionTop + 1) (floor $ selectionBottom - 1) (floor selectionBottom))
-					(styleFillColor selectedStyle) (styleBorderColor selectedStyle)
+			unless (T.null textSelected) $ drawBorderedRectangle canvas
+				(Vec4 (floor $ textX + selectionMinX - 1) (floor $ textX + selectionMinX) (floor $ textX + selectionMaxX + 1) (floor $ textX + selectionMaxX + 2))
+				(Vec4 (floor selectionTop) (floor $ selectionTop + 1) (floor $ selectionBottom - 1) (floor selectionBottom))
+				(styleFillColor selectedStyle) (styleBorderColor selectedStyle)
 
 			-- draw blinking cursor
-			when (blink * 2 < 1) $ do
-				drawBorderedRectangle canvas
-					(Vec4 (floor $ textX + cursorX) (floor $ textX + cursorX + 1) (floor $ textX + cursorX + 1) (floor $ textX + cursorX + 1))
-					(Vec4 (floor selectionTop) (floor $ selectionTop + 1) (floor $ selectionBottom - 1) (floor selectionBottom))
-					(styleFillColor selectedStyle) (styleBorderColor selectedStyle)
+			when (blink * 2 < 1) $ drawBorderedRectangle canvas
+				(Vec4 (floor $ textX + cursorX) (floor $ textX + cursorX + 1) (floor $ textX + cursorX + 1) (floor $ textX + cursorX + 1))
+				(Vec4 (floor selectionTop) (floor $ selectionTop + 1) (floor $ selectionBottom - 1) (floor selectionBottom))
+				(styleFillColor selectedStyle) (styleBorderColor selectedStyle)
 
 			-- draw floating cursor
 			case maybeFloatingCursor of
@@ -266,8 +263,8 @@ instance Element EditBox where
 				Nothing -> return ()
 
 			-- render glyphs
-			renderGlyphs glyphRenderer renderableFont $ do
-				forM_ (zip runs [styleTextColor style, styleTextColor selectedStyle, styleTextColor style]) $ \((shapedGlyphs, _advance), color) -> do
+			renderGlyphs glyphRenderer renderableFont $
+				forM_ (zip runs [styleTextColor style, styleTextColor selectedStyle, styleTextColor style]) $ \((shapedGlyphs, _advance), color) ->
 					renderTextRun shapedGlyphs textXY color
 
 	processInputEvent EditBox
@@ -371,7 +368,7 @@ instance Element EditBox where
 						return True
 					else return False
 				_ -> return False
-			CharEvent char -> do
+			CharEvent char ->
 				-- ignore control characters
 				if char > '\x1f' then do
 					replaceSelection $ T.singleton char
@@ -457,7 +454,7 @@ instance HasText EditBox where
 		writeTVar selectionVar (0, 0)
 	setTextScript EditBox
 		{ editBoxTextScriptVar = textScriptVar
-		} textScript = writeTVar textScriptVar textScript
+		} = writeTVar textScriptVar
 	getText EditBox
 		{ editBoxTextVar = textVar
 		} = readTVar textVar
@@ -465,7 +462,7 @@ instance HasText EditBox where
 instance HasPassword EditBox where
 	setPasswordMode EditBox
 		{ editBoxPasswordModeVar = passwordModeVar
-		} passwordMode = writeTVar passwordModeVar passwordMode
+		} = writeTVar passwordModeVar
 
 instance HasPreferredSize EditBox where
 	preferredSize Metrics
