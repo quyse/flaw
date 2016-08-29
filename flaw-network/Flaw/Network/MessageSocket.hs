@@ -4,7 +4,7 @@ Description: Serializing wrapper over socket.
 License: MIT
 -}
 
-{-# LANGUAGE GADTs, GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE GADTs #-}
 
 module Flaw.Network.MessageSocket
 	( MessageSocket(..)
