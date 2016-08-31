@@ -19,7 +19,7 @@ source-repository head
 
 library
   exposed-modules:
-    Flaw.Game.State.Lockstep
+    Flaw.Game.Lockstep
   other-modules:
   -- other-extensions:    
   build-depends:       base
