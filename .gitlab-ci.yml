@@ -159,6 +159,7 @@ linux:
   - x64
   except:
   - arm
+  - pages
 
 windows:
   script:
@@ -175,6 +176,7 @@ windows:
   - x64
   except:
   - arm
+  - pages
 
 osx:
   script:
@@ -190,6 +192,7 @@ osx:
   - x64
   except:
   - arm
+  - pages
 
 web:
   script:
@@ -201,6 +204,7 @@ web:
   - x64
   except:
   - arm
+  - pages
 
 linux-arm:
   script:
@@ -216,6 +220,8 @@ linux-arm:
   - arm
   only:
   - arm
+  except:
+  - pages
 
 itch:
   stage: deploy
@@ -248,8 +254,7 @@ pages:
   - "mv $(stack path --local-doc-root) public/docs"
   - "mv $(stack path --local-hpc-root) public/hpc"
   - "./pages/sanitize.sh public"
-  - "curl -o public/docs/badge.svg https://img.shields.io/badge/haddock-$(date +%Y/%m/%d)-blue.svg"
-  - "curl -o public/hpc/badge.svg https://img.shields.io/badge/test%20coverage-$(date +%Y/%m/%d)-orange.svg"
+  - "tail -n +6 README.md | pandoc -f markdown_github -o public/index.html --template pages/index.html"
   tags:
   - haskellstack
   - linux
@@ -259,3 +264,4 @@ pages:
     - public
   only:
   - master
+  - pages

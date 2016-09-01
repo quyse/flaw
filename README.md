@@ -1,11 +1,9 @@
 # FLAW Engine
 
-[![Gitlab Build Status](https://gitlab.com/quyse/flaw/badges/master/build.svg)](https://gitlab.com/quyse/flaw/builds)
+[![Gitlab Build Status](https://gitlab.com/quyse/flaw/badges/master/build.svg)](https://gitlab.com/quyse/flaw/pipelines)
 [![Code Climate](https://codeclimate.com/github/quyse/flaw/badges/gpa.svg)](https://codeclimate.com/github/quyse/flaw)
-[![Haddock Status](https://quyse.gitlab.io/flaw/docs/badge.svg)](https://quyse.gitlab.io/flaw/docs/)
-[![Test Coverage Status](https://quyse.gitlab.io/flaw/hpc/badge.svg)](https://quyse.gitlab.io/flaw/hpc/)
 
-FLAW is a highly experimental game engine written in Haskell.
+**FLAW** is a highly experimental game engine written in Haskell.
 
 ## Motivation
 
@@ -29,7 +27,7 @@ This project is mostly a playground for absolutely crazy ideas. Surely if someon
 
 * Visual effects (deferred rendering, materials, lighting, shadowing, etc)
 * High-level GUI framework made from scratch (i.e. neither using native GUIs nor frameworks like Qt)
-* Real-time collaborative asset editor ([doc](docs/editor.md))
+* Real-time collaborative asset editor
 
 ## Experiments
 
@@ -49,7 +47,7 @@ Here are all packages in A-Z order. Checkmark against a platform means that the 
 Linux is the main development platform. It also considered the only "server" platform, hence several "server" packages are tested only on Linux, even if it's probably possible to compile and run them on Windows or OS X.
 
 | Package | Description | Linux | Windows | OS X | Web (GHCJS) |
-|---|---|:---:|:---:|:---:|:---:|
+|---------------|-------------------------------------------------------------|:---:|:---:|:---:|:---:|
 | `flaw-al` | OpenAL integration - implementation of `flaw-audio` interface | ✔ | ✔ | ✔ |   |
 | `flaw-app` | Handy engine initialization and main loop routines | ✔ | ✔ | ✔ | ✔ |
 | `flaw-asset` | Packing and unpacking assets into asset packs | ✔ | ✔ | ✔ | ✔ |
@@ -94,3 +92,12 @@ Linux is the main development platform. It also considered the only "server" pla
 | `flaw-websocket-client` | Websocket client library |   |   |   | ✔ |
 | `flaw-websocket-server` | Websocket server library | ✔ |   |   |   |
 | `flaw-window` | Windowing platform bindings and graphics support | ✔ | ✔ | ✔ | ✔ |
+
+## Links
+
+* [FLAW on itch.io](https://quyse.itch.io/flaw)
+* [Gitlab CI](https://gitlab.com/quyse/flaw/pipelines)
+* [Code Climate](https://codeclimate.com/github/quyse/flaw)
+* [Haddock module documentation](https://quyse.gitlab.io/flaw/docs/)
+* [HPC coverage report](https://quyse.gitlab.io/flaw/hpc/combined/all/hpc_index.html)
+* [hlint report](https://quyse.gitlab.io/flaw/hlint.html)
