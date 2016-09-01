@@ -3,6 +3,8 @@
 [![Gitlab Build Status](https://gitlab.com/quyse/flaw/badges/master/build.svg)](https://gitlab.com/quyse/flaw/pipelines)
 [![Code Climate](https://codeclimate.com/github/quyse/flaw/badges/gpa.svg)](https://codeclimate.com/github/quyse/flaw)
 
+[documentation](https://quyse.gitlab.io/flaw/docs/) | [itch.io](https://quyse.itch.io/flaw) | [hlint report](https://quyse.gitlab.io/flaw/hlint.html) | [hpc report](https://quyse.gitlab.io/flaw/hpc/combined/all/hpc_index.html)
+
 **FLAW** is a highly experimental game engine written in Haskell.
 
 ## Motivation
@@ -92,12 +94,3 @@ Linux is the main development platform. It also considered the only "server" pla
 | `flaw-websocket-client` | Websocket client library |   |   |   | ✔ |
 | `flaw-websocket-server` | Websocket server library | ✔ |   |   |   |
 | `flaw-window` | Windowing platform bindings and graphics support | ✔ | ✔ | ✔ | ✔ |
-
-## Links
-
-* [FLAW on itch.io](https://quyse.itch.io/flaw)
-* [Gitlab CI](https://gitlab.com/quyse/flaw/pipelines)
-* [Code Climate](https://codeclimate.com/github/quyse/flaw)
-* [Haddock module documentation](https://quyse.gitlab.io/flaw/docs/)
-* [HPC coverage report](https://quyse.gitlab.io/flaw/hpc/combined/all/hpc_index.html)
-* [hlint report](https://quyse.gitlab.io/flaw/hlint.html)
