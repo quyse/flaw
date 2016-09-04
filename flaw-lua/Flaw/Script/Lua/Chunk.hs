@@ -269,15 +269,17 @@ compileLuaFunction LuaProto
 		-- helper functions
 		kst j = constants V.! j -- :: LuaValue m
 		r j = stack V.! j -- :: MutVar (PrimState m) (LuaValue m)
-		rk j = -- :: m (LuaValue m)
-			if j `testBit` 8 then [| return $(kst (j `clearBit` 8)) |]
-			else [| readMutVar $(r j) |]
+		rk e j = -- :: m (LuaValue m)
+			if j `testBit` 8 then [| $e $(kst (j `clearBit` 8)) |]
+			else [| $e =<< readMutVar $(r j) |]
+		rk2 e j1 j2 = -- :: m (LuaValue m)
+			if j1 `testBit` 8 then rk [| $e $(kst (j1 `clearBit` 8)) |] j2
+			else [| do
+				p <- readMutVar $(r j1)
+				$(rk [| $e p |] j2)
+				|]
 		u j = upvalues V.! j -- :: MutVar (PrimState m) (LuaValue m)
-		binop op = normalFlow [| do
-			p <- $(rk b)
-			q <- $(rk c)
-			writeMutVar $(r a) =<< $op p q
-			|]
+		binop op = normalFlow [| writeMutVar $(r a) =<< $(rk2 op b c) |]
 		unop op = normalFlow [| writeMutVar $(r a) =<< $op =<< readMutVar $(r b) |]
 
 		-- next and next-after-next instruction ids
@@ -290,9 +292,7 @@ compileLuaFunction LuaProto
 			nextInstStmts <- nextInstCode codeState
 			nextNextInstStmts <- nextNextInstCode codeState
 			return [noBindS [| do
-				p <- $(rk b)
-				q <- $(rk c)
-				z <- $op p q
+				z <- $(rk2 op b c)
 				$(if a > 0 then
 					[| if luaCoerceToBool z then $(doE nextInstStmts) else $(doE nextNextInstStmts) |]
 					else
@@ -365,28 +365,26 @@ compileLuaFunction LuaProto
 			OP_GETUPVAL -> normalFlow [| writeMutVar $(r a) =<< readMutVar $(u b) |]
 			OP_GETTABUP -> normalFlow [| do
 				t <- readMutVar $(u b)
-				writeMutVar $(r a) =<< luaValueGet t =<< $(rk c)
+				writeMutVar $(r a) =<< $(rk [| luaValueGet t |] c)
 				|]
 			OP_GETTABLE -> normalFlow [| do
 				t <- readMutVar $(r b)
-				writeMutVar $(r a) =<< luaValueGet t =<< $(rk c)
+				writeMutVar $(r a) =<< $(rk [| luaValueGet t |] c)
 				|]
 			OP_SETTABUP -> normalFlow [| do
 				t <- readMutVar $(u a)
-				q <- $(rk b)
-				luaValueSet t q =<< $(rk c)
+				$(rk2 [| luaValueSet t |] b c)
 				|]
 			OP_SETUPVAL -> normalFlow [| writeMutVar $(u b) =<< readMutVar $(r a) |]
 			OP_SETTABLE -> normalFlow [| do
 				t <- readMutVar $(r a)
-				q <- $(rk b)
-				luaValueSet t q =<< $(rk c)
+				$(rk2 [| luaValueSet t |] b c)
 				|]
 			OP_NEWTABLE -> normalFlow [| writeMutVar $(r a) =<< luaNewTableSized $(litE $ integerL $ fromIntegral $ max b c) |]
 			OP_SELF -> normalFlow [| do
 				writeMutVar $(r $ a + 1) =<< readMutVar $(r b)
 				t <- readMutVar $(r b)
-				writeMutVar $(r a) =<< luaValueGet t =<< $(rk c)
+				writeMutVar $(r a) =<< $(rk [| luaValueGet t |] c)
 				|]
 			OP_ADD -> binop [| luaValueAdd |]
 			OP_SUB -> binop [| luaValueSub |]
