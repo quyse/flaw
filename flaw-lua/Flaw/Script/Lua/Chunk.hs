@@ -66,8 +66,12 @@ data LuaProto = LuaProto
 	, luaProtoMaxStackSize :: {-# UNPACK #-} !Int
 	, luaProtoOpcodes :: !(VU.Vector Word32)
 	, luaProtoConstants :: !(V.Vector ExpQ)
-	, luaProtoFunctions :: !(V.Vector LuaProto)
+	-- | Flags for variables. True means volatile variable.
+	, luaProtoVariables :: !(V.Vector Bool)
 	, luaProtoUpvalues :: !(V.Vector (Bool, Int))
+	-- | Bitmask of in-stack upvalues (for parent scope they are volatile variables).
+	, luaProtoVolatileUpvaluesMask :: !Integer
+	, luaProtoFunctions :: !(V.Vector LuaProto)
 	}
 
 -- | Compile Lua chunk.
@@ -126,13 +130,23 @@ luaCompileChunk bytes = do
 			-- upvalues
 			upvaluesCount <- getInt
 			upvalues <- V.replicateM upvaluesCount $ do
-				instack <- S.getWord8
-				idx <- S.getWord8
-				return (instack > 0, fromIntegral idx)
+				instack <- ( > 0) <$> S.getWord8
+				idx <- fromIntegral <$> S.getWord8
+				return (instack, idx)
+
+			-- bitmask of in-stack upvalues
+			let volatileUpvaluesMask = V.foldr (\(instack, idx) mask -> if instack then mask .|. (1 `shiftL` idx) else mask) 0 upvalues
 
 			-- subfunctions
 			functionsCount <- getInt
 			functions <- V.replicateM functionsCount loadFunction
+
+			-- calculate volatile variables
+			let
+				volatileVariablesMask = V.foldr (\LuaProto
+					{ luaProtoVolatileUpvaluesMask = mask
+					} restMask -> mask .|. restMask) 0 functions
+				variables = V.generate maxStackSize $ testBit volatileVariablesMask
 
 			-- debug info
 			debugLineInfoCount <- getInt
@@ -155,7 +169,9 @@ luaCompileChunk bytes = do
 				, luaProtoMaxStackSize = maxStackSize
 				, luaProtoOpcodes = opcodes
 				, luaProtoConstants = constants
+				, luaProtoVariables = variables
 				, luaProtoUpvalues = upvalues
+				, luaProtoVolatileUpvaluesMask = volatileUpvaluesMask
 				, luaProtoFunctions = functions
 				}
 
