@@ -4,7 +4,7 @@ Description: Lua implementation in Haskell.
 License: MIT
 -}
 
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE ViewPatterns, TemplateHaskell #-}
 
 module Flaw.Script.Lua.Chunk
 	( luaCompileChunk
@@ -232,38 +232,34 @@ compileLuaFunction LuaProto
 	let constants = V.map varE constantsNames
 	let upvalues = V.map varE upvaluesNames
 
-	-- stack
-	stackNames <- V.generateM maxStackSize $ \i -> newName $ "s" ++ show i
-	let stackStmts = V.toList $ V.generate maxStackSize $ \i ->
-		bindS (varP (stackNames V.! i)) [| newMutVar LuaNil |]
-	let stack = V.generate maxStackSize $ \i -> varE $ stackNames V.! i
-
 	-- arguments & vararg
+	paramNames <- V.generateM numParams $ \i -> newName $ "s" ++ show i
 	varargName <- newName "va"
-	let varargStmts = if isVararg then [bindS (varP varargName) [| newMutVar [] |] ] else []
-	let argsSetStmts i =
+	let argsSetDecs i =
 		if i < numParams then do
 			a <- newName "a"
-			x <- newName "x"
-			(restStmts, xs) <- argsSetStmts $ i + 1
-			let e = doE $ (noBindS [| writeMutVar $(stack V.! i) $(varE x) |]) : restStmts
+			(restDecs, xs) <- argsSetDecs $ i + 1
 			return
-				( [ noBindS $ caseE (varE a)
-						[ match [p| $(varP x) : $xs |] (normalB e) []
-						, match [p| [] |] (normalB [| return () |]) []
-						]
-					]
+				( valD [p| $(varP (paramNames V.! i)) : $xs |] (normalB [| case $(varE a) of
+					[] -> [LuaNil]
+					_ -> $(varE a)
+					|]) [] : restDecs
 				, varP a
 				)
 		else if isVararg then do
 			a <- newName "a"
 			return
-				( [ noBindS [| writeMutVar $(varE varargName) $(varE a) |]
-					]
+				( [valD (varP varargName) (normalB $ varE a) []]
 				, varP a
 				)
 		else return ([], wildP)
-	(argsStmts, argsPat) <- argsSetStmts 0
+	(letS -> argsStmt, argsPat) <- argsSetDecs 0
+
+	-- stack
+	stackNames <- V.generateM maxStackSize $ \i -> newName $ "s" ++ show i
+	let stackStmts = V.toList $ V.generate maxStackSize $ \i ->
+		bindS (varP (stackNames V.! i)) [| newMutVar $(if i < numParams then varE (paramNames V.! i) else [| LuaNil |]) |]
+	let stack = V.generate maxStackSize $ \i -> varE $ stackNames V.! i
 
 	-- subfunctions
 	functionsNames <- V.generateM (V.length functions) $ \i -> newName $ "f" ++ show i
@@ -526,7 +522,7 @@ compileLuaFunction LuaProto
 					] ++ nextInstStmts
 			OP_CLOSURE -> normalFlow [| writeMutVar $(r a) =<< luaNewClosure $(varE $ functionsNames V.! bx) |]
 			OP_VARARG -> LuaInst [nextInstId] $ \[nextInstCode] codeState -> do
-				putRets (if b == 0 then Left a else Right [a .. (a + b - 2)]) [| readMutVar $(varE varargName) |] nextInstCode codeState
+				putRets (if b == 0 then Left a else Right [a .. (a + b - 2)]) [| return $(varE varargName) |] nextInstCode codeState
 			--OP_EXTRAARG -- should not be processed here
 			_ -> LuaInst [] $ \[] _ -> fail "unknown Lua opcode"
 
@@ -574,5 +570,5 @@ compileLuaFunction LuaProto
 			return [valD (varP $ instructionsNames V.! i) (normalB $ doE stmts) []]
 		else return []
 
-	lamE [argsPat] $ doE $ constantsUpvaluesStmt : stackStmts ++ varargStmts ++ argsStmts
+	lamE [argsPat] $ doE $ constantsUpvaluesStmt : argsStmt : stackStmts
 		++ [functionsStmt, letS sharedInstructionsDecs, noBindS $ varE $ instructionsNames V.! 0]
