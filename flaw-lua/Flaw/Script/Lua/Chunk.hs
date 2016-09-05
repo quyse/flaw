@@ -66,8 +66,8 @@ data LuaProto = LuaProto
 	, luaProtoMaxStackSize :: {-# UNPACK #-} !Int
 	, luaProtoOpcodes :: !(VU.Vector Word32)
 	, luaProtoConstants :: !(V.Vector ExpQ)
-	-- | Flags for variables. True means volatile variable.
-	, luaProtoVariables :: !(V.Vector Bool)
+	-- | Bitmask of volatile variables.
+	, luaProtoVolatileVariablesMask :: !Integer
 	, luaProtoUpvalues :: !(V.Vector (Bool, Int))
 	-- | Bitmask of in-stack upvalues (for parent scope they are volatile variables).
 	, luaProtoVolatileUpvaluesMask :: !Integer
@@ -141,12 +141,10 @@ luaCompileChunk bytes = do
 			functionsCount <- getInt
 			functions <- V.replicateM functionsCount loadFunction
 
-			-- calculate volatile variables
-			let
-				volatileVariablesMask = V.foldr (\LuaProto
-					{ luaProtoVolatileUpvaluesMask = mask
-					} restMask -> mask .|. restMask) 0 functions
-				variables = V.generate maxStackSize $ testBit volatileVariablesMask
+			-- volatile variables
+			let volatileVariablesMask = V.foldr (\LuaProto
+				{ luaProtoVolatileUpvaluesMask = mask
+				} restMask -> mask .|. restMask) 0 functions
 
 			-- debug info
 			debugLineInfoCount <- getInt
@@ -169,7 +167,7 @@ luaCompileChunk bytes = do
 				, luaProtoMaxStackSize = maxStackSize
 				, luaProtoOpcodes = opcodes
 				, luaProtoConstants = constants
-				, luaProtoVariables = variables
+				, luaProtoVolatileVariablesMask = volatileVariablesMask
 				, luaProtoUpvalues = upvalues
 				, luaProtoVolatileUpvaluesMask = volatileUpvaluesMask
 				, luaProtoFunctions = functions
@@ -194,10 +192,10 @@ type LuaCode = LuaCodeState -> Q [StmtQ]
 
 data LuaCodeState = LuaCodeState
 	{
-	  -- | Start register of dynamic arguments.
-	  -- -1 if not set.
+	-- | Start register of dynamic arguments.
+	-- -1 if not set.
 	  luaCodeStateTop :: !Int
-	  -- | Expression representing dynamic arguments (of type [LuaValue m]).
+	-- | Expression representing dynamic arguments (of type [LuaValue m]).
 	, luaCodeStateTopValuesE :: ExpQ
 	}
 
