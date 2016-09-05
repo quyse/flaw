@@ -539,8 +539,8 @@ compileLuaFunction LuaProto
 		markReachable 0
 
 		rc <- VUM.replicate (VU.length opcodes) (0 :: Int)
-		-- force first instruction to have a name
-		VUM.write rc 0 2
+		-- make into account reference from additional "start instruction"
+		VUM.write rc 0 1
 		-- calculate how many instructions refer to every instruction
 		flip V.imapM_ instructions $ \i (LuaInst edges _) -> do
 			isRechable <- VUM.read reachable i
@@ -570,5 +570,9 @@ compileLuaFunction LuaProto
 			return [valD (varP $ instructionsNames V.! i) (normalB $ doE stmts) []]
 		else return []
 
-	lamE [argsPat] $ doE $ constantsUpvaluesStmt : argsStmt : stackStmts
-		++ [functionsStmt, letS sharedInstructionsDecs, noBindS $ varE $ instructionsNames V.! 0]
+	-- start instruction
+	startStmts <- do
+		startCode <- getInstructionCode $ LuaInst [0] $ \[f] s -> f s
+		startCode nullCodeState
+
+	lamE [argsPat] $ doE $ constantsUpvaluesStmt : argsStmt : stackStmts ++ functionsStmt : letS sharedInstructionsDecs : startStmts
