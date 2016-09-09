@@ -106,10 +106,22 @@ fmap concat $ forM
 cast :: (OfValueType a, OfValueType b) => Node a -> Node b
 cast a = withUndefined $ \u -> CastNode (nodeValueType a) (valueType u) a
 
-attribute :: OfAttributeType a => Int -> Int -> Int -> AttributeFormat a -> Program (Node a)
+-- | Define vertex attribute using typed format.
+attribute :: OfAttributeType a
+	=> Int -- ^ Slot.
+	-> Int -- ^ Offset.
+	-> Int -- ^ Divisor.
+	-> AttributeFormat a -- ^ Format.
+	-> Program (Node a)
 attribute slot offset divisor format = attributeWithType slot offset divisor $ attributeFormatToType format
 
-attributeWithType :: OfAttributeType a => Int -> Int -> Int -> AttributeType -> Program (Node a)
+-- | Define vertex attribute using untyped 'AttributeType'.
+attributeWithType :: OfAttributeType a
+	=> Int -- ^ Slot.
+	-> Int -- ^ Offset.
+	-> Int -- ^ Divisor.
+	-> AttributeType -- ^ Attribute type.
+	-> Program (Node a)
 attributeWithType slot offset divisor at = withUndefinedM $ \u -> withState $ \state@State
 	{ stateStage = stage
 	} -> do
@@ -170,7 +182,11 @@ uniform UniformBufferSlot
 		, uniformType = valueType u
 		}
 
-uniformArray :: (OfValueType a, Storable a) => Int -> UniformBufferSlot -> IO (Node [a])
+uniformArray
+	:: (OfValueType a, Storable a)
+	=> Int -- ^ size
+	-> UniformBufferSlot -- ^ slot
+	-> IO (Node [a])
 uniformArray size UniformBufferSlot
 	{ uniformBufferSlotIndex = slot
 	, uniformBufferSlotSizeRef = sizeRef

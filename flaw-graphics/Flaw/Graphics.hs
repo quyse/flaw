@@ -361,11 +361,16 @@ renderUploadVertexBuffer :: Context c d => VertexBufferId d -> B.ByteString -> R
 renderUploadVertexBuffer vb bytes = renderAction $ \c -> contextUploadVertexBuffer c vb bytes
 
 -- | Draw.
-renderDraw :: Context c d => Int -> Render c ()
+renderDraw :: Context c d
+	=> Int -- ^ Indices count.
+	-> Render c ()
 renderDraw = renderDrawInstanced 1
 
 -- | Draw instanced.
-renderDrawInstanced :: Context c d => Int -> Int -> Render c ()
+renderDrawInstanced :: Context c d
+	=> Int -- ^ Instances count.
+	-> Int -- ^ Indices count.
+	-> Render c ()
 renderDrawInstanced instancesCount indicesCount = renderAction $ \c -> contextDraw c instancesCount indicesCount
 
 -- | Play deferred context on immediate context.
