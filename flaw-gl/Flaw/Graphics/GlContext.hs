@@ -570,7 +570,7 @@ instance Device GlContext where
 			{ glContextStateProgram = actualProgramRef
 			}
 		, glContextProgramCache = SomeBinaryCache programCache
-		} program = invoke $ describeException "failed to create OpenGL program" $ withSpecialBook $ \bk -> do
+		} program = withSpecialBook $ \bk -> invoke $ describeException "failed to create OpenGL program" $ do
 
 		-- reset current program in order to correctly rebind it later for drawing
 		writeIORef actualProgramRef glNullProgram
@@ -1123,7 +1123,13 @@ glNullProgram = GlProgramId
 	, glProgramUniforms = V.empty
 	}
 
-newGlContext :: (forall a. IO a -> IO a) -> GlCaps -> GlslConfig -> SomeBinaryCache -> IO GlContext
+-- | Init 'GlContext' structure.
+newGlContext
+	:: (forall a. IO a -> IO a) -- ^ Invoke function, may be used to perform operations in a separate thread. Does not need to be re-entrant.
+	-> GlCaps -- ^ Context capabilities.
+	-> GlslConfig -- ^ GLSL config.
+	-> SomeBinaryCache -- ^ Cache for binary shaders and other stuff.
+	-> IO GlContext
 newGlContext invoke caps glslConfig programCache = do
 	actualState <- glCreateContextState
 	desiredState <- glCreateContextState
