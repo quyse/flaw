@@ -79,6 +79,7 @@ variables:
     flaw-ui
     flaw-ui-default-style
     flaw-visual
+    flaw-vulkan
     flaw-window
   PACKAGES_OSX: >-
     flaw-al
@@ -150,6 +151,7 @@ linux:
   script:
   - "mkdir -p flaw-linux/bin"
   - "stack --no-terminal build --test --copy-bins --local-bin-path flaw-linux/bin $PACKAGES_LINUX"
+  - "stack --no-terminal build --test --flag flaw-app:vulkan flaw-app"
   artifacts:
     name: "flaw-linux_x64-$CI_BUILD_ID"
     paths:
@@ -167,6 +169,9 @@ windows:
   - "%FIX_TH_WINDOWS%"
   - "mkdir flaw-windows\\bin"
   - "stack --no-terminal build --test --copy-bins --local-bin-path flaw-windows/bin %INTEGERSIMPLE_FLAGS_WINDOWS% %PACKAGES_WINDOWS%"
+  - "stack --no-terminal build --test --flag flaw-app:vulkan %INTEGERSIMPLE_FLAGS_WINDOWS% flaw-app"
+  - "stack --no-terminal build --test --flag flaw-app:-dx11 %INTEGERSIMPLE_FLAGS_WINDOWS% flaw-app"
+  - "stack --no-terminal build --test --flag flaw-app:-gl %INTEGERSIMPLE_FLAGS_WINDOWS% flaw-app"
   artifacts:
     name: "flaw-windows_x64-$CI_BUILD_ID"
     paths:

@@ -17,6 +17,20 @@ source-repository head
   location: https://github.com/quyse/flaw.git
   subdir: flaw-app
 
+-- all flags are wishes, and ignored if platform doesn't have support for particular feature
+flag vulkan
+  description:         support Vulkan
+  default:             False
+  manual:              True
+flag dx11
+  description:         support DirectX 11
+  default:             True
+  manual:              True
+flag gl
+  description:         support OpenGL
+  default:             True
+  manual:              True
+
 library
   exposed-modules:
     Flaw.App
@@ -26,8 +40,15 @@ library
   if impl(ghcjs)
     build-depends:       flaw-js
   else
-    build-depends:       flaw-vulkan
-    if os(windows)
-      build-depends:       flaw-dx11, flaw-gl-win32
-    else
-      build-depends:       flaw-gl-sdl
+    if flag(vulkan) && (os(linux) || os(windows))
+      build-depends:       flaw-vulkan
+      ghc-options:         -DFLAW_APP_SUPPORT_VULKAN
+    if flag(dx11) && os(windows)
+      build-depends:       flaw-dx11
+      ghc-options:         -DFLAW_APP_SUPPORT_DX11
+    if flag(gl)
+      if os(windows)
+        build-depends:       flaw-gl-win32
+      else
+        build-depends:       flaw-gl-sdl
+      ghc-options:         -DFLAW_APP_SUPPORT_GL

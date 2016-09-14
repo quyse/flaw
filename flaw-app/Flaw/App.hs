@@ -41,26 +41,32 @@ import qualified Flaw.Window.Web.Canvas as Web
 
 #else
 
+#if defined(FLAW_APP_SUPPORT_VULKAN)
 import Flaw.Graphics.Vulkan
+#endif
 
-#if defined(mingw32_HOST_OS)
-
+#if defined(FLAW_APP_SUPPORT_DX11)
 import Flaw.Graphics.DirectX11
 import Flaw.Graphics.DXGI
+#endif
+
+#if defined(FLAW_APP_SUPPORT_GL)
+#if defined(mingw32_HOST_OS)
 import Flaw.Graphics.OpenGL.Win32
+#else
+import Flaw.Graphics.OpenGL.Sdl
+#endif
+#endif
+
+#if defined(mingw32_HOST_OS)
 import Flaw.Input.Win32
 import Flaw.Window.Win32
-
 #else
-
-import Flaw.Graphics.OpenGL.Sdl
 import Flaw.Input.Sdl
 import Flaw.Window.Sdl
-
 #endif
 
 #endif
-
 
 -- platform-specific type synonyms
 #if defined(ghcjs_HOST_OS)
@@ -108,11 +114,15 @@ appConfig = AppConfig
 #if defined(ghcjs_HOST_OS)
 		AppGraphicsSystemWebGL :
 #else
+#if defined(FLAW_APP_SUPPORT_VULKAN)
 		AppGraphicsSystemVulkan :
-#if defined(mingw32_HOST_OS)
+#endif
+#if defined(FLAW_APP_SUPPORT_DX11)
 		AppGraphicsSystemDirectX11 :
 #endif
+#if defined(FLAW_APP_SUPPORT_GL)
 		AppGraphicsSystemOpenGL :
+#endif
 #endif
 		[]
 	}
@@ -169,12 +179,14 @@ withApp AppConfig
 				(graphicsSystem, graphicsDevice, graphicsContext, presenter) <- book bk $ webglInit window needDepthBuffer
 				return $ GraphicsSystem graphicsSystem graphicsDevice graphicsContext presenter
 #else
+#if defined(FLAW_APP_SUPPORT_VULKAN)
 			AppGraphicsSystemVulkan -> do
 				graphicsSystem <- book bk $ initVulkanSystem title
 				graphicsDevices <- book bk $ getInstalledDevices graphicsSystem
 				graphicsDevice <- book bk $ newVulkanDevice graphicsSystem $ fst $ head graphicsDevices
 				throwIO $ DescribeFirstException "vulkan not implemented yet"
-#if defined(mingw32_HOST_OS)
+#endif
+#if defined(FLAW_APP_SUPPORT_DX11)
 			AppGraphicsSystemDirectX11 -> do
 				graphicsSystem <- book bk $ dxgiCreateSystem
 				graphicsDevices <- book bk $ getInstalledDevices graphicsSystem
@@ -182,6 +194,7 @@ withApp AppConfig
 				presenter <- book bk $ dx11CreatePresenter graphicsDevice window Nothing needDepthBuffer
 				return $ GraphicsSystem graphicsSystem graphicsDevice graphicsContext presenter
 #endif
+#if defined(FLAW_APP_SUPPORT_GL)
 			AppGraphicsSystemOpenGL -> do
 #if defined(mingw32_HOST_OS)
 				graphicsSystem <- book bk createOpenGLWin32System
@@ -193,6 +206,7 @@ withApp AppConfig
 				(graphicsContext, presenter) <- book bk $ createOpenGLSdlPresenter (fst $ head graphicsDevices) window binaryCache debug
 #endif
 				return $ GraphicsSystem graphicsSystem graphicsContext graphicsContext presenter
+#endif
 #endif
 			_ -> throwIO $ DescribeFirstException "unsupported graphics system"
 
