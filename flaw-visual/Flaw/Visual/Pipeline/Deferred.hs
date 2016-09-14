@@ -89,7 +89,7 @@ newDeferredPipeline device width height = withSpecialBook $ \bk -> do
 		} samplerStateInfo
 
 	-- depth-stencil target
-	(opaqueDST, opaqueDSTT) <- book bk $ createReadableDepthStencilTarget device width height
+	(opaqueDST, opaqueDSTT) <- book bk $ createReadableDepthStencilTarget device width height samplerStateInfo
 
 	-- result color RT
 	(colorRT, colorRTT) <- book bk $ createReadableRenderTarget device width height UncompressedTextureFormat
