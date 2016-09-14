@@ -476,7 +476,7 @@ instance Device GlContext where
 			glCheckErrors0 "bind framebuffer color buffer"
 		-- setup draw buffer mapping
 		let colorBuffersCount = length renderTargets
-		when (colorBuffersCount > 1) $ do
+		when (colorBuffersCount /= 1) $ do
 			glDrawBuffers_n colorBuffersCount
 			glCheckErrors0 "set framebuffer draw buffers"
 
