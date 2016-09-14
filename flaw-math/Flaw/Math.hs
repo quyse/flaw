@@ -534,7 +534,14 @@ do
 					]]
 				]
 
-		return [matInstance, numInstance, storableInstance, eqInstance, ordInstance, showInstance]
+		-- Serialize instance
+		serializeInstance <-
+			instanceD (sequence [ [t| Vectorized $elemType |], [t| S.Serialize $elemType |] ]) [t| S.Serialize ($(conT dataName) $elemType) |] =<< addInlines
+				[ funD 'S.put [clause [conP conName $ map varP as] (normalB $ doE $ map (\a -> noBindS [| S.put $(varE a) |]) as) []]
+				, funD 'S.get [clause [] (normalB $ doE $ map (\a -> bindS (varP a) [| S.get |]) as ++ [noBindS $ [| return $(foldl appE (conE conName) $ map varE as) |] ]) []]
+				]
+
+		return [matInstance, numInstance, storableInstance, eqInstance, ordInstance, showInstance, serializeInstance]
 
 	-- Generate multiplications.
 	mulInstances <- do
