@@ -42,13 +42,13 @@ library
   else
     if flag(vulkan) && (os(linux) || os(windows))
       build-depends:       flaw-vulkan
-      ghc-options:         -DFLAW_APP_SUPPORT_VULKAN
+      cpp-options:         -DFLAW_APP_SUPPORT_VULKAN
     if flag(dx11) && os(windows)
       build-depends:       flaw-dx11
-      ghc-options:         -DFLAW_APP_SUPPORT_DX11
+      cpp-options:         -DFLAW_APP_SUPPORT_DX11
     if flag(gl)
       if os(windows)
         build-depends:       flaw-gl-win32
       else
         build-depends:       flaw-gl-sdl
-      ghc-options:         -DFLAW_APP_SUPPORT_GL
+      cpp-options:         -DFLAW_APP_SUPPORT_GL
