@@ -126,11 +126,10 @@ instance Device Dx11Device where
 
 	createDeferredContext device@Dx11Device
 		{ dx11DeviceInterface = deviceInterface
-		} = describeException "failed to create DirectX11 deferred context" $ do
-		bk <- newBook
+		} = describeException "failed to create DirectX11 deferred context" $ withSpecialBook $ \bk -> do
 		contextInterface <- book bk $ allocateCOMObject $ createCOMObjectViaPtr $ m_ID3D11Device_CreateDeferredContext deviceInterface 0
 		context <- book bk $ dx11CreateContextFromInterface device contextInterface
-		return (context, freeBook bk)
+		return context
 
 	createStaticTexture device@Dx11Device
 		{ dx11DeviceInterface = deviceInterface
@@ -141,7 +140,7 @@ instance Device Dx11Device where
 		, textureMips = mips
 		, textureFormat = format
 		, textureCount = count
-		} samplerStateInfo bytes = describeException ("failed to create DirectX11 static texture", textureInfo) $ do
+		} samplerStateInfo bytes = describeException ("failed to create DirectX11 static texture", textureInfo) $ withSpecialBook $ \bk -> do
 		let dxgiFormat = getDXGIFormat format
 		let realCount = if count > 0 then count else 1
 		let TextureMetrics
@@ -276,8 +275,6 @@ instance Device Dx11Device where
 		-- create ID3D11Resource
 		(resourceInterface, releaseResourceInterface) <- allocateCOMObject $ B.unsafeUseAsCString bytes createResource
 
-		bk <- newBook
-
 		-- create ID3D11ShaderResourceView
 		srvInterface <- book bk $ allocateCOMObject $ with srvDesc $ \srvDescPtr ->
 			createCOMObjectViaPtr $ m_ID3D11Device_CreateShaderResourceView deviceInterface (pokeCOMObject resourceInterface) srvDescPtr
@@ -287,7 +284,7 @@ instance Device Dx11Device where
 		-- create sampler state
 		samplerState <- book bk $ createSamplerState device samplerStateInfo
 
-		return (Dx11TextureId srvInterface samplerState, freeBook bk)
+		return $ Dx11TextureId srvInterface samplerState
 
 	createSamplerState Dx11Device
 		{ dx11DeviceInterface = deviceInterface
@@ -409,7 +406,7 @@ instance Device Dx11Device where
 
 	createReadableRenderTarget device@Dx11Device
 		{ dx11DeviceInterface = deviceInterface
-		} width height format samplerStateInfo = describeException ("failed to create DirectX11 readable render target", width, height, format) $ do
+		} width height format samplerStateInfo = describeException ("failed to create DirectX11 readable render target", width, height, format) $ withSpecialBook $ \bk -> do
 
 		let dxgiFormat = getDXGIFormat format
 
@@ -433,8 +430,6 @@ instance Device Dx11Device where
 		(resourceInterface, releaseResourceInterface) <- allocateCOMObject $ with desc $ \descPtr ->
 			fmap com_get_ID3D11Resource $ createCOMObjectViaPtr $ m_ID3D11Device_CreateTexture2D deviceInterface descPtr nullPtr
 
-		bk <- newBook
-
 		-- create render target view
 		rtvInterface <- book bk $ allocateCOMObject $ createCOMObjectViaPtr $ m_ID3D11Device_CreateRenderTargetView deviceInterface (pokeCOMObject resourceInterface) nullPtr
 
@@ -447,7 +442,7 @@ instance Device Dx11Device where
 		-- create sampler state
 		samplerState <- book bk $ createSamplerState device samplerStateInfo
 
-		return ((Dx11RenderTargetId rtvInterface, Dx11TextureId srvInterface samplerState), freeBook bk)
+		return (Dx11RenderTargetId rtvInterface, Dx11TextureId srvInterface samplerState)
 
 	createDepthStencilTarget Dx11Device
 		{ dx11DeviceInterface = deviceInterface
@@ -491,9 +486,9 @@ instance Device Dx11Device where
 
 		return (Dx11DepthStencilTargetId dsvInterface, releaseDsvInterface)
 
-	createReadableDepthStencilTarget Dx11Device
+	createReadableDepthStencilTarget device@Dx11Device
 		{ dx11DeviceInterface = deviceInterface
-		} width height = describeException ("failed to create DirectX11 readable depth stencil target", width, height) $ do
+		} width height samplerStateInfo = describeException ("failed to create DirectX11 readable depth stencil target", width, height) $ withSpecialBook $ \bk -> do
 
 		-- resource desc
 		let desc = D3D11_TEXTURE2D_DESC
@@ -525,7 +520,7 @@ instance Device Dx11Device where
 				}
 			}
 		-- create depth stencil view
-		(dsvInterface, releaseDsvInterface) <- allocateCOMObject $ with dsvDesc $ \dsvDescPtr ->
+		dsvInterface <- book bk $ allocateCOMObject $ with dsvDesc $ \dsvDescPtr ->
 			createCOMObjectViaPtr $ m_ID3D11Device_CreateDepthStencilView deviceInterface (pokeCOMObject resourceInterface) dsvDescPtr
 
 		-- SRV desc
@@ -538,17 +533,16 @@ instance Device Dx11Device where
 				}
 			}
 		-- create shader resource view
-		(srvInterface, releaseSrvInterface) <- allocateCOMObject $ with srvDesc $ \srvDescPtr ->
+		srvInterface <- book bk $ allocateCOMObject $ with srvDesc $ \srvDescPtr ->
 			createCOMObjectViaPtr $ m_ID3D11Device_CreateShaderResourceView deviceInterface (pokeCOMObject resourceInterface) srvDescPtr
 
 		-- release resource interface
 		releaseResourceInterface
 
-		let destroy = do
-			releaseDsvInterface
-			releaseSrvInterface
+		-- create sampler state
+		samplerState <- book bk $ createSamplerState device samplerStateInfo
 
-		return ((Dx11DepthStencilTargetId dsvInterface, Dx11TextureId srvInterface nullSamplerState), destroy)
+		return (Dx11DepthStencilTargetId dsvInterface, Dx11TextureId srvInterface samplerState)
 
 	createFrameBuffer _device renderTargets depthStencilTarget = return (Dx11FrameBufferId renderTargets depthStencilTarget, return ())
 
@@ -630,7 +624,7 @@ instance Device Dx11Device where
 		, dx11DeviceD3DCompile = d3dCompile
 		, dx11DeviceShaderCache = SomeBinaryCache shaderCache
 		, dx11DeviceDebug = debug
-		} program = describeException "failed to create DirectX11 program" $ do
+		} program = describeException "failed to create DirectX11 program" $ withSpecialBook $ \bk -> do
 
 		-- function to create input layout
 		let createInputLayout attributes vertexShaderByteCode = allocateCOMObject $ B.unsafeUseAsCStringLen vertexShaderByteCode $ \(byteCodePtr, byteCodeSize) -> let
@@ -770,8 +764,6 @@ instance Device Dx11Device where
 			, hlslProgramShaders = shaders
 			} <- hlslGenerateProgram <$> runProgram program
 
-		bk <- newBook
-
 		-- sort shaders by stage
 		let sortedShaders = sortBy (\(stage1, _) (stage2, _) -> compare stage1 stage2) shaders
 		-- accept only certain combinations of shaders
@@ -781,7 +773,7 @@ instance Device Dx11Device where
 				inputLayoutInterface <- book bk $ createInputLayout attributes vertexShaderByteCode
 				vertexShaderInterface <- book bk $ createVertexShader vertexShaderByteCode
 				pixelShaderInterface <- book bk $ createPixelShader =<< compileShader pixelShader
-				return (Dx11VertexPixelProgramId inputLayoutInterface vertexShaderInterface pixelShaderInterface, freeBook bk)
+				return $ Dx11VertexPixelProgramId inputLayoutInterface vertexShaderInterface pixelShaderInterface
 			_ -> throwIO $ DescribeFirstException ("unsupported combination of HLSL shaders", map fst sortedShaders)
 
 	createUniformBuffer Dx11Device
