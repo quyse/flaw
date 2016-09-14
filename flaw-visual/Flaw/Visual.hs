@@ -79,9 +79,11 @@ tangentFrame position normal texcoord = do
 
 	return (tt, bb, nn)
 
+-- | Encode normalized 3-float into 2 floats using lambert azimuthal equal-area projection.
 encodeLambertAzimuthalEqualArea :: Node Float3 -> Program (Node Float2)
 encodeLambertAzimuthalEqualArea v = temp $ xy__ v / vecFromScalar (sqrt (z_ v * 8 + 8)) + vecFromScalar 0.5
 
+-- | Decode normalized 3-float from 2 floats using lambert azimuthal equal-area projection.
 decodeLambertAzimuthalEqualArea :: Node Float2 -> Program (Node Float3)
 decodeLambertAzimuthalEqualArea v = do
 	fenc <- temp $ v * vecFromScalar 4 - vecFromScalar 2
