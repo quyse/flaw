@@ -419,9 +419,13 @@ instance Device GlContext where
 			, glRenderTargetHeight = height
 			}, GlTextureId textureName), invoke $ glDeleteTextureName textureName)
 
-	createDepthStencilTarget GlContext
+	createDepthStencilTarget context width height = do
+		((depthStencilTarget, _depthStencilTexture), destroy) <- createReadableDepthStencilTarget context width height defaultSamplerStateInfo
+		return (depthStencilTarget, destroy)
+
+	createReadableDepthStencilTarget GlContext
 		{ glContextInvoke = invoke
-		} width height = invoke $ describeException "failed to create OpenGL depth stencil target" $ do
+		} width height samplerStateInfo = invoke $ describeException "failed to create OpenGL readable depth stencil target" $ do
 
 		textureName <- glAllocTextureName
 
@@ -430,26 +434,19 @@ instance Device GlContext where
 		glTexImage2D_null GL_TEXTURE_2D 0 (fromIntegral GL_DEPTH24_STENCIL8) (fromIntegral width) (fromIntegral height) 0 GL_DEPTH_STENCIL GL_UNSIGNED_INT_24_8
 		glCheckErrors0 "tex image"
 
-		glTexParameteri GL_TEXTURE_2D GL_TEXTURE_MIN_FILTER $ fromIntegral GL_NEAREST
-		glTexParameteri GL_TEXTURE_2D GL_TEXTURE_MAG_FILTER $ fromIntegral GL_NEAREST
-		glTexParameteri GL_TEXTURE_2D GL_TEXTURE_WRAP_S $ fromIntegral GL_CLAMP_TO_EDGE
-		glTexParameteri GL_TEXTURE_2D GL_TEXTURE_WRAP_T $ fromIntegral GL_CLAMP_TO_EDGE
-		glTexParameteri GL_TEXTURE_2D GL_TEXTURE_WRAP_R $ fromIntegral GL_CLAMP_TO_EDGE
-		glCheckErrors0 "texture parameters"
+		-- setup sampling
+		glSetupTextureSampling GL_TEXTURE_2D samplerStateInfo
+			{ samplerMaxLod = 0
+			}
 
-		glCheckErrors1 "create depth stencil target"
+		glCheckErrors1 "create readable depth stencil target"
 
-		return (GlDepthStencilTargetId
+		return ((GlDepthStencilTargetId
 			{ glDepthStencilTargetName = textureName
 			, glDepthStencilWidth = width
 			, glDepthStencilHeight = height
-			}, invoke $ glDeleteTextureName textureName)
-
-	createReadableDepthStencilTarget context width height = do
-		(depthStencilTarget@GlDepthStencilTargetId
-			{ glDepthStencilTargetName = bufferName
-			}, destroy) <- createDepthStencilTarget context width height
-		return ((depthStencilTarget, GlTextureId bufferName), destroy)
+			}, GlTextureId textureName
+			), invoke $ glDeleteTextureName textureName)
 
 	createFrameBuffer GlContext
 		{ glContextInvoke = invoke
@@ -476,7 +473,7 @@ instance Device GlContext where
 			glCheckErrors0 "bind framebuffer color buffer"
 		-- setup draw buffer mapping
 		let colorBuffersCount = length renderTargets
-		when (colorBuffersCount > 1) $ do
+		when (colorBuffersCount /= 1) $ do
 			glDrawBuffers_n colorBuffersCount
 			glCheckErrors0 "set framebuffer draw buffers"
 
@@ -485,7 +482,7 @@ instance Device GlContext where
 		glCheckErrors0 "bind framebuffer depth-stencil buffer"
 
 		-- get width and height of framebuffer (and check that they're equal)
-		let foldSize (n, w, h) (rw, rh) = do
+		let foldSize (n, w, h) (rw, rh) =
 			if n /= glNullTextureName then do
 				when ((rw > 0 && w /= rw) || (rh > 0 && h /= rh)) $ throwIO $ DescribeFirstException "sizes are not equal"
 				return (rw .|. w, rh .|. h)
@@ -570,7 +567,7 @@ instance Device GlContext where
 			{ glContextStateProgram = actualProgramRef
 			}
 		, glContextProgramCache = SomeBinaryCache programCache
-		} program = invoke $ describeException "failed to create OpenGL program" $ withSpecialBook $ \bk -> do
+		} program = withSpecialBook $ \bk -> invoke $ describeException "failed to create OpenGL program" $ do
 
 		-- reset current program in order to correctly rebind it later for drawing
 		writeIORef actualProgramRef glNullProgram
@@ -673,7 +670,7 @@ instance Device GlContext where
 				glGetProgramiv programName GL_LINK_STATUS statusPtr
 				glCheckErrors0 "get program link status"
 				peek statusPtr
-			if status == 1 then do
+			if status == 1 then
 				-- save binary program into cache
 				when capGetProgramBinary $ do
 					len <- alloca $ \lenPtr -> do
@@ -946,7 +943,7 @@ instance Context GlContext GlContext where
 			glBindBuffer GL_UNIFORM_BUFFER bufferName
 			glBufferData_bs GL_UNIFORM_BUFFER bytes GL_DYNAMIC_DRAW
 			glCheckErrors0 "upload uniform buffer"
-		GlUniformMemoryBufferId bufferRef -> do
+		GlUniformMemoryBufferId bufferRef ->
 			-- remember buffer data
 			writeIORef bufferRef bytes
 		GlNullUniformBufferId -> throwIO $ DescribeFirstException "uploading to null uniform buffer"
@@ -963,12 +960,12 @@ instance Context GlContext GlContext where
 		} instancesCount indicesCount = do
 		glUpdateContext context
 		GlIndexBufferId indexBufferName indicesType <- readIORef indexBufferRef
-		if indexBufferName /= glNullBufferName then do
+		if indexBufferName /= glNullBufferName then
 			if instancesCount > 1 then
 				glDrawElementsInstanced GL_TRIANGLES (fromIntegral indicesCount) indicesType (glIntToOffset 0) (fromIntegral instancesCount)
 			else
 				glDrawElements GL_TRIANGLES (fromIntegral indicesCount) indicesType (glIntToOffset 0)
-		else do
+		else
 			if instancesCount > 1 then
 				glDrawArraysInstanced GL_TRIANGLES 0 (fromIntegral indicesCount) (fromIntegral instancesCount)
 			else
@@ -1123,7 +1120,13 @@ glNullProgram = GlProgramId
 	, glProgramUniforms = V.empty
 	}
 
-newGlContext :: (forall a. IO a -> IO a) -> GlCaps -> GlslConfig -> SomeBinaryCache -> IO GlContext
+-- | Init 'GlContext' structure.
+newGlContext
+	:: (forall a. IO a -> IO a) -- ^ Invoke function, may be used to perform operations in a separate thread. Does not need to be re-entrant.
+	-> GlCaps -- ^ Context capabilities.
+	-> GlslConfig -- ^ GLSL config.
+	-> SomeBinaryCache -- ^ Cache for binary shaders and other stuff.
+	-> IO GlContext
 newGlContext invoke caps glslConfig programCache = do
 	actualState <- glCreateContextState
 	desiredState <- glCreateContextState
@@ -1374,12 +1377,11 @@ glUpdateContext context@GlContext
 				GlUniformBufferId {} -> do
 					bindBuffer glNullBufferName
 					updateActual
-				GlUniformMemoryBufferId {} -> do
-					updateActual
+				GlUniformMemoryBufferId {} -> updateActual
 				GlNullUniformBufferId -> return ()
 
 	-- bind vertex buffers if supported
-	if capVertexAttribBinding then do
+	if capVertexAttribBinding then
 		vectorSetupCond programUpdated actualVertexBuffersVector desiredVertexBuffersVector $ \i (GlVertexBufferId bufferName stride) -> do
 			glBindVertexBuffer (fromIntegral i) bufferName 0 (fromIntegral stride)
 			glCheckErrors0 "bind vertex buffer"

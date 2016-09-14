@@ -55,9 +55,15 @@ import Flaw.Visual.Geometry.Basic
 import Flaw.Visual.Geometry.Vertex
 import Flaw.Visual.Pipeline
 import Flaw.Visual.Pipeline.Deferred
+import Flaw.Visual.Pipeline.Shadow
 import Flaw.Visual.ScreenQuad
 import Flaw.Visual.Texture
 import Flaw.Window
+
+data Pipeline d = Pipeline
+	{ pipelineDeferred :: !(DeferredPipeline d)
+	, pipelineShadow :: !(ShadowPipeline d)
+	}
 
 data TextureCell d = TextureCell
 	{ textureCellBook :: !Book
@@ -120,7 +126,9 @@ data EditorState d = EditorState
 	, editorStateEyeSpeed :: !Float3
 	, editorStateEyeAlpha :: !Float
 	, editorStateEyeBeta :: !Float
+	, editorStateEyeViewProj :: !Float4x4
 	, editorStateMaterial :: !Float4
+	, editorStateLightTransform :: !Float4x4
 	, editorStateLightPosition :: !Float3
 	, editorStateLightColor :: !Float3
 	, editorStateAmbientLightColor :: !Float3
@@ -147,6 +155,8 @@ pattern SHADER_FLAG_SPECULAR_MAP = 4
 pattern SHADER_FLAG_METALNESS_MAP = 8
 pattern SHADER_FLAG_GLOSSINESS_MAP = 16
 pattern SHADER_FLAGS_COUNT = 32
+
+pattern SHADOW_MAP_SIZE = 1024
 
 getEyeDirection :: EditorState d -> Float3
 getEyeDirection EditorState
@@ -195,7 +205,9 @@ main = withApp appConfig
 			, editorStateEyeSpeed = Vec3 0 0 0
 			, editorStateEyeAlpha = 0
 			, editorStateEyeBeta = 0
+			, editorStateEyeViewProj = affineIdentity
 			, editorStateMaterial = Vec4 0.2 0.5 0 0.4
+			, editorStateLightTransform = affineTranslation $ negate $ Vec3 (-2) 2 2
 			, editorStateLightPosition = Vec3 (-2) 2 2
 			, editorStateLightColor = vecFromScalar 10
 			, editorStateAmbientLightColor = vecFromScalar 0.01
@@ -241,7 +253,7 @@ main = withApp appConfig
 				} defaultSamplerStateInfo $ B.pack $ do
 				i <- [0..(height - 1)]
 				j <- [0..(width - 1)]
-				let c = if (i `quot` step + j `quot` step) `rem` 2 == 0 then 255 else 0
+				let c = if even (i `quot` step + j `quot` step) then 255 else 0
 				[c, c, c, 255]
 		initialNormalTextureCell <- book bk $ newTextureCell $ do
 			let
@@ -313,7 +325,13 @@ main = withApp appConfig
 			}
 
 	-- render pipeline
-	updatePipeline <- book bk $ newPipelineWrapper $ newDeferredPipeline device
+	updatePipeline <- book bk $ newPipelineWrapper $ \width height -> withSpecialBook $ \pbk -> do
+		deferredPipeline <- book pbk $ newDeferredPipeline device width height
+		shadowPipeline <- book pbk $ newShadowPipeline device SHADOW_MAP_SIZE SHADOW_MAP_SIZE 1
+		return Pipeline
+			{ pipelineDeferred = deferredPipeline
+			, pipelineShadow = shadowPipeline
+			}
 
 	-- programs
 	ubsEye <- uniformBufferSlot 0
@@ -321,6 +339,7 @@ main = withApp appConfig
 	uViewProj <- uniform ubsEye
 	uInvProj <- uniform ubsEye
 	ubsLight <- uniformBufferSlot 1
+	uLightTransform <- uniform ubsLight
 	uLightPosition <- uniform ubsLight
 	uLightColor <- uniform ubsLight
 	ubsObject <- uniformBufferSlot 2
@@ -330,6 +349,12 @@ main = withApp appConfig
 	usEye <- book bk $ createUniformStorage device ubsEye
 	usLight <- book bk $ createUniformStorage device ubsLight
 	usObject <- book bk $ createUniformStorage device ubsObject
+	-- shadow program
+	shadowProgram <- book bk $ createProgram device $ do
+		let v = undefined :: VertexPNT
+		aPosition <- vertexAttribute 0 0 $ vertexPositionAttribute v
+		worldPosition <- temp $ mul uWorld $ cvec31 aPosition (constf 1)
+		rasterize (uViewProj `mul` worldPosition) $ colorTarget 0 $ cvec1111 0 0 0 0
 	-- opaque programs
 	opaquePrograms <- V.generateM SHADER_FLAGS_COUNT $ \shaderFlags -> book bk $ createProgram device $ do
 		let v = undefined :: VertexPNT
@@ -352,10 +377,11 @@ main = withApp appConfig
 			let
 				emission = 0
 				occlusion = 1
-				diffuse    = if (shaderFlags .&. SHADER_FLAG_DIFFUSE_MAP    ) > 0 then sample (sampler2Df 2) aTexcoord else x_ uMaterial
-				specular   = if (shaderFlags .&. SHADER_FLAG_SPECULAR_MAP   ) > 0 then sample (sampler2Df 3) aTexcoord else y_ uMaterial
-				metalness  = if (shaderFlags .&. SHADER_FLAG_METALNESS_MAP  ) > 0 then sample (sampler2Df 4) aTexcoord else z_ uMaterial
-				glossiness = if (shaderFlags .&. SHADER_FLAG_GLOSSINESS_MAP ) > 0 then sample (sampler2Df 5) aTexcoord else w_ uMaterial
+				diffuse    = if (shaderFlags .&. SHADER_FLAG_DIFFUSE_MAP   ) > 0 then sample (sampler2Df 2) aTexcoord else x_ uMaterial
+				specular   = if (shaderFlags .&. SHADER_FLAG_SPECULAR_MAP  ) > 0 then sample (sampler2Df 3) aTexcoord else y_ uMaterial
+				metalness  = if (shaderFlags .&. SHADER_FLAG_METALNESS_MAP ) > 0 then sample (sampler2Df 4) aTexcoord else z_ uMaterial
+				glossiness = if (shaderFlags .&. SHADER_FLAG_GLOSSINESS_MAP) > 0 then sample (sampler2Df 5) aTexcoord else w_ uMaterial
+
 			outputDeferredPipelineOpaquePass (albedo * vecFromScalar emission) (cvec31 albedo occlusion) (cvec1111 diffuse specular metalness glossiness) resultViewNormal
 	-- lightbulb opaque program
 	lightbulbOpaqueProgram <- book bk $ createProgram device $ do
@@ -373,7 +399,8 @@ main = withApp appConfig
 		toLight <- temp $ uLightPosition - viewPosition
 		toLightDirection <- temp $ normalize toLight
 		lightColor <- temp $ uLightColor / vecFromScalar (dot toLight toLight)
-		return (toLightDirection, lightColor)
+		shadow <- shadowPipelineInput uLightTransform viewPosition 0 less_
+		return (toLightDirection, lightColor * vecFromScalar shadow)
 	-- ambient light program
 	ambientLightProgram <- book bk $ createProgram device $ deferredPipelineAmbientLightPassProgram uInvProj uLightColor
 	-- tone mapping
@@ -434,8 +461,10 @@ main = withApp appConfig
 			KeyDownEvent KeyL -> do
 				modifyTVar' editorStateVar $ \editorState@EditorState
 					{ editorStateEyePosition = eyePosition
+					, editorStateEyeViewProj = eyeViewProj
 					} -> editorState
-					{ editorStateLightPosition = eyePosition
+					{ editorStateLightTransform = eyeViewProj
+					, editorStateLightPosition = eyePosition
 					}
 				return True
 			_ -> return False
@@ -701,6 +730,7 @@ main = withApp appConfig
 			editorState@EditorState
 				{ editorStateEyePosition = eyePosition
 				, editorStateMaterial = material
+				, editorStateLightTransform = lightTransform
 				, editorStateLightPosition = lightPosition
 				, editorStateLightColor = lightColor
 				, editorStateAmbientLightColor = ambientLightColor
@@ -737,8 +767,13 @@ main = withApp appConfig
 				, editorStateLinearFiltering = linearFiltering
 				} <- liftIO $ readTVarIO editorStateVar
 
-			deferredPipeline@DeferredPipeline
-				{ deferredPipelineColorRTT = colorRTT
+			Pipeline
+				{ pipelineDeferred = deferredPipeline@DeferredPipeline
+					{ deferredPipelineColorRTT = colorRTT
+					}
+				, pipelineShadow = shadowPipeline@ShadowPipeline
+					{ shadowPipelineShadowDSTT = shadowDSTT
+					}
 				} <- updatePipeline
 
 			-- setup camera
@@ -751,87 +786,119 @@ main = withApp appConfig
 			let view = affineLookAt eyePosition (eyePosition + eyeDirection) (Vec3 0 0 1) :: Float4x4
 			let proj = projectionPerspectiveFov (pi / 4) aspect cameraFarPlane cameraNearPlane :: Float4x4
 			let viewProj = mul proj view
+			let invView = matInverse view
 			let invProj = matInverse proj
 
-			renderUniform usEye uView view
-			renderUniform usEye uViewProj viewProj
-			renderUniform usEye uInvProj invProj
-			renderUploadUniformStorage usEye
-			renderUniformStorage usEye
+			liftIO $ atomically $ writeTVar editorStateVar $ editorState
+				{ editorStateEyeViewProj = viewProj
+				}
 
-			-- opaque pass
+			-- light-space passes
 			renderScope $ do
-				renderDeferredPipelineOpaquePass deferredPipeline
+				renderUniform usEye uViewProj lightTransform
+				renderUploadUniformStorage usEye
+				renderUniformStorage usEye
 
-				renderClearColor 0 $ Float4 0 0 0 0
-				renderClearColor 1 $ Float4 0 0 0 0
-				renderClearColor 2 $ Float4 0 0 0 0
-				renderClearColor 3 $ Float4 0 0 0 0
-				renderClearDepth 0
-				renderDepthTestFunc DepthTestFuncGreater
+				-- shadow pass
+				renderScope $ do
+					renderViewport $ Vec4 0 0 SHADOW_MAP_SIZE SHADOW_MAP_SIZE
+					renderShadowPipelineShadowPass shadowPipeline
+					renderClearDepth 0
+					renderDepthTestFunc DepthTestFuncGreater
 
-				renderProgram $ opaquePrograms V.!
-					(   (if normalTextureEnabled then SHADER_FLAG_NORMAL_MAP else 0)
-					.|. (if diffuseTextureEnabled then SHADER_FLAG_DIFFUSE_MAP else 0)
-					.|. (if specularTextureEnabled then SHADER_FLAG_SPECULAR_MAP else 0)
-					.|. (if metalnessTextureEnabled then SHADER_FLAG_METALNESS_MAP else 0)
-					.|. (if glossinessTextureEnabled then SHADER_FLAG_GLOSSINESS_MAP else 0)
-					)
-				renderUniformStorage usObject
-				renderVertexBuffer 0 vbObject
-				renderIndexBuffer ibObject
-				let ss = if linearFiltering then linearSamplerState else nullSamplerState
-				renderSampler 0 tAlbedo ss
-				renderSampler 1 tNormal ss
-				renderSampler 2 tDiffuse ss
-				renderSampler 3 tSpecular ss
-				renderSampler 4 tMetalness ss
-				renderSampler 5 tGlossiness ss
-				renderUniform usObject uWorld (affineIdentity :: Float4x4)
-				renderUniform usObject uMaterial material
-				renderUploadUniformStorage usObject
-				renderUniformStorage usObject
-				renderDraw icObject
-
-				-- render lightbulb
-				do
-					let Geometry
-						{ geometryVertexBuffer = vb
-						, geometryIndexBuffer = ib
-						, geometryIndicesCount = ic
-						} = sphereGeometry
-					renderProgram lightbulbOpaqueProgram
-					renderVertexBuffer 0 vb
-					renderIndexBuffer ib
-					renderUniform usObject uWorld (affineTranslation lightPosition `mul` affineScaling (vecFromScalar 0.05 :: Float3))
+					renderProgram shadowProgram
+					renderUniformStorage usObject
+					renderVertexBuffer 0 vbObject
+					renderIndexBuffer ibObject
+					renderUniform usObject uWorld (affineIdentity :: Float4x4)
 					renderUploadUniformStorage usObject
 					renderUniformStorage usObject
+					renderDraw icObject
+
+			-- camera-space passes
+			renderScope $ do
+				renderUniform usEye uView view
+				renderUniform usEye uViewProj viewProj
+				renderUniform usEye uInvProj invProj
+				renderUploadUniformStorage usEye
+				renderUniformStorage usEye
+
+				-- opaque pass
+				renderScope $ do
+					renderDeferredPipelineOpaquePass deferredPipeline
+
+					renderClearColor 0 $ Float4 0 0 0 0
+					renderClearColor 1 $ Float4 0 0 0 0
+					renderClearColor 2 $ Float4 0 0 0 0
+					renderClearColor 3 $ Float4 0 0 0 0
+					renderClearDepth 0
+					renderDepthTestFunc DepthTestFuncGreater
+
+					renderProgram $ opaquePrograms V.!
+						(   (if normalTextureEnabled then SHADER_FLAG_NORMAL_MAP else 0)
+						.|. (if diffuseTextureEnabled then SHADER_FLAG_DIFFUSE_MAP else 0)
+						.|. (if specularTextureEnabled then SHADER_FLAG_SPECULAR_MAP else 0)
+						.|. (if metalnessTextureEnabled then SHADER_FLAG_METALNESS_MAP else 0)
+						.|. (if glossinessTextureEnabled then SHADER_FLAG_GLOSSINESS_MAP else 0)
+						)
+					renderUniformStorage usObject
+					renderVertexBuffer 0 vbObject
+					renderIndexBuffer ibObject
+					let ss = if linearFiltering then linearSamplerState else nullSamplerState
+					renderSampler 0 tAlbedo ss
+					renderSampler 1 tNormal ss
+					renderSampler 2 tDiffuse ss
+					renderSampler 3 tSpecular ss
+					renderSampler 4 tMetalness ss
+					renderSampler 5 tGlossiness ss
+					renderUniform usObject uWorld (affineIdentity :: Float4x4)
+					renderUniform usObject uMaterial material
+					renderUploadUniformStorage usObject
+					renderUniformStorage usObject
+					renderDraw icObject
+
+					-- render lightbulb
+					do
+						let Geometry
+							{ geometryVertexBuffer = vb
+							, geometryIndexBuffer = ib
+							, geometryIndicesCount = ic
+							} = sphereGeometry
+						renderProgram lightbulbOpaqueProgram
+						renderVertexBuffer 0 vb
+						renderIndexBuffer ib
+						renderUniform usObject uWorld (affineTranslation lightPosition `mul` affineScaling (vecFromScalar 0.05 :: Float3))
+						renderUploadUniformStorage usObject
+						renderUniformStorage usObject
+						renderUniform usLight uLightColor lightColor
+						renderUploadUniformStorage usLight
+						renderUniformStorage usLight
+						renderDraw ic
+
+				-- lighting pass
+				renderScope $ do
+					renderDeferredPipelineLightPass deferredPipeline
+
+					renderUniform usLight uLightTransform $ lightTransform `mul` invView
+					let
+						Vec3 x y z = lightPosition
+						lightPosition1 = Vec4 x y z 1
+						in renderUniform usLight uLightPosition $ xyz__ $ view `mul` lightPosition1
 					renderUniform usLight uLightColor lightColor
 					renderUploadUniformStorage usLight
 					renderUniformStorage usLight
-					renderDraw ic
 
-			-- lighting pass
-			renderScope $ do
-				renderDeferredPipelineLightPass deferredPipeline
+					renderDepthTestFunc DepthTestFuncAlways
 
-				let
-					Vec3 x y z = lightPosition
-					lightPosition1 = Vec4 x y z 1
-					in renderUniform usLight uLightPosition $ xyz__ $ view `mul` lightPosition1
-				renderUniform usLight uLightColor lightColor
-				renderUploadUniformStorage usLight
-				renderUniformStorage usLight
+					renderSampler 0 shadowDSTT nullSamplerState
 
-				renderDepthTestFunc DepthTestFuncAlways
+					renderProgram lightProgram
+					renderScreenQuad screenQuadRenderer
 
-				renderProgram lightProgram
-				renderScreenQuad screenQuadRenderer
-
-				renderUniform usLight uLightColor ambientLightColor
-				renderUploadUniformStorage usLight
-				renderProgram ambientLightProgram
-				renderScreenQuad screenQuadRenderer
+					renderUniform usLight uLightColor ambientLightColor
+					renderUploadUniformStorage usLight
+					renderProgram ambientLightProgram
+					renderScreenQuad screenQuadRenderer
 
 			-- tone mapping
 			renderScope $ do

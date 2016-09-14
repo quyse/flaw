@@ -116,16 +116,16 @@ unite images GlyphUnionConfig
 		-- create united image and reorder positions to initial (unsorted) order
 		resultImageData <- VSM.replicate (resultWidth * resultHeight) 0
 		resultPositions <- VM.new (V.length images)
-		VSM.unsafeWith resultImageData $ \resultPtr -> do
+		VSM.unsafeWith resultImageData $ \resultPtr ->
 			forM_ (zip sortedImages positions) $ \(imageIndex, position@(positionX, positionY)) -> do
 				let Image
 					{ imageWidth = width
 					, imageHeight = height
 					, imageData = sourceImageData
 					} = images V.! imageIndex
-				VS.unsafeWith sourceImageData $ \sourcePtr -> do
+				VS.unsafeWith sourceImageData $ \sourcePtr ->
 					-- put image to result
-					forM_ [0..(height - 1)] $ \i -> do
+					forM_ [0..(height - 1)] $ \i ->
 						copyArray
 							(advancePtr resultPtr ((positionY + i) * resultWidth + positionX)) -- destination
 							(advancePtr sourcePtr (i * width)) -- source

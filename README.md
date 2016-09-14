@@ -1,11 +1,11 @@
 # FLAW Engine
 
-[![Gitlab Build Status](https://gitlab.com/quyse/flaw/badges/master/build.svg)](https://gitlab.com/quyse/flaw/builds)
+[![Gitlab Build Status](https://gitlab.com/quyse/flaw/badges/master/build.svg)](https://gitlab.com/quyse/flaw/pipelines)
 [![Code Climate](https://codeclimate.com/github/quyse/flaw/badges/gpa.svg)](https://codeclimate.com/github/quyse/flaw)
-[![Haddock Status](https://quyse.gitlab.io/flaw/docs/badge.svg)](https://quyse.gitlab.io/flaw/docs/)
-[![Test Coverage Status](https://quyse.gitlab.io/flaw/hpc/badge.svg)](https://quyse.gitlab.io/flaw/hpc/)
 
-FLAW is a highly experimental game engine written in Haskell.
+[github](https://github.com/quyse/flaw) | [documentation](https://quyse.gitlab.io/flaw/docs/) | [gitlab ci](https://gitlab.com/quyse/flaw/pipelines) | [code climate](https://codeclimate.com/github/quyse/flaw) | [itch.io](https://quyse.itch.io/flaw) | [hlint report](https://quyse.gitlab.io/flaw/hlint.html) | [hpc report](https://quyse.gitlab.io/flaw/hpc/combined/all/hpc_index.html)
+
+**FLAW** is a highly experimental open source game engine written in Haskell.
 
 ## Motivation
 
@@ -29,7 +29,7 @@ This project is mostly a playground for absolutely crazy ideas. Surely if someon
 
 * Visual effects (deferred rendering, materials, lighting, shadowing, etc)
 * High-level GUI framework made from scratch (i.e. neither using native GUIs nor frameworks like Qt)
-* Real-time collaborative asset editor ([doc](docs/editor.md))
+* Real-time collaborative asset editor
 
 ## Experiments
 
@@ -42,14 +42,14 @@ This project is mostly a playground for absolutely crazy ideas. Surely if someon
 
 ## Packages and platform support
 
-FLAW has moved to GHC 8. A few packages are not compilable currently due to not updated dependencies.
+FLAW has moved to GHC 8.
+
+Linux is the primary development platform. It also considered the only "server" platform, hence several "server" packages are tested only on Linux, although it's probably possible to compile and run them on Windows or OS X.
 
 Here are all packages in A-Z order. Checkmark against a platform means that the package is being actually built and tested (if it has tests :D) on this platform during CI.
 
-Linux is the main development platform. It also considered the only "server" platform, hence several "server" packages are tested only on Linux, even if it's probably possible to compile and run them on Windows or OS X.
-
 | Package | Description | Linux | Windows | OS X | Web (GHCJS) |
-|---|---|:---:|:---:|:---:|:---:|
+|---------------|-------------------------------------------------------------|:---:|:---:|:---:|:---:|
 | `flaw-al` | OpenAL integration - implementation of `flaw-audio` interface | ✔ | ✔ | ✔ |   |
 | `flaw-app` | Handy engine initialization and main loop routines | ✔ | ✔ | ✔ | ✔ |
 | `flaw-asset` | Packing and unpacking assets into asset packs | ✔ | ✔ | ✔ | ✔ |

@@ -105,7 +105,7 @@ data C_lua_State
 
 luaNewState :: IO (Ptr C_lua_State, IO ())
 luaNewState = do
-	alloc <- wrap_C_lua_Alloc $ \_ ptr _osize nsize -> do
+	alloc <- wrap_C_lua_Alloc $ \_ ptr _osize nsize ->
 		if nsize > 0 then reallocBytes ptr (fromIntegral nsize)
 		else do
 			free ptr

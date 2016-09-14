@@ -79,9 +79,11 @@ tangentFrame position normal texcoord = do
 
 	return (tt, bb, nn)
 
+-- | Encode normalized 3-float into 2 floats using lambert azimuthal equal-area projection.
 encodeLambertAzimuthalEqualArea :: Node Float3 -> Program (Node Float2)
 encodeLambertAzimuthalEqualArea v = temp $ xy__ v / vecFromScalar (sqrt (z_ v * 8 + 8)) + vecFromScalar 0.5
 
+-- | Decode normalized 3-float from 2 floats using lambert azimuthal equal-area projection.
 decodeLambertAzimuthalEqualArea :: Node Float2 -> Program (Node Float3)
 decodeLambertAzimuthalEqualArea v = do
 	fenc <- temp $ v * vecFromScalar 4 - vecFromScalar 2
@@ -135,4 +137,4 @@ gaussianWeights tapsHalfCount = weights where
 	a = 1 / (sqrt (2 * pi) * sigma)
 	b = (-1) / (2 * sigma * sigma)
 	gauss x = a * exp (b * x * x)
-	weights = map (gauss . fromIntegral) $ [(-tapsHalfCount) .. tapsHalfCount]
+	weights = map (gauss . fromIntegral) [(-tapsHalfCount) .. tapsHalfCount]

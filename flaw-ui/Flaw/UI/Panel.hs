@@ -92,7 +92,7 @@ instance Element Panel where
 	dabElement Panel
 		{ panelChildrenVar = childrenVar
 		, panelSizeVar = sizeVar
-		} point@(Vec2 px py) = do
+		} point@(Vec2 px py) =
 		if px < 0 || py < 0 then return False
 		else do
 			Vec2 sx sy <- readTVar sizeVar
@@ -332,7 +332,7 @@ instance FreeContainer Panel where
 
 	setLayoutHandler Panel
 		{ panelLayoutHandlerVar = layoutHandlerVar
-		} layoutHandler = writeTVar layoutHandlerVar layoutHandler
+		} = writeTVar layoutHandlerVar
 
 	addFreeChild Panel
 		{ panelChildrenVar = childrenVar
@@ -389,7 +389,7 @@ instance FreeContainer Panel where
 
 	placeFreeChild _panel PanelChild
 		{ panelChildPositionVar = childPositionVar
-		} position = writeTVar childPositionVar position
+		} = writeTVar childPositionVar
 
 	placeFreeChildRelatively _panel PanelChild
 		{ panelChildPositionVar = childPositionVar

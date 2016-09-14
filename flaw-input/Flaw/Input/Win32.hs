@@ -222,15 +222,15 @@ initWin32Input window@Win32Window
 
 		-- process message
 		case msg of
-			0x0102 {- WM_CHAR -} -> do
+			0x0102 {- WM_CHAR -} ->
 				addKeyboardEvent $ CharEvent $ toEnum $ fromIntegral wParam
-			0x0200 {- WM_MOUSEMOVE -} -> do
+			0x0200 {- WM_MOUSEMOVE -} ->
 				addMouseEvent $ CursorMoveEvent
 					(loWord $ fromIntegral lParam) (hiWord $ fromIntegral lParam)
 			0x00FF {- WM_INPUT -} -> do
 				let blockSize = sizeOf (undefined :: RAWINPUTHEADER) + 32
 				allocaBytes blockSize $ \blockPtr -> do
-					r <- with (fromIntegral blockSize) $ \blockSizePtr -> do
+					r <- with (fromIntegral blockSize) $ \blockSizePtr ->
 						winapi_GetRawInputData
 							(intPtrToPtr $ fromIntegral lParam)
 							RID_INPUT
@@ -295,7 +295,7 @@ initWin32Input window@Win32Window
 			, f_RAWINPUTDEVICE_dwFlags = 0
 			, f_RAWINPUTDEVICE_hwndTarget = hwnd
 			}
-		] $ \ridPtr -> do
+		] $ \ridPtr ->
 		winapi_RegisterRawInputDevices ridPtr 2 (fromIntegral $ sizeOf (undefined :: RAWINPUTDEVICE))
 	unless success $ throwIO $ DescribeFirstException "failed to register raw input"
 

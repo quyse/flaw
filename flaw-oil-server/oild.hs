@@ -107,8 +107,8 @@ run Options
 
 			[("sync", Nothing)] -> do
 				-- read request
-				body <- (BL.take $ fromIntegral $ syncRequestBodyLimit + 1) <$> W.lazyRequestBody request
-				if BL.length body <= fromIntegral syncRequestBodyLimit then do
+				body <- BL.take (fromIntegral $ syncRequestBodyLimit + 1) <$> W.lazyRequestBody request
+				if BL.length body <= fromIntegral syncRequestBodyLimit then
 					-- deserialize push
 					case S.decodeLazy body of
 						Right push -> do
@@ -130,8 +130,8 @@ run Options
 				else respondFail H.status400 "too big sync request"
 
 			[("watch", Nothing)] -> do
-				body <- (BL.take $ watchRequestBodyLimit + 1) <$> W.lazyRequestBody request
-				if BL.length body <= watchRequestBodyLimit then do
+				body <- BL.take (watchRequestBodyLimit + 1) <$> W.lazyRequestBody request
+				if BL.length body <= watchRequestBodyLimit then
 					-- deserialize revision
 					case S.decodeLazy body of
 						Right watchRevision -> do
@@ -140,7 +140,7 @@ run Options
 							-- wait until revision become bigger than watch revison, or time outs
 							revision <- atomically $ do
 								repoRevision <- readTVar revisionVar
-								let checkRevision = do
+								let checkRevision =
 									if watchRevision < repoRevision then return repoRevision
 									else retry
 								let checkTimer = do

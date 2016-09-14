@@ -90,7 +90,7 @@ dxtCompressTexture textureInfo@TextureInfo
 	newBytesPtr <- mallocBytes newTotalImageSize
 
 	-- process source image
-	B.unsafeUseAsCString bytes $ \bytesPtr -> do
+	B.unsafeUseAsCString bytes $ \bytesPtr ->
 		-- loop for textures in the array
 		forM_ [0..(ncount - 1)] $ \c -> do
 			let imageSrcPtr = bytesPtr `plusPtr` (c * imageSize)

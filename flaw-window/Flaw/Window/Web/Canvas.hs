@@ -75,12 +75,12 @@ instance Window Canvas where
 
 	setWindowMouseLock Canvas
 		{ canvasElement = jsCanvas
-		} mouseLock = js_setMouseLock jsCanvas mouseLock
+		} = js_setMouseLock jsCanvas
 
 setCanvasFullscreen :: Canvas -> Bool -> IO ()
 setCanvasFullscreen Canvas
 	{ canvasElement = jsCanvas
-	} fullscreen = js_setFullscreen jsCanvas fullscreen
+	} = js_setFullscreen jsCanvas
 
 foreign import javascript unsafe "h$flaw_window_init_canvas" js_initCanvas :: IO JSVal
 

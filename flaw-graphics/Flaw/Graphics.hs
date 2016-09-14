@@ -138,7 +138,7 @@ class Device d where
 	-- | Create depth stencil target.
 	createDepthStencilTarget :: d -> Int -> Int -> IO (DepthStencilTargetId d, IO ())
 	-- | Create readable depth stencil target.
-	createReadableDepthStencilTarget :: d -> Int -> Int -> IO ((DepthStencilTargetId d, TextureId d), IO ())
+	createReadableDepthStencilTarget :: d -> Int -> Int -> SamplerStateInfo -> IO ((DepthStencilTargetId d, TextureId d), IO ())
 	-- | Create framebuffer.
 	createFrameBuffer :: d -> [RenderTargetId d] -> DepthStencilTargetId d -> IO (FrameBufferId d, IO ())
 	-- | Create static vertex buffer.
@@ -187,7 +187,7 @@ class Device d => Context c d | c -> d where
 	-- | Replay deferred context on immediate context.
 	contextPlay :: Context dc d => c -> dc -> IO ()
 	contextPlay _ _ = throwIO $ DescribeFirstException "playing deferred context is not supported"
-	-- | Perform offscreen rendering. Initial state is context's default state.
+	-- | Perform rendering. Initial state is context's default state.
 	contextRender :: c -> IO a -> IO a
 	------- Setup commands.
 	-- | Set framebuffer.
@@ -361,11 +361,16 @@ renderUploadVertexBuffer :: Context c d => VertexBufferId d -> B.ByteString -> R
 renderUploadVertexBuffer vb bytes = renderAction $ \c -> contextUploadVertexBuffer c vb bytes
 
 -- | Draw.
-renderDraw :: Context c d => Int -> Render c ()
+renderDraw :: Context c d
+	=> Int -- ^ Indices count.
+	-> Render c ()
 renderDraw = renderDrawInstanced 1
 
 -- | Draw instanced.
-renderDrawInstanced :: Context c d => Int -> Int -> Render c ()
+renderDrawInstanced :: Context c d
+	=> Int -- ^ Instances count.
+	-> Int -- ^ Indices count.
+	-> Render c ()
 renderDrawInstanced instancesCount indicesCount = renderAction $ \c -> contextDraw c instancesCount indicesCount
 
 -- | Play deferred context on immediate context.

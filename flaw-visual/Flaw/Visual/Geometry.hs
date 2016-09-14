@@ -66,7 +66,7 @@ packGeometry rawVertices = uncurry packIndexedGeometry =<< indexGeometryVertices
 packIndexedGeometry :: Storable a => V.Vector a -> VU.Vector Int -> IO PackedGeometry
 packIndexedGeometry vertices indices = do
 	verticesBytes <- packVector vertices
-	(isIndices32Bit, indicesBytes) <- do
+	(isIndices32Bit, indicesBytes) <-
 		if length vertices > 0x10000 then do
 			indicesBytes <- packVector (VG.map fromIntegral indices :: VU.Vector Word32)
 			return (True, indicesBytes)

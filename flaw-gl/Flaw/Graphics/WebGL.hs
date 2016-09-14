@@ -33,7 +33,7 @@ import Flaw.Window
 import Flaw.Window.Web.Canvas
 
 -- | Graphics system.
-data WebGLSystem
+data WebGLSystem = WebGLSystem
 
 instance System WebGLSystem where
 	data DeviceId WebGLSystem
@@ -96,7 +96,7 @@ instance Presenter WebGLPresenter WebGLSystem GlContext GlContext where
 
 		return r
 
-webglInit :: Canvas -> Bool -> IO ((WebGLDevice, WebGLContext, WebGLPresenter), IO ())
+webglInit :: Canvas -> Bool -> IO ((WebGLSystem, WebGLDevice, WebGLContext, WebGLPresenter), IO ())
 webglInit canvas@Canvas
 	{ canvasElement = jsCanvas
 	} needDepth = do
@@ -169,4 +169,4 @@ webglInit canvas@Canvas
 		}
 
 	-- return
-	return ((device, context, presenter), return ())
+	return ((WebGLSystem, device, context, presenter), return ())

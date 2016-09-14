@@ -161,13 +161,12 @@ instance InputState KeyboardState where
 instance InputDevice KeyboardState KeyboardEvent where
 	applyInputEvent KeyboardState
 		{ keyboardStateKeys = keysArray
-		} event = do
-		case event of
-			KeyDownEvent key -> writeArray keysArray key True
-			KeyUpEvent key -> writeArray keysArray key False
-			CharEvent _ -> return ()
+		} event = case event of
+		KeyDownEvent key -> writeArray keysArray key True
+		KeyUpEvent key -> writeArray keysArray key False
+		CharEvent _ -> return ()
 
 getKeyState :: KeyboardState -> Key -> STM Bool
 getKeyState KeyboardState
 	{ keyboardStateKeys = keysArray
-	} key = readArray keysArray key
+	} = readArray keysArray

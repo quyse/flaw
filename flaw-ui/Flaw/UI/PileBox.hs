@@ -114,7 +114,7 @@ instance Element PileBoxItem where
 			{ pileBoxGripWidth = gripWidth
 			, pileBoxHeightVar = heightVar
 			}
-		} (Vec2 x y) = do
+		} (Vec2 x y) =
 		if x < 0 || y < 0 || x >= gripWidth then return False
 		else do
 			height <- readTVar heightVar

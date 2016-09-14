@@ -43,6 +43,6 @@ main = do
 
 	void $ evaluate =<< packGeometry (geomVert :: V.Vector VertexPNT)
 	void $ evaluate =<< packGeometry (skinVert :: V.Vector VertexPNTWB)
-	forM_ (animateSkel identityTransform 0 :: V.Vector Float4x4) $ void . evaluate
+	forM_ (animateSkel identityTransform 0 :: V.Vector Float4x4) evaluate
 	void $ evaluate skeleton
 	void $ evaluate skin

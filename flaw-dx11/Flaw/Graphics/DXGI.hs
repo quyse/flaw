@@ -81,12 +81,10 @@ instance System DXGISystem where
 					allocaArray modesCount $ \modeDescsPtr -> do
 						hresultCheck =<< m_IDXGIOutput_GetDisplayModeList output (wrapEnum DXGI_FORMAT_R8G8B8A8_UNORM) 0 modesCountPtr modeDescsPtr
 						peekArray modesCount modeDescsPtr
-				-- make id-info output pairs
-				let modes = [(DXGIDisplayModeId modeDesc, displayModeInfoFromDesc modeDesc) | modeDesc <- modeDescs]
 				-- return output pair
 				return (DXGIDisplayId deviceId output, DisplayInfo
 					{ displayName = winUTF16ToText $ f_DXGI_OUTPUT_DESC_DeviceName outputDesc
-					, displayModes = modes
+					, displayModes = map displayModeIdInfoFromDesc modeDescs
 					})
 			outputs <- mapM makeOutputIdInfo =<< enumerateOutput 0
 			-- return adapter pair
@@ -109,20 +107,36 @@ instance System DXGISystem where
 			, f_DXGI_MODE_DESC_Scaling = DXGI_MODE_SCALING_UNSPECIFIED
 			}
 		closestDesc <- with desc $ \descPtr -> createCOMValueViaPtr $ \closestDescPtr -> m_IDXGIOutput_FindClosestMatchingMode output descPtr closestDescPtr nullPtr
-		return ((DXGIDisplayModeId closestDesc, displayModeInfoFromDesc closestDesc), return ())
+		return (displayModeIdInfoFromDesc closestDesc, return ())
 
 -- | Convert DXGI_MODE_DESC to DisplayModeInfo.
-displayModeInfoFromDesc :: DXGI_MODE_DESC -> DisplayModeInfo
-displayModeInfoFromDesc desc = info where
+displayModeIdInfoFromDesc :: DXGI_MODE_DESC -> (DisplayModeId DXGISystem, DisplayModeInfo)
+displayModeIdInfoFromDesc desc@DXGI_MODE_DESC
+	{ f_DXGI_MODE_DESC_Width = width
+	, f_DXGI_MODE_DESC_Height = height
+	, f_DXGI_MODE_DESC_RefreshRate = DXGI_RATIONAL
+		{ f_DXGI_RATIONAL_Numerator = refreshRateNumerator
+		, f_DXGI_RATIONAL_Denominator = refreshRateDenominator
+		}
+	, f_DXGI_MODE_DESC_Format = format
+	} = (DXGIDisplayModeId backBufferDesc, info) where
+	backBufferDesc = desc
+	-- use SRGB back buffer
+	-- according to MSDN, this is the right way
+	-- https://msdn.microsoft.com/en-us/library/windows/desktop/bb173064
+		{ f_DXGI_MODE_DESC_Format = case format of
+			DXGI_FORMAT_R8G8B8A8_UNORM -> DXGI_FORMAT_R8G8B8A8_UNORM_SRGB
+			DXGI_FORMAT_B8G8R8A8_UNORM -> DXGI_FORMAT_B8G8R8A8_UNORM_SRGB
+			_ -> format
+		}
 	info = DisplayModeInfo
 		{ displayModeName = T.pack $ show desc
-		, displayModeWidth = fromIntegral $ f_DXGI_MODE_DESC_Width desc
-		, displayModeHeight = fromIntegral $ f_DXGI_MODE_DESC_Height desc
-		, displayModeRefreshRate = fromIntegral (f_DXGI_RATIONAL_Numerator refreshRate) % fromIntegral (f_DXGI_RATIONAL_Denominator refreshRate)
+		, displayModeWidth = fromIntegral width
+		, displayModeHeight = fromIntegral height
+		, displayModeRefreshRate = fromIntegral refreshRateNumerator % fromIntegral refreshRateDenominator
 		}
-	refreshRate = f_DXGI_MODE_DESC_RefreshRate desc
 
--- | Convert display mode to DXGI_MODE_DESC
+-- | Get DXGI_MODE_DESC for back buffer from optional display mode desc.
 getDXGIDisplayModeDesc :: Maybe (DisplayModeId DXGISystem) -> Int -> Int -> DXGI_MODE_DESC
 getDXGIDisplayModeDesc maybeDisplayMode width height = case maybeDisplayMode of
 	Just (DXGIDisplayModeId displayModeDesc) -> displayModeDesc

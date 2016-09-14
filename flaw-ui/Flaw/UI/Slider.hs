@@ -57,11 +57,11 @@ instance Element Slider where
 
 	layoutElement Slider
 		{ sliderSizeVar = sizeVar
-		} size = writeTVar sizeVar size
+		} = writeTVar sizeVar
 
 	dabElement Slider
 		{ sliderSizeVar = sizeVar
-		} (Vec2 x y) = do
+		} (Vec2 x y) =
 		if x < 0 || y < 0 then return False
 		else do
 			Vec2 sx sy <- readTVar sizeVar
@@ -177,7 +177,7 @@ instance Element Slider where
 instance HasFloatValue Slider where
 	setFloatValue Slider
 		{ sliderValueVar = valueVar
-		} value = writeTVar valueVar value
+		} = writeTVar valueVar
 	getFloatValue Slider
 		{ sliderValueVar = valueVar
 		}	= readTVar valueVar
@@ -185,7 +185,7 @@ instance HasFloatValue Slider where
 instance HasChangeHandler Slider where
 	setChangeHandler Slider
 		{ sliderChangeHandlerVar = changeHandlerVar
-		} changeHandler = writeTVar changeHandlerVar changeHandler
+		} = writeTVar changeHandlerVar
 
 instance HasPreferredSize Slider where
 	preferredSize Metrics

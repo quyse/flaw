@@ -29,7 +29,7 @@ instance Editable T.Text where
 	editableLayout setter = ReaderT $ \EditableLayoutState {} -> do
 		currentValueVar <- lift $ newTVar T.empty
 		panel <- lift $ newPanel False
-		editBox <- lift $ newEditBox
+		editBox <- lift newEditBox
 		_editBoxChild <- lift $ addFreeChild panel editBox
 		lift $ setLayoutHandler panel $ layoutElement editBox
 		FlowLayoutState

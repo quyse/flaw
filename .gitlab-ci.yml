@@ -3,8 +3,6 @@ before_script:
 - git submodule update
 
 variables:
-  # flaw-social, flaw-websocket-server removed from PACKAGES_LINUX
-  # they depend on wai-routes which's not in GHC8 snapshot yet
   PACKAGES_LINUX: >-
     flaw-al
     flaw-app
@@ -39,11 +37,13 @@ variables:
     flaw-physics
     flaw-sdl
     flaw-sl
+    flaw-social
     flaw-sqlite
     flaw-ui
     flaw-ui-default-style
     flaw-visual
     flaw-vulkan
+    flaw-websocket-server
     flaw-window
   PACKAGES_WINDOWS: >-
     flaw-al
@@ -160,6 +160,7 @@ linux:
   - x64
   except:
   - arm
+  - pages
 
 windows:
   script:
@@ -176,6 +177,7 @@ windows:
   - x64
   except:
   - arm
+  - pages
 
 osx:
   script:
@@ -191,11 +193,11 @@ osx:
   - x64
   except:
   - arm
+  - pages
 
-# temporary disabled because of ghcjs' brokeness
-.web:
+web:
   script:
-  - "stack --no-terminal --compiler ghcjs-0.2.0_ghc-7.10.3 build --test $PACKAGES_WEB"
+  - "stack --no-terminal --compiler ghcjs-0.2.0_ghc-8.0.1 build --test $PACKAGES_WEB"
   tags:
   - haskellstack
   - ghcjs
@@ -203,6 +205,7 @@ osx:
   - x64
   except:
   - arm
+  - pages
 
 linux-arm:
   script:
@@ -218,6 +221,8 @@ linux-arm:
   - arm
   only:
   - arm
+  except:
+  - pages
 
 itch:
   stage: deploy
@@ -250,8 +255,7 @@ pages:
   - "mv $(stack path --local-doc-root) public/docs"
   - "mv $(stack path --local-hpc-root) public/hpc"
   - "./pages/sanitize.sh public"
-  - "curl -o public/docs/badge.svg https://img.shields.io/badge/haddock-$(date +%Y/%m/%d)-blue.svg"
-  - "curl -o public/hpc/badge.svg https://img.shields.io/badge/test%20coverage-$(date +%Y/%m/%d)-orange.svg"
+  - "tail -n +6 README.md | pandoc -f markdown_github -o public/index.html --template pages/index.html"
   tags:
   - haskellstack
   - linux
@@ -261,3 +265,4 @@ pages:
     - public
   only:
   - master
+  - pages

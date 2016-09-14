@@ -181,7 +181,7 @@ instance Device Dx11Device where
 					, f_D3D11_TEXTURE3D_DESC_MiscFlags = 0
 					}
 				-- create resource function
-				let createResource bytesPtr = with desc $ \descPtr -> withArray (subresourceDescs bytesPtr) $ \subresourceDescsPtr -> do
+				let createResource bytesPtr = with desc $ \descPtr -> withArray (subresourceDescs bytesPtr) $ \subresourceDescsPtr ->
 					fmap com_get_ID3D11Resource $ createCOMObjectViaPtr $ m_ID3D11Device_CreateTexture3D deviceInterface descPtr subresourceDescsPtr
 				-- SRV desc
 				let srvDesc = D3D11_SHADER_RESOURCE_VIEW_DESC_Texture3D
@@ -212,7 +212,7 @@ instance Device Dx11Device where
 					, f_D3D11_TEXTURE2D_DESC_MiscFlags = 0
 					}
 				-- create resource function
-				let createResource bytesPtr = with desc $ \descPtr -> withArray (subresourceDescs bytesPtr) $ \subresourceDescsPtr -> do
+				let createResource bytesPtr = with desc $ \descPtr -> withArray (subresourceDescs bytesPtr) $ \subresourceDescsPtr ->
 					fmap com_get_ID3D11Resource $ createCOMObjectViaPtr $ m_ID3D11Device_CreateTexture2D deviceInterface descPtr subresourceDescsPtr
 				-- SRV desc
 				let srvDesc =
@@ -249,7 +249,7 @@ instance Device Dx11Device where
 					, f_D3D11_TEXTURE1D_DESC_MiscFlags = 0
 					}
 				-- create resource function
-				let createResource bytesPtr = with desc $ \descPtr -> withArray (subresourceDescs bytesPtr) $ \subresourceDescsPtr -> do
+				let createResource bytesPtr = with desc $ \descPtr -> withArray (subresourceDescs bytesPtr) $ \subresourceDescsPtr ->
 					fmap com_get_ID3D11Resource $ createCOMObjectViaPtr $ m_ID3D11Device_CreateTexture1D deviceInterface descPtr subresourceDescsPtr
 				-- SRV desc
 				let srvDesc =
@@ -279,7 +279,7 @@ instance Device Dx11Device where
 		bk <- newBook
 
 		-- create ID3D11ShaderResourceView
-		srvInterface <- book bk $ allocateCOMObject $ with srvDesc $ \srvDescPtr -> do
+		srvInterface <- book bk $ allocateCOMObject $ with srvDesc $ \srvDescPtr ->
 			createCOMObjectViaPtr $ m_ID3D11Device_CreateShaderResourceView deviceInterface (pokeCOMObject resourceInterface) srvDescPtr
 		-- release resource interface
 		releaseResourceInterface
@@ -338,7 +338,7 @@ instance Device Dx11Device where
 			}
 
 		-- create
-		(ssInterface, releaseSsInterface) <- allocateCOMObject $ with desc $ \descPtr -> do
+		(ssInterface, releaseSsInterface) <- allocateCOMObject $ with desc $ \descPtr ->
 			createCOMObjectViaPtr $ m_ID3D11Device_CreateSamplerState deviceInterface descPtr
 
 		return (Dx11SamplerStateId ssInterface, releaseSsInterface)
@@ -402,7 +402,7 @@ instance Device Dx11Device where
 			}
 
 		-- create
-		(bsInterface, releaseBsInterface) <- allocateCOMObject $ with desc $ \descPtr -> do
+		(bsInterface, releaseBsInterface) <- allocateCOMObject $ with desc $ \descPtr ->
 			createCOMObjectViaPtr $ m_ID3D11Device_CreateBlendState deviceInterface descPtr
 
 		return (Dx11BlendStateId bsInterface, releaseBsInterface)
@@ -430,7 +430,7 @@ instance Device Dx11Device where
 			, f_D3D11_TEXTURE2D_DESC_MiscFlags = 0
 			}
 		-- create resource
-		(resourceInterface, releaseResourceInterface) <- allocateCOMObject $ with desc $ \descPtr -> do
+		(resourceInterface, releaseResourceInterface) <- allocateCOMObject $ with desc $ \descPtr ->
 			fmap com_get_ID3D11Resource $ createCOMObjectViaPtr $ m_ID3D11Device_CreateTexture2D deviceInterface descPtr nullPtr
 
 		bk <- newBook
@@ -470,7 +470,7 @@ instance Device Dx11Device where
 			, f_D3D11_TEXTURE2D_DESC_MiscFlags = 0
 			}
 		-- create resource
-		(resourceInterface, releaseResourceInterface) <- allocateCOMObject $ with desc $ \descPtr -> do
+		(resourceInterface, releaseResourceInterface) <- allocateCOMObject $ with desc $ \descPtr ->
 			fmap com_get_ID3D11Resource $ createCOMObjectViaPtr $ m_ID3D11Device_CreateTexture2D deviceInterface descPtr nullPtr
 
 		-- DSV desc
@@ -483,7 +483,7 @@ instance Device Dx11Device where
 				}
 			}
 		-- create depth stencil view
-		(dsvInterface, releaseDsvInterface) <- allocateCOMObject $ with dsvDesc $ \dsvDescPtr -> do
+		(dsvInterface, releaseDsvInterface) <- allocateCOMObject $ with dsvDesc $ \dsvDescPtr ->
 			createCOMObjectViaPtr $ m_ID3D11Device_CreateDepthStencilView deviceInterface (pokeCOMObject resourceInterface) dsvDescPtr
 
 		-- release resource interface
@@ -512,7 +512,7 @@ instance Device Dx11Device where
 			, f_D3D11_TEXTURE2D_DESC_MiscFlags = 0
 			}
 		-- create resource
-		(resourceInterface, releaseResourceInterface) <- allocateCOMObject $ with desc $ \descPtr -> do
+		(resourceInterface, releaseResourceInterface) <- allocateCOMObject $ with desc $ \descPtr ->
 			fmap com_get_ID3D11Resource $ createCOMObjectViaPtr $ m_ID3D11Device_CreateTexture2D deviceInterface descPtr nullPtr
 
 		-- DSV desc
@@ -525,7 +525,7 @@ instance Device Dx11Device where
 				}
 			}
 		-- create depth stencil view
-		(dsvInterface, releaseDsvInterface) <- allocateCOMObject $ with dsvDesc $ \dsvDescPtr -> do
+		(dsvInterface, releaseDsvInterface) <- allocateCOMObject $ with dsvDesc $ \dsvDescPtr ->
 			createCOMObjectViaPtr $ m_ID3D11Device_CreateDepthStencilView deviceInterface (pokeCOMObject resourceInterface) dsvDescPtr
 
 		-- SRV desc
@@ -538,7 +538,7 @@ instance Device Dx11Device where
 				}
 			}
 		-- create shader resource view
-		(srvInterface, releaseSrvInterface) <- allocateCOMObject $ with srvDesc $ \srvDescPtr -> do
+		(srvInterface, releaseSrvInterface) <- allocateCOMObject $ with srvDesc $ \srvDescPtr ->
 			createCOMObjectViaPtr $ m_ID3D11Device_CreateShaderResourceView deviceInterface (pokeCOMObject resourceInterface) srvDescPtr
 
 		-- release resource interface
@@ -550,8 +550,7 @@ instance Device Dx11Device where
 
 		return ((Dx11DepthStencilTargetId dsvInterface, Dx11TextureId srvInterface nullSamplerState), destroy)
 
-	createFrameBuffer _device renderTargets depthStencilTarget = do
-		return (Dx11FrameBufferId renderTargets depthStencilTarget, return ())
+	createFrameBuffer _device renderTargets depthStencilTarget = return (Dx11FrameBufferId renderTargets depthStencilTarget, return ())
 
 	createStaticVertexBuffer Dx11Device
 		{ dx11DeviceInterface = deviceInterface
@@ -572,9 +571,9 @@ instance Device Dx11Device where
 			, f_D3D11_SUBRESOURCE_DATA_SysMemSlicePitch = 0
 			}
 		-- create
-		(bufferInterface, releaseBufferInterface) <- allocateCOMObject $ with desc $ \descPtr -> do
-			B.unsafeUseAsCString bytes $ \bytesPtr -> do
-				with (subresourceData $ castPtr bytesPtr) $ \subresourceDataPtr -> do
+		(bufferInterface, releaseBufferInterface) <- allocateCOMObject $ with desc $ \descPtr ->
+			B.unsafeUseAsCString bytes $ \bytesPtr ->
+				with (subresourceData $ castPtr bytesPtr) $ \subresourceDataPtr ->
 					createCOMObjectViaPtr $ m_ID3D11Device_CreateBuffer deviceInterface descPtr subresourceDataPtr
 
 		return (Dx11VertexBufferId bufferInterface stride, releaseBufferInterface)
@@ -592,7 +591,7 @@ instance Device Dx11Device where
 			, f_D3D11_BUFFER_DESC_StructureByteStride = 0
 			}
 		-- create
-		(bufferInterface, releaseBufferInterface) <- allocateCOMObject $ with desc $ \descPtr -> do
+		(bufferInterface, releaseBufferInterface) <- allocateCOMObject $ with desc $ \descPtr ->
 			createCOMObjectViaPtr $ m_ID3D11Device_CreateBuffer deviceInterface descPtr nullPtr
 
 		return (Dx11VertexBufferId bufferInterface stride, releaseBufferInterface)
@@ -616,9 +615,9 @@ instance Device Dx11Device where
 			, f_D3D11_SUBRESOURCE_DATA_SysMemSlicePitch = 0
 			}
 		-- create
-		(bufferInterface, releaseBufferInterface) <- allocateCOMObject $ with desc $ \descPtr -> do
-			B.unsafeUseAsCString bytes $ \bytesPtr -> do
-				with (subresourceData $ castPtr bytesPtr) $ \subresourceDataPtr -> do
+		(bufferInterface, releaseBufferInterface) <- allocateCOMObject $ with desc $ \descPtr ->
+			B.unsafeUseAsCString bytes $ \bytesPtr ->
+				with (subresourceData $ castPtr bytesPtr) $ \subresourceDataPtr ->
 					createCOMObjectViaPtr $ m_ID3D11Device_CreateBuffer deviceInterface descPtr subresourceDataPtr
 
 		return
@@ -643,23 +642,21 @@ instance Device Dx11Device where
 					, attributeDivisor = divisor
 					, attributeType = atype
 					}
-				} : restAttributes) descs = do
-				B.useAsCString (T.encodeUtf8 semantic) $ \semanticPtr -> do
-					let format = convertFormat atype
-					when (format == DXGI_FORMAT_UNKNOWN) $ fail $ "wrong attribute format for " ++ T.unpack semantic
-					let desc = D3D11_INPUT_ELEMENT_DESC
-						{ f_D3D11_INPUT_ELEMENT_DESC_SemanticName = semanticPtr
-						, f_D3D11_INPUT_ELEMENT_DESC_SemanticIndex = 0
-						, f_D3D11_INPUT_ELEMENT_DESC_Format = format
-						, f_D3D11_INPUT_ELEMENT_DESC_InputSlot = fromIntegral slot
-						, f_D3D11_INPUT_ELEMENT_DESC_AlignedByteOffset = fromIntegral offset
-						, f_D3D11_INPUT_ELEMENT_DESC_InputSlotClass = if divisor > 0 then D3D11_INPUT_PER_INSTANCE_DATA else D3D11_INPUT_PER_VERTEX_DATA
-						, f_D3D11_INPUT_ELEMENT_DESC_InstanceDataStepRate = fromIntegral divisor
-						}
-					inputElementDescs restAttributes (desc : descs)
-			inputElementDescs [] descs = do
-				withArray descs $ \descsPtr -> do
-					createCOMObjectViaPtr $ m_ID3D11Device_CreateInputLayout deviceInterface descsPtr (fromIntegral $ length descs) (castPtr byteCodePtr) (fromIntegral byteCodeSize)
+				} : restAttributes) descs = B.useAsCString (T.encodeUtf8 semantic) $ \semanticPtr -> do
+				let format = convertFormat atype
+				when (format == DXGI_FORMAT_UNKNOWN) $ fail $ "wrong attribute format for " ++ T.unpack semantic
+				let desc = D3D11_INPUT_ELEMENT_DESC
+					{ f_D3D11_INPUT_ELEMENT_DESC_SemanticName = semanticPtr
+					, f_D3D11_INPUT_ELEMENT_DESC_SemanticIndex = 0
+					, f_D3D11_INPUT_ELEMENT_DESC_Format = format
+					, f_D3D11_INPUT_ELEMENT_DESC_InputSlot = fromIntegral slot
+					, f_D3D11_INPUT_ELEMENT_DESC_AlignedByteOffset = fromIntegral offset
+					, f_D3D11_INPUT_ELEMENT_DESC_InputSlotClass = if divisor > 0 then D3D11_INPUT_PER_INSTANCE_DATA else D3D11_INPUT_PER_VERTEX_DATA
+					, f_D3D11_INPUT_ELEMENT_DESC_InstanceDataStepRate = fromIntegral divisor
+					}
+				inputElementDescs restAttributes (desc : descs)
+			inputElementDescs [] descs = withArray descs $ \descsPtr ->
+				createCOMObjectViaPtr $ m_ID3D11Device_CreateInputLayout deviceInterface descsPtr (fromIntegral $ length descs) (castPtr byteCodePtr) (fromIntegral byteCodeSize)
 			convertFormat atype = case atype of
 				ATFloat32 -> DXGI_FORMAT_R32_FLOAT
 				ATFloat16 -> DXGI_FORMAT_R16_FLOAT
@@ -721,10 +718,10 @@ instance Device Dx11Device where
 			cachedShaderData <- getCachedBinary shaderCache cacheKey
 			if B.null cachedShaderData then do
 				-- shader is not in cache, compile it
-				(hr, shaderData, errorsData) <- B.unsafeUseAsCStringLen (T.encodeUtf8 source) $ \(sourcePtr, sourceLen) -> do
-					B.useAsCString (T.encodeUtf8 entryPoint) $ \entryPointPtr -> do
-						B.useAsCString (T.encodeUtf8 profile) $ \profilePtr -> do
-							alloca $ \shaderBlobPtrPtr -> do
+				(hr, shaderData, errorsData) <- B.unsafeUseAsCStringLen (T.encodeUtf8 source) $ \(sourcePtr, sourceLen) ->
+					B.useAsCString (T.encodeUtf8 entryPoint) $ \entryPointPtr ->
+						B.useAsCString (T.encodeUtf8 profile) $ \profilePtr ->
+							alloca $ \shaderBlobPtrPtr ->
 								alloca $ \errorsBlobPtrPtr -> do
 									hr <- d3dCompile
 										(castPtr sourcePtr) -- pSrcData
@@ -761,15 +758,11 @@ instance Device Dx11Device where
 			else return cachedShaderData
 
 		-- function to create vertex shader
-		let createVertexShader bytecode = allocateCOMObject $ do
-			B.unsafeUseAsCStringLen bytecode $ \(ptr, len) -> do
-				describeException "failed to create vertex shader" $ do
-					createCOMObjectViaPtr $ m_ID3D11Device_CreateVertexShader deviceInterface (castPtr ptr) (fromIntegral len) nullPtr
+		let createVertexShader bytecode = allocateCOMObject $ B.unsafeUseAsCStringLen bytecode $ \(ptr, len) ->
+			describeException "failed to create vertex shader" $ createCOMObjectViaPtr $ m_ID3D11Device_CreateVertexShader deviceInterface (castPtr ptr) (fromIntegral len) nullPtr
 		-- function to create pixel shader
-		let createPixelShader bytecode = allocateCOMObject $ do
-			B.unsafeUseAsCStringLen bytecode $ \(ptr, len) -> do
-				describeException "failed to create pixel shader" $ do
-					createCOMObjectViaPtr $ m_ID3D11Device_CreatePixelShader deviceInterface (castPtr ptr) (fromIntegral len) nullPtr
+		let createPixelShader bytecode = allocateCOMObject $ B.unsafeUseAsCStringLen bytecode $ \(ptr, len) ->
+			describeException "failed to create pixel shader" $ createCOMObjectViaPtr $ m_ID3D11Device_CreatePixelShader deviceInterface (castPtr ptr) (fromIntegral len) nullPtr
 
 		-- generate HLSL
 		HlslProgram
@@ -809,7 +802,7 @@ instance Device Dx11Device where
 			}
 
 		-- create
-		(bufferInterface, releaseBufferInterface) <- allocateCOMObject $ with desc $ \descPtr -> do
+		(bufferInterface, releaseBufferInterface) <- allocateCOMObject $ with desc $ \descPtr ->
 			createCOMObjectViaPtr $ m_ID3D11Device_CreateBuffer deviceInterface descPtr nullPtr
 
 		return (Dx11UniformBufferId bufferInterface, releaseBufferInterface)
@@ -821,8 +814,8 @@ dx11CreateDevice (DXGIDeviceId system adapter) shaderCache debug = describeExcep
 	-- create device and context interfaces
 	(deviceInterface, contextInterface) <- book bk $ alloca $ \devicePtr -> alloca $ \deviceContextPtr -> do
 		let featureLevels = [D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_1, D3D_FEATURE_LEVEL_10_0]
-		withArray featureLevels $ \featureLevelsPtr -> alloca $ \realFeatureLevelPtr -> do
-			describeException "failed to create D3D11 device" $ do
+		withArray featureLevels $ \featureLevelsPtr -> alloca $ \realFeatureLevelPtr ->
+			describeException "failed to create D3D11 device" $
 				-- driver type is required to be D3D_DRIVER_TYPE_UNKNOWN, because adapter is not null
 				-- see http://msdn.microsoft.com/en-us/library/ff476082 (remarks)
 				hresultCheck =<< d3d11CreateDevice (pokeCOMObject adapter) (wrapEnum D3D_DRIVER_TYPE_UNKNOWN) nullPtr 0 featureLevelsPtr (fromIntegral $ length featureLevels) d3d11SdkVersion devicePtr realFeatureLevelPtr deviceContextPtr
@@ -908,9 +901,8 @@ dx11CreateContextFromInterface device contextInterface = do
 	depthStencilStateCacheRef <- newIORef HM.empty
 	let destroy = do
 		depthStencilStateCache <- readIORef depthStencilStateCacheRef
-		forM_ (HM.toList depthStencilStateCache) $ \(_code, depthStencilStateInterface) -> do
-			m_IUnknown_Release depthStencilStateInterface
 		writeIORef depthStencilStateCacheRef HM.empty
+		mapM_ (m_IUnknown_Release . snd) $ HM.toList depthStencilStateCache
 	return (Dx11Context
 		{ dx11ContextDevice = device
 		, dx11ContextInterface = contextInterface
@@ -981,27 +973,25 @@ instance Context Dx11Context Dx11Device where
 		} targetIndex color = do
 		Dx11FrameBufferId renderTargets _depthStencilTarget <- readIORef frameBufferRef
 		let Dx11RenderTargetId rtvInterface = renderTargets !! targetIndex
-		withArray (vecToList color) $ \colorPtr -> do
+		withArray (vecToList color) $ \colorPtr ->
 			m_ID3D11DeviceContext_ClearRenderTargetView contextInterface (pokeCOMObject rtvInterface) colorPtr
 
-	contextClearDepth context depth = do
+	contextClearDepth context depth =
 		dx11ClearDepthStencil context depth 0 (fromEnum D3D11_CLEAR_DEPTH)
 
-	contextClearStencil context stencil = do
+	contextClearStencil context stencil =
 		dx11ClearDepthStencil context 0 stencil (fromEnum D3D11_CLEAR_STENCIL)
 
-	contextClearDepthStencil context depth stencil = do
+	contextClearDepthStencil context depth stencil =
 		dx11ClearDepthStencil context depth stencil (fromEnum D3D11_CLEAR_DEPTH .|. fromEnum D3D11_CLEAR_STENCIL)
 
-	contextUploadUniformBuffer context uniformBuffer bytes = do
-		case uniformBuffer of
-			Dx11UniformBufferId bufferInterface -> dx11UploadBuffer context bufferInterface bytes
-			Dx11NullUniformBufferId -> return ()
+	contextUploadUniformBuffer context uniformBuffer bytes = case uniformBuffer of
+		Dx11UniformBufferId bufferInterface -> dx11UploadBuffer context bufferInterface bytes
+		Dx11NullUniformBufferId -> return ()
 
-	contextUploadVertexBuffer context vertexBuffer bytes = do
-		case vertexBuffer of
-			Dx11VertexBufferId bufferInterface _stride -> dx11UploadBuffer context bufferInterface bytes
-			Dx11NullVertexBufferId -> return ()
+	contextUploadVertexBuffer context vertexBuffer bytes = case vertexBuffer of
+		Dx11VertexBufferId bufferInterface _stride -> dx11UploadBuffer context bufferInterface bytes
+		Dx11NullVertexBufferId -> return ()
 
 	contextDraw context@Dx11Context
 		{ dx11ContextInterface = contextInterface
@@ -1012,12 +1002,12 @@ instance Context Dx11Context Dx11Device where
 		dx11UpdateContext context
 		indexBuffer <- readIORef indexBufferRef
 		case indexBuffer of
-			Dx11IndexBufferId _indexBufferInterface _format _primitiveTopology -> do
+			Dx11IndexBufferId _indexBufferInterface _format _primitiveTopology ->
 				if instancesCount > 1 then
 					m_ID3D11DeviceContext_DrawIndexedInstanced contextInterface (fromIntegral indicesCount) (fromIntegral instancesCount) 0 0 0
 				else
 					m_ID3D11DeviceContext_DrawIndexed contextInterface (fromIntegral indicesCount) 0 0
-			Dx11NullIndexBufferId _primitiveTopology -> do
+			Dx11NullIndexBufferId _primitiveTopology ->
 				if instancesCount > 1 then
 					m_ID3D11DeviceContext_DrawInstanced contextInterface (fromIntegral indicesCount) (fromIntegral instancesCount) 0 0
 				else
@@ -1205,8 +1195,7 @@ instance Presenter Dx11Presenter DXGISystem Dx11Context Dx11Device where
 			} <- readIORef stateRef
 		-- resize target
 		let desc = getDXGIDisplayModeDesc maybeDisplayMode width height
-		with desc $ \descPtr -> do
-			hresultCheck =<< m_IDXGISwapChain_ResizeTarget swapChainInterface descPtr
+		with desc $ hresultCheck <=< m_IDXGISwapChain_ResizeTarget swapChainInterface
 		-- if fullscreen state changed, change
 		newState <- if isJust currentMaybeDisplayMode /= isJust maybeDisplayMode then do
 			hresultCheck =<< m_IDXGISwapChain_SetFullscreenState swapChainInterface (isJust maybeDisplayMode) nullPtr
@@ -1236,88 +1225,86 @@ instance Presenter Dx11Presenter DXGISystem Dx11Context Dx11Device where
 			{ dx11ContextStateFrameBuffer = frameBufferRef
 			, dx11ContextStateViewport = viewportRef
 			}
-		} f = do
-		-- sync with window
-		invokeWin32WindowSystem windowSystem $ do
-			-- get RTV for backbuffer (create if needed)
-			Dx11PresenterState
-				{ dx11PresenterMaybeRTV = maybeRTV
-				, dx11PresenterMaybeDSV = maybeDSV
-				, dx11PresenterWidth = width
-				, dx11PresenterHeight = height
-				} <- readIORef stateRef
-			rtv <- case maybeRTV of
-				Just rtv -> return rtv
-				Nothing -> do
-					-- create new RTV
-					backBufferTextureInterfacePtr <- with (getIID (undefined :: ID3D11Texture2D)) $ \iidPtr -> do
-						fmap castPtr $ createCOMValueViaPtr $ m_IDXGISwapChain_GetBuffer swapChainInterface 0 iidPtr
-					rtv <- createCOMObjectViaPtr $ m_ID3D11Device_CreateRenderTargetView deviceInterface backBufferTextureInterfacePtr nullPtr
-					_ <- m_IUnknown_Release =<< peekCOMObject backBufferTextureInterfacePtr
+		} f = invokeWin32WindowSystem windowSystem $ do
+		-- get RTV for backbuffer (create if needed)
+		Dx11PresenterState
+			{ dx11PresenterMaybeRTV = maybeRTV
+			, dx11PresenterMaybeDSV = maybeDSV
+			, dx11PresenterWidth = width
+			, dx11PresenterHeight = height
+			} <- readIORef stateRef
+		rtv <- case maybeRTV of
+			Just rtv -> return rtv
+			Nothing -> do
+				-- create new RTV
+				backBufferTextureInterfacePtr <- with (getIID (undefined :: ID3D11Texture2D)) $ \iidPtr ->
+					fmap castPtr $ createCOMValueViaPtr $ m_IDXGISwapChain_GetBuffer swapChainInterface 0 iidPtr
+				rtv <- createCOMObjectViaPtr $ m_ID3D11Device_CreateRenderTargetView deviceInterface backBufferTextureInterfacePtr nullPtr
+				_ <- m_IUnknown_Release =<< peekCOMObject backBufferTextureInterfacePtr
+				-- save it in state
+				modifyIORef stateRef $ \s -> s
+					{ dx11PresenterMaybeRTV = Just rtv
+					}
+				return rtv
+		depthStencilTarget <- case maybeDSV of
+			Just dsv -> return $ Dx11DepthStencilTargetId dsv
+			Nothing ->
+				if needDepthStencil then do
+					-- create new DSV
+					-- resource desc
+					let desc = D3D11_TEXTURE2D_DESC
+						{ f_D3D11_TEXTURE2D_DESC_Width = fromIntegral width
+						, f_D3D11_TEXTURE2D_DESC_Height = fromIntegral height
+						, f_D3D11_TEXTURE2D_DESC_MipLevels = 1
+						, f_D3D11_TEXTURE2D_DESC_ArraySize = 1
+						, f_D3D11_TEXTURE2D_DESC_Format = DXGI_FORMAT_R24G8_TYPELESS
+						, f_D3D11_TEXTURE2D_DESC_SampleDesc = DXGI_SAMPLE_DESC
+							{ f_DXGI_SAMPLE_DESC_Count = 1
+							, f_DXGI_SAMPLE_DESC_Quality = 0
+							}
+						, f_D3D11_TEXTURE2D_DESC_Usage = D3D11_USAGE_DEFAULT
+						, f_D3D11_TEXTURE2D_DESC_BindFlags = fromIntegral $ fromEnum D3D11_BIND_DEPTH_STENCIL
+						, f_D3D11_TEXTURE2D_DESC_CPUAccessFlags = 0
+						, f_D3D11_TEXTURE2D_DESC_MiscFlags = 0
+						}
+					-- create resource
+					resourceInterface <- with desc $ \descPtr ->
+						fmap com_get_ID3D11Resource $ createCOMObjectViaPtr $ m_ID3D11Device_CreateTexture2D deviceInterface descPtr nullPtr
+
+					-- DSV desc
+					let dsvDesc = D3D11_DEPTH_STENCIL_VIEW_DESC_Texture2D
+						{ f_D3D11_DEPTH_STENCIL_VIEW_DESC_Format = DXGI_FORMAT_D24_UNORM_S8_UINT
+						, f_D3D11_DEPTH_STENCIL_VIEW_DESC_ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D
+						, f_D3D11_DEPTH_STENCIL_VIEW_DESC_Flags = 0
+						, f_D3D11_DEPTH_STENCIL_VIEW_DESC_Texture2D = D3D11_TEX2D_DSV
+							{ f_D3D11_TEX2D_DSV_MipSlice = 0
+							}
+						}
+					-- create depth stencil view
+					dsvInterface <- with dsvDesc $ \dsvDescPtr ->
+						createCOMObjectViaPtr $ m_ID3D11Device_CreateDepthStencilView deviceInterface (pokeCOMObject resourceInterface) dsvDescPtr
+
+					-- release resource
+					_ <- m_IUnknown_Release resourceInterface
+
 					-- save it in state
 					modifyIORef stateRef $ \s -> s
-						{ dx11PresenterMaybeRTV = Just rtv
+						{ dx11PresenterMaybeDSV = Just dsvInterface
 						}
-					return rtv
-			depthStencilTarget <- case maybeDSV of
-				Just dsv -> return $ Dx11DepthStencilTargetId dsv
-				Nothing -> do
-					if needDepthStencil then do
-						-- create new DSV
-						-- resource desc
-						let desc = D3D11_TEXTURE2D_DESC
-							{ f_D3D11_TEXTURE2D_DESC_Width = fromIntegral width
-							, f_D3D11_TEXTURE2D_DESC_Height = fromIntegral height
-							, f_D3D11_TEXTURE2D_DESC_MipLevels = 1
-							, f_D3D11_TEXTURE2D_DESC_ArraySize = 1
-							, f_D3D11_TEXTURE2D_DESC_Format = DXGI_FORMAT_R24G8_TYPELESS
-							, f_D3D11_TEXTURE2D_DESC_SampleDesc = DXGI_SAMPLE_DESC
-								{ f_DXGI_SAMPLE_DESC_Count = 1
-								, f_DXGI_SAMPLE_DESC_Quality = 0
-								}
-							, f_D3D11_TEXTURE2D_DESC_Usage = D3D11_USAGE_DEFAULT
-							, f_D3D11_TEXTURE2D_DESC_BindFlags = fromIntegral $ fromEnum D3D11_BIND_DEPTH_STENCIL
-							, f_D3D11_TEXTURE2D_DESC_CPUAccessFlags = 0
-							, f_D3D11_TEXTURE2D_DESC_MiscFlags = 0
-							}
-						-- create resource
-						resourceInterface <- with desc $ \descPtr -> do
-							fmap com_get_ID3D11Resource $ createCOMObjectViaPtr $ m_ID3D11Device_CreateTexture2D deviceInterface descPtr nullPtr
+					return $ Dx11DepthStencilTargetId dsvInterface
+				else return Dx11NullDepthStencilTargetId
 
-						-- DSV desc
-						let dsvDesc = D3D11_DEPTH_STENCIL_VIEW_DESC_Texture2D
-							{ f_D3D11_DEPTH_STENCIL_VIEW_DESC_Format = DXGI_FORMAT_D24_UNORM_S8_UINT
-							, f_D3D11_DEPTH_STENCIL_VIEW_DESC_ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D
-							, f_D3D11_DEPTH_STENCIL_VIEW_DESC_Flags = 0
-							, f_D3D11_DEPTH_STENCIL_VIEW_DESC_Texture2D = D3D11_TEX2D_DSV
-								{ f_D3D11_TEX2D_DSV_MipSlice = 0
-								}
-							}
-						-- create depth stencil view
-						dsvInterface <- with dsvDesc $ \dsvDescPtr -> do
-							createCOMObjectViaPtr $ m_ID3D11Device_CreateDepthStencilView deviceInterface (pokeCOMObject resourceInterface) dsvDescPtr
+		-- set context state
+		writeIORef frameBufferRef $ Dx11FrameBufferId [Dx11RenderTargetId rtv] depthStencilTarget
+		writeIORef viewportRef $ Vec4 0 0 width height
 
-						-- release resource
-						_ <- m_IUnknown_Release resourceInterface
+		-- perform render
+		r <- f
 
-						-- save it in state
-						modifyIORef stateRef $ \s -> s
-							{ dx11PresenterMaybeDSV = Just dsvInterface
-							}
-						return $ Dx11DepthStencilTargetId dsvInterface
-					else return Dx11NullDepthStencilTargetId
+		-- present
+		hresultCheck =<< m_IDXGISwapChain_Present swapChainInterface 1 0
 
-			-- set context state
-			writeIORef frameBufferRef $ Dx11FrameBufferId [Dx11RenderTargetId rtv] depthStencilTarget
-			writeIORef viewportRef $ Vec4 0 0 width height
-
-			-- perform render
-			r <- f
-
-			-- present
-			hresultCheck =<< m_IDXGISwapChain_Present swapChainInterface 1 0
-
-			return r
+		return r
 
 dx11ResizePresenter :: Dx11Presenter -> Dx11PresenterState -> Int -> Int -> IO Dx11PresenterState
 dx11ResizePresenter Dx11Presenter
@@ -1328,15 +1315,11 @@ dx11ResizePresenter Dx11Presenter
 	} width height = do
 	-- release previous RTV if any
 	case maybePreviousRTV of
-		Just previousRTV -> do
-			_ <- m_IUnknown_Release previousRTV
-			return ()
+		Just previousRTV -> void $ m_IUnknown_Release previousRTV
 		Nothing -> return ()
 	-- release previous DSV if any
 	case maybePreviousDSV of
-		Just previousDSV -> do
-			_ <- m_IUnknown_Release previousDSV
-			return ()
+		Just previousDSV -> void $ m_IUnknown_Release previousDSV
 		Nothing -> return ()
 	-- resize buffers
 	hresultCheck =<< m_IDXGISwapChain_ResizeBuffers swapChainInterface 0
@@ -1379,9 +1362,8 @@ dx11CreatePresenter device@Dx11Device
 		}
 
 	-- create swap chain
-	(swapChainInterface, releaseSwapChainInterface) <- allocateCOMObject $ do
-		with desc $ \descPtr -> do
-			createCOMObjectViaPtr $ m_IDXGIFactory_CreateSwapChain factoryInterface (pokeCOMObject $ com_get_IUnknown deviceInterface) descPtr
+	(swapChainInterface, releaseSwapChainInterface) <- allocateCOMObject $ with desc $ \descPtr ->
+		createCOMObjectViaPtr $ m_IDXGIFactory_CreateSwapChain factoryInterface (pokeCOMObject $ com_get_IUnknown deviceInterface) descPtr
 
 	-- presenter state ref
 	stateRef <- newIORef Dx11PresenterState
@@ -1405,14 +1387,13 @@ dx11CreatePresenter device@Dx11Device
 	presenterValidRef <- newIORef True
 
 	-- set window callback
-	addWin32WindowCallback window $ \msg _wParam lParam -> do
-		case msg of
-			0x0005 {- WM_SIZE -} -> do
-				presenterValid <- readIORef presenterValidRef
-				when presenterValid $ do
-					state <- readIORef stateRef
-					writeIORef stateRef =<< dx11ResizePresenter presenter state (fromIntegral $ loWord lParam) (fromIntegral $ hiWord lParam)
-			_ -> return ()
+	addWin32WindowCallback window $ \msg _wParam lParam -> case msg of
+		0x0005 {- WM_SIZE -} -> do
+			presenterValid <- readIORef presenterValidRef
+			when presenterValid $ do
+				state <- readIORef stateRef
+				writeIORef stateRef =<< dx11ResizePresenter presenter state (fromIntegral $ loWord lParam) (fromIntegral $ hiWord lParam)
+		_ -> return ()
 
 	-- set mode
 	setPresenterMode presenter maybeDisplayMode
@@ -1454,7 +1435,7 @@ dx11ClearDepthStencil Dx11Context
 	} depth stencil flags = do
 	Dx11FrameBufferId _renderTargets depthStencilTarget <- readIORef frameBufferRef
 	case depthStencilTarget of
-		Dx11DepthStencilTargetId dsvInterface -> do
+		Dx11DepthStencilTargetId dsvInterface ->
 			m_ID3D11DeviceContext_ClearDepthStencilView contextInterface (pokeCOMObject dsvInterface) (fromIntegral flags) depth (fromIntegral stencil)
 		Dx11NullDepthStencilTargetId -> return ()
 
@@ -1511,7 +1492,7 @@ dx11GetDepthStencilState Dx11Context
 				, f_D3D11_DEPTH_STENCIL_DESC_FrontFace = stencilOpDesc
 				, f_D3D11_DEPTH_STENCIL_DESC_BackFace = stencilOpDesc
 				}
-			depthStencilInterface <- with desc $ \descPtr -> do
+			depthStencilInterface <- with desc $ \descPtr ->
 				createCOMObjectViaPtr $ m_ID3D11Device_CreateDepthStencilState deviceInterface descPtr
 			writeIORef depthStencilStateCacheRef $ HM.insert code depthStencilInterface depthStencilStateCache
 			return depthStencilInterface
@@ -1563,9 +1544,9 @@ dx11UpdateContext context@Dx11Context
 
 	let
 		vectorSetup :: Eq a => VM.IOVector a -> VM.IOVector a -> (V.Vector a -> IO ()) -> IO ()
-		vectorSetup actualVector desiredVector setup = do
-			let len = VM.length actualVector
-			let f i = when (i < len) $ do
+		vectorSetup actualVector desiredVector setup = f 0 where
+			len = VM.length actualVector
+			f i = when (i < len) $ do
 				actual <- VM.unsafeRead actualVector i
 				desired <- VM.unsafeRead desiredVector i
 				if actual /= desired then do
@@ -1573,7 +1554,6 @@ dx11UpdateContext context@Dx11Context
 					setup freezedDesiredVector
 					V.copy actualVector freezedDesiredVector
 				else f $ i + 1
-			f 0
 
 	-- framebuffer
 	refSetup actualFrameBufferRef desiredFrameBufferRef $ \desiredFrameBuffer -> do
@@ -1582,7 +1562,7 @@ dx11UpdateContext context@Dx11Context
 		let depthStencilInterface = case depthStencilTarget of
 			Dx11DepthStencilTargetId interface -> pokeCOMObject interface
 			Dx11NullDepthStencilTargetId -> nullPtr
-		withArray renderTargetsInterfaces $ \renderTargetsInterfacesPtr -> do
+		withArray renderTargetsInterfaces $ \renderTargetsInterfacesPtr ->
 			m_ID3D11DeviceContext_OMSetRenderTargets contextInterface (fromIntegral $ length renderTargetsInterfaces) renderTargetsInterfacesPtr depthStencilInterface
 
 	-- viewport
@@ -1596,7 +1576,7 @@ dx11UpdateContext context@Dx11Context
 			, f_D3D11_VIEWPORT_MinDepth = 0
 			, f_D3D11_VIEWPORT_MaxDepth = 1
 			}
-		with viewport $ \viewportPtr -> do
+		with viewport $ \viewportPtr ->
 			m_ID3D11DeviceContext_RSSetViewports contextInterface 1 viewportPtr
 
 	-- scissor
@@ -1636,7 +1616,7 @@ dx11UpdateContext context@Dx11Context
 	vectorSetup actualUniformBuffersVector desiredUniformBuffersVector $ \desiredUniformBuffers -> do
 		let buffersCount = V.length desiredUniformBuffers
 		allocaArray buffersCount $ \buffersInterfacesPtr -> do
-			flip V.imapM_ desiredUniformBuffers $ \i uniformBuffer -> do
+			flip V.imapM_ desiredUniformBuffers $ \i uniformBuffer ->
 				pokeElemOff buffersInterfacesPtr i $ case uniformBuffer of
 					Dx11UniformBufferId bufferInterface -> pokeCOMObject bufferInterface
 					Dx11NullUniformBufferId -> nullPtr
@@ -1646,7 +1626,7 @@ dx11UpdateContext context@Dx11Context
 	-- samplers
 	vectorSetup actualSamplersVector desiredSamplersVector $ \desiredSamplers -> do
 		let samplersCount = V.length desiredSamplers
-		allocaArray samplersCount $ \srvInterfacesPtr -> do
+		allocaArray samplersCount $ \srvInterfacesPtr ->
 			allocaArray samplersCount $ \ssInterfacesPtr -> do
 				flip V.imapM_ desiredSamplers $ \i (texture, samplerState) -> do
 					let (srvInterfacePtr, ssInterfacePtr) = case texture of

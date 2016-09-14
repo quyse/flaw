@@ -27,6 +27,7 @@ import Data.Typeable
 import Flaw.BinaryCache
 import Flaw.Book
 import Flaw.Exception
+import Flaw.Graphics
 
 
 -- platform-specific imports
@@ -39,8 +40,6 @@ import Flaw.Js
 import qualified Flaw.Window.Web.Canvas as Web
 
 #else
-
-import Flaw.Graphics
 
 #if defined(mingw32_HOST_OS)
 
@@ -160,6 +159,12 @@ withApp AppConfig
 
 		-- initialize specified graphics system
 		let initGraphics graphicsSystemId = case graphicsSystemId of
+#if defined(ghcjs_HOST_OS)
+			AppGraphicsSystemWebGL -> do
+				let _ = (maybeWindowPosition, maybeWindowSize, binaryCache, debug)
+				(graphicsSystem, graphicsDevice, graphicsContext, presenter) <- book bk $ webglInit window needDepthBuffer
+				return $ GraphicsSystem graphicsSystem graphicsDevice graphicsContext presenter
+#else
 #if defined(mingw32_HOST_OS)
 			AppGraphicsSystemDirectX11 -> do
 				graphicsSystem <- book bk $ dxgiCreateSystem
@@ -179,11 +184,6 @@ withApp AppConfig
 				(graphicsContext, presenter) <- book bk $ createOpenGLSdlPresenter (fst $ head graphicsDevices) window binaryCache debug
 #endif
 				return $ GraphicsSystem graphicsSystem graphicsContext graphicsContext presenter
-#if defined(ghcjs_HOST_OS)
-			AppGraphicsSystemWebGL -> do
-				let _ = (maybeWindowPosition, maybeWindowSize, binaryCache, debug)
-				(graphicsDevice, graphicsContext, presenter) <- book bk $ webglInit window needDepthBuffer
-				return $ GraphicsSystem graphicsDevice graphicsContext presenter
 #endif
 			_ -> throwIO $ DescribeFirstException "unsupported graphics system"
 

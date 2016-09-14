@@ -70,7 +70,7 @@ comQueryInterface this = alloca $ \out -> do
 
 -- | Ensure release of COM object after computation.
 withCOMObject :: IUnknown_Class a => IO a -> (a -> IO b) -> IO b
-withCOMObject create work = bracket create m_IUnknown_Release work
+withCOMObject create = bracket create m_IUnknown_Release
 
 -- | Get value from computation working with pointer.
 createCOMValueViaPtr :: Storable a => (Ptr a -> IO HRESULT) -> IO a

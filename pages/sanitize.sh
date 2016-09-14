@@ -54,4 +54,4 @@ done
 popd > /dev/null
 
 # copy static files over
-cp -r pages/* $1/
+cp -r pages/root/* $1/

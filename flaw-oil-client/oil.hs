@@ -225,7 +225,7 @@ run Options
 			, optionWriteCommandValueFormat = valueFormat
 			, optionWriteCommandKey = keyStr
 			, optionWriteCommandValue = valueStr
-			} -> do
+			} ->
 			clientRepoChange clientRepo (optionByteStringToBytes keyFormat keyStr) (optionByteStringToBytes valueFormat valueStr)
 
 		OptionCheckCommand -> do

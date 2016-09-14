@@ -67,7 +67,7 @@ initQuadRenderer device = do
 	program <- book bk $ createProgram device $ do
 		aVertex <- attribute 0 0 0 (AttributeVec4 AttributeFloat32)
 		texcoord <- temp $ zw__ aVertex
-		rasterize (cvec211 (xy__ aVertex) (constf 0) (constf 1)) $ do
+		rasterize (cvec211 (xy__ aVertex) (constf 0) (constf 1)) $
 			colorTarget 0 $ sample (sampler2D4f 0) texcoord
 
 	buffer <- VSM.new $ capacity * 6

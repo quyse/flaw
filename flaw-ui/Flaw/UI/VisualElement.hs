@@ -31,7 +31,7 @@ newVisualElement visual = do
 instance Element VisualElement where
 	layoutElement VisualElement
 		{ visualElementSizeVar = sizeVar
-		} size = writeTVar sizeVar size
+		} = writeTVar sizeVar
 	dabElement _ _ = return False
 	elementMouseCursor _ = return MouseCursorArrow
 	renderElement VisualElement

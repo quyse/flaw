@@ -70,7 +70,7 @@ listNoLongerThan [] _ = True
 
 -- | Poke array with length limit.
 pokeArrayWithLength :: Storable a => Int -> Ptr a -> [a] -> IO ()
-pokeArrayWithLength len ptr lst = do
+pokeArrayWithLength len ptr lst =
 	if listNoLongerThan lst len then
 		pokeArray ptr lst
 	else
@@ -136,7 +136,7 @@ processField typeName ft fn fc prevEndExp = do
 -- | Create ''Field objects for fields.
 -- Calculates offsets and other stuff, starting from zero offset, and chaining end offsets.
 processFields :: String -> [(TypeQ, String, Int)] -> Q ([Field], ExpQ)
-processFields typeName fs = pf [| 0 |] fs where
+processFields typeName = pf [| 0 |] where
 	pf prevEndExp ((ft, fn, fc) : nfs) = do
 		f <- processField typeName ft fn fc prevEndExp
 		(nextFields, nextEndExp) <- pf (fieldEnd f) nfs

@@ -228,7 +228,7 @@ instance Device AlDevice where
 		{ alDeviceRepeatOperationsRef = repeatOperationsRef
 		} = do
 		alRunDeferredOperations device
-		join $ sequence_ . map snd <$> readIORef repeatOperationsRef
+		join $ mapM_ snd <$> readIORef repeatOperationsRef
 
 	playSound AlSoundPlayerId
 		{ alSoundPlayerDevice = device

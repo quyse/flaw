@@ -13,14 +13,19 @@ module Flaw.Graphics.OpenGL.Mesa
 	, OpenGLOsMesaContext
 	, OpenGLOsMesaPresenter()
 	, createOpenGLOsMesaPresenter
+	, openGLOsMesaPresenterFormat
+	, openGLOsMesaPresenterBuffer
 	) where
 
 import Control.Exception
 import Control.Monad
+import qualified Data.ByteString as B
+import qualified Data.ByteString.Unsafe as B
 import Data.IORef
 import Foreign.C.Types
 import Foreign.Marshal.Alloc
 import Foreign.Marshal.Array
+import Foreign.Marshal.Utils
 import Foreign.Ptr
 import Graphics.GL.Core33
 
@@ -31,6 +36,7 @@ import Flaw.Flow
 import Flaw.Graphics
 import Flaw.Graphics.GlContext
 import Flaw.Graphics.OpenGL
+import Flaw.Graphics.Texture
 import Flaw.Math
 
 data OpenGLOsMesaSystem
@@ -96,7 +102,8 @@ createOpenGLOsMesaPresenter width height needDepth debug = describeException "fa
 			, OSMESA_PROFILE, OSMESA_CORE_PROFILE
 			, OSMESA_CONTEXT_MAJOR_VERSION, 3
 			, OSMESA_CONTEXT_MINOR_VERSION, 3
-			] $ \attribsPtr -> c_OSMesaCreateContextAttribs (castPtr attribsPtr) nullPtr
+			, 0, 0
+			] $ \attribsPtr -> c_OSMesaCreateContextAttribs attribsPtr nullPtr
 		when (contextPtr == nullPtr) $ throwIO $ DescribeFirstException "failed to create context"
 		book bk $ return ((), c_OSMesaDestroyContext contextPtr)
 
@@ -112,6 +119,38 @@ createOpenGLOsMesaPresenter width height needDepth debug = describeException "fa
 			, openglPresenterHeight = height
 			})
 
+-- | Get presenter's framebuffer format.
+openGLOsMesaPresenterFormat :: OpenGLOsMesaPresenter -> TextureInfo
+openGLOsMesaPresenterFormat OpenGLOsMesaPresenter
+	{ openglPresenterWidth = width
+	, openglPresenterHeight = height
+	} = TextureInfo
+	{ textureWidth = width
+	, textureHeight = height
+	, textureDepth = 0
+	, textureMips = 1
+	, textureFormat = UncompressedTextureFormat
+		{ textureFormatComponents = PixelRGBA
+		, textureFormatValueType = PixelUint
+		, textureFormatPixelSize = Pixel32bit
+		, textureFormatColorSpace = LinearColorSpace
+		}
+	, textureCount = 0
+	}
+
+-- | Copy bytes from Mesa presenter's framebuffer into new bytestring.
+openGLOsMesaPresenterBuffer :: OpenGLOsMesaPresenter -> IO B.ByteString
+openGLOsMesaPresenterBuffer OpenGLOsMesaPresenter
+	{ openglPresenterFlow = flow
+	, openglPresenterBufferPtr = bufferPtr
+	, openglPresenterWidth = width
+	, openglPresenterHeight = height
+	} = runInFlow flow $ do
+	let size = width * height * 4
+	copyPtr <- mallocBytes size
+	copyBytes copyPtr (castPtr bufferPtr) size
+	B.unsafePackMallocCStringLen (copyPtr, size)
+
 foreign import ccall safe "OSMesaCreateContextAttribs" c_OSMesaCreateContextAttribs :: Ptr CInt -> Ptr C_OSMesaContext -> IO (Ptr C_OSMesaContext)
 foreign import ccall safe "OSMesaDestroyContext" c_OSMesaDestroyContext :: Ptr C_OSMesaContext -> IO ()
 foreign import ccall safe "OSMesaMakeCurrent" c_OSMesaMakeCurrent :: Ptr C_OSMesaContext -> Ptr () -> GLenum -> GLsizei -> GLsizei -> IO GLboolean
@@ -125,6 +164,6 @@ pattern OSMESA_CORE_PROFILE          = 0x34
 pattern OSMESA_CONTEXT_MAJOR_VERSION = 0x36
 pattern OSMESA_CONTEXT_MINOR_VERSION = 0x37
 
-pattern OSMESA_RGBA                  = GL_RGBA
+pattern OSMESA_RGBA                  = 0x1908
 
 data C_OSMesaContext

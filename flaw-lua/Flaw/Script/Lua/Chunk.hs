@@ -4,7 +4,7 @@ Description: Lua implementation in Haskell.
 License: MIT
 -}
 
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE ViewPatterns, TemplateHaskell #-}
 
 module Flaw.Script.Lua.Chunk
 	( luaCompileChunk
@@ -66,8 +66,12 @@ data LuaProto = LuaProto
 	, luaProtoMaxStackSize :: {-# UNPACK #-} !Int
 	, luaProtoOpcodes :: !(VU.Vector Word32)
 	, luaProtoConstants :: !(V.Vector ExpQ)
-	, luaProtoFunctions :: !(V.Vector LuaProto)
+	-- | Bitmask of volatile variables.
+	, luaProtoVolatileVariablesMask :: !Integer
 	, luaProtoUpvalues :: !(V.Vector (Bool, Int))
+	-- | Bitmask of in-stack upvalues (for parent scope they are volatile variables).
+	, luaProtoVolatileUpvaluesMask :: !Integer
+	, luaProtoFunctions :: !(V.Vector LuaProto)
 	}
 
 -- | Compile Lua chunk.
@@ -79,11 +83,11 @@ luaCompileChunk bytes = do
 		chunkHeader <- S.getByteString (B.length luaChunkHeader)
 		when (chunkHeader /= luaChunkHeader) $ fail "wrong Lua chunk header"
 
-		let getInt = fmap fromIntegral S.getWord32le :: S.Get Int
+		let getInt = fromIntegral <$> S.getWord32le :: S.Get Int
 
 		let getString = do
 			b <- S.getWord8
-			size <- if b == 0xff then fmap fromIntegral S.getWordhost else return $ fromIntegral b
+			size <- if b == 0xff then fromIntegral <$> S.getWordhost else return $ fromIntegral b
 			if size == 0 then return B.empty
 			else S.getByteString $ size - 1
 
@@ -93,9 +97,9 @@ luaCompileChunk bytes = do
 			source <- getString
 			lineDefined <- getInt
 			lastLineDefined <- getInt
-			numParams <- fmap fromIntegral S.getWord8
-			isVararg <- fmap ( > 0) S.getWord8
-			maxStackSize <- fmap fromIntegral S.getWord8
+			numParams <- fromIntegral <$> S.getWord8
+			isVararg <- ( > 0) <$> S.getWord8
+			maxStackSize <- fromIntegral <$> S.getWord8
 
 			-- opcodes
 			opcodesCount <- getInt
@@ -111,13 +115,13 @@ luaCompileChunk bytes = do
 				case t of
 					LUA_TNIL -> return [| LuaNil |]
 					LUA_TBOOLEAN -> do
-						b <- fmap ( > 0) S.getWord8
+						b <- ( > 0) <$> S.getWord8
 						return [| LuaBoolean b |]
 					LUA_TNUMFLT -> do
 						n <- S.getFloat64le
 						return [| LuaReal n |]
 					LUA_TNUMINT -> do
-						n <- fmap fromIntegral S.getWord64host :: S.Get Int
+						n <- fromIntegral <$> S.getWord64host :: S.Get Int
 						return [| LuaInteger n |]
 					LUA_TSHRSTR -> getStringConstant
 					LUA_TLNGSTR -> getStringConstant
@@ -126,13 +130,21 @@ luaCompileChunk bytes = do
 			-- upvalues
 			upvaluesCount <- getInt
 			upvalues <- V.replicateM upvaluesCount $ do
-				instack <- S.getWord8
-				idx <- S.getWord8
-				return (instack > 0, fromIntegral idx)
+				instack <- ( > 0) <$> S.getWord8
+				idx <- fromIntegral <$> S.getWord8
+				return (instack, idx)
+
+			-- bitmask of in-stack upvalues
+			let volatileUpvaluesMask = V.foldr (\(instack, idx) mask -> if instack then mask .|. (1 `shiftL` idx) else mask) 0 upvalues
 
 			-- subfunctions
 			functionsCount <- getInt
 			functions <- V.replicateM functionsCount loadFunction
+
+			-- volatile variables
+			let volatileVariablesMask = V.foldr (\LuaProto
+				{ luaProtoVolatileUpvaluesMask = mask
+				} restMask -> mask .|. restMask) 0 functions
 
 			-- debug info
 			debugLineInfoCount <- getInt
@@ -155,7 +167,9 @@ luaCompileChunk bytes = do
 				, luaProtoMaxStackSize = maxStackSize
 				, luaProtoOpcodes = opcodes
 				, luaProtoConstants = constants
+				, luaProtoVolatileVariablesMask = volatileVariablesMask
 				, luaProtoUpvalues = upvalues
+				, luaProtoVolatileUpvaluesMask = volatileUpvaluesMask
 				, luaProtoFunctions = functions
 				}
 
@@ -178,10 +192,10 @@ type LuaCode = LuaCodeState -> Q [StmtQ]
 
 data LuaCodeState = LuaCodeState
 	{
-	  -- | Start register of dynamic arguments.
-	  -- -1 if not set.
+	-- | Start register of dynamic arguments.
+	-- -1 if not set.
 	  luaCodeStateTop :: !Int
-	  -- | Expression representing dynamic arguments (of type [LuaValue m]).
+	-- | Expression representing dynamic arguments (of type [LuaValue m]).
 	, luaCodeStateTopValuesE :: ExpQ
 	}
 
@@ -216,38 +230,34 @@ compileLuaFunction LuaProto
 	let constants = V.map varE constantsNames
 	let upvalues = V.map varE upvaluesNames
 
-	-- stack
-	stackNames <- V.generateM maxStackSize $ \i -> newName $ "s" ++ show i
-	let stackStmts = V.toList $ V.generate maxStackSize $ \i ->
-		bindS (varP (stackNames V.! i)) [| newMutVar LuaNil |]
-	let stack = V.generate maxStackSize $ \i -> varE $ stackNames V.! i
-
 	-- arguments & vararg
+	paramNames <- V.generateM numParams $ \i -> newName $ "s" ++ show i
 	varargName <- newName "va"
-	let varargStmts = if isVararg then [bindS (varP varargName) [| newMutVar [] |] ] else []
-	let argsSetStmts i =
+	let argsSetDecs i =
 		if i < numParams then do
 			a <- newName "a"
-			x <- newName "x"
-			(restStmts, xs) <- argsSetStmts $ i + 1
-			let e = doE $ (noBindS [| writeMutVar $(stack V.! i) $(varE x) |]) : restStmts
+			(restDecs, xs) <- argsSetDecs $ i + 1
 			return
-				( [ noBindS $ caseE (varE a)
-						[ match [p| $(varP x) : $xs |] (normalB e) []
-						, match [p| [] |] (normalB [| return () |]) []
-						]
-					]
+				( valD [p| $(varP (paramNames V.! i)) : $xs |] (normalB [| case $(varE a) of
+					[] -> [LuaNil]
+					_ -> $(varE a)
+					|]) [] : restDecs
 				, varP a
 				)
 		else if isVararg then do
 			a <- newName "a"
 			return
-				( [ noBindS [| writeMutVar $(varE varargName) $(varE a) |]
-					]
+				( [valD (varP varargName) (normalB $ varE a) []]
 				, varP a
 				)
 		else return ([], wildP)
-	(argsStmts, argsPat) <- argsSetStmts 0
+	(letS -> argsStmt, argsPat) <- argsSetDecs 0
+
+	-- stack
+	stackNames <- V.generateM maxStackSize $ \i -> newName $ "s" ++ show i
+	let stackStmts = V.toList $ V.generate maxStackSize $ \i ->
+		bindS (varP (stackNames V.! i)) [| newMutVar $(if i < numParams then varE (paramNames V.! i) else [| LuaNil |]) |]
+	let stack = V.generate maxStackSize $ \i -> varE $ stackNames V.! i
 
 	-- subfunctions
 	functionsNames <- V.generateM (V.length functions) $ \i -> newName $ "f" ++ show i
@@ -269,30 +279,30 @@ compileLuaFunction LuaProto
 		-- helper functions
 		kst j = constants V.! j -- :: LuaValue m
 		r j = stack V.! j -- :: MutVar (PrimState m) (LuaValue m)
-		rk j = -- :: m (LuaValue m)
-			if j `testBit` 8 then [| return $(kst (j `clearBit` 8)) |]
-			else [| readMutVar $(r j) |]
+		rk e j = -- :: m (LuaValue m)
+			if j `testBit` 8 then [| $e $(kst (j `clearBit` 8)) |]
+			else [| $e =<< readMutVar $(r j) |]
+		rk2 e j1 j2 = -- :: m (LuaValue m)
+			if j1 `testBit` 8 then rk [| $e $(kst (j1 `clearBit` 8)) |] j2
+			else [| do
+				p <- readMutVar $(r j1)
+				$(rk [| $e p |] j2)
+				|]
 		u j = upvalues V.! j -- :: MutVar (PrimState m) (LuaValue m)
-		binop op = normalFlow [| do
-			p <- $(rk b)
-			q <- $(rk c)
-			writeMutVar $(r a) =<< $op p q
-			|]
+		binop op = normalFlow [| writeMutVar $(r a) =<< $(rk2 op b c) |]
 		unop op = normalFlow [| writeMutVar $(r a) =<< $op =<< readMutVar $(r b) |]
 
 		-- next and next-after-next instruction ids
 		nextInstId = i + 1
 		nextNextInstId = i + 2
 		-- append next instruction
-		normalFlow e = LuaInst [nextInstId] $ \[nextInstCode] codeState -> fmap ((noBindS e) :) $ nextInstCode codeState
+		normalFlow e = LuaInst [nextInstId] $ \[nextInstCode] codeState -> ((noBindS e) :) <$> nextInstCode codeState
 		-- conditional operation
 		condbinop op = LuaInst [nextInstId, nextNextInstId] $ \[nextInstCode, nextNextInstCode] codeState -> do
 			nextInstStmts <- nextInstCode codeState
 			nextNextInstStmts <- nextNextInstCode codeState
 			return [noBindS [| do
-				p <- $(rk b)
-				q <- $(rk c)
-				z <- $op p q
+				z <- $(rk2 op b c)
 				$(if a > 0 then
 					[| if luaCoerceToBool z then $(doE nextInstStmts) else $(doE nextNextInstStmts) |]
 					else
@@ -310,11 +320,11 @@ compileLuaFunction LuaProto
 			} = case eargs of
 			Right args -> do
 				when (top >= 0) $ reportError "flaw-lua: dynamic values are lost"
-				(stmts, argsEs) <- fmap unzip $ mapM staticArgStmtAndExp args
+				(stmts, argsEs) <- unzip <$> mapM staticArgStmtAndExp args
 				return (stmts, listE argsEs)
 			Left firstArg -> do
 				when (top < 0) $ reportError "flaw-lua: expected dynamic values for opcode"
-				(stmts, argsEs) <- fmap unzip $ mapM staticArgStmtAndExp [firstArg .. (top - 1)]
+				(stmts, argsEs) <- unzip <$> mapM staticArgStmtAndExp [firstArg .. (top - 1)]
 				return (stmts, foldr (\p q -> [| $p : $q |]) topValuesE argsEs)
 		putRets :: Either Int [Int] -> ExpQ -> LuaCode -> LuaCodeState -> Q [StmtQ]
 		putRets erets mainE nextInstCode codeState = case erets of
@@ -324,7 +334,7 @@ compileLuaFunction LuaProto
 					return (noBindS [| writeMutVar $(r j) $(varE n) |], varP n)
 				let retPat = foldr (\p q -> [p| $p : $q |]) wildP retsPats
 				let mainStmt = if null rets then noBindS [| void $mainE |]
-					else bindS retPat [| fmap (++ repeat LuaNil) $mainE |]
+					else bindS retPat [| (++ repeat LuaNil) <$> $mainE |]
 				nextInstStmts <- nextInstCode codeState
 					{ luaCodeStateTop = -1
 					}
@@ -365,28 +375,26 @@ compileLuaFunction LuaProto
 			OP_GETUPVAL -> normalFlow [| writeMutVar $(r a) =<< readMutVar $(u b) |]
 			OP_GETTABUP -> normalFlow [| do
 				t <- readMutVar $(u b)
-				writeMutVar $(r a) =<< luaValueGet t =<< $(rk c)
+				writeMutVar $(r a) =<< $(rk [| luaValueGet t |] c)
 				|]
 			OP_GETTABLE -> normalFlow [| do
 				t <- readMutVar $(r b)
-				writeMutVar $(r a) =<< luaValueGet t =<< $(rk c)
+				writeMutVar $(r a) =<< $(rk [| luaValueGet t |] c)
 				|]
 			OP_SETTABUP -> normalFlow [| do
 				t <- readMutVar $(u a)
-				q <- $(rk b)
-				luaValueSet t q =<< $(rk c)
+				$(rk2 [| luaValueSet t |] b c)
 				|]
 			OP_SETUPVAL -> normalFlow [| writeMutVar $(u b) =<< readMutVar $(r a) |]
 			OP_SETTABLE -> normalFlow [| do
 				t <- readMutVar $(r a)
-				q <- $(rk b)
-				luaValueSet t q =<< $(rk c)
+				$(rk2 [| luaValueSet t |] b c)
 				|]
 			OP_NEWTABLE -> normalFlow [| writeMutVar $(r a) =<< luaNewTableSized $(litE $ integerL $ fromIntegral $ max b c) |]
 			OP_SELF -> normalFlow [| do
 				writeMutVar $(r $ a + 1) =<< readMutVar $(r b)
 				t <- readMutVar $(r b)
-				writeMutVar $(r a) =<< luaValueGet t =<< $(rk c)
+				writeMutVar $(r a) =<< $(rk [| luaValueGet t |] c)
 				|]
 			OP_ADD -> binop [| luaValueAdd |]
 			OP_SUB -> binop [| luaValueSub |]
@@ -512,7 +520,7 @@ compileLuaFunction LuaProto
 					] ++ nextInstStmts
 			OP_CLOSURE -> normalFlow [| writeMutVar $(r a) =<< luaNewClosure $(varE $ functionsNames V.! bx) |]
 			OP_VARARG -> LuaInst [nextInstId] $ \[nextInstCode] codeState -> do
-				putRets (if b == 0 then Left a else Right [a .. (a + b - 2)]) [| readMutVar $(varE varargName) |] nextInstCode codeState
+				putRets (if b == 0 then Left a else Right [a .. (a + b - 2)]) [| return $(varE varargName) |] nextInstCode codeState
 			--OP_EXTRAARG -- should not be processed here
 			_ -> LuaInst [] $ \[] _ -> fail "unknown Lua opcode"
 
@@ -529,8 +537,8 @@ compileLuaFunction LuaProto
 		markReachable 0
 
 		rc <- VUM.replicate (VU.length opcodes) (0 :: Int)
-		-- force first instruction to have a name
-		VUM.write rc 0 2
+		-- make into account reference from additional "start instruction"
+		VUM.write rc 0 1
 		-- calculate how many instructions refer to every instruction
 		flip V.imapM_ instructions $ \i (LuaInst edges _) -> do
 			isRechable <- VUM.read reachable i
@@ -560,5 +568,9 @@ compileLuaFunction LuaProto
 			return [valD (varP $ instructionsNames V.! i) (normalB $ doE stmts) []]
 		else return []
 
-	lamE [argsPat] $ doE $ constantsUpvaluesStmt : stackStmts ++ varargStmts ++ argsStmts
-		++ [functionsStmt, letS sharedInstructionsDecs, noBindS $ varE $ instructionsNames V.! 0]
+	-- start instruction
+	startStmts <- do
+		startCode <- getInstructionCode $ LuaInst [0] $ \[f] s -> f s
+		startCode nullCodeState
+
+	lamE [argsPat] $ doE $ constantsUpvaluesStmt : argsStmt : stackStmts ++ functionsStmt : letS sharedInstructionsDecs : startStmts

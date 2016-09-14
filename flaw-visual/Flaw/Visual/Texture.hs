@@ -116,10 +116,9 @@ loadDynamicImage dynamicImage = case dynamicImage of
 	ImageCMYK16 pixelCMYK16Image -> loadDynamicImage $ ImageRGB16 $ convertImage pixelCMYK16Image
 
 loadTexture :: B.ByteString -> IO PackedTexture
-loadTexture bytes = do
-	case decodeImage bytes of
-		Right dynamicImage -> loadDynamicImage dynamicImage
-		Left err -> fail err
+loadTexture bytes = case decodeImage bytes of
+	Right dynamicImage -> loadDynamicImage dynamicImage
+	Left err -> fail err
 
 -- | Convert texture from whatever format to linear RG.
 -- Useful for normal map textures.
@@ -172,7 +171,7 @@ convertTextureToLinearRG packedTexture = case packedTexture of
 			let loop typedPtr typedNewPtr i = when (i < pixelsCount) $ do
 				pixel <- peek typedPtr
 				poke typedNewPtr pixel
-				loop (typedPtr `plusPtr` inSize) (typedNewPtr `plusPtr` (sizeOf pixel)) $ i + 1
+				loop (typedPtr `plusPtr` inSize) (typedNewPtr `plusPtr` sizeOf pixel) $ i + 1
 			case outSize of
 				2 -> loop (castPtr ptr :: Ptr Word16) (castPtr newPtr) 0
 				4 -> loop (castPtr ptr :: Ptr Word32) (castPtr newPtr) 0

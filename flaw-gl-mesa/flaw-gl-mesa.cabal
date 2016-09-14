@@ -21,7 +21,6 @@ library
   exposed-modules:
     Flaw.Graphics.OpenGL.Mesa
   other-modules:
-  build-depends:       base, flaw-base, flaw-graphics, flaw-gl, flaw-math, OpenGLRaw
-  -- hs-source-dirs:      
+  build-depends:       base, bytestring, flaw-base, flaw-graphics, flaw-gl, flaw-math, OpenGLRaw
   default-language:    Haskell2010
   extra-libraries:     OSMesa
