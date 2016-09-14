@@ -26,6 +26,7 @@ library
   if impl(ghcjs)
     build-depends:       flaw-js
   else
+    build-depends:       flaw-vulkan
     if os(windows)
       build-depends:       flaw-dx11, flaw-gl-win32
     else

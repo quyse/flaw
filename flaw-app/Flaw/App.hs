@@ -41,6 +41,8 @@ import qualified Flaw.Window.Web.Canvas as Web
 
 #else
 
+import Flaw.Graphics.Vulkan
+
 #if defined(mingw32_HOST_OS)
 
 import Flaw.Graphics.DirectX11
@@ -77,7 +79,8 @@ type AppInputManager = SdlInputManager
 
 -- | Supported graphics systems.
 data AppGraphicsSystemId
-	= AppGraphicsSystemDirectX11
+	= AppGraphicsSystemVulkan
+	| AppGraphicsSystemDirectX11
 	| AppGraphicsSystemOpenGL
 	| AppGraphicsSystemWebGL
 
@@ -102,12 +105,13 @@ appConfig = AppConfig
 	, appConfigBinaryCache = NullBinaryCache
 	, appConfigDebug = False
 	, appConfigGraphicsSystems =
-#if defined(mingw32_HOST_OS)
-		AppGraphicsSystemDirectX11 :
-#endif
 #if defined(ghcjs_HOST_OS)
 		AppGraphicsSystemWebGL :
 #else
+		AppGraphicsSystemVulkan :
+#if defined(mingw32_HOST_OS)
+		AppGraphicsSystemDirectX11 :
+#endif
 		AppGraphicsSystemOpenGL :
 #endif
 		[]
@@ -165,6 +169,11 @@ withApp AppConfig
 				(graphicsSystem, graphicsDevice, graphicsContext, presenter) <- book bk $ webglInit window needDepthBuffer
 				return $ GraphicsSystem graphicsSystem graphicsDevice graphicsContext presenter
 #else
+			AppGraphicsSystemVulkan -> do
+				graphicsSystem <- book bk $ initVulkanSystem title
+				graphicsDevices <- book bk $ getInstalledDevices graphicsSystem
+				graphicsDevice <- book bk $ newVulkanDevice graphicsSystem $ fst $ head graphicsDevices
+				throwIO $ DescribeFirstException "vulkan not implemented yet"
 #if defined(mingw32_HOST_OS)
 			AppGraphicsSystemDirectX11 -> do
 				graphicsSystem <- book bk $ dxgiCreateSystem
