@@ -21,6 +21,7 @@ library
   exposed-modules:
     Flaw.Visual
     Flaw.Visual.Fog
+    Flaw.Visual.Frustum
     Flaw.Visual.Geometry
     Flaw.Visual.Geometry.Basic
     Flaw.Visual.Geometry.Skinned
