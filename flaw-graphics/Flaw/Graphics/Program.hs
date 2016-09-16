@@ -45,7 +45,7 @@ module Flaw.Graphics.Program
 	, (!)
 	, min_, max_
 	, clamp, lerp
-	, equal_ , less_, lessEqual_, if_
+	, equal_ , less_, lessEqual_, greater_, greaterEqual_, if_
 	, ddx, ddy
 	, instanceId
 	, invSqrt
@@ -491,6 +491,12 @@ less_ a b = LessNode (nodeValueType a) a b
 
 lessEqual_ :: OfValueType a => Node a -> Node a -> Node Bool
 lessEqual_ a b = LessEqualNode (nodeValueType a) a b
+
+greater_ :: OfValueType a => Node a -> Node a -> Node Bool
+greater_ = flip less_
+
+greaterEqual_ :: OfValueType a => Node a -> Node a -> Node Bool
+greaterEqual_ = flip lessEqual_
 
 if_ :: OfValueType a => Node Bool -> Node a -> Node a -> Node a
 if_ c a b = IfNode (nodeValueType a) c a b
