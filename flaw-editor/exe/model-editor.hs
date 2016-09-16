@@ -399,7 +399,7 @@ main = withApp appConfig
 		toLight <- temp $ uLightPosition - viewPosition
 		toLightDirection <- temp $ normalize toLight
 		lightColor <- temp $ uLightColor / vecFromScalar (dot toLight toLight)
-		shadow <- shadowPipelineInput uLightTransform viewPosition 0 less_
+		shadow <- shadowPipelineInput uLightTransform viewPosition 0 greater_
 		return (toLightDirection, lightColor * vecFromScalar shadow)
 	-- ambient light program
 	ambientLightProgram <- book bk $ createProgram device $ deferredPipelineAmbientLightPassProgram uInvProj uLightColor

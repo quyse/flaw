@@ -59,4 +59,4 @@ shadowPipelineInput shadowTransform viewPosition samplerIndex compareOp = do
 	shadowCoordH <- temp $ shadowTransform `mul` cvec31 viewPosition 1
 	shadowCoord <- temp $ xyz__ shadowCoordH / www__ shadowCoordH
 	shadowDepth <- temp $ normalizeSampledDepth $ sample (sampler2Df samplerIndex) (screenToTexture $ xy__ shadowCoord)
-	temp $ cast $ compareOp shadowDepth $ z_ shadowCoord
+	temp $ cast $ compareOp (z_ shadowCoord) shadowDepth
