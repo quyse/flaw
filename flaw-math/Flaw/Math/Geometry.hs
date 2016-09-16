@@ -82,13 +82,20 @@ affineFromQuat (Quat (Vec4 x y z w)) = r where
 		(xz2 - wy2)         (yz2 + wx2)         (ww - xx - yy + zz) 0
 		0                   0                   0                   1
 
+-- | Perspective projection matrix.
+-- Converts right-handed view space to left-handed projection space.
 {-# INLINE projectionPerspectiveFov #-}
-projectionPerspectiveFov :: (Vectorized a, Floating a) => a -> a -> a -> a -> Mat4x4 a
-projectionPerspectiveFov fovY aspect zn zf = r where
+projectionPerspectiveFov :: (Vectorized a, Floating a)
+	=> a -- ^ Vertical field of view in radians.
+	-> a -- ^ Viewport width / height.
+	-> a -- ^ Linear Z mapped to homogeneous 0.
+	-> a -- ^ Linear Z mapped to homogeneous 1.
+	-> Mat4x4 a
+projectionPerspectiveFov fovY aspect z0 z1 = r where
 	ys = 1 / tan (fovY * 0.5)
 	xs = ys / aspect
 	r = Mat4x4
 		xs 0  0                0
 		0  ys 0                0
-		0  0  (zf / (zn - zf)) (zn * zf / (zn - zf))
+		0  0  (z1 / (z0 - z1)) (z0 * z1 / (z1 - z0))
 		0  0  (-1)             0

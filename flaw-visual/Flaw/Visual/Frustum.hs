@@ -68,7 +68,9 @@ perspectiveFrustum fovY aspect near far frustum@Frustum
 	, frustumInvProj = matInverse proj
 	, frustumViewProj = proj `mul` view
 	} where
-	proj = projectionPerspectiveFov fovY aspect near far
+	-- use inverse projection for better precision distribution
+	-- (far plane maps to zero, near plane maps to 1)
+	proj = projectionPerspectiveFov fovY aspect (-far) (-near)
 
 -- | Set look-at view matrix for frustum.
 lookAtFrustum :: Float3 -> Float3 -> Float3 -> Frustum -> Frustum

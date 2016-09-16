@@ -50,6 +50,7 @@ import Flaw.UI.RenderBox
 import Flaw.UI.Slider
 import Flaw.UI.Window
 import Flaw.Visual
+import Flaw.Visual.Frustum
 import Flaw.Visual.Geometry
 import Flaw.Visual.Geometry.Basic
 import Flaw.Visual.Geometry.Vertex
@@ -783,14 +784,10 @@ main = withApp appConfig
 			let viewportHeight = viewportBottom - viewportTop
 			let aspect = fromIntegral viewportWidth / fromIntegral viewportHeight
 
-			let view = affineLookAt eyePosition (eyePosition + eyeDirection) (Vec3 0 0 1) :: Float4x4
-			let proj = projectionPerspectiveFov (pi / 4) aspect cameraFarPlane cameraNearPlane :: Float4x4
-			let viewProj = mul proj view
-			let invView = matInverse view
-			let invProj = matInverse proj
+			let frustum = lookAtFrustum eyePosition (eyePosition + eyeDirection) (Vec3 0 0 1) $ perspectiveFrustum (pi / 4) aspect cameraNearPlane cameraFarPlane identityFrustum
 
 			liftIO $ atomically $ writeTVar editorStateVar $ editorState
-				{ editorStateEyeViewProj = viewProj
+				{ editorStateEyeViewProj = frustumViewProj frustum
 				}
 
 			-- light-space passes
@@ -817,9 +814,9 @@ main = withApp appConfig
 
 			-- camera-space passes
 			renderScope $ do
-				renderUniform usEye uView view
-				renderUniform usEye uViewProj viewProj
-				renderUniform usEye uInvProj invProj
+				renderUniform usEye uView $ frustumView frustum
+				renderUniform usEye uViewProj $ frustumViewProj frustum
+				renderUniform usEye uInvProj $ frustumInvProj frustum
 				renderUploadUniformStorage usEye
 				renderUniformStorage usEye
 
@@ -879,11 +876,11 @@ main = withApp appConfig
 				renderScope $ do
 					renderDeferredPipelineLightPass deferredPipeline
 
-					renderUniform usLight uLightTransform $ lightTransform `mul` invView
+					renderUniform usLight uLightTransform $ lightTransform `mul` frustumInvView frustum
 					let
 						Vec3 x y z = lightPosition
 						lightPosition1 = Vec4 x y z 1
-						in renderUniform usLight uLightPosition $ xyz__ $ view `mul` lightPosition1
+						in renderUniform usLight uLightPosition $ xyz__ $ frustumView frustum `mul` lightPosition1
 					renderUniform usLight uLightColor lightColor
 					renderUploadUniformStorage usLight
 					renderUniformStorage usLight
