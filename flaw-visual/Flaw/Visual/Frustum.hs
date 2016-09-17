@@ -12,6 +12,7 @@ module Flaw.Visual.Frustum
 	, FrustumNode(..)
 	, uniformFrustum
 	, renderUniformFrustum
+	, perspectiveFrustumDepthHomogeneousToLinear
 	) where
 
 import Flaw.Graphics
@@ -88,8 +89,8 @@ data FrustumNode = FrustumNode
 	{ frustumNodeEye :: !(Node Float3)
 	, frustumNodeView :: !(Node Float4x4)
 	, frustumNodeInvView :: !(Node Float4x4)
-	, frustumNodeNear :: !(Node Float)
-	, frustumNodeFar :: !(Node Float)
+	-- | (z0, z1, z0 / z1 - 1)
+	, frustumNodeZParams :: !(Node Float3)
 	, frustumNodeProj :: !(Node Float4x4)
 	, frustumNodeInvProj :: !(Node Float4x4)
 	, frustumNodeViewProj :: !(Node Float4x4)
@@ -104,15 +105,13 @@ uniformFrustum ubs = FrustumNode
 	<*> uniform ubs
 	<*> uniform ubs
 	<*> uniform ubs
-	<*> uniform ubs
 
 renderUniformFrustum :: UniformStorage d -> FrustumNode -> Frustum -> Render c ()
 renderUniformFrustum us FrustumNode
 	{ frustumNodeEye = eyeNode
 	, frustumNodeView = viewNode
 	, frustumNodeInvView = invViewNode
-	, frustumNodeNear = nearNode
-	, frustumNodeFar = farNode
+	, frustumNodeZParams = zParamsNode
 	, frustumNodeProj = projNode
 	, frustumNodeInvProj = invProjNode
 	, frustumNodeViewProj = viewProjNode
@@ -129,8 +128,12 @@ renderUniformFrustum us FrustumNode
 	renderUniform us eyeNode eye
 	renderUniform us viewNode view
 	renderUniform us invViewNode invView
-	renderUniform us nearNode near
-	renderUniform us farNode far
+	renderUniform us zParamsNode $ Float3 (-far) (-near) (far / near - 1)
 	renderUniform us projNode proj
 	renderUniform us invProjNode invProj
 	renderUniform us viewProjNode viewProj
+
+perspectiveFrustumDepthHomogeneousToLinear :: FrustumNode -> Node Float -> Node Float
+perspectiveFrustumDepthHomogeneousToLinear FrustumNode
+	{ frustumNodeZParams = p
+	} z = x_ p / (1 + z * z_ p)
