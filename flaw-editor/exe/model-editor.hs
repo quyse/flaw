@@ -173,7 +173,7 @@ main :: IO ()
 main = withApp appConfig
 	{ appConfigTitle = "FLAW Model Editor"
 	, appConfigNeedDepthBuffer = False
-	} $ \window device context presenter inputManager -> withBook $ \bk -> do
+	} $ \window device context presenter inputManager -> withBook $ \bk -> handle (errorHandler "main") $ do
 
 	-- UI styles and drawer
 	let metrics = defaultStyleMetrics
@@ -422,7 +422,7 @@ main = withApp appConfig
 	-- flow for background operations
 	flow <- book bk newFlow
 
-	let loadColladaFile fileName elementId = handle errorHandler $ do
+	let loadColladaFile fileName elementId = handle (errorHandler "loadColladaFile") $ do
 		bytes <- BL.readFile $ T.unpack fileName
 		let eitherVertices = runCollada $ do
 			initColladaCache bytes
@@ -523,7 +523,7 @@ main = withApp appConfig
 			fileElement <- newFileElement fileDialogService
 			let actionHandler = do
 				fileName <- getText fileElement
-				asyncRunInFlow flow $ handle errorHandler $ do
+				asyncRunInFlow flow $ handle (errorHandler "genericTextureFileElement") $ do
 					cell@TextureCell
 						{ textureCellBook = cellBook
 						} <- getTextureCell <$> readTVarIO editorStateVar
@@ -726,7 +726,8 @@ main = withApp appConfig
 		-- render window
 		windowRender <- atomically $ renderWindow mainWindow drawer
 
-		render context $ present presenter $ do
+		-- run render synchronously with texture operations
+		runInFlow flow $ render context $ present presenter $ do
 
 			editorState@EditorState
 				{ editorStateEyePosition = eyePosition
@@ -916,5 +917,5 @@ main = withApp appConfig
 	-- save config
 	B.writeFile configFileName . S.encode =<< readTVarIO editorStateVar
 
-errorHandler :: SomeException -> IO ()
-errorHandler = print
+errorHandler :: String -> SomeException -> IO ()
+errorHandler s e = print (s, e)
