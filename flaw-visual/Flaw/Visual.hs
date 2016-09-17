@@ -131,10 +131,11 @@ schulerAmbientReflectance normal toEyeDirection specular glossiness = do
 -- | Calculate gaussian weights.
 -- Accepts half-number of taps, so with n = 3 it will be 7 weights.
 gaussianWeights :: Int -> [Float]
-gaussianWeights tapsHalfCount = weights where
+gaussianWeights tapsHalfCount = normalizedWeights where
 	-- 3-sigma rule
 	sigma = fromIntegral tapsHalfCount / 3
 	a = 1 / (sqrt (2 * pi) * sigma)
 	b = (-1) / (2 * sigma * sigma)
 	gauss x = a * exp (b * x * x)
 	weights = map (gauss . fromIntegral) [(-tapsHalfCount) .. tapsHalfCount]
+	normalizedWeights = map (/ sum weights) weights
