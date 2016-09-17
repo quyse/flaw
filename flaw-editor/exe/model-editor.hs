@@ -4,7 +4,7 @@ Description: Entry point for flaw model-editor executable.
 License: MIT
 -}
 
-{-# LANGUAGE DeriveGeneric, OverloadedStrings, PatternSynonyms, RankNTypes #-}
+{-# LANGUAGE DeriveGeneric, OverloadedStrings, PatternSynonyms, RankNTypes, StandaloneDeriving #-}
 {-# OPTIONS_GHC -fno-warn-missing-pattern-synonym-signatures #-}
 
 module Main(main) where
@@ -64,6 +64,7 @@ import Flaw.Window
 data Pipeline d = Pipeline
 	{ pipelineDeferred :: !(DeferredPipeline d)
 	, pipelineShadow :: !(ShadowPipeline d)
+	, pipelineShadowBlur :: !(ShadowBlurPipeline d)
 	}
 
 data TextureCell d = TextureCell
@@ -123,14 +124,12 @@ newTextureCell createTexture = withSpecialBook $ \bk -> do
 		}
 
 data EditorState d = EditorState
-	{ editorStateEyePosition :: !Float3
-	, editorStateEyeSpeed :: !Float3
+	{ editorStateEyeSpeed :: !Float3
 	, editorStateEyeAlpha :: !Float
 	, editorStateEyeBeta :: !Float
-	, editorStateEyeViewProj :: !Float4x4
+	, editorStateEyeFrustum :: !Frustum
 	, editorStateMaterial :: !Float4
-	, editorStateLightTransform :: !Float4x4
-	, editorStateLightPosition :: !Float3
+	, editorStateLightFrustum :: !Frustum
 	, editorStateLightColor :: !Float3
 	, editorStateAmbientLightColor :: !Float3
 	, editorStateGeometryCell :: !(GeometryCell d)
@@ -149,6 +148,9 @@ data EditorState d = EditorState
 	} deriving Generic
 
 instance Device d => S.Serialize (EditorState d)
+
+deriving instance Generic Frustum
+instance S.Serialize Frustum
 
 pattern SHADER_FLAG_NORMAL_MAP = 1
 pattern SHADER_FLAG_DIFFUSE_MAP = 2
@@ -202,14 +204,12 @@ main = withApp appConfig
 		}
 	let templateEditorState = case S.decode configData of
 		Left _ -> EditorState
-			{ editorStateEyePosition = Vec3 (-2) 0 1
-			, editorStateEyeSpeed = Vec3 0 0 0
+			{ editorStateEyeSpeed = Vec3 0 0 0
 			, editorStateEyeAlpha = 0
 			, editorStateEyeBeta = 0
-			, editorStateEyeViewProj = affineIdentity
+			, editorStateEyeFrustum = identityFrustum
 			, editorStateMaterial = Vec4 0.2 0.5 0 0.4
-			, editorStateLightTransform = affineTranslation $ negate $ Vec3 (-2) 2 2
-			, editorStateLightPosition = Vec3 (-2) 2 2
+			, editorStateLightFrustum = identityFrustum
 			, editorStateLightColor = vecFromScalar 10
 			, editorStateAmbientLightColor = vecFromScalar 0.01
 			, editorStateGeometryCell = GeometryCell
@@ -329,19 +329,18 @@ main = withApp appConfig
 	updatePipeline <- book bk $ newPipelineWrapper $ \width height -> withSpecialBook $ \pbk -> do
 		deferredPipeline <- book pbk $ newDeferredPipeline device width height
 		shadowPipeline <- book pbk $ newShadowPipeline device SHADOW_MAP_SIZE SHADOW_MAP_SIZE 1
+		shadowBlurPipeline <- book pbk $ newShadowBlurPipeline device SHADOW_MAP_SIZE SHADOW_MAP_SIZE
 		return Pipeline
 			{ pipelineDeferred = deferredPipeline
 			, pipelineShadow = shadowPipeline
+			, pipelineShadowBlur = shadowBlurPipeline
 			}
 
 	-- programs
 	ubsEye <- uniformBufferSlot 0
-	uView <- uniform ubsEye
-	uViewProj <- uniform ubsEye
-	uInvProj <- uniform ubsEye
+	uEyeFrustum <- uniformFrustum ubsEye
 	ubsLight <- uniformBufferSlot 1
-	uLightTransform <- uniform ubsLight
-	uLightPosition <- uniform ubsLight
+	uLightFrustum <- uniformFrustum ubsLight
 	uLightColor <- uniform ubsLight
 	ubsObject <- uniformBufferSlot 2
 	uWorld <- uniform ubsObject
@@ -355,7 +354,7 @@ main = withApp appConfig
 		let v = undefined :: VertexPNT
 		aPosition <- vertexAttribute 0 0 $ vertexPositionAttribute v
 		worldPosition <- temp $ mul uWorld $ cvec31 aPosition (constf 1)
-		rasterize (uViewProj `mul` worldPosition) $ colorTarget 0 $ cvec1111 0 0 0 0
+		rasterize (frustumNodeViewProj uEyeFrustum `mul` worldPosition) $ colorTarget 0 0
 	-- opaque programs
 	opaquePrograms <- V.generateM SHADER_FLAGS_COUNT $ \shaderFlags -> book bk $ createProgram device $ do
 		let v = undefined :: VertexPNT
@@ -363,9 +362,9 @@ main = withApp appConfig
 		aNormal <- vertexAttribute 0 0 $ vertexNormalAttribute v
 		aTexcoord <- vertexAttribute 0 0 $ vertexTexcoordAttribute v
 		worldPosition <- temp $ mul uWorld $ cvec31 aPosition (constf 1)
-		viewPosition <- temp $ uView `mul` worldPosition
-		vertexViewNormal <- temp $ xyz__ $ mul uView $ cvec31 aNormal (constf 0)
-		rasterize (uViewProj `mul` worldPosition) $ do
+		viewPosition <- temp $ frustumNodeView uEyeFrustum `mul` worldPosition
+		vertexViewNormal <- temp $ xyz__ $ mul (frustumNodeView uEyeFrustum) $ cvec31 aNormal (constf 0)
+		rasterize (frustumNodeViewProj uEyeFrustum `mul` worldPosition) $ do
 			albedo <- temp $ sample (sampler2D3f 0) aTexcoord
 			resultViewNormal <- if (shaderFlags .&. SHADER_FLAG_NORMAL_MAP) > 0 then do
 				(viewTangent, viewBinormal, viewNormal) <- tangentFrame (xyz__ viewPosition) vertexViewNormal aTexcoord
@@ -390,20 +389,23 @@ main = withApp appConfig
 		aPosition <- vertexAttribute 0 0 $ vertexPositionAttribute v
 		aNormal <- vertexAttribute 0 0 $ vertexNormalAttribute v
 		worldPosition <- temp $ mul uWorld $ cvec31 aPosition (constf 1)
-		vertexViewNormal <- temp $ xyz__ $ mul uView $ cvec31 aNormal (constf 0)
-		rasterize (uViewProj `mul` worldPosition) $ do
+		vertexViewNormal <- temp $ xyz__ $ mul (frustumNodeView uEyeFrustum) $ cvec31 aNormal (constf 0)
+		rasterize (frustumNodeViewProj uEyeFrustum `mul` worldPosition) $ do
 			viewNormal <- temp $ normalize vertexViewNormal
 			outputDeferredPipelineOpaquePass uLightColor (const4f $ Vec4 0 0 0 0) (const4f $ Vec4 0 0 0 0) viewNormal
-	-- light program
+	-- screen quad
 	screenQuadRenderer <- book bk $ newScreenQuadRenderer device
-	lightProgram <- book bk $ createProgram device $ deferredPipelineLightPassProgram uInvProj $ \viewPosition -> do
-		toLight <- temp $ uLightPosition - viewPosition
+	-- shadow blurer
+	shadowBlurer <- book bk $ newShadowBlurerESM device 3 $ perspectiveFrustumDepthHomogeneousToLinear uEyeFrustum
+	-- light program
+	lightProgram <- book bk $ createProgram device $ deferredPipelineLightPassProgram (frustumNodeInvProj uEyeFrustum) $ \viewPosition -> do
+		toLight <- temp $ frustumNodeEye uLightFrustum - viewPosition
 		toLightDirection <- temp $ normalize toLight
 		lightColor <- temp $ uLightColor / vecFromScalar (dot toLight toLight)
-		shadow <- shadowPipelineInput uLightTransform viewPosition 0 greater_
+		shadow <- shadowBlurerESMInput (frustumNodeViewProj uLightFrustum) viewPosition 0
 		return (toLightDirection, lightColor * vecFromScalar shadow)
 	-- ambient light program
-	ambientLightProgram <- book bk $ createProgram device $ deferredPipelineAmbientLightPassProgram uInvProj uLightColor
+	ambientLightProgram <- book bk $ createProgram device $ deferredPipelineAmbientLightPassProgram (frustumNodeInvProj uEyeFrustum) uLightColor
 	-- tone mapping
 	toneMappingProgram <- book bk $ createProgram device $ screenQuadProgram $ \screenPositionTexcoord -> do
 		xyY <- xyz2xyY =<< rgb2xyz (sample (sampler2D3f 0) $ zw__ screenPositionTexcoord)
@@ -461,11 +463,9 @@ main = withApp appConfig
 		KeyboardInputEvent keyboardEvent -> case keyboardEvent of
 			KeyDownEvent KeyL -> do
 				modifyTVar' editorStateVar $ \editorState@EditorState
-					{ editorStateEyePosition = eyePosition
-					, editorStateEyeViewProj = eyeViewProj
+					{ editorStateEyeFrustum = eyeFrustum
 					} -> editorState
-					{ editorStateLightTransform = eyeViewProj
-					, editorStateLightPosition = eyePosition
+					{ editorStateLightFrustum = eyeFrustum
 					}
 				return True
 			_ -> return False
@@ -689,7 +689,9 @@ main = withApp appConfig
 			focused <- isFocused renderBox
 			when focused $ do
 				editorState@EditorState
-					{ editorStateEyePosition = position
+					{ editorStateEyeFrustum = eyeFrustum@Frustum
+						{ frustumEye = position
+						}
 					, editorStateEyeSpeed = speed
 					} <- readTVar editorStateVar
 				w <- getKeyState keyboardState KeyW
@@ -716,7 +718,9 @@ main = withApp appConfig
 				let maxSpeed = 10
 				let newSpeed2 = if newSpeedNorm > maxSpeed then newSpeed * vecFromScalar (maxSpeed / newSpeedNorm) else newSpeed
 				writeTVar editorStateVar editorState
-					{ editorStateEyePosition = position + speed * vecFromScalar frameTime
+					{ editorStateEyeFrustum = eyeFrustum
+						{ frustumEye = position + speed * vecFromScalar frameTime
+						}
 					, editorStateEyeSpeed = newSpeed2
 					}
 
@@ -730,10 +734,11 @@ main = withApp appConfig
 		runInFlow flow $ render context $ present presenter $ do
 
 			editorState@EditorState
-				{ editorStateEyePosition = eyePosition
+				{ editorStateEyeFrustum = Frustum
+					{ frustumEye = eyePosition
+					}
 				, editorStateMaterial = material
-				, editorStateLightTransform = lightTransform
-				, editorStateLightPosition = lightPosition
+				, editorStateLightFrustum = lightFrustum
 				, editorStateLightColor = lightColor
 				, editorStateAmbientLightColor = ambientLightColor
 				, editorStateGeometryCell = GeometryCell
@@ -773,8 +778,9 @@ main = withApp appConfig
 				{ pipelineDeferred = deferredPipeline@DeferredPipeline
 					{ deferredPipelineColorRTT = colorRTT
 					}
-				, pipelineShadow = shadowPipeline@ShadowPipeline
-					{ shadowPipelineShadowDSTT = shadowDSTT
+				, pipelineShadow = shadowPipeline
+				, pipelineShadowBlur = shadowBlurPipeline@ShadowBlurPipeline
+					{ shadowBlurPipelineRTT2 = shadowRTT
 					}
 				} <- updatePipeline
 
@@ -785,21 +791,20 @@ main = withApp appConfig
 			let viewportHeight = viewportBottom - viewportTop
 			let aspect = fromIntegral viewportWidth / fromIntegral viewportHeight
 
-			let frustum = lookAtFrustum eyePosition (eyePosition + eyeDirection) (Vec3 0 0 1) $ perspectiveFrustum (pi / 4) aspect cameraNearPlane cameraFarPlane identityFrustum
+			let eyeFrustum = lookAtFrustum eyePosition (eyePosition + eyeDirection) (Vec3 0 0 1) $ perspectiveFrustum (pi / 4) aspect cameraNearPlane cameraFarPlane identityFrustum
 
 			liftIO $ atomically $ writeTVar editorStateVar $ editorState
-				{ editorStateEyeViewProj = frustumViewProj frustum
+				{ editorStateEyeFrustum = eyeFrustum
 				}
 
 			-- light-space passes
 			renderScope $ do
-				renderUniform usEye uViewProj lightTransform
+				renderUniformFrustum usEye uEyeFrustum lightFrustum
 				renderUploadUniformStorage usEye
 				renderUniformStorage usEye
 
 				-- shadow pass
 				renderScope $ do
-					renderViewport $ Vec4 0 0 SHADOW_MAP_SIZE SHADOW_MAP_SIZE
 					renderShadowPipelineShadowPass shadowPipeline
 					renderClearDepth 0
 					renderDepthTestFunc DepthTestFuncGreater
@@ -813,11 +818,12 @@ main = withApp appConfig
 					renderUniformStorage usObject
 					renderDraw icObject
 
+				-- shadow blur passes
+				renderShadowBlurerESM shadowPipeline shadowBlurPipeline shadowBlurer screenQuadRenderer
+
 			-- camera-space passes
 			renderScope $ do
-				renderUniform usEye uView $ frustumView frustum
-				renderUniform usEye uViewProj $ frustumViewProj frustum
-				renderUniform usEye uInvProj $ frustumInvProj frustum
+				renderUniformFrustum usEye uEyeFrustum eyeFrustum
 				renderUploadUniformStorage usEye
 				renderUniformStorage usEye
 
@@ -865,7 +871,7 @@ main = withApp appConfig
 						renderProgram lightbulbOpaqueProgram
 						renderVertexBuffer 0 vb
 						renderIndexBuffer ib
-						renderUniform usObject uWorld (affineTranslation lightPosition `mul` affineScaling (vecFromScalar 0.05 :: Float3))
+						renderUniform usObject uWorld $ affineTranslation (frustumEye lightFrustum) `mul` affineScaling (vecFromScalar 0.05 :: Float3)
 						renderUploadUniformStorage usObject
 						renderUniformStorage usObject
 						renderUniform usLight uLightColor lightColor
@@ -877,18 +883,17 @@ main = withApp appConfig
 				renderScope $ do
 					renderDeferredPipelineLightPass deferredPipeline
 
-					renderUniform usLight uLightTransform $ lightTransform `mul` frustumInvView frustum
-					let
-						Vec3 x y z = lightPosition
-						lightPosition1 = Vec4 x y z 1
-						in renderUniform usLight uLightPosition $ xyz__ $ frustumView frustum `mul` lightPosition1
+					renderUniformFrustum usLight uLightFrustum $ lightFrustum
+						{ frustumEye = xyz__ $ frustumView eyeFrustum `mul` (let Vec3 x y z = frustumEye lightFrustum in Vec4 x y z 1)
+						, frustumViewProj = frustumViewProj lightFrustum `mul` frustumInvView eyeFrustum
+						}
 					renderUniform usLight uLightColor lightColor
 					renderUploadUniformStorage usLight
 					renderUniformStorage usLight
 
 					renderDepthTestFunc DepthTestFuncAlways
 
-					renderSampler 0 shadowDSTT nullSamplerState
+					renderSampler 0 shadowRTT nullSamplerState
 
 					renderProgram lightProgram
 					renderScreenQuad screenQuadRenderer
