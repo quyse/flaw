@@ -93,7 +93,6 @@ data ShadowBlurPipeline d = ShadowBlurPipeline
 
 newShadowBlurPipeline :: Device d => d -> Int -> Int -> IO (ShadowBlurPipeline d, IO ())
 newShadowBlurPipeline device width height = withSpecialBook $ \bk -> do
-	let samplerStateInfo = shadowSamplerStateInfo 0
 	let format = UncompressedTextureFormat
 		{ textureFormatComponents = PixelR
 		, textureFormatValueType = PixelFloat
@@ -101,8 +100,11 @@ newShadowBlurPipeline device width height = withSpecialBook $ \bk -> do
 		, textureFormatColorSpace = LinearColorSpace
 		}
 
-	(rt1, rtt1) <- book bk $ createReadableRenderTarget device width height format samplerStateInfo
-	(rt2, rtt2) <- book bk $ createReadableRenderTarget device width height format samplerStateInfo
+	(rt1, rtt1) <- book bk $ createReadableRenderTarget device width height format $ shadowSamplerStateInfo 0
+	(rt2, rtt2) <- book bk $ createReadableRenderTarget device width height format $ (shadowSamplerStateInfo 0)
+		{ samplerMinFilter = SamplerLinearFilter
+		, samplerMagFilter = SamplerLinearFilter
+		}
 	fb1 <- book bk $ createFrameBuffer device [rt1] nullDepthStencilTarget
 	fb2 <- book bk $ createFrameBuffer device [rt2] nullDepthStencilTarget
 
