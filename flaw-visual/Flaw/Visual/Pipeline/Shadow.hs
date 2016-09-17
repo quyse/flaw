@@ -116,6 +116,8 @@ newShadowBlurPipeline device width height = withSpecialBook $ \bk -> do
 		}
 
 -- | Helper object doing blurring using Exponential Shadow Maps method.
+-- See "Rendering Filtered Shadows with Exponential Shadow Maps",
+-- ShaderX 6, by Marco Salvi.
 data ShadowBlurerESM d = ShadowBlurerESM
 	{ shadowBlurerESMProgram1 :: !(ProgramId d)
 	, shadowBlurerESMProgram2 :: !(ProgramId d)
@@ -127,22 +129,31 @@ newShadowBlurerESM :: Device d
 	-> (Node Float -> Node Float) -- ^ Function to convert homogeneous depth to linear depth.
 	-> IO (ShadowBlurerESM d, IO ())
 newShadowBlurerESM device tapsHalfCount homogeneousToLinear = withSpecialBook $ \bk -> do
-	let weights = gaussianWeights tapsHalfCount
+	let
+		conv a b aw bw = a + log (constf aw + constf bw * exp (b - a))
+		fold :: [(Node Float, Float)] -> Node Float
+		fold [] = 0
+		fold [(a, w)] = a + constf (log w)
+		fold [(a, aw), (b, bw)] = conv a b aw bw
+		fold ((a, aw) : (b, bw) : ts) = fold ((conv a b aw bw, 1) : ts)
+		twoSideFold f = do
+			let weights = gaussianWeights tapsHalfCount
+			let halfWeights = take tapsHalfCount weights
+			let centerWeight = weights !! tapsHalfCount
+			leftTaps <- mapM f [-tapsHalfCount .. -1]
+			centerTap <- f 0
+			rightTaps <- mapM f [tapsHalfCount, (tapsHalfCount - 1) .. 1]
+			temp $ fold [(fold $ zip leftTaps halfWeights, 1), (centerTap, centerWeight), (fold $ zip rightTaps halfWeights, 1)]
 
 	-- first pass converts homogeneous depths to linear and blurs them horizontally
 	program1 <- book bk $ createProgram device $ screenQuadProgram $ \screenPositionTexcoord -> do
-		let tap weight i =
-			exp (homogeneousToLinear $ normalizeSampledDepth $ sampleOffset (sampler2Df 0) (zw__ screenPositionTexcoord) (cvec11 (fromIntegral $ i - tapsHalfCount) 0))
-			* (constf weight)
-		blurred <- temp $ log $ foldl1 (+) $ zipWith tap weights [0..]
+		blurred <- twoSideFold $ \i -> temp $ homogeneousToLinear $ normalizeSampledDepth $
+			sampleOffset (sampler2Df 0) (zw__ screenPositionTexcoord) (cvec11 (fromIntegral i) 0)
 		colorTarget 0 $ vecFromScalar blurred
 
 	-- second pass blurs vertically
 	program2 <- book bk $ createProgram device $ screenQuadProgram $ \screenPositionTexcoord -> do
-		let tap weight i =
-			exp (sampleOffset (sampler2Df 0) (zw__ screenPositionTexcoord) (cvec11 0 (fromIntegral $ i - tapsHalfCount)))
-			* (constf weight)
-		blurred <- temp $ log $ foldl1 (+) $ zipWith tap weights [0..]
+		blurred <- twoSideFold $ \i -> temp $ sampleOffset (sampler2Df 0) (zw__ screenPositionTexcoord) (cvec11 0 (fromIntegral i))
 		colorTarget 0 $ vecFromScalar blurred
 
 	return ShadowBlurerESM
