@@ -18,6 +18,7 @@ module Flaw.Graphics.GLSL
 	, glslGenerateProgram
 	) where
 
+import Data.Bits
 import Data.List
 import Data.Monoid
 import qualified Data.Serialize as S
@@ -273,7 +274,7 @@ glslGenerateProgram GlslConfig
 				| otherwise = error "wrong uniform offset"
 				where
 					advance = uniformOffset u - offset
-					cappedAdvance = min advance 16
+					cappedAdvance = min advance $ ((offset + 16) .&. complement 15) - offset
 					size = uniformSize u
 					count = if size > 0 then size else 1
 			addBlockGaps [] _ = []
