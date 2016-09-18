@@ -11,6 +11,7 @@ module Flaw.Math.Geometry
 	, affineLookAt
 	, affineAxisRotation
 	, affineFromQuat
+	, projectionOrtho
 	, projectionPerspectiveFov
 	) where
 
@@ -82,8 +83,20 @@ affineFromQuat (Quat (Vec4 x y z w)) = r where
 		(xz2 - wy2)         (yz2 + wx2)         (ww - xx - yy + zz) 0
 		0                   0                   0                   1
 
+-- | Orthographic projection matrix.
+projectionOrtho :: (Vectorized a, Floating a)
+	=> a -- ^ Width of screen in view-space units.
+	-> a -- ^ Height of screen in view-space units.
+	-> a -- ^ Z mapped to 0.
+	-> a -- ^ Z mapped to 1.
+	-> Mat4x4 a
+projectionOrtho width height z0 z1 = Mat4x4
+	(2 / width) 0 0 0
+	0 (2 / height) 0 0
+	0 0 (1 / (z1 - z0)) (z0 / (z0 - z1))
+	0 0 0 1
+
 -- | Perspective projection matrix.
--- Converts right-handed view space to left-handed projection space.
 {-# INLINE projectionPerspectiveFov #-}
 projectionPerspectiveFov :: (Vectorized a, Floating a)
 	=> a -- ^ Vertical field of view in radians.
