@@ -110,7 +110,7 @@ createOpenGLOsMesaPresenter width height needDepth debug = describeException "fa
 		r <- c_OSMesaMakeCurrent contextPtr bufferPtr GL_UNSIGNED_BYTE (fromIntegral width) (fromIntegral height)
 		when (r == GL_FALSE) $ throwIO $ DescribeFirstException "failed to make context current"
 
-		context <- createOpenGLContext NullBinaryCache (runInFlow flow) debug
+		context <- createOpenGLContext NullBinaryCache (runInFlow flow) (runInFlow flow) debug
 
 		return (context, OpenGLOsMesaPresenter
 			{ openglPresenterFlow = flow
