@@ -327,6 +327,8 @@ instance Device GlContext where
 		-- setup sampling
 		glSetupTextureSampling glTarget samplerStateInfo
 
+		-- unbind texture, so we don't hold a reference
+		glBindTexture glTarget glNullTextureName
 		-- as a background operation, we need to wait for completion
 		glFinish
 
@@ -340,6 +342,8 @@ instance Device GlContext where
 		} samplerStateInfo bytes = invoke $ describeException "failed to create OpenGL native texture" $ do
 		(glTarget, jsTexture) <- glNativeTexture bytes
 		glSetupTextureSampling glTarget samplerStateInfo
+		-- unbind texture, so we don't hold a reference
+		glBindTexture glTarget glNullTextureName
 		return (GlTextureId jsTexture, invoke $ glDeleteTextureName jsTexture)
 #endif
 
@@ -417,6 +421,9 @@ instance Device GlContext where
 		-- setup sampling
 		glSetupTextureSampling GL_TEXTURE_2D samplerStateInfo
 
+		-- unbind texture, so we don't hold a reference
+		glBindTexture GL_TEXTURE_2D glNullTextureName
+
 		glCheckErrors1 "create readable render target"
 
 		return ((GlRenderTargetId
@@ -444,6 +451,9 @@ instance Device GlContext where
 		glSetupTextureSampling GL_TEXTURE_2D samplerStateInfo
 			{ samplerMaxLod = 0
 			}
+
+		-- unbind texture, so we don't hold a reference
+		glBindTexture GL_TEXTURE_2D glNullTextureName
 
 		glCheckErrors1 "create readable depth stencil target"
 
@@ -507,6 +517,9 @@ instance Device GlContext where
 
 		writeIORef actualFrameBufferRef frameBufferId
 
+		-- unbind framebuffer, so we don't hold a reference
+		glBindFramebuffer GL_FRAMEBUFFER glNullFramebufferName
+
 		glCheckErrors1 "create framebuffer"
 
 		return (frameBufferId, invoke $ glDeleteFramebufferName framebufferName)
@@ -521,6 +534,8 @@ instance Device GlContext where
 		glBufferData_bs GL_ARRAY_BUFFER bytes GL_STATIC_DRAW
 		glCheckErrors0 "buffer data"
 
+		-- unbind buffer, so we don't hold a reference
+		glBindBuffer GL_ARRAY_BUFFER glNullBufferName
 		-- as a background operation, we need to wait for completion
 		glFinish
 
@@ -536,6 +551,9 @@ instance Device GlContext where
 		glCheckErrors0 "bind buffer"
 		glBufferData_null GL_ARRAY_BUFFER (fromIntegral size) GL_DYNAMIC_DRAW
 		glCheckErrors0 "buffer data"
+
+		-- unbind buffer, so we don't hold a reference
+		glBindBuffer GL_ARRAY_BUFFER glNullBufferName
 
 		glCheckErrors1 "create dynamic vertex buffer"
 
@@ -860,6 +878,9 @@ instance Device GlContext where
 			glBindVertexArray glNullVertexArrayName
 			glCheckErrors0 "unbind vertex array"
 
+		-- unbind program
+		glUseProgram glNullProgramName
+
 		glCheckErrors1 "create program"
 
 		return GlProgramId
@@ -883,6 +904,7 @@ instance Device GlContext where
 			glCheckErrors0 "bind buffer"
 			glBufferData_null GL_UNIFORM_BUFFER (fromIntegral size) GL_DYNAMIC_DRAW
 			glCheckErrors0 "buffer data"
+			glBindBuffer GL_UNIFORM_BUFFER glNullBufferName
 			
 			return (GlUniformBufferId bufferName size, invoke $ glDeleteBufferName bufferName)
 		else do
