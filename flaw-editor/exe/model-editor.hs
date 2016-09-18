@@ -419,7 +419,7 @@ main = withApp appConfig
 		}
 
 	let cameraNearPlane = 0.01
-	let cameraFarPlane = 1000
+	let cameraFarPlane = 10
 
 	-- flow for background operations
 	flow <- book bk newFlow
