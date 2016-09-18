@@ -195,9 +195,10 @@ shadowBlurerESMInput
 	:: Node Float4x4 -- ^ Transform from eye view space to shadow proj space.
 	-> Node Float3 -- ^ View-space position.
 	-> Int -- ^ Shadow map sampler index.
+	-> (Node Float4 -> Node Float) -- ^ Function getting linear depth from proj coord.
 	-> Program (Node Float)
-shadowBlurerESMInput shadowTransform viewPosition samplerIndex = do
+shadowBlurerESMInput shadowTransform viewPosition samplerIndex projCoordToLinearDepth = do
 	shadowCoordH <- temp $ shadowTransform `mul` cvec31 viewPosition 1
 	shadowCoord <- temp $ xyz__ shadowCoordH / www__ shadowCoordH
 	shadowDepth <- temp $ sample (sampler2Df samplerIndex) (screenToTexture $ xy__ shadowCoord)
-	temp $ max_ 0 $ min_ 1 $ exp ((negate (w_ shadowCoordH) - shadowDepth) * constf 4)
+	temp $ max_ 0 $ exp (min_ 0 $ (projCoordToLinearDepth shadowCoordH - shadowDepth) * constf 4)

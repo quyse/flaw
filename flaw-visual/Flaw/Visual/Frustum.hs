@@ -7,12 +7,14 @@ License: MIT
 module Flaw.Visual.Frustum
 	( Frustum(..)
 	, identityFrustum
+	, orthoFrustum
 	, perspectiveFrustum
 	, lookAtFrustum
 	, FrustumNode(..)
 	, uniformFrustum
 	, renderUniformFrustum
-	, perspectiveFrustumDepthHomogeneousToLinear
+	, frustumDepthHomogeneousToLinear
+	, frustumProjCoordToLinearDepth
 	) where
 
 import Flaw.Graphics
@@ -41,6 +43,11 @@ data Frustum = Frustum
 	, frustumProj :: !Float4x4
 	-- | Inverse projection matrix.
 	, frustumInvProj :: Float4x4
+	-- | Projection params.
+	-- Chosen to work universally for both ortho and perspective projections,
+	-- so we can use universal formulae in 'frustumDepthHomogeneousToLinear'
+	-- and 'frustumProjCoordToLinearDepth'.
+	, frustumProjParams :: !Float4
 	-- | View-projection matrix.
 	, frustumViewProj :: Float4x4
 	}
@@ -55,8 +62,23 @@ identityFrustum = Frustum
 	, frustumFar = 0
 	, frustumProj = affineIdentity
 	, frustumInvProj = affineIdentity
+	, frustumProjParams = 0
 	, frustumViewProj = affineIdentity
 	}
+
+-- | Set orthographic projection for frustum.
+orthoFrustum :: Float -> Float -> Float -> Float -> Frustum -> Frustum
+orthoFrustum width height near far frustum@Frustum
+	{ frustumView = view
+	} = frustum
+	{ frustumNear = near
+	, frustumFar = far
+	, frustumProj = proj
+	, frustumInvProj = matInverse proj
+	, frustumProjParams = Float4 (-far) 0 (far - near) (-far)
+	, frustumViewProj = proj `mul` view
+	} where
+	proj = projectionOrtho width height (-far) (-near)
 
 -- | Set perspective projection for frustum.
 perspectiveFrustum :: Float -> Float -> Float -> Float -> Frustum -> Frustum
@@ -67,6 +89,7 @@ perspectiveFrustum fovY aspect near far frustum@Frustum
 	, frustumFar = far
 	, frustumProj = proj
 	, frustumInvProj = matInverse proj
+	, frustumProjParams = Float4 (-far) (far / near - 1) 0 (-1)
 	, frustumViewProj = proj `mul` view
 	} where
 	-- use inverse projection for better precision distribution
@@ -90,7 +113,7 @@ data FrustumNode = FrustumNode
 	, frustumNodeView :: !(Node Float4x4)
 	, frustumNodeInvView :: !(Node Float4x4)
 	-- | (z0, z1, z0 / z1 - 1)
-	, frustumNodeZParams :: !(Node Float3)
+	, frustumNodeProjParams :: !(Node Float4)
 	, frustumNodeProj :: !(Node Float4x4)
 	, frustumNodeInvProj :: !(Node Float4x4)
 	, frustumNodeViewProj :: !(Node Float4x4)
@@ -111,7 +134,7 @@ renderUniformFrustum us FrustumNode
 	{ frustumNodeEye = eyeNode
 	, frustumNodeView = viewNode
 	, frustumNodeInvView = invViewNode
-	, frustumNodeZParams = zParamsNode
+	, frustumNodeProjParams = projParamsNode
 	, frustumNodeProj = projNode
 	, frustumNodeInvProj = invProjNode
 	, frustumNodeViewProj = viewProjNode
@@ -123,17 +146,25 @@ renderUniformFrustum us FrustumNode
 	, frustumFar = far
 	, frustumProj = proj
 	, frustumInvProj = invProj
+	, frustumProjParams = projParams
 	, frustumViewProj = viewProj
 	} = do
 	renderUniform us eyeNode eye
 	renderUniform us viewNode view
 	renderUniform us invViewNode invView
-	renderUniform us zParamsNode $ Float3 (-far) (-near) (far / near - 1)
+	renderUniform us projParamsNode projParams
 	renderUniform us projNode proj
 	renderUniform us invProjNode invProj
 	renderUniform us viewProjNode viewProj
 
-perspectiveFrustumDepthHomogeneousToLinear :: FrustumNode -> Node Float -> Node Float
-perspectiveFrustumDepthHomogeneousToLinear FrustumNode
-	{ frustumNodeZParams = p
-	} z = x_ p / (1 + z * z_ p)
+-- | Get linear depth from homogeneous depth.
+frustumDepthHomogeneousToLinear :: FrustumNode -> Node Float -> Node Float
+frustumDepthHomogeneousToLinear FrustumNode
+	{ frustumNodeProjParams = p
+	} z = x_ p / (1 + z * y_ p) + z_ p * z
+
+-- | Get linear depth from projection-space coord.
+frustumProjCoordToLinearDepth :: FrustumNode -> Node Float4 -> Node Float
+frustumProjCoordToLinearDepth FrustumNode
+	{ frustumNodeProjParams = p
+	} c = dot (zw__ c) (zw__ p)

@@ -396,13 +396,13 @@ main = withApp appConfig
 	-- screen quad
 	screenQuadRenderer <- book bk $ newScreenQuadRenderer device
 	-- shadow blurer
-	shadowBlurer <- book bk $ newShadowBlurerESM device 3 $ perspectiveFrustumDepthHomogeneousToLinear uEyeFrustum
+	shadowBlurer <- book bk $ newShadowBlurerESM device 3 $ frustumDepthHomogeneousToLinear uEyeFrustum
 	-- light program
 	lightProgram <- book bk $ createProgram device $ deferredPipelineLightPassProgram (frustumNodeInvProj uEyeFrustum) $ \viewPosition -> do
 		toLight <- temp $ frustumNodeEye uLightFrustum - viewPosition
 		toLightDirection <- temp $ normalize toLight
 		lightColor <- temp $ uLightColor / vecFromScalar (dot toLight toLight)
-		shadow <- shadowBlurerESMInput (frustumNodeViewProj uLightFrustum) viewPosition 0
+		shadow <- shadowBlurerESMInput (frustumNodeViewProj uLightFrustum) viewPosition 0 (frustumProjCoordToLinearDepth uLightFrustum)
 		return (toLightDirection, lightColor * vecFromScalar shadow)
 	-- ambient light program
 	ambientLightProgram <- book bk $ createProgram device $ deferredPipelineAmbientLightPassProgram (frustumNodeInvProj uEyeFrustum) uLightColor
