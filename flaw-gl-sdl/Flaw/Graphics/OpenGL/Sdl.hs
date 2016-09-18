@@ -29,6 +29,7 @@ import qualified SDL.Raw.Video as SDL
 import Flaw.BinaryCache
 import Flaw.Book
 import Flaw.Exception
+import Flaw.Flow
 import Flaw.Graphics
 import Flaw.Graphics.GlContext
 import Flaw.Graphics.OpenGL
@@ -85,8 +86,7 @@ type OpenGLSdlContext = GlContext
 
 -- | OpenGL presenter.
 data OpenGLSdlPresenter = OpenGLSdlPresenter
-	{ openglPresenterSdlContext :: !SDL.GLContext
-	, openglPresenterWindow :: !SdlWindow
+	{ openglPresenterWindow :: !SdlWindow
 	}
 
 instance Presenter OpenGLSdlPresenter OpenGLSdlSystem GlContext GlContext where
@@ -138,21 +138,30 @@ createOpenGLSdlPresenter _deviceId window@SdlWindow
 	{ swSystem = ws
 	, swHandle = windowHandle
 	} programCache debug = describeException "failed to create OpenGL SDL presenter" $ withSpecialBook $ \bk -> invokeSdlWindowSystem ws $ do
-	-- create context
-	sdlContext <- checkSdlResult $ SDL.glCreateContext windowHandle
+	-- spawn background flow
+	backgroundFlow <- book bk newFlowOS
+	-- create background context
+	backgroundSdlContext <- checkSdlResult $ SDL.glCreateContext windowHandle
+	-- create main context (has to be created while background context is current, in order to "share with current")
+	mainSdlContext <- checkSdlResult $ SDL.glCreateContext windowHandle
 	book bk $ return ((), invokeSdlWindowSystem ws $ do
 		void $ SDL.glMakeCurrent windowHandle nullPtr
-		SDL.glDeleteContext sdlContext
+		SDL.glDeleteContext mainSdlContext
 		)
-	-- make it current
-	checkSdlError (== 0) $ SDL.glMakeCurrent windowHandle sdlContext
+	-- make background context current in background thread
+	checkSdlError (== 0) $ runInFlow backgroundFlow $ SDL.glMakeCurrent windowHandle backgroundSdlContext
+	book bk $ return ((), runInFlow backgroundFlow $ do
+		void $ SDL.glMakeCurrent windowHandle nullPtr
+		SDL.glDeleteContext backgroundSdlContext
+		)
+	-- make main context current in current thread
+	checkSdlError (== 0) $ SDL.glMakeCurrent windowHandle mainSdlContext
 
 	-- create context
 	let presenter = OpenGLSdlPresenter
-		{ openglPresenterSdlContext = sdlContext
-		, openglPresenterWindow = window
+		{ openglPresenterWindow = window
 		}
-	context <- createOpenGLContext programCache (invokeSdlWindowSystem ws) debug
+	context <- createOpenGLContext programCache (invokeSdlWindowSystem ws) (runInFlow backgroundFlow) debug
 
 	-- set swap interval
 	do

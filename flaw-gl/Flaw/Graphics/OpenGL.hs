@@ -25,8 +25,8 @@ import Flaw.Graphics.GlContext
 import Flaw.Graphics.GLSL
 
 -- | Create OpenGL context and perform basic initialization.
-createOpenGLContext :: BinaryCache c => c -> (forall a. IO a -> IO a) -> Bool -> IO GlContext
-createOpenGLContext programCache invoke debug = do
+createOpenGLContext :: BinaryCache c => c -> (forall a. IO a -> IO a) -> (forall a. IO a -> IO a) -> Bool -> IO GlContext
+createOpenGLContext programCache invoke backgroundInvoke debug = do
 	-- OpenGL version
 	majorVersion <- alloca $ \majorVersionPtr -> do
 		glGetIntegerv GL_MAJOR_VERSION majorVersionPtr
@@ -59,7 +59,7 @@ createOpenGLContext programCache invoke debug = do
 		capDebugOutput         = version >= (4, 3) || isExtensionSupported "GL_ARB_debug_output"
 		capGetProgramBinary    = version >= (4, 1) || isExtensionSupported "GL_ARB_get_program_binary"
 
-	context <- newGlContext invoke GlCaps
+	context <- newGlContext invoke backgroundInvoke GlCaps
 		{ glCapsUniformBufferObject = capUniformBufferObject
 		, glCapsSamplerObjects = capSamplerObjects
 		, glCapsVertexArrayObject = capVertexArrayObject

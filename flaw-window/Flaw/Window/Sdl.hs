@@ -246,6 +246,7 @@ createSdlWindow ws@SdlWindowSystem
 	{ swsWindows = windowsVar
 	} title maybePosition maybeSize needDepth = invokeSdlWindowSystem ws $ do
 	-- set up attributes
+	checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_SHARE_WITH_CURRENT_CONTEXT 1
 	checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_RED_SIZE 8
 	checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_GREEN_SIZE 8
 	checkSdlError (== 0) $ SDL.glSetAttribute SDL.SDL_GL_BLUE_SIZE 8

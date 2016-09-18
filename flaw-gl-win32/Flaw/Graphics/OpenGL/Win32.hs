@@ -115,7 +115,7 @@ createOpenGLWin32Presenter _deviceId window@Win32Window
 		{ openglPresenterWindow = window
 		, openglPresenterHDC = hdc
 		}
-	context <- createOpenGLContext programCache (invokeWin32WindowSystem ws) debug
+	context <- createOpenGLContext programCache (invokeWin32WindowSystem ws) (invokeWin32WindowSystem ws) debug
 
 	-- TODO: set swap interval
 

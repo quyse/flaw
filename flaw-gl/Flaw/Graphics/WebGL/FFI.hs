@@ -181,6 +181,7 @@ module Flaw.Graphics.WebGL.FFI
 	, glVertexAttribBinding
 	, glVertexBindingDivisor
 	, glBindVertexBuffer
+	, glFinish
 	-- * Shims
 	-- ** Buffer uploading
 	, glBufferData_bs
@@ -1089,6 +1090,12 @@ glVertexBindingDivisor _ _ = throwIO $ DescribeFirstException "glVertexBindingDi
 
 glBindVertexBuffer :: GLuint -> JS_WebGLBuffer -> GLintptr -> GLintptr -> IO ()
 glBindVertexBuffer _ _ _ _ = throwIO $ DescribeFirstException "glBindVertexBuffer is not supported in WebGL"
+
+-- glFinish is currently used only by background operations for synchronization.
+-- WebGL implementation doesn't have background operations, so glFinish is no-op.
+{-# INLINE glFinish #-}
+glFinish :: IO ()
+glFinish = return ()
 
 
 -- Constants.

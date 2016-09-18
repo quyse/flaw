@@ -70,8 +70,10 @@ import Flaw.Graphics.OpenGL.FFI
 -- | 'GlContext' is a 'Device' and 'Context' simultaneously.
 data GlContext = GlContext
 	{
-	-- | Function to do stuff in device mode.
+	-- | Run action in main thread.
 	  glContextInvoke :: !(forall a. IO a -> IO a)
+	-- | Run action in background thread.
+	, glContextBackgroundInvoke :: !(forall a. IO a -> IO a)
 	, glContextCaps :: {-# UNPACK #-} !GlCaps
 	, glContextGlslConfig :: {-# UNPACK #-} !GlslConfig
 	, glContextActualState :: {-# UNPACK #-} !GlContextState
@@ -196,12 +198,13 @@ instance Device GlContext where
 
 	createStaticTexture GlContext
 		{ glContextInvoke = invoke
+		, glContextBackgroundInvoke = backgroundInvoke
 		, glContextCaps = GlCaps
 			{ glCapsTextureStorage = useTextureStorage
 			}
 		} textureInfo@TextureInfo
 		{ textureFormat = format
-		} samplerStateInfo bytes = invoke $ describeException ("failed to create OpenGL static texture", textureInfo) $ do
+		} samplerStateInfo bytes = backgroundInvoke $ describeException ("failed to create OpenGL static texture", textureInfo) $ do
 
 		let
 			width = fromIntegral $ textureWidth textureInfo
@@ -323,6 +326,9 @@ instance Device GlContext where
 
 		-- setup sampling
 		glSetupTextureSampling glTarget samplerStateInfo
+
+		-- as a background operation, we need to wait for completion
+		glFinish
 
 		glCheckErrors1 "create static texture"
 
@@ -507,12 +513,16 @@ instance Device GlContext where
 
 	createStaticVertexBuffer GlContext
 		{ glContextInvoke = invoke
-		} bytes stride = invoke $ describeException "failed to create OpenGL static vertex buffer" $ do
+		, glContextBackgroundInvoke = backgroundInvoke
+		} bytes stride = backgroundInvoke $ describeException "failed to create OpenGL static vertex buffer" $ do
 		bufferName <- glAllocBufferName
 		glBindBuffer GL_ARRAY_BUFFER bufferName
 		glCheckErrors0 "bind buffer"
 		glBufferData_bs GL_ARRAY_BUFFER bytes GL_STATIC_DRAW
 		glCheckErrors0 "buffer data"
+
+		-- as a background operation, we need to wait for completion
+		glFinish
 
 		glCheckErrors1 "create static vertex buffer"
 
@@ -1122,17 +1132,19 @@ glNullProgram = GlProgramId
 
 -- | Init 'GlContext' structure.
 newGlContext
-	:: (forall a. IO a -> IO a) -- ^ Invoke function, may be used to perform operations in a separate thread. Does not need to be re-entrant.
+	:: (forall a. IO a -> IO a) -- ^ Invoke function, may be used to perform operations in a window thread. Does not need to be re-entrant.
+	-> (forall a. IO a -> IO a) -- ^ Background invoke function, used by heavy functions. Can be the same as invoke function.
 	-> GlCaps -- ^ Context capabilities.
 	-> GlslConfig -- ^ GLSL config.
 	-> SomeBinaryCache -- ^ Cache for binary shaders and other stuff.
 	-> IO GlContext
-newGlContext invoke caps glslConfig programCache = do
+newGlContext invoke backgroundInvoke caps glslConfig programCache = do
 	actualState <- glCreateContextState
 	desiredState <- glCreateContextState
 	boundAttributesCount <- newIORef 0
 	return GlContext
 		{ glContextInvoke = invoke
+		, glContextBackgroundInvoke = backgroundInvoke
 		, glContextCaps = caps
 		, glContextGlslConfig = glslConfig
 		, glContextActualState = actualState

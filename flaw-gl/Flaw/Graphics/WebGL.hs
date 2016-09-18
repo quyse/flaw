@@ -104,7 +104,7 @@ webglInit canvas@Canvas
 	jsContext@(JS_WebGLContext jsContextVal) <- js_getCanvasContext jsCanvas needDepth
 	when (isNull jsContextVal) $ throwIO $ DescribeFirstException "cannot get WebGL context"
 	-- create context
-	context <- newGlContext id GlCaps
+	context <- newGlContext id id GlCaps
 		{ glCapsUniformBufferObject = False
 		, glCapsSamplerObjects = False
 		, glCapsVertexArrayObject = False
