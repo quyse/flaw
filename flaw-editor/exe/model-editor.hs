@@ -421,8 +421,10 @@ main = withApp appConfig
 	let cameraNearPlane = 0.01
 	let cameraFarPlane = 10
 
+	-- flow for state and rendering
+	stateFlow <- book bk newFlow
 	-- flow for background operations
-	flow <- book bk newFlow
+	backgroundFlow <- book bk newFlow
 
 	let loadColladaFile fileName elementId = handle (errorHandler "loadColladaFile") $ do
 		bytes <- BL.readFile $ T.unpack fileName
@@ -432,7 +434,7 @@ main = withApp appConfig
 		case eitherVertices of
 			Right vertices -> do
 				geometry <- book bk (loadPackedGeometry device =<< packGeometry (vertices :: V.Vector VertexPNT))
-				atomically $ modifyTVar' editorStateVar $ \s@EditorState
+				runInFlow stateFlow $ atomically $ modifyTVar' editorStateVar $ \s@EditorState
 					{ editorStateGeometryCell = geometryCell
 					} -> s
 					{ editorStateGeometryCell = geometryCell
@@ -471,10 +473,10 @@ main = withApp appConfig
 			_ -> return False
 		MouseInputEvent mouseEvent -> case mouseEvent of
 			MouseDownEvent LeftMouseButton -> do
-				asyncRunInFlow flow $ setWindowMouseLock window True
+				asyncRunInFlow stateFlow $ setWindowMouseLock window True
 				return True
 			MouseUpEvent LeftMouseButton -> do
-				asyncRunInFlow flow $ setWindowMouseLock window False
+				asyncRunInFlow stateFlow $ setWindowMouseLock window False
 				return True
 			RawMouseMoveEvent dx dy _dz -> do
 				buttonPressed <- getMouseButtonState mouseInputState LeftMouseButton
@@ -497,7 +499,7 @@ main = withApp appConfig
 		mainWindow <- newWindow window inputManager windowPanel
 		setWindowCloseHandler mainWindow $ writeTVar exitVar True
 
-		fileDialogService <- newFileDialogService metrics windowPanel flow
+		fileDialogService <- newFileDialogService metrics windowPanel backgroundFlow
 
 		initialEditorState <- readTVar editorStateVar
 
@@ -508,7 +510,7 @@ main = withApp appConfig
 			let actionHandler = do
 				fileName <- getText colladaFileElement
 				nodeName <- getText colladaNodeEditBox
-				asyncRunInFlow flow $ loadColladaFile fileName nodeName
+				asyncRunInFlow backgroundFlow $ loadColladaFile fileName nodeName
 			setActionHandler colladaFileElement actionHandler
 			-- load initial geometry
 			let GeometryCell
@@ -523,13 +525,13 @@ main = withApp appConfig
 			fileElement <- newFileElement fileDialogService
 			let actionHandler = do
 				fileName <- getText fileElement
-				asyncRunInFlow flow $ handle (errorHandler "genericTextureFileElement") $ do
+				asyncRunInFlow backgroundFlow $ handle (errorHandler "genericTextureFileElement") $ do
 					cell@TextureCell
 						{ textureCellBook = cellBook
 						} <- getTextureCell <$> readTVarIO editorStateVar
 					freePreviousTexture <- releaseBook cellBook
 					texture <- book cellBook $ loadTextureFile fileName isNormalTexture
-					atomically $ modifyTVar' editorStateVar $ setTextureCell cell
+					runInFlow stateFlow $ atomically $ modifyTVar' editorStateVar $ setTextureCell cell
 						{ textureCellTexture = texture
 						, textureCellFileName = fileName
 						}
@@ -730,8 +732,8 @@ main = withApp appConfig
 		-- render window
 		windowRender <- atomically $ renderWindow mainWindow drawer
 
-		-- run render synchronously with texture operations
-		runInFlow flow $ render context $ present presenter $ do
+		-- run render in state flow, so setting resources is synchronized
+		runInFlow stateFlow $ render context $ present presenter $ do
 
 			editorState@EditorState
 				{ editorStateEyeFrustum = Frustum
