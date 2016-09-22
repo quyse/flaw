@@ -29,8 +29,8 @@ import Flaw.UI.Metrics
 
 defaultStyleMetrics :: Metrics
 defaultStyleMetrics = Metrics
-	{ metricsGap = 3
-	, metricsBigGap = 5
+	{ metricsGap = 1
+	, metricsBigGap = 3
 	, metricsFrameClient = Vec4 5 25 5 5
 	, metricsFrameTopBorder = 5
 	, metricsMainWidth = 250
