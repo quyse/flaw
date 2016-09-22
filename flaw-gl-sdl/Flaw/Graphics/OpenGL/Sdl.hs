@@ -142,6 +142,10 @@ createOpenGLSdlPresenter _deviceId window@SdlWindow
 	backgroundFlow <- book bk newFlowOS
 	-- create background context
 	backgroundSdlContext <- checkSdlResult $ SDL.glCreateContext windowHandle
+	book bk $ return ((), runInFlow backgroundFlow $ do
+		void $ SDL.glMakeCurrent windowHandle nullPtr
+		SDL.glDeleteContext backgroundSdlContext
+		)
 	-- create main context (has to be created while background context is current, in order to "share with current")
 	mainSdlContext <- checkSdlResult $ SDL.glCreateContext windowHandle
 	book bk $ return ((), invokeSdlWindowSystem ws $ do
@@ -150,10 +154,6 @@ createOpenGLSdlPresenter _deviceId window@SdlWindow
 		)
 	-- make background context current in background thread
 	checkSdlError (== 0) $ runInFlow backgroundFlow $ SDL.glMakeCurrent windowHandle backgroundSdlContext
-	book bk $ return ((), runInFlow backgroundFlow $ do
-		void $ SDL.glMakeCurrent windowHandle nullPtr
-		SDL.glDeleteContext backgroundSdlContext
-		)
 	-- make main context current in current thread
 	checkSdlError (== 0) $ SDL.glMakeCurrent windowHandle mainSdlContext
 

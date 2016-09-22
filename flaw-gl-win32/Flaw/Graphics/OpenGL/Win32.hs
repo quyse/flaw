@@ -28,6 +28,7 @@ import Flaw.BinaryCache
 import Flaw.Book
 import Flaw.Exception
 import Flaw.FFI.Win32
+import Flaw.Flow
 import Flaw.Graphics
 import Flaw.Graphics.GlContext
 import Flaw.Graphics.OpenGL
@@ -102,20 +103,35 @@ createOpenGLWin32Presenter _deviceId window@Win32Window
 	, wHandle = hwnd
 	} programCache debug = describeException "failed to create OpenGL Win32 presenter" $ withSpecialBook $ \bk -> invokeWin32WindowSystem ws $ do
 
-	-- create OpenGL context and make it current
-	(hglrc, hdc) <- alloca $ \hdcPtr -> do
-		hglrc <- c_initWin32OpenGLContext hwnd (if debug then 1 else 0) hdcPtr
-		when (hglrc == nullPtr) $ throwIO $ DescribeFirstException "failed to init Win32 OpenGL context"
-		hdc <- peek hdcPtr
-		return (hglrc, hdc)
-	book bk $ return ((), invokeWin32WindowSystem ws $ c_deinitWin32OpenGLContext hwnd hglrc)
+	-- spawn background flow
+	backgroundFlow <- book bk newFlowOS
 
-	-- create context
+	-- create OpenGL contexts
+	(hdc, hglrcMain, hglrcBackground) <- alloca $ \hglrcMainPtr -> alloca $ \hglrcBackgroundPtr -> do
+		hdc <- c_initWin32OpenGLContext hwnd (if debug then 1 else 0) hglrcMainPtr hglrcBackgroundPtr
+		when (hdc == nullPtr) $ throwIO $ DescribeFirstException "failed to init contexts"
+		hglrcMain <- peek hglrcMainPtr
+		hglrcBackground <- peek hglrcBackgroundPtr
+		return (hdc, hglrcMain, hglrcBackground)
+	book bk $ return ((), invokeWin32WindowSystem ws $ c_deinitWin32OpenGLContext hwnd hglrcMain)
+	book bk $ return ((), runInFlow backgroundFlow $ c_deinitWin32OpenGLContext hwnd hglrcBackground)
+
+	-- set main context current
+	do
+		r <- c_setCurrentWin32OpenGLContext hdc hglrcMain
+		when (r == 0) $ throwIO $ DescribeFirstException "failed to set main context current"
+
+	-- set background context current in background flow
+	do
+		r <- runInFlow backgroundFlow $ c_setCurrentWin32OpenGLContext hdc hglrcBackground
+		when (r == 0) $ throwIO $ DescribeFirstException "failed to set background context current"
+
+	-- create GL context
 	let presenter = OpenGLWin32Presenter
 		{ openglPresenterWindow = window
 		, openglPresenterHDC = hdc
 		}
-	context <- createOpenGLContext programCache (invokeWin32WindowSystem ws) (invokeWin32WindowSystem ws) debug
+	context <- createOpenGLContext programCache (invokeWin32WindowSystem ws) (runInFlow backgroundFlow) debug
 
 	-- TODO: set swap interval
 
@@ -124,6 +140,7 @@ createOpenGLWin32Presenter _deviceId window@Win32Window
 type HGLRC = Ptr ()
 type HDC = Ptr ()
 
-foreign import ccall safe "initWin32OpenGLContext" c_initWin32OpenGLContext :: HWND -> CInt -> Ptr HDC -> IO HGLRC
+foreign import ccall safe "initWin32OpenGLContext" c_initWin32OpenGLContext :: HWND -> CInt -> Ptr HGLRC -> Ptr HGLRC -> IO HDC
+foreign import ccall safe "setCurrentWin32OpenGLContext" c_setCurrentWin32OpenGLContext :: HDC -> HGLRC -> IO CInt
 foreign import ccall safe "deinitWin32OpenGLContext" c_deinitWin32OpenGLContext :: HWND -> HGLRC -> IO ()
 foreign import ccall safe "swapWin32OpenGLWindow" c_swapWin32OpenGLWindow :: HDC -> IO ()

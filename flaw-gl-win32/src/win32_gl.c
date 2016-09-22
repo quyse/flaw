@@ -15,12 +15,11 @@ typedef HGLRC (WINAPI *PFNWGLCREATECONTEXTATTRIBSARBPROC)(HDC hDC, HGLRC hShareC
 #define WGL_CONTEXT_DEBUG_BIT_ARB 0x0001
 #define WGL_CONTEXT_CORE_PROFILE_BIT_ARB 0x00000001
 
-HGLRC initWin32OpenGLContext(HWND hWnd, int debug, HDC* phdc)
+HDC initWin32OpenGLContext(HWND hWnd, int debug, HGLRC* phglrcMain, HGLRC* phglrcBackground)
 {
 	// get window's persistent HDC
 	HDC hdc = GetDC(hWnd);
 	if(!hdc) return NULL;
-	*phdc = hdc;
 
 	// choose & set pixel format
 	PIXELFORMATDESCRIPTOR pfd;
@@ -66,35 +65,41 @@ HGLRC initWin32OpenGLContext(HWND hWnd, int debug, HDC* phdc)
 		return NULL;
 	}
 	// loop for versions
-	HGLRC hglrc = NULL;
+	HGLRC hglrcMain = NULL, hglrcBackground = NULL;
 	for(int i = 0; i < sizeof(versions) / sizeof(versions[0]); ++i)
 	{
 		attribs[1] = versions[i][0];
 		attribs[3] = versions[i][1];
-		hglrc = wglCreateContextAttribsARB(hdc, 0, attribs);
-		if(hglrc) break;
-	}
-	// if no version is supported, bummer
-	if(!hglrc)
-	{
-		wglMakeCurrent(hdc, NULL);
-		wglDeleteContext(hglrcTemp);
-		return NULL;
-	}
-
-	// make new context current
-	if(!wglMakeCurrent(hdc, hglrc))
-	{
-		wglMakeCurrent(hdc, NULL);
-		wglDeleteContext(hglrcTemp);
-		return NULL;
+		hglrcMain = wglCreateContextAttribsARB(hdc, 0, attribs);
+		hglrcBackground = wglCreateContextAttribsARB(hdc, 0, attribs);
+		if(hglrcMain && hglrcBackground) break;
+		if(hglrcMain) wglDeleteContext(hglrcMain);
+		if(hglrcBackground) wglDeleteContext(hglrcBackground);
 	}
 
 	// delete temporary context
+	wglMakeCurrent(hdc, NULL);
 	wglDeleteContext(hglrcTemp);
 
-	// return context
-	return hglrc;
+	// if no version is supported, bummer
+	if(!hglrcMain || !hglrcBackground) return NULL;
+
+	// make contexts share resources
+	if(!wglShareLists(hglrcMain, hglrcBackground))
+	{
+		wglDeleteContext(hglrcMain);
+		wglDeleteContext(hglrcBackground);
+		return NULL;
+	}
+
+	*phglrcMain = hglrcMain;
+	*phglrcBackground = hglrcBackground;
+	return hdc;
+}
+
+int setCurrentWin32OpenGLContext(HDC hdc, HGLRC hglrc)
+{
+	return wglMakeCurrent(hdc, hglrc);
 }
 
 void deinitWin32OpenGLContext(HWND hWnd, HGLRC hglrc)
