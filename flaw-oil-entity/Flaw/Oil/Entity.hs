@@ -38,7 +38,7 @@ runs in 'IO' monad.
 
 -}
 
-{-# LANGUAGE DefaultSignatures, GADTs, GeneralizedNewtypeDeriving, PatternSynonyms, TemplateHaskell, TypeFamilies, TypeOperators, ViewPatterns #-}
+{-# LANGUAGE ConstraintKinds, DefaultSignatures, GADTs, GeneralizedNewtypeDeriving, PatternSynonyms, TemplateHaskell, TypeFamilies, TypeOperators, ViewPatterns #-}
 {-# OPTIONS_GHC -fno-warn-missing-pattern-synonym-signatures #-}
 
 module Flaw.Oil.Entity
@@ -58,6 +58,10 @@ module Flaw.Oil.Entity
 	, SomeBasicEntity(..)
 	, SomeBasicOrdEntity(..)
 	, NullEntity(..)
+	, EntityInterfaceId(..)
+	, nullEntityInterfaceId
+	, EntityInterface(..)
+	, EntityInterfaced(..)
 	, EntityManager(..)
 	, GetEntity
 	, getRootBaseEntity
@@ -79,6 +83,10 @@ module Flaw.Oil.Entity
 	, readEntityHistoryChan
 	, EntityException(..)
 	, hashTextToEntityTypeId
+	, hashTextToEntityInterfaceId
+	, interfaceEntityExp
+	-- * Re-exports for convenience
+	, Proxy(..)
 	) where
 
 import Control.Concurrent.STM
@@ -97,6 +105,7 @@ import qualified Data.Serialize as S
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import Data.Typeable
+import GHC.Exts(Constraint)
 import Language.Haskell.TH
 import System.Mem.Weak
 
@@ -213,7 +222,7 @@ newtype SomeEntityVar = SomeEntityVar (TVar SomeEntity)
 -- Entity should be able to deserialize from any data.
 -- It must not throw exceptions. It's free to ignore invalid data
 -- and/or provide some default values instead.
-class Typeable a => Entity a where
+class Typeable a => Entity (a :: *) where
 
 	{-# MINIMAL getEntityTypeId #-}
 
@@ -250,6 +259,10 @@ class Typeable a => Entity a where
 	default applyEntityChange :: a -> a -> a
 	applyEntityChange = const
 
+	-- | Return witness for entity that it supports specified entity interface.
+	interfaceEntity :: EntityInterface i => Proxy i -> a -> EntityInterfaced i a
+	interfaceEntity _ _ = EntityNotInterfaced
+
 -- | Basic entity is an entity consisting of main record only.
 class (Entity a, EntityChange a ~ a) => BasicEntity a where
 	-- | Serialize basic entity into main record's value.
@@ -282,6 +295,38 @@ data NullEntity = NullEntity deriving (Typeable, Show)
 instance Entity NullEntity where
 	getEntityTypeId _ = nullEntityTypeId
 	processEntityChange NullEntity _ _ = (NullEntity, NullEntity)
+
+-- | Entity interface id.
+newtype EntityInterfaceId = EntityInterfaceId BS.ShortByteString deriving (Eq, Ord)
+
+instance Show EntityInterfaceId where
+	show (EntityInterfaceId entityInterfaceIdBytes) = "EntityInterfaceId \"" <> T.unpack (T.decodeUtf8 $ BA.convertToBase BA.Base64 $ BS.fromShort entityInterfaceIdBytes) <> "\""
+
+instance Default EntityInterfaceId where
+	def = nullEntityInterfaceId
+
+-- | Entity interface id length in bytes.
+pattern ENTITY_INTERFACE_ID_SIZE = 20
+
+-- | Null entity interface id.
+{-# NOINLINE nullEntityInterfaceId #-}
+nullEntityInterfaceId :: EntityInterfaceId
+nullEntityInterfaceId = EntityInterfaceId $ BS.toShort $ B.replicate ENTITY_INTERFACE_ID_SIZE 0
+
+instance S.Serialize EntityInterfaceId where
+	put (EntityInterfaceId bytes) = S.putShortByteString bytes
+	get = EntityInterfaceId <$> S.getShortByteString ENTITY_INTERFACE_ID_SIZE
+
+-- | Class of entity interface.
+-- Entity interface is itself a class.
+class Typeable i => EntityInterface (i :: * -> Constraint) where
+	-- | Get id of entity interface.
+	getEntityInterfaceId :: p i -> EntityInterfaceId
+
+-- | Witness for entity having an interface.
+data EntityInterfaced i a where
+	EntityInterfaced :: (EntityInterface i, Entity a, i a) => EntityInterfaced i a
+	EntityNotInterfaced :: EntityInterfaced i a
 
 -- | Entity manager based on client repo.
 data EntityManager = EntityManager
@@ -744,3 +789,23 @@ instance Exception EntityException
 -- | Handy function to generate compile-time entity type id out of text.
 hashTextToEntityTypeId :: T.Text -> Q Exp
 hashTextToEntityTypeId = hashTextDecl "entityTypeIdHash_" [t| EntityTypeId |] $ \e -> [| EntityTypeId (BS.toShort $e) |]
+
+-- | Handy function to generate compile-time entity interface id out of text.
+hashTextToEntityInterfaceId :: T.Text -> Q Exp
+hashTextToEntityInterfaceId = hashTextDecl "entityInterfaceIdHash_" [t| EntityInterfaceId |] $ \e -> [| EntityInterfaceId (BS.toShort $e) |]
+
+-- | Helper method for comparing interfaces' types.
+-- Helps solving problems with kinds.
+{-# INLINE eqEntityInterfaces #-}
+eqEntityInterfaces :: (EntityInterface a, EntityInterface b) => Proxy a -> Proxy b -> Maybe ((Proxy a) :~: (Proxy b))
+eqEntityInterfaces _ _ = eqT
+
+-- | Handy 'interfaceEntity' implementation generator.
+interfaceEntityExp :: [Name] -> ExpQ
+interfaceEntityExp interfaceNames = do
+	p <- newName "p"
+	let f n q = caseE [| eqEntityInterfaces $(varE p) (Proxy :: Proxy $(conT n)) |]
+		[ match [p| Just Refl |] (normalB [| EntityInterfaced |]) []
+		, match [p| Nothing |] (normalB q) []
+		]
+	lamE [varP p, wildP] $ foldr f (conE 'EntityNotInterfaced) interfaceNames
