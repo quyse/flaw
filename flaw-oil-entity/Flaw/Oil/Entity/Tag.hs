@@ -10,6 +10,7 @@ and attached entity's id.
 -}
 
 {-# LANGUAGE PatternSynonyms, TemplateHaskell #-}
+{-# OPTIONS_GHC -fno-warn-missing-pattern-synonym-signatures #-}
 
 module Flaw.Oil.Entity.Tag
 	( EntityTagId(..)
@@ -18,7 +19,7 @@ module Flaw.Oil.Entity.Tag
   , hashTextToEntityTagId
 	) where
 
-import qualified Data.ByteString as B
+import qualified Data.ByteString.Short as BS
 import Data.Monoid
 import qualified Data.Text as T
 import Language.Haskell.TH
@@ -27,7 +28,7 @@ import Flaw.Oil.Entity
 import Flaw.Oil.Entity.Internal
 
 -- | Entity tag id, used for prefixing entity id of tag entities.
-newtype EntityTagId = EntityTagId B.ByteString
+newtype EntityTagId = EntityTagId BS.ShortByteString
 
 pattern ENTITY_TAG_ID_SIZE = 20
 
@@ -38,4 +39,4 @@ entityTagEntityId (EntityTagId entityTagIdBytes) (EntityId entityIdBytes) =
 
 -- | Handy function to generate compile-time entity tag id out of text.
 hashTextToEntityTagId :: T.Text -> Q Exp
-hashTextToEntityTagId = hashTextDecl "entityTagIdHash_" [t| EntityTagId |] $ \e -> [| EntityTagId $e |]
+hashTextToEntityTagId = hashTextDecl "entityTagIdHash_" [t| EntityTagId |] $ \e -> [| EntityTagId (BS.toShort $e) |]

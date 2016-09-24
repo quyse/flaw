@@ -38,7 +38,7 @@ runs in 'IO' monad.
 
 -}
 
-{-# LANGUAGE DefaultSignatures, GADTs, GeneralizedNewtypeDeriving, PatternSynonyms, TemplateHaskell, TypeFamilies, TypeOperators #-}
+{-# LANGUAGE DefaultSignatures, GADTs, GeneralizedNewtypeDeriving, PatternSynonyms, TemplateHaskell, TypeFamilies, TypeOperators, ViewPatterns #-}
 {-# OPTIONS_GHC -fno-warn-missing-pattern-synonym-signatures #-}
 
 module Flaw.Oil.Entity
@@ -88,6 +88,7 @@ import Control.Monad.Reader
 import qualified Crypto.Random.EntropyPool as C
 import qualified Data.ByteArray.Encoding as BA
 import qualified Data.ByteString as B
+import qualified Data.ByteString.Short as BS
 import Data.Default
 import Data.IORef
 import qualified Data.Map.Strict as M
@@ -104,10 +105,10 @@ import Flaw.Oil.ClientRepo
 import Flaw.Oil.Entity.Internal
 
 -- | Entity id.
-newtype EntityId = EntityId B.ByteString deriving (Eq, Ord)
+newtype EntityId = EntityId BS.ShortByteString deriving (Eq, Ord)
 
 instance Show EntityId where
-	show (EntityId entityIdBytes) = "EntityId \"" <> T.unpack (T.decodeUtf8 $ BA.convertToBase BA.Base64 entityIdBytes) <> "\""
+	show (EntityId entityIdBytes) = "EntityId \"" <> T.unpack (T.decodeUtf8 $ BA.convertToBase BA.Base64 $ BS.fromShort entityIdBytes) <> "\""
 
 instance Default EntityId where
 	def = nullEntityId
@@ -118,14 +119,14 @@ pattern ENTITY_ID_SIZE = 20
 -- | Null entity id.
 {-# NOINLINE nullEntityId #-}
 nullEntityId :: EntityId
-nullEntityId = EntityId $ B.replicate ENTITY_ID_SIZE 0
+nullEntityId = EntityId $ BS.toShort $ B.replicate ENTITY_ID_SIZE 0
 
 instance S.Serialize EntityId where
-	put (EntityId bytes) = S.putByteString bytes
-	get = EntityId <$> S.getBytes ENTITY_ID_SIZE
+	put (EntityId bytes) = S.putShortByteString bytes
+	get = EntityId <$> S.getShortByteString ENTITY_ID_SIZE
 
 -- | Entity type id.
-newtype EntityTypeId = EntityTypeId B.ByteString deriving (Eq, Ord, Monoid, Show)
+newtype EntityTypeId = EntityTypeId BS.ShortByteString deriving (Eq, Ord, Monoid, Show)
 
 -- | Entity type id length in bytes.
 pattern ENTITY_TYPE_ID_SIZE = 20
@@ -133,11 +134,11 @@ pattern ENTITY_TYPE_ID_SIZE = 20
 -- | Null entity type id.
 {-# NOINLINE nullEntityTypeId #-}
 nullEntityTypeId :: EntityTypeId
-nullEntityTypeId = EntityTypeId B.empty
+nullEntityTypeId = EntityTypeId BS.empty
 
 instance S.Serialize EntityTypeId where
-	put (EntityTypeId bytes) = S.putByteString bytes
-	get = EntityTypeId <$> S.getBytes ENTITY_ID_SIZE
+	put (EntityTypeId bytes) = S.putShortByteString bytes
+	get = EntityTypeId <$> S.getShortByteString ENTITY_ID_SIZE
 
 -- | Entity "pointer" is a typed entity id.
 -- Doesn't keep a reference to cached entity.
@@ -417,7 +418,7 @@ internalGetEntityState EntityManager
 deserializeSomeEntity :: EntityManager -> EntityId -> IO SomeEntity
 deserializeSomeEntity entityManager@EntityManager
 	{ entityManagerClientRepo = clientRepo
-	} (EntityId entityIdBytes) = do
+	} (EntityId (BS.fromShort -> entityIdBytes)) = do
 	mainValue <- clientRepoGetValue clientRepo entityIdBytes
 	getEntity <- getEntityStateGetter <$> internalGetEntityState entityManager
 	let eitherReturnResult = flip S.runGet mainValue $ do
@@ -446,7 +447,7 @@ pullEntityManager entityManager@EntityManager
 		-- get entity id
 		let
 			(entityIdBytes, recordKeySuffix) = B.splitAt ENTITY_ID_SIZE recordKey
-			entityId = EntityId entityIdBytes
+			entityId = EntityId $ BS.toShort entityIdBytes
 		-- get cached entity
 		cache <- readIORef cacheRef
 		case M.lookup entityId cache of
@@ -615,10 +616,10 @@ newEntityVar entityManager@EntityManager
 		entityIdBytes <- C.getEntropyFrom entropyPool ENTITY_ID_SIZE
 		-- write entity type id
 		let EntityTypeId entityTypeIdBytes = getEntityTypeId u
-		clientRepoChange clientRepo entityIdBytes entityTypeIdBytes
+		clientRepoChange clientRepo entityIdBytes $ BS.fromShort entityTypeIdBytes
 		pushAction
 		-- create cached entity var
-		cacheEntity entityManager (EntityId entityIdBytes)
+		cacheEntity entityManager (EntityId $ BS.toShort entityIdBytes)
 
 -- | Read entity var type safely.
 -- If entity var contains entity of wrong type, throws EntityWrongTypeException.
@@ -664,9 +665,9 @@ writeEntityVarRecord entityVar@EntityVar
 			let newRecordValue =
 				if B.null recordKeySuffix then let
 					EntityTypeId entityTypeIdBytes = getEntityTypeId newEntity
-					in entityTypeIdBytes <> recordNewValue
+					in BS.fromShort entityTypeIdBytes <> recordNewValue
 				else recordNewValue
-			modifyTVar' dirtyRecordsVar $ M.insert (entityIdBytes <> recordKeySuffix) newRecordValue
+			modifyTVar' dirtyRecordsVar $ M.insert (BS.fromShort entityIdBytes <> recordKeySuffix) newRecordValue
 		-- else entity is of another type
 		Nothing -> throwSTM EntityWrongTypeException
 	-- schedule push
@@ -686,7 +687,7 @@ writeBasicEntityVar EntityVar
 	writeEntityChange entityValueVar newEntity newEntity
 	-- write record
 	let EntityTypeId entityTypeIdBytes = getEntityTypeId newEntity
-	modifyTVar' dirtyRecordsVar $ M.insert entityIdBytes $ entityTypeIdBytes <> serializeBasicEntity newEntity
+	modifyTVar' dirtyRecordsVar $ M.insert (BS.fromShort entityIdBytes) $ BS.fromShort entityTypeIdBytes <> serializeBasicEntity newEntity
 	-- schedule push
 	scheduleEntityManagerPush entityManager
 
@@ -742,4 +743,4 @@ instance Exception EntityException
 
 -- | Handy function to generate compile-time entity type id out of text.
 hashTextToEntityTypeId :: T.Text -> Q Exp
-hashTextToEntityTypeId = hashTextDecl "entityTypeIdHash_" [t| EntityTypeId |] $ \e -> [| EntityTypeId $e |]
+hashTextToEntityTypeId = hashTextDecl "entityTypeIdHash_" [t| EntityTypeId |] $ \e -> [| EntityTypeId (BS.toShort $e) |]

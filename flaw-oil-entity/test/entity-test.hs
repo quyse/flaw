@@ -37,7 +37,7 @@ testFailedRef = unsafePerformIO $ newIORef False
 failTest :: IO ()
 failTest = writeIORef testFailedRef True
 
-verify :: Eq a => (a -> Bool) -> IO a -> IO ()
+verify :: (a -> Bool) -> IO a -> IO ()
 verify f m = do
 	r <- m
 	unless (f r) failTest
