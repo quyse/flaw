@@ -26,6 +26,7 @@ import qualified Data.ByteString as B
 import qualified Data.ByteString.Unsafe as B
 import Data.Foldable
 import Data.List
+import Data.Maybe
 import Data.IORef
 import qualified Data.Serialize as S
 import qualified Data.Text.Encoding as T
@@ -618,7 +619,7 @@ instance Device GlContext where
 		-- if binary programs are supported, try to use binary cache
 		let cacheKey = S.encode glslProgram
 		binaryLoaded <- if capGetProgramBinary then do
-			encodedBinaryProgram <- getCachedBinary programCache cacheKey
+			encodedBinaryProgram <- fromMaybe B.empty <$> getCachedBinary programCache cacheKey
 			case S.decode encodedBinaryProgram of
 				Right binaryProgram -> do
 					let (bytes, format) = binaryProgram :: BinaryProgram
@@ -713,7 +714,7 @@ instance Device GlContext where
 							glCheckErrors0 "get program binary"
 							format <- peek formatPtr
 							return (bytes, fromIntegral format)
-						setCachedBinary programCache cacheKey $ S.encode (binaryProgram :: BinaryProgram)
+						putCachedBinary programCache cacheKey $ S.encode (binaryProgram :: BinaryProgram)
 			else do
 				programLog <- glGetProgramInfoLog_s programName
 				glCheckErrors0 "get program log"

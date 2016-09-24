@@ -709,47 +709,48 @@ instance Device Dx11Device where
 			-- get cache key
 			let cacheKey = S.encode (source, entryPoint, profile, flags)
 			-- try to use cache
-			cachedShaderData <- getCachedBinary shaderCache cacheKey
-			if B.null cachedShaderData then do
-				-- shader is not in cache, compile it
-				(hr, shaderData, errorsData) <- B.unsafeUseAsCStringLen (T.encodeUtf8 source) $ \(sourcePtr, sourceLen) ->
-					B.useAsCString (T.encodeUtf8 entryPoint) $ \entryPointPtr ->
-						B.useAsCString (T.encodeUtf8 profile) $ \profilePtr ->
-							alloca $ \shaderBlobPtrPtr ->
-								alloca $ \errorsBlobPtrPtr -> do
-									hr <- d3dCompile
-										(castPtr sourcePtr) -- pSrcData
-										(fromIntegral sourceLen) -- SrcDataSize
-										nullPtr -- pSourceName
-										nullPtr -- pDefines
-										nullPtr -- pInclude
-										entryPointPtr -- pEntrypoint
-										profilePtr -- pTarget
-										flags -- Flags1
-										0 -- Flags2
-										shaderBlobPtrPtr -- ppCode
-										errorsBlobPtrPtr -- ppErrorMsgs
-									-- retrieve blobs
-									let getBlobData blobPtrPtr = do
-										blobPtr <- peek blobPtrPtr
-										if blobPtr == nullPtr then return B.empty
-										else do
-											blobInterface <- peekCOMObject blobPtr
-											dataPtr <- m_ID3DBlob_GetBufferPointer blobInterface
-											dataSize <- fromIntegral <$> m_ID3DBlob_GetBufferSize blobInterface
-											dataCopyPtr <- mallocBytes dataSize
-											copyArray dataCopyPtr (castPtr dataPtr) dataSize
-											_ <- m_IUnknown_Release blobInterface
-											B.unsafePackMallocCStringLen (dataCopyPtr, dataSize)
-									shaderData <- getBlobData shaderBlobPtrPtr
-									errorsData <- getBlobData errorsBlobPtrPtr
-									return (hr, shaderData, errorsData)
-				if hresultFailed hr then throwIO $ DescribeFirstException ("failed to compile shader", errorsData)
-				else do
-					-- put shader into cache
-					setCachedBinary shaderCache cacheKey shaderData
-					return shaderData
-			else return cachedShaderData
+			maybeCachedShaderData <- getCachedBinary shaderCache cacheKey
+			case maybeCachedShaderData of
+				Just cachedShaderData -> return cachedShaderData
+				Nothing -> do
+					-- shader is not in cache, compile it
+					(hr, shaderData, errorsData) <- B.unsafeUseAsCStringLen (T.encodeUtf8 source) $ \(sourcePtr, sourceLen) ->
+						B.useAsCString (T.encodeUtf8 entryPoint) $ \entryPointPtr ->
+							B.useAsCString (T.encodeUtf8 profile) $ \profilePtr ->
+								alloca $ \shaderBlobPtrPtr ->
+									alloca $ \errorsBlobPtrPtr -> do
+										hr <- d3dCompile
+											(castPtr sourcePtr) -- pSrcData
+											(fromIntegral sourceLen) -- SrcDataSize
+											nullPtr -- pSourceName
+											nullPtr -- pDefines
+											nullPtr -- pInclude
+											entryPointPtr -- pEntrypoint
+											profilePtr -- pTarget
+											flags -- Flags1
+											0 -- Flags2
+											shaderBlobPtrPtr -- ppCode
+											errorsBlobPtrPtr -- ppErrorMsgs
+										-- retrieve blobs
+										let getBlobData blobPtrPtr = do
+											blobPtr <- peek blobPtrPtr
+											if blobPtr == nullPtr then return B.empty
+											else do
+												blobInterface <- peekCOMObject blobPtr
+												dataPtr <- m_ID3DBlob_GetBufferPointer blobInterface
+												dataSize <- fromIntegral <$> m_ID3DBlob_GetBufferSize blobInterface
+												dataCopyPtr <- mallocBytes dataSize
+												copyArray dataCopyPtr (castPtr dataPtr) dataSize
+												_ <- m_IUnknown_Release blobInterface
+												B.unsafePackMallocCStringLen (dataCopyPtr, dataSize)
+										shaderData <- getBlobData shaderBlobPtrPtr
+										errorsData <- getBlobData errorsBlobPtrPtr
+										return (hr, shaderData, errorsData)
+					if hresultFailed hr then throwIO $ DescribeFirstException ("failed to compile shader", errorsData)
+					else do
+						-- put shader into cache
+						putCachedBinary shaderCache cacheKey shaderData
+						return shaderData
 
 		-- function to create vertex shader
 		let createVertexShader bytecode = allocateCOMObject $ B.unsafeUseAsCStringLen bytecode $ \(ptr, len) ->
