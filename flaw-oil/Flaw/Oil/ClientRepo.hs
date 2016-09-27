@@ -11,6 +11,7 @@ module Flaw.Oil.ClientRepo
 	( ClientRepo()
 	, openClientRepo
 	, clientRepoRevision
+	, clientRepoGetRevision
 	, clientRepoGetRevisionValue
 	, clientRepoChange
 	, clientRepoGetKeysPrefixed
@@ -44,6 +45,7 @@ data ClientRepo = ClientRepo
 	, clientRepoStmtGetKeyItems            :: !SqliteStmt
 	, clientRepoStmtGetKeyItemsByOneItemId :: !SqliteStmt
 	, clientRepoStmtGetKeyItemKey          :: !SqliteStmt
+	, clientRepoStmtGetKeyItemRev          :: !SqliteStmt
 	, clientRepoStmtGetKeyItemRevValue     :: !SqliteStmt
 	, clientRepoStmtAddKeyItem             :: !SqliteStmt
 	, clientRepoStmtChangeKeyItemRevStatus :: !SqliteStmt
@@ -104,6 +106,7 @@ openClientRepo fileName = describeException "failed to open oil client repo" $ w
 	stmtGetKeyItems            <- createStmt "SELECT id, status FROM items WHERE key = ?1"
 	stmtGetKeyItemsByOneItemId <- createStmt "SELECT id, status FROM items WHERE key = (SELECT key FROM items WHERE id = ?1)"
 	stmtGetKeyItemKey          <- createStmt "SELECT key FROM items WHERE id = ?1"
+	stmtGetKeyItemRev          <- createStmt "SELECT rev FROM items WHERE id = ?1"
 	stmtGetKeyItemRevValue     <- createStmt "SELECT rev, value FROM items WHERE id = ?1"
 	stmtAddKeyItem             <- createStmt "INSERT OR REPLACE INTO items (key, value, rev, status) VALUES (?1, ?2, ?3, ?4)"
 	stmtChangeKeyItemRevStatus <- createStmt "UPDATE OR REPLACE items SET rev = ?2, status = ?3 WHERE id = ?1"
@@ -125,6 +128,7 @@ openClientRepo fileName = describeException "failed to open oil client repo" $ w
 		, clientRepoStmtGetKeyItems            = stmtGetKeyItems
 		, clientRepoStmtGetKeyItemsByOneItemId = stmtGetKeyItemsByOneItemId
 		, clientRepoStmtGetKeyItemKey          = stmtGetKeyItemKey
+		, clientRepoStmtGetKeyItemRev          = stmtGetKeyItemRev
 		, clientRepoStmtGetKeyItemRevValue     = stmtGetKeyItemRevValue
 		, clientRepoStmtAddKeyItem             = stmtAddKeyItem
 		, clientRepoStmtChangeKeyItemRevStatus = stmtChangeKeyItemRevStatus
@@ -222,6 +226,15 @@ changeKeyItemRevisionStatus ClientRepo
 	sqliteBind query 3 newStatus
 	sqliteFinalStep query
 
+getKeyItemRevision :: ClientRepo -> ItemId -> IO Revision
+getKeyItemRevision ClientRepo
+	{ clientRepoStmtGetKeyItemRev = stmtGetKeyItemRev
+	} itemId = sqliteQuery stmtGetKeyItemRev $ \query -> do
+	sqliteBind query 1 itemId
+	r <- sqliteStep query
+	unless r $ throwIO $ DescribeFirstException "failed to get key item revision"
+	sqliteColumn query 0
+
 getKeyItemRevisionValue :: ClientRepo -> ItemId -> IO (Revision, B.ByteString)
 getKeyItemRevisionValue ClientRepo
 	{ clientRepoStmtGetKeyItemRevValue = stmtGetKeyItemRevValue
@@ -273,19 +286,31 @@ getKeyItemsByOneItemId ClientRepo
 	sqliteBind query 1 itemId
 	fillKeyItems query
 
-getKeyRevisionValue :: ClientRepo -> B.ByteString -> IO (Revision, B.ByteString)
-getKeyRevisionValue repo key = do
+mapKeyRevisionItem :: ClientRepo -> B.ByteString -> a -> (ItemId -> IO a) -> IO a
+mapKeyRevisionItem repo key defaultResult f = do
 	KeyItems keyItemIds <- getKeyItems repo key
 	let
 		step (status : restStatuses) = do
 			let itemId = keyItemIds VU.! status
-			if itemId > 0 then getKeyItemRevisionValue repo itemId
+			if itemId > 0 then f itemId
 			else step restStatuses
-		step [] = return (0, B.empty)
+		step [] = return defaultResult
 	-- check key items in this particular order
 	step [ItemStatusPostponed, ItemStatusTransient, ItemStatusClient, ItemStatusServer]
 
--- | Get value by key.
+getKeyRevision :: ClientRepo -> B.ByteString -> IO Revision
+getKeyRevision repo key = mapKeyRevisionItem repo key 0 $ getKeyItemRevision repo
+
+getKeyRevisionValue :: ClientRepo -> B.ByteString -> IO (Revision, B.ByteString)
+getKeyRevisionValue repo key = mapKeyRevisionItem repo key (0, B.empty) $ getKeyItemRevisionValue repo
+
+-- | Get revision by key.
+clientRepoGetRevision :: ClientRepo -> B.ByteString -> IO Revision
+clientRepoGetRevision repo@ClientRepo
+	{ clientRepoDb = db
+	} key = sqliteTransaction db $ \_commit -> getKeyRevision repo key
+
+-- | Get revision and value by key.
 clientRepoGetRevisionValue :: ClientRepo -> B.ByteString -> IO (Revision, B.ByteString)
 clientRepoGetRevisionValue repo@ClientRepo
 	{ clientRepoDb = db
@@ -304,6 +329,7 @@ clientRepoChange repo@ClientRepo
 	commit
 
 -- | Get all keys having the string given as a prefix.
+-- Empty-valued keys are returned too for removed values, for purpose of detecting changes.
 clientRepoGetKeysPrefixed :: ClientRepo -> B.ByteString -> IO [B.ByteString]
 clientRepoGetKeysPrefixed ClientRepo
 	{ clientRepoDb = db
@@ -330,14 +356,11 @@ clientRepoGetKeysPrefixed ClientRepo
 			f _ = Nothing
 			in f $ keyPrefixLength - 1
 		process query = let
-			step = do
+			step previousKeys = do
 				r <- sqliteStep query
-				if r then do
-					key <- sqliteColumn query 0
-					restKeys <- step
-					return $ key : restKeys
-				else return []
-			in step
+				if r then step =<< (: previousKeys) <$> sqliteColumn query 0
+				else return previousKeys
+			in reverse <$> step []
 
 -- | State of push, needed for pull.
 newtype ClientRepoPushState = ClientRepoPushState

@@ -73,8 +73,20 @@ check Client
 	let ok = revision == repoRevision && value == repoValue
 	unless ok failTest
 	putStrLn $ T.unpack $ (if ok then "OK    " else "WRONG ")
-		<> "checkValue: client=" <> name <> ", key=" <> key <> ", value=" <> value <> ", repoValue=" <> repoValue
+		<> "check: client=" <> name <> ", key=" <> key <> ", value=" <> value <> ", repoValue=" <> repoValue
 		<> ", rev=" <> T.pack (show revision) <> ", repoRev=" <> T.pack (show repoRevision)
+
+checkPrefixed :: Client -> T.Text -> [T.Text] -> SessionM ()
+checkPrefixed Client
+	{ clientName = name
+	, clientRepo = repo
+	} keyPrefix keys = lift $ do
+	((map T.decodeUtf8) -> repoKeys) <- clientRepoGetKeysPrefixed repo $ T.encodeUtf8 keyPrefix
+	let ok = keys == repoKeys
+	unless ok failTest
+	putStrLn $ T.unpack $ (if ok then "OK    " else "WRONG ")
+		<> "checkPrefixed: client=" <> name <> ", keyPrefix=" <> keyPrefix
+		<> ", keys=" <> T.pack (show keys) <> ", repoKeys=" <> T.pack (show repoKeys)
 
 change :: Client -> T.Text -> T.Text -> SessionM ()
 change Client
@@ -242,6 +254,35 @@ main = do
 		check b "k1" 1 "aaa111"
 		check b "k2" 2 "aaa222"
 		check b "k3" 3 "aaa333"
+
+	session "prefixed" $ do
+		a <- client "A"
+		b <- client "B"
+
+		change a "k1" "a1"
+		checkPrefixed a "k" ["k1"]
+		psp a
+		checkPrefixed a "k" ["k1"]
+		change a "k2" "a2"
+		checkPrefixed a "k" ["k1", "k2"]
+		psp a
+		checkPrefixed a "k" ["k1", "k2"]
+		change a "k1" ""
+		checkPrefixed a "k" ["k1", "k2"]
+		psp a
+		checkPrefixed a "k" ["k1", "k2"]
+		psp b
+		change b "k1" "b1"
+		psp b
+		psp a
+		checkPrefixed a "k" ["k1", "k2"]
+		change b "k2" ""
+		change b "k3" "b3"
+		change b "z1" "z1"
+		psp b
+		psp a
+		checkPrefixed a "k" ["k1", "k2", "k3"]
+		checkPrefixed a "z" ["z1"]
 
 	testFailed <- readIORef testFailedRef
 	when testFailed exitFailure
