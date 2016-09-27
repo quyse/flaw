@@ -217,7 +217,7 @@ run Options
 			, optionReadCommandValueFormat = valueFormat
 			, optionReadCommandKey = keyStr
 			} -> do
-			value <- clientRepoGetValue clientRepo $ optionByteStringToBytes keyFormat keyStr
+			(_revision, value) <- clientRepoGetRevisionValue clientRepo $ optionByteStringToBytes keyFormat keyStr
 			putStrLn =<< optionByteStringFromBytes valueFormat value
 
 		OptionWriteCommand
