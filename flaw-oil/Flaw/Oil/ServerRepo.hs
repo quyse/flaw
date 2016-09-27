@@ -155,7 +155,7 @@ syncServerRepo repo@ServerRepo
 					key <- sqliteColumn query 1
 					-- get rest items and return
 					(restItemsToPull, newLastKnownClientRevision) <- step newValuesTotalSize revision
-					return ((key, value) : restItemsToPull, newLastKnownClientRevision)
+					return ((revision, key, value) : restItemsToPull, newLastKnownClientRevision)
 			else return ([], lastKnownClientRevision)
 		step 0 clientRevision
 

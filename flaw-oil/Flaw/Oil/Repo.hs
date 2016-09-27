@@ -137,7 +137,7 @@ data Pull = Pull
 	-- | Server revision after pushing items (should be equal to pre-push revision + number of items pushed).
 	, pullPostPushRevision :: !Revision
 	-- | Pairs (key, value) to pull.
-	, pullItems :: [(B.ByteString, B.ByteString)]
+	, pullItems :: [(Revision, B.ByteString, B.ByteString)]
 	-- | New client revision after whole operation.
 	, pullNewClientRevision :: !Revision
 	} deriving Generic

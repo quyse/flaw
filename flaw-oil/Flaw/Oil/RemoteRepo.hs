@@ -35,7 +35,7 @@ initHttpRemoteRepo :: H.Manager -> T.Text -> IO (HttpRemoteRepo, Manifest)
 initHttpRemoteRepo httpManager url = do
 
 	-- create template request by parsing url
-	templateRequest <- H.parseUrl $ T.unpack url
+	templateRequest <- H.parseUrlThrow $ T.unpack url
 
 	-- get manifest
 	let request = templateRequest
