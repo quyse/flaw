@@ -62,6 +62,9 @@ module Flaw.Oil.Entity
 	, nullEntityInterfaceId
 	, EntityInterface(..)
 	, EntityInterfaced(..)
+	, SomeInterfacedEntity(..)
+	, InterfacedEntityPtr(..)
+	, nullInterfacedEntityPtr
 	, EntityManager(..)
 	, GetEntity
 	, getRootBaseEntity
@@ -327,6 +330,16 @@ class Typeable i => EntityInterface (i :: * -> Constraint) where
 data EntityInterfaced i a where
 	EntityInterfaced :: (EntityInterface i, Entity a, i a) => EntityInterfaced i a
 	EntityNotInterfaced :: EntityInterfaced i a
+
+-- | Some entity supporting specified interface.
+data SomeInterfacedEntity i where
+	SomeInterfacedEntity :: (EntityInterface i, Entity a, i a) => a -> SomeInterfacedEntity i
+
+-- | Entity pointer pointing at some entity which supports specified interface.
+newtype InterfacedEntityPtr (i :: * -> Constraint) = InterfacedEntityPtr EntityId deriving (Eq, Ord, S.Serialize, Default, Show)
+
+nullInterfacedEntityPtr :: InterfacedEntityPtr a
+nullInterfacedEntityPtr = InterfacedEntityPtr nullEntityId
 
 -- | Entity manager based on client repo.
 data EntityManager = EntityManager
