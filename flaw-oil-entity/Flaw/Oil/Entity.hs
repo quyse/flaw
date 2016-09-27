@@ -115,6 +115,7 @@ import System.Mem.Weak
 import Flaw.Flow
 import Flaw.Oil.ClientRepo
 import Flaw.Oil.Entity.Internal
+import Flaw.Oil.Repo
 
 -- | Entity id.
 newtype EntityId = EntityId BS.ShortByteString deriving (Eq, Ord)
@@ -168,6 +169,7 @@ data EntityVar a = EntityVar
 -- | Entity value, stored in entity var.
 data EntityValue = EntityValue
 	{ entityValueEntity :: !SomeEntity
+	, entityValueRevision :: {-# UNPACK #-} !Revision
 	, entityValueHistoryVar :: {-# UNPACK #-} !(TVar EntityHistory)
 	}
 
@@ -175,43 +177,49 @@ data EntityValue = EntityValue
 data EntityHistory where
 	EntityHistoryEnd :: EntityHistory
 	EntityHistoryChange :: Entity a =>
-		{ entityHistoryEntity :: !a
+		{ entityHistoryRevision :: {-# UNPACK #-} !Revision
+		, entityHistoryEntity :: !a
 		, entityHistoryChange :: !(EntityChange a)
 		, entityHistoryNextVar :: {-# UNPACK #-} !(TVar EntityHistory)
 		} -> EntityHistory
 	EntityHistoryTypeChange :: Entity a =>
-		{ entityHistoryEntity :: !a
+		{ entityHistoryRevision :: {-# UNPACK #-} !Revision
+		, entityHistoryEntity :: !a
 		, entityHistoryNextVar :: {-# UNPACK #-} !(TVar EntityHistory)
 		} -> EntityHistory
 
-writeEntityChange :: Entity a => TVar EntityValue -> a -> EntityChange a -> STM ()
-writeEntityChange valueVar entity change = do
+writeEntityChange :: Entity a => TVar EntityValue -> Revision -> a -> EntityChange a -> STM ()
+writeEntityChange valueVar revision entity change = do
 	nextHistoryVar <- newTVar EntityHistoryEnd
 	entityValue@EntityValue
 		{ entityValueHistoryVar = historyVar
 		} <- readTVar valueVar
 	writeTVar historyVar EntityHistoryChange
-		{ entityHistoryEntity = entity
+		{ entityHistoryRevision = revision
+		, entityHistoryEntity = entity
 		, entityHistoryChange = change
 		, entityHistoryNextVar = nextHistoryVar
 		}
 	writeTVar valueVar entityValue
 		{ entityValueEntity = SomeEntity entity
+		, entityValueRevision = revision
 		, entityValueHistoryVar = nextHistoryVar
 		}
 
-writeEntityTypeChange :: Entity a => TVar EntityValue -> a -> STM ()
-writeEntityTypeChange valueVar entity = do
+writeEntityTypeChange :: Entity a => TVar EntityValue -> Revision -> a -> STM ()
+writeEntityTypeChange valueVar revision entity = do
 	nextHistoryVar <- newTVar EntityHistoryEnd
 	entityValue@EntityValue
 		{ entityValueHistoryVar = historyVar
 		} <- readTVar valueVar
 	writeTVar historyVar EntityHistoryTypeChange
-		{ entityHistoryEntity = entity
+		{ entityHistoryRevision = revision
+		, entityHistoryEntity = entity
 		, entityHistoryNextVar = nextHistoryVar
 		}
 	writeTVar valueVar entityValue
 		{ entityValueEntity = SomeEntity entity
+		, entityValueRevision = revision
 		, entityValueHistoryVar = nextHistoryVar
 		}
 
@@ -472,28 +480,37 @@ internalGetEntityState EntityManager
 			}
 	return s
 
+-- | Combine revisions of entity's records to get entity's revision.
+combineRevisions :: Revision -> Revision -> Revision
+combineRevisions a b = if a > 0 && b > 0 then max a b else 0
+
 -- | Deserialize entity.
-deserializeSomeEntity :: EntityManager -> EntityId -> IO SomeEntity
+deserializeSomeEntity :: EntityManager -> EntityId -> IO (Revision, SomeEntity)
 deserializeSomeEntity entityManager@EntityManager
 	{ entityManagerClientRepo = clientRepo
 	} (EntityId (BS.fromShort -> entityIdBytes)) = do
-	mainValue <- clientRepoGetValue clientRepo entityIdBytes
+	(mainRecordRevision, mainValue) <- clientRepoGetRevisionValue clientRepo entityIdBytes
 	getEntity <- getEntityStateGetter <$> internalGetEntityState entityManager
 	let eitherReturnResult = flip S.runGet mainValue $ do
 		SomeEntity baseEntity <- getEntity
 		mainValueSuffix <- S.getBytes =<< S.remaining
 		return $ do
-			let f entity key = fst . processEntityChange entity (B.drop (B.length entityIdBytes) key) <$>
-				if key == entityIdBytes then return mainValueSuffix
-				else clientRepoGetValue clientRepo key
-			entity <- foldM f baseEntity =<< clientRepoGetKeysPrefixed clientRepo entityIdBytes
-			return $ SomeEntity entity
+			let f (revision, entity) key = do
+				(recordRevision, value) <-
+					if key == entityIdBytes then return (mainRecordRevision, mainValueSuffix)
+					else clientRepoGetRevisionValue clientRepo key
+				return
+					( combineRevisions revision recordRevision
+					, fst $ processEntityChange entity (B.drop (B.length entityIdBytes) key) value
+					)
+			(revision, entity) <- foldM f (mainRecordRevision, baseEntity) =<< clientRepoGetKeysPrefixed clientRepo entityIdBytes
+			return (revision, SomeEntity entity)
 	case eitherReturnResult of
-		Left _ -> return $ SomeEntity NullEntity
+		Left _ -> return (0, SomeEntity NullEntity)
 		Right returnResult -> returnResult
 
 -- | Provide entity manager with changes pulled from remote repo.
-pullEntityManager :: EntityManager -> [(B.ByteString, B.ByteString)] -> STM ()
+pullEntityManager :: EntityManager -> [(Revision, B.ByteString, B.ByteString)] -> STM ()
 pullEntityManager entityManager@EntityManager
 	{ entityManagerFlow = flow
 	, entityManagerClientRepo = clientRepo
@@ -501,7 +518,7 @@ pullEntityManager entityManager@EntityManager
 	, entityManagerDirtyRecordsVar = dirtyRecordsVar
 	} changes = asyncRunInFlow flow $ do
 	getEntity <- getEntityStateGetter <$> internalGetEntityState entityManager
-	forM_ (filter ((>= ENTITY_ID_SIZE) . B.length) $ map fst changes) $ \recordKey -> do
+	forM_ (filter ((>= ENTITY_ID_SIZE) . B.length) $ map (\(_revision, key, _value) -> key) changes) $ \recordKey -> do
 		-- get entity id
 		let
 			(entityIdBytes, recordKeySuffix) = B.splitAt ENTITY_ID_SIZE recordKey
@@ -518,7 +535,7 @@ pullEntityManager entityManager@EntityManager
 						-- note that changes from pull info contain server value,
 						-- i.e. it doesn't include non-pushed-yet changes on client side
 						-- so we need to read real value from client repo
-						recordValue <- clientRepoGetValue clientRepo recordKey
+						(recordRevision, recordValue) <- clientRepoGetRevisionValue clientRepo recordKey
 						join $ atomically $ do
 							-- update entity only if record is not dirty
 							dirtyRecords <- readTVar dirtyRecordsVar
@@ -537,7 +554,7 @@ pullEntityManager entityManager@EntityManager
 											newValueSuffix <- S.getBytes =<< S.remaining
 											return $ do
 												let (newEntity, entityChange) = processEntityChange entity B.empty newValueSuffix
-												writeEntityChange entityVar newEntity entityChange
+												writeEntityChange entityVar recordRevision newEntity entityChange
 												return $ return ()
 										else return $ return $ do
 											-- re-deserialize it completely
@@ -545,8 +562,8 @@ pullEntityManager entityManager@EntityManager
 											-- the only thing which can happen is user will write something into entity var (not changing a type)
 											-- it will be useless anyway, and typed entity var will have to be re-typed at least
 											-- so hopefully it's ok to do two transactions
-											SomeEntity newEntity <- deserializeSomeEntity entityManager entityId
-											atomically $ writeEntityTypeChange entityVar newEntity
+											(newRevision, SomeEntity newEntity) <- deserializeSomeEntity entityManager entityId
+											atomically $ writeEntityTypeChange entityVar newRevision newEntity
 									case S.runGet getter recordValue of
 										Right stm -> stm
 										Left _e -> do
@@ -558,7 +575,7 @@ pullEntityManager entityManager@EntityManager
 								else do
 									-- simply process change
 									let (newEntity, entityChange) = processEntityChange entity recordKeySuffix recordValue
-									writeEntityChange entityVar newEntity entityChange
+									writeEntityChange entityVar recordRevision newEntity entityChange
 									return $ return ()
 					Nothing ->
 						-- expired cached entity, remove it
@@ -598,12 +615,13 @@ cacheEntity entityManager@EntityManager
 	, entityManagerCacheRef = cacheRef
 	} entityId = do
 	-- get initial value of entity
-	initialEntity <- deserializeSomeEntity entityManager entityId
+	(revision, entity) <- deserializeSomeEntity entityManager entityId
 	-- create new var
 	tag <- atomicModifyIORef' nextTagRef $ \nextVarId -> (nextVarId + 1, nextVarId)
 	historyVar <- newTVarIO EntityHistoryEnd
 	entityVar <- newTVarIO EntityValue
-		{ entityValueEntity = initialEntity
+		{ entityValueEntity = entity
+		, entityValueRevision = revision
 		, entityValueHistoryVar = historyVar
 		}
 	-- put it into cache
@@ -718,7 +736,7 @@ writeEntityVarRecord entityVar@EntityVar
 			-- simply apply the change
 			let (newEntity, entityChange) = processEntityChange entityOfVarType recordKeySuffix recordNewValue
 			-- write to var
-			writeEntityChange entityValueVar newEntity entityChange
+			writeEntityChange entityValueVar 0 newEntity entityChange
 			-- write record
 			let newRecordValue =
 				if B.null recordKeySuffix then let
@@ -742,7 +760,7 @@ writeBasicEntityVar EntityVar
 	, entityVarValueVar = entityValueVar
 	} newEntity = do
 	-- modify var
-	writeEntityChange entityValueVar newEntity newEntity
+	writeEntityChange entityValueVar 0 newEntity newEntity
 	-- write record
 	let EntityTypeId entityTypeIdBytes = getEntityTypeId newEntity
 	modifyTVar' dirtyRecordsVar $ M.insert (BS.fromShort entityIdBytes) $ BS.fromShort entityTypeIdBytes <> serializeBasicEntity newEntity
