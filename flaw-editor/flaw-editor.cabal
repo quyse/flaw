@@ -19,6 +19,7 @@ source-repository head
 
 library
   exposed-modules:
+    Flaw.Editor.ProcessingCache
     Flaw.Editor.Project
     Flaw.UI.Editor.Editable
     Flaw.UI.Editor.Editable.Basic
@@ -30,12 +31,14 @@ library
   build-depends:
     aeson
     , base
+    , bytestring
     , directory
     , filepath
     , flaw-base
     , flaw-graphics
     , flaw-math
     , flaw-oil-entity
+    , flaw-sqlite
     , flaw-ui
     , mtl
     , stm
