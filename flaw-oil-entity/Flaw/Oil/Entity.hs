@@ -79,6 +79,7 @@ module Flaw.Oil.Entity
 	, newEntityVar
 	, readEntityVar
 	, readSomeEntityVar
+	, readSomeEntityWithRevisionVar
 	, writeEntityVarRecord
 	, writeBasicEntityVar
 	, EntityHistoryChan(..)
@@ -89,6 +90,7 @@ module Flaw.Oil.Entity
 	, hashTextToEntityInterfaceId
 	, interfaceEntityExp
 	-- * Re-exports for convenience
+	, Revision
 	, Proxy(..)
 	) where
 
@@ -706,11 +708,22 @@ readEntityVar var = do
 		Just correctEntity -> return correctEntity
 		Nothing -> throwSTM EntityWrongTypeException
 
--- | Read untyped entity var.
+-- | Read untyped entity from var.
 readSomeEntityVar :: EntityVar a -> STM SomeEntity
 readSomeEntityVar EntityVar
 	{ entityVarValueVar = valueVar
 	} = entityValueEntity <$> readTVar valueVar
+
+-- | Read untyped entity and revision from var.
+readSomeEntityWithRevisionVar :: EntityVar a -> STM (SomeEntity, Revision)
+readSomeEntityWithRevisionVar EntityVar
+	{ entityVarValueVar = valueVar
+	} = do
+	EntityValue
+		{ entityValueEntity = someEntity
+		, entityValueRevision = revision
+		} <- readTVar valueVar
+	return (someEntity, revision)
 
 -- | Write record for entity var.
 -- Current entity in the var must be of the correct type.

@@ -19,6 +19,10 @@ source-repository head
 
 library
   exposed-modules:
+    Flaw.Editor.BlobService
+    Flaw.Editor.Entity.Blob
+    Flaw.Editor.Entity.Texture
+    Flaw.Editor.Processing
     Flaw.Editor.ProcessingCache
     Flaw.Editor.Project
     Flaw.UI.Editor.Editable
@@ -32,14 +36,22 @@ library
     aeson
     , base
     , bytestring
+    , cereal
+    , cereal-text
+    , cryptonite
+    , data-default
     , directory
     , filepath
+    , flaw-asset-dxt
     , flaw-base
     , flaw-graphics
     , flaw-math
     , flaw-oil-entity
     , flaw-sqlite
     , flaw-ui
+    , flaw-visual
+    , http-client
+    , memory
     , mtl
     , stm
     , text
