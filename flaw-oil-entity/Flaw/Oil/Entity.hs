@@ -49,9 +49,10 @@ module Flaw.Oil.Entity
 	, pattern ENTITY_TYPE_ID_SIZE
 	, nullEntityTypeId
 	, EntityPtr(..)
+	, SomeEntityVar()
 	, EntityVar(..)
+	, entityVarEntityId
 	, SomeEntityPtr(..)
-	, SomeEntityVar(..)
 	, Entity(..)
 	, BasicEntity(..)
 	, SomeEntity(..)
@@ -75,6 +76,7 @@ module Flaw.Oil.Entity
 	, registerBasicEntityType
 	, registerBasicOrdEntityType
 	, pullEntityManager
+	, getSomeEntityVar
 	, getEntityVar
 	, newEntityVar
 	, readEntityVar
@@ -160,13 +162,22 @@ instance S.Serialize EntityTypeId where
 -- You can read or write entity by entity pointer in IO monad.
 newtype EntityPtr a = EntityPtr EntityId deriving (Eq, Ord, S.Serialize, Default, Show)
 
--- | Entity var, stores cached entity.
+-- | Untyped entity var, stores cached entity.
 -- Entity manager keeps updating the var until it's GC'ed.
-data EntityVar a = EntityVar
-	{ entityVarEntityManager :: !EntityManager
-	, entityVarEntityId :: !EntityId
-	, entityVarValueVar :: {-# UNPACK #-} !(TVar EntityValue)
+data SomeEntityVar = SomeEntityVar
+	{ someEntityVarEntityManager :: !EntityManager
+	, someEntityVarEntityId :: !EntityId
+	, someEntityVarValueVar :: {-# UNPACK #-} !(TVar EntityValue)
 	}
+
+-- | Typed entity var.
+newtype EntityVar a = EntityVar SomeEntityVar
+
+-- | Get entity id from entity var.
+entityVarEntityId :: EntityVar a -> EntityId
+entityVarEntityId (EntityVar SomeEntityVar
+	{ someEntityVarEntityId = entityId
+	}) = entityId
 
 -- | Entity value, stored in entity var.
 data EntityValue = EntityValue
@@ -227,9 +238,6 @@ writeEntityTypeChange valueVar revision entity = do
 
 -- | Untyped entity pointer.
 newtype SomeEntityPtr a = SomeEntityPtr EntityId deriving S.Serialize
-
--- | Untyped entity var.
-newtype SomeEntityVar = SomeEntityVar (TVar SomeEntity)
 
 -- | Class of repo entity.
 -- Entity should be able to deserialize from any data.
@@ -610,7 +618,7 @@ scheduleEntityManagerPush EntityManager
 			-- run push action
 			pushAction
 
-cacheEntity :: EntityManager -> EntityId -> IO (EntityVar a)
+cacheEntity :: EntityManager -> EntityId -> IO SomeEntityVar
 cacheEntity entityManager@EntityManager
 	{ entityManagerFlow = flow
 	, entityManagerNextTagRef = nextTagRef
@@ -632,10 +640,10 @@ cacheEntity entityManager@EntityManager
 		{ cachedEntityTag = tag
 		, cachedEntityWeak = weak
 		}
-	return $ EntityVar
-		{ entityVarEntityManager = entityManager
-		, entityVarEntityId = entityId
-		, entityVarValueVar = entityVar
+	return SomeEntityVar
+		{ someEntityVarEntityManager = entityManager
+		, someEntityVarEntityId = entityId
+		, someEntityVarValueVar = entityVar
 		}
 	where
 		-- finalizer for weak references
@@ -647,9 +655,9 @@ cacheEntity entityManager@EntityManager
 					} -> when (tag == t) $ writeIORef cacheRef $ M.delete entityId cache
 				Nothing -> return ()
 
--- | Get entity var for a given entity.
-getEntityVar :: EntityManager -> EntityId -> IO (EntityVar a)
-getEntityVar entityManager@EntityManager
+-- | Get untyped entity var for given entity id.
+getSomeEntityVar :: EntityManager -> EntityId -> IO SomeEntityVar
+getSomeEntityVar entityManager@EntityManager
 	{ entityManagerFlow = flow
 	, entityManagerCacheRef = cacheRef
 	} entityId = runInFlow flow $ do
@@ -669,15 +677,19 @@ getEntityVar entityManager@EntityManager
 			maybeEntityVar <- deRefWeak weak
 			case maybeEntityVar of
 				-- if it's still alive, return it
-				Just entityVar -> return $ EntityVar
-					{ entityVarEntityManager = entityManager
-					, entityVarEntityId = entityId
-					, entityVarValueVar = entityVar
+				Just entityVar -> return SomeEntityVar
+					{ someEntityVarEntityManager = entityManager
+					, someEntityVarEntityId = entityId
+					, someEntityVarValueVar = entityVar
 					}
 				-- otherwise cached var has been garbage collected
 				Nothing -> cacheExistingEntityVar
 		-- otherwise there's no cached var
 		Nothing -> cacheExistingEntityVar
+
+-- | Get typed entity var for given entity id.
+getEntityVar :: EntityManager -> EntityId -> IO (EntityVar a)
+getEntityVar entityManager entityId = EntityVar <$> getSomeEntityVar entityManager entityId
 
 -- | Generate entity id and create new entity var.
 -- Generated entity is "empty", i.e. contains NullEntity.
@@ -697,27 +709,27 @@ newEntityVar entityManager@EntityManager
 		clientRepoChange clientRepo entityIdBytes $ BS.fromShort entityTypeIdBytes
 		pushAction
 		-- create cached entity var
-		cacheEntity entityManager (EntityId $ BS.toShort entityIdBytes)
+		EntityVar <$> cacheEntity entityManager (EntityId $ BS.toShort entityIdBytes)
 
 -- | Read entity var type safely.
 -- If entity var contains entity of wrong type, throws EntityWrongTypeException.
 readEntityVar :: Entity a => EntityVar a -> STM a
-readEntityVar var = do
-	SomeEntity entity <- readSomeEntityVar var
+readEntityVar (EntityVar someEntityVar) = do
+	SomeEntity entity <- readSomeEntityVar someEntityVar
 	case cast entity of
 		Just correctEntity -> return correctEntity
 		Nothing -> throwSTM EntityWrongTypeException
 
 -- | Read untyped entity from var.
-readSomeEntityVar :: EntityVar a -> STM SomeEntity
-readSomeEntityVar EntityVar
-	{ entityVarValueVar = valueVar
+readSomeEntityVar :: SomeEntityVar -> STM SomeEntity
+readSomeEntityVar SomeEntityVar
+	{ someEntityVarValueVar = valueVar
 	} = entityValueEntity <$> readTVar valueVar
 
 -- | Read untyped entity and revision from var.
-readSomeEntityWithRevisionVar :: EntityVar a -> STM (SomeEntity, Revision)
-readSomeEntityWithRevisionVar EntityVar
-	{ entityVarValueVar = valueVar
+readSomeEntityWithRevisionVar :: SomeEntityVar -> STM (SomeEntity, Revision)
+readSomeEntityWithRevisionVar SomeEntityVar
+	{ someEntityVarValueVar = valueVar
 	} = do
 	EntityValue
 		{ entityValueEntity = someEntity
@@ -728,13 +740,13 @@ readSomeEntityWithRevisionVar EntityVar
 -- | Write record for entity var.
 -- Current entity in the var must be of the correct type.
 writeEntityVarRecord :: Entity a => EntityVar a -> B.ByteString -> B.ByteString -> STM ()
-writeEntityVarRecord entityVar@EntityVar
-	{ entityVarEntityManager = entityManager@EntityManager
+writeEntityVarRecord entityVar@(EntityVar SomeEntityVar
+	{ someEntityVarEntityManager = entityManager@EntityManager
 		{ entityManagerDirtyRecordsVar = dirtyRecordsVar
 		}
-	, entityVarEntityId = EntityId entityIdBytes
-	, entityVarValueVar = entityValueVar
-	} recordKeySuffix recordNewValue = do
+	, someEntityVarEntityId = EntityId entityIdBytes
+	, someEntityVarValueVar = entityValueVar
+	}) recordKeySuffix recordNewValue = do
 	-- get entity
 	EntityValue
 		{ entityValueEntity = SomeEntity entity
@@ -765,13 +777,13 @@ writeEntityVarRecord entityVar@EntityVar
 -- | Write basic entity into entity var.
 -- Entity is replaced completely. Var may contain entity of wrong type prior to operation.
 writeBasicEntityVar :: BasicEntity a => EntityVar a -> a -> STM ()
-writeBasicEntityVar EntityVar
-	{ entityVarEntityManager = entityManager@EntityManager
+writeBasicEntityVar (EntityVar SomeEntityVar
+	{ someEntityVarEntityManager = entityManager@EntityManager
 		{ entityManagerDirtyRecordsVar = dirtyRecordsVar
 		}
-	, entityVarEntityId = EntityId entityIdBytes
-	, entityVarValueVar = entityValueVar
-	} newEntity = do
+	, someEntityVarEntityId = EntityId entityIdBytes
+	, someEntityVarValueVar = entityValueVar
+	}) newEntity = do
 	-- modify var
 	writeEntityChange entityValueVar 0 newEntity newEntity
 	-- write record
@@ -785,9 +797,9 @@ newtype EntityHistoryChan a = EntityHistoryChan (TVar (TVar EntityHistory))
 
 -- | Get entity's history chan.
 entityVarHistory :: Typeable a => EntityVar a -> STM (EntityHistoryChan a)
-entityVarHistory EntityVar
-	{ entityVarValueVar = valueVar
-	} = do
+entityVarHistory (EntityVar SomeEntityVar
+	{ someEntityVarValueVar = valueVar
+	}) = do
 	EntityValue
 		{ entityValueEntity = SomeEntity entity
 		, entityValueHistoryVar = historyVar
