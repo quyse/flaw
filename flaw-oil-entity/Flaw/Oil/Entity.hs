@@ -249,7 +249,7 @@ class Typeable a => Entity (a :: *) where
 
 	-- | Type representing change to entity.
 	type EntityChange a :: *
-	type EntityChange a = a
+	type EntityChange a = a -> a
 
 	-- | Return type id of entity.
 	-- Parameter is not used and can be 'undefined'.
@@ -266,10 +266,10 @@ class Typeable a => Entity (a :: *) where
 		-> B.ByteString -- ^ Key suffix of changed record.
 		-> B.ByteString -- ^ New value of changed record.
 		-> Maybe (a, EntityChange a)
-	default processEntityChange :: BasicEntity a => a -> B.ByteString -> B.ByteString -> Maybe (a, EntityChange a)
+	default processEntityChange :: BasicEntity a => a -> B.ByteString -> B.ByteString -> Maybe (a, a -> a)
 	processEntityChange _oldEntity changedKeySuffix newValue =
 		if B.null changedKeySuffix then
-			let newEntity = deserializeBasicEntity newValue in Just (newEntity, newEntity)
+			let newEntity = deserializeBasicEntity newValue in Just (newEntity, const newEntity)
 		else Nothing
 
 	-- | Apply change to get new entity and write changes to entity var.
@@ -277,15 +277,15 @@ class Typeable a => Entity (a :: *) where
 		:: EntityVar a -- ^ Entity var.
 		-> EntityChange a -- ^ Entity change.
 		-> STM ()
-	default applyEntityChange :: BasicEntity a => EntityVar a -> a -> STM ()
-	applyEntityChange = writeBasicEntityVar
+	default applyEntityChange :: BasicEntity a => EntityVar a -> (a -> a) -> STM ()
+	applyEntityChange entityVar change = writeBasicEntityVar entityVar . change =<< readEntityVar entityVar
 
 	-- | Return witness for entity that it supports specified entity interface.
 	interfaceEntity :: EntityInterface i => Proxy i -> a -> EntityInterfaced i a
 	interfaceEntity _ _ = EntityNotInterfaced
 
 -- | Basic entity is an entity consisting of main record only.
-class (Entity a, EntityChange a ~ a) => BasicEntity a where
+class (Entity a, EntityChange a ~ (a -> a)) => BasicEntity a where
 	-- | Serialize basic entity into main record's value.
 	serializeBasicEntity :: a -> B.ByteString
 	default serializeBasicEntity :: S.Serialize a => a -> B.ByteString
@@ -788,7 +788,7 @@ writeBasicEntityVar (EntityVar SomeEntityVar
 	, someEntityVarValueVar = entityValueVar
 	}) newEntity = do
 	-- modify var
-	writeEntityChange entityValueVar 0 newEntity newEntity
+	writeEntityChange entityValueVar 0 newEntity $ const newEntity
 	-- write record
 	let EntityTypeId entityTypeIdBytes = getEntityTypeId newEntity
 	modifyTVar' dirtyRecordsVar $ M.insert (BS.fromShort entityIdBytes) $ BS.fromShort entityTypeIdBytes <> serializeBasicEntity newEntity
