@@ -8,14 +8,9 @@ License: MIT
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Flaw.Oil.Entity.Basic
-	( writeInsertSetEntityVar
-	, writeDeleteSetEntityVar
-	, writeInsertMapEntityVar
-	, writeDeleteMapEntityVar
-	, registerBasicEntityDeserializators
+	( registerBasicEntityDeserializators
 	) where
 
-import Control.Concurrent.STM
 import qualified Data.ByteString as B
 import Data.Default
 import Data.Int
@@ -83,26 +78,18 @@ setFirstEntityTypeId :: EntityTypeId
 setFirstEntityTypeId = $(hashTextToEntityTypeId "Set")
 
 instance (Ord a, BasicEntity a) => Entity (S.Set a) where
-	type EntityChange (S.Set a) = Maybe (a, Bool)
+	type EntityChange (S.Set a) = (a, Bool)
 	getEntityTypeId = f undefined where
 		f :: (Entity a) => a -> S.Set a -> EntityTypeId
 		f u _ = setFirstEntityTypeId <> getEntityTypeId u
 	processEntityChange oldEntity keyBytes valueBytes = result where
-		result = if B.null keyBytes || B.head keyBytes /= 0 then (oldEntity, Nothing) else (newEntity, change)
+		result = if B.null keyBytes || B.head keyBytes /= 0 then Nothing else Just (newEntity, change)
 		newEntity = operation oldEntity
 		(operation, change) =
-			if B.null valueBytes then (S.delete key, Just (key, False))
-			else (S.insert key, Just (key, True))
+			if B.null valueBytes then (S.delete key, (key, False))
+			else (S.insert key, (key, True))
 		key = deserializeBasicEntity $ B.drop 1 keyBytes
-	applyEntityChange sc s = case sc of
-		Just (k, f) -> (if f then S.insert else S.delete) k s
-		Nothing -> s
-
-writeInsertSetEntityVar :: (Ord a, BasicEntity a) => EntityVar (S.Set a) -> a -> STM ()
-writeInsertSetEntityVar var value = writeEntityVarRecord var (B.singleton 0 <> serializeBasicEntity value) (B.singleton 1)
-
-writeDeleteSetEntityVar :: (Ord a, BasicEntity a) => EntityVar (S.Set a) -> a -> STM ()
-writeDeleteSetEntityVar var value = writeEntityVarRecord var (B.singleton 0 <> serializeBasicEntity value) B.empty
+	applyEntityChange var (value, f) = writeEntityVarRecord var (B.singleton 0 <> serializeBasicEntity value) (if f then B.singleton 1 else B.empty)
 
 -- Map
 
@@ -110,29 +97,21 @@ mapFirstEntityTypeId :: EntityTypeId
 mapFirstEntityTypeId = $(hashTextToEntityTypeId "Map")
 
 instance (Ord k, BasicEntity k, BasicEntity v) => Entity (M.Map k v) where
-	type EntityChange (M.Map k v) = Maybe (k, Maybe v)
+	type EntityChange (M.Map k v) = (k, Maybe v)
 	getEntityTypeId = f undefined undefined where
 		f :: (Entity k, Entity v) => k -> v -> M.Map k v -> EntityTypeId
 		f uk uv _ = mapFirstEntityTypeId <> getEntityTypeId uk <> getEntityTypeId uv
 	processEntityChange oldEntity keyBytes valueBytes = result where
-		result = if B.null keyBytes || B.head keyBytes /= 0 then (oldEntity, Nothing) else (newEntity, change)
+		result = if B.null keyBytes || B.head keyBytes /= 0 then Nothing else Just (newEntity, change)
 		newEntity = operation oldEntity
 		(operation, change) =
-			if B.null valueBytes then (M.delete key, Just (key, Nothing))
-			else (M.insert key value, Just (key, Just value))
+			if B.null valueBytes then (M.delete key, (key, Nothing))
+			else (M.insert key value, (key, Just value))
 		key = deserializeBasicEntity $ B.drop 1 keyBytes
 		value = deserializeBasicEntity $ B.drop 1 valueBytes
-	applyEntityChange mc m = case mc of
-		Just (k, mv) -> case mv of
-			Just v -> M.insert k v m
-			Nothing -> M.delete k m
-		Nothing -> m
-
-writeInsertMapEntityVar :: (Ord k, BasicEntity k, BasicEntity v) => EntityVar (M.Map k v) -> k -> v -> STM ()
-writeInsertMapEntityVar var key value = writeEntityVarRecord var (B.singleton 0 <> serializeBasicEntity key) (B.singleton 0 <> serializeBasicEntity value)
-
-writeDeleteMapEntityVar :: (Ord k, BasicEntity k, BasicEntity v) => EntityVar (M.Map k v) -> k -> STM ()
-writeDeleteMapEntityVar var key = writeEntityVarRecord var (B.singleton 0 <> serializeBasicEntity key) B.empty
+	applyEntityChange var (key, maybeValue) = writeEntityVarRecord var (B.singleton 0 <> serializeBasicEntity key) $ case maybeValue of
+		Just value -> B.singleton 0 <> serializeBasicEntity value
+		Nothing -> B.empty
 
 registerBasicEntityDeserializators :: EntityManager -> IO ()
 registerBasicEntityDeserializators entityManager = do

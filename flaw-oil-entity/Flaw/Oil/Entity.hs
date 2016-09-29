@@ -256,7 +256,7 @@ class Typeable a => Entity (a :: *) where
 	getEntityTypeId :: a -> EntityTypeId
 
 	-- | Process change in entity's data.
-	-- Changes of one specific record (with fixed key) constitutes a group.
+	-- Changes of one specific record (with fixed key) constitute a group.
 	-- Changes to different records are commutative.
 	-- Must not throw exceptions.
 	-- Invalid values must be processed as well as valid,
@@ -265,20 +265,20 @@ class Typeable a => Entity (a :: *) where
 		:: a -- ^ Current entity value.
 		-> B.ByteString -- ^ Key suffix of changed record.
 		-> B.ByteString -- ^ New value of changed record.
-		-> (a, EntityChange a)
-	default processEntityChange :: BasicEntity a => a -> B.ByteString -> B.ByteString -> (a, EntityChange a)
-	processEntityChange oldEntity changedKeySuffix newValue =
+		-> Maybe (a, EntityChange a)
+	default processEntityChange :: BasicEntity a => a -> B.ByteString -> B.ByteString -> Maybe (a, EntityChange a)
+	processEntityChange _oldEntity changedKeySuffix newValue =
 		if B.null changedKeySuffix then
-			let newEntity = deserializeBasicEntity newValue in (newEntity, newEntity)
-		else (oldEntity, oldEntity)
+			let newEntity = deserializeBasicEntity newValue in Just (newEntity, newEntity)
+		else Nothing
 
-	-- | Apply change to get new entity.
+	-- | Apply change to get new entity and write changes to entity var.
 	applyEntityChange
-		:: EntityChange a -- ^ Entity change.
-		-> a -- ^ Current entity value.
-		-> a
-	default applyEntityChange :: a -> a -> a
-	applyEntityChange = const
+		:: EntityVar a -- ^ Entity var.
+		-> EntityChange a -- ^ Entity change.
+		-> STM ()
+	default applyEntityChange :: BasicEntity a => EntityVar a -> a -> STM ()
+	applyEntityChange = writeBasicEntityVar
 
 	-- | Return witness for entity that it supports specified entity interface.
 	interfaceEntity :: EntityInterface i => Proxy i -> a -> EntityInterfaced i a
@@ -315,7 +315,8 @@ data NullEntity = NullEntity deriving (Typeable, Show)
 
 instance Entity NullEntity where
 	getEntityTypeId _ = nullEntityTypeId
-	processEntityChange NullEntity _ _ = (NullEntity, NullEntity)
+	processEntityChange NullEntity _ _ = Nothing
+	applyEntityChange _ _ = return ()
 
 -- | Entity interface id.
 newtype EntityInterfaceId = EntityInterfaceId BS.ShortByteString deriving (Eq, Ord)
@@ -511,7 +512,7 @@ deserializeSomeEntity entityManager@EntityManager
 					else clientRepoGetRevisionValue clientRepo key
 				return
 					( combineRevisions revision recordRevision
-					, fst $ processEntityChange entity (B.drop (B.length entityIdBytes) key) value
+					, maybe entity fst $ processEntityChange entity (B.drop (B.length entityIdBytes) key) value
 					)
 			(revision, entity) <- foldM f (mainRecordRevision, baseEntity) =<< clientRepoGetKeysPrefixed clientRepo entityIdBytes
 			return (revision, SomeEntity entity)
@@ -563,8 +564,9 @@ pullEntityManager entityManager@EntityManager
 										if getEntityTypeId entity == getEntityTypeId baseEntity then do
 											newValueSuffix <- S.getBytes =<< S.remaining
 											return $ do
-												let (newEntity, entityChange) = processEntityChange entity B.empty newValueSuffix
-												writeEntityChange entityVar recordRevision newEntity entityChange
+												case processEntityChange entity B.empty newValueSuffix of
+													Just (newEntity, entityChange) -> writeEntityChange entityVar recordRevision newEntity entityChange
+													Nothing -> return ()
 												return $ return ()
 										else return $ return $ do
 											-- re-deserialize it completely
@@ -584,8 +586,9 @@ pullEntityManager entityManager@EntityManager
 								-- else it's non-main record
 								else do
 									-- simply process change
-									let (newEntity, entityChange) = processEntityChange entity recordKeySuffix recordValue
-									writeEntityChange entityVar recordRevision newEntity entityChange
+									case processEntityChange entity recordKeySuffix recordValue of
+										Just (newEntity, entityChange) -> writeEntityChange entityVar recordRevision newEntity entityChange
+										Nothing -> return ()
 									return $ return ()
 					Nothing ->
 						-- expired cached entity, remove it
@@ -756,19 +759,19 @@ writeEntityVarRecord entityVar@(EntityVar SomeEntityVar
 		castEntityForVar :: (Typeable a, Typeable b) => EntityVar a -> b -> Maybe a
 		castEntityForVar _ = cast
 	case castEntityForVar entityVar entity of
-		-- if entity is of the same type
-		Just entityOfVarType -> do
-			-- simply apply the change
-			let (newEntity, entityChange) = processEntityChange entityOfVarType recordKeySuffix recordNewValue
-			-- write to var
-			writeEntityChange entityValueVar 0 newEntity entityChange
-			-- write record
-			let newRecordValue =
-				if B.null recordKeySuffix then let
-					EntityTypeId entityTypeIdBytes = getEntityTypeId newEntity
-					in BS.fromShort entityTypeIdBytes <> recordNewValue
-				else recordNewValue
-			modifyTVar' dirtyRecordsVar $ M.insert (BS.fromShort entityIdBytes <> recordKeySuffix) newRecordValue
+		-- if entity is of the same type, simply apply the change
+		Just entityOfVarType -> case processEntityChange entityOfVarType recordKeySuffix recordNewValue of
+			Just (newEntity, entityChange) -> do
+				-- write to var
+				writeEntityChange entityValueVar 0 newEntity entityChange
+				-- write record
+				let newRecordValue =
+					if B.null recordKeySuffix then let
+						EntityTypeId entityTypeIdBytes = getEntityTypeId newEntity
+						in BS.fromShort entityTypeIdBytes <> recordNewValue
+					else recordNewValue
+				modifyTVar' dirtyRecordsVar $ M.insert (BS.fromShort entityIdBytes <> recordKeySuffix) newRecordValue
+			Nothing -> return ()
 		-- else entity is of another type
 		Nothing -> throwSTM EntityWrongTypeException
 	-- schedule push

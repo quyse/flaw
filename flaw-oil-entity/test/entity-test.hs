@@ -195,7 +195,7 @@ main = do
 		setVar <- newEntityVar $ clientEntityManager c1 :: IO (EntityVar (S.Set (EntityPtr Word32)))
 		verify (== S.empty) $ atomically $ readEntityVar setVar
 		-- insert
-		atomically $ writeInsertSetEntityVar setVar (EntityPtr intEntityId)
+		atomically $ applyEntityChange setVar (EntityPtr intEntityId, True)
 		verify (== S.fromList [EntityPtr intEntityId]) $ atomically $ readEntityVar setVar
 		-- sync
 		clientWaitAndSync c1
@@ -203,7 +203,7 @@ main = do
 		setVar2 <- getEntityVar (clientEntityManager c2) $ entityVarEntityId setVar :: IO (EntityVar (S.Set (EntityPtr Word32)))
 		verify (== S.fromList [EntityPtr intEntityId]) $ atomically $ readEntityVar setVar2
 		-- delete
-		atomically $ writeDeleteSetEntityVar setVar2 (EntityPtr intEntityId)
+		atomically $ applyEntityChange setVar2 (EntityPtr intEntityId, False)
 		verify (== S.empty) $ atomically $ readEntityVar setVar2
 		-- sync
 		clientWaitAndSync c2
@@ -215,7 +215,7 @@ main = do
 		verify (== M.empty) $ atomically $ readEntityVar mapVar
 		-- insert
 		ptr <- atomically $ readEntityVar ptrVar3
-		atomically $ writeInsertMapEntityVar mapVar (EntityPtr intEntityId) ptr
+		atomically $ applyEntityChange mapVar (EntityPtr intEntityId, Just ptr)
 		verify (== M.fromList [(EntityPtr intEntityId, ptr)]) $ atomically $ readEntityVar mapVar
 		-- sync
 		clientWaitAndSync c1
@@ -223,7 +223,7 @@ main = do
 		mapVar2 <- getEntityVar (clientEntityManager c2) $ entityVarEntityId mapVar :: IO (EntityVar (M.Map (EntityPtr Word32) (EntityPtr Int32)))
 		verify (== M.fromList [(EntityPtr intEntityId, ptr)]) $ atomically $ readEntityVar mapVar2
 		-- delete
-		atomically $ writeDeleteMapEntityVar mapVar2 (EntityPtr intEntityId)
+		atomically $ applyEntityChange mapVar2 (EntityPtr intEntityId, Nothing)
 		verify (== M.empty) $ atomically $ readEntityVar mapVar2
 		-- sync
 		clientWaitAndSync c2
