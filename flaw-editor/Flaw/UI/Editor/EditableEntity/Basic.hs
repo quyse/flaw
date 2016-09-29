@@ -1,5 +1,5 @@
 {-|
-Module: Flaw.UI.Editor.Editable.Basic
+Module: Flaw.UI.Editor.EditableEntity.Basic
 Description: Basic entities' layout.
 License: MIT
 -}
@@ -7,7 +7,7 @@ License: MIT
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
-module Flaw.UI.Editor.Editable.Basic
+module Flaw.UI.Editor.EditableEntity.Basic
 	(
 	) where
 
@@ -16,17 +16,18 @@ import Control.Monad.Reader
 import Control.Monad.State.Strict
 import qualified Data.Text as T
 
+import Flaw.Oil.Entity.Basic()
 import Flaw.UI
 import Flaw.UI.EditBox
-import Flaw.UI.Editor.Editable
+import Flaw.UI.Editor.EditableEntity
 import Flaw.UI.Layout
 import Flaw.UI.Metrics
 import Flaw.UI.Panel
 
-instance Editable T.Text where
-	editableTypeName _ = "Text"
-	editableConstructorName _ = "Text"
-	editableLayout setter = ReaderT $ \EditableLayoutState {} -> do
+instance EditableEntity T.Text where
+	editableEntityTypeName _ = "Text"
+	editableEntityConstructorName _ = "Text"
+	editableEntityLayout setter = ReaderT $ \EditableLayoutState {} -> do
 		currentValueVar <- lift $ newTVar T.empty
 		panel <- lift $ newPanel False
 		editBox <- lift newEditBox
@@ -45,7 +46,7 @@ instance Editable T.Text where
 					setter $ const value
 			else setText editBox =<< readTVar currentValueVar
 			return True
-		return $ \newValue -> do
+		return $ \newValue _change -> do
 			-- check that it's not equal to current value
 			currentValue <- readTVar currentValueVar
 			when (newValue /= currentValue) $ do
