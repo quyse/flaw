@@ -65,8 +65,7 @@ readEntityPtr (EntityPtr entityId) = do
 	ProcessingContext
 		{ processingContextEntityManager = entityManager
 		} <- ask
-	entityVar <- liftIO $ getEntityVar entityManager entityId
-	(SomeEntity entity, _revision) <- liftIO $ atomically $ readSomeEntityWithRevisionVar entityVar
+	SomeEntity entity <- liftIO $ atomically . readSomeEntityVar =<< getSomeEntityVar entityManager entityId
 	case cast entity of
 		Just castedEntity -> return castedEntity
 		Nothing -> throwError $ ProcessingException $ SomeException EntityWrongTypeException
@@ -79,8 +78,7 @@ readInterfacedEntityPtr (InterfacedEntityPtr entityId) = f Proxy where
 		ProcessingContext
 			{ processingContextEntityManager = entityManager
 			} <- ask
-		entityVar <- liftIO $ getEntityVar entityManager entityId
-		(SomeEntity entity, _revision) <- liftIO $ atomically $ readSomeEntityWithRevisionVar entityVar
+		SomeEntity entity <- liftIO $ atomically . readSomeEntityVar =<< getSomeEntityVar entityManager entityId
 		case interfaceEntity proxy entity of
 			EntityInterfaced -> return $ SomeInterfacedEntity entity
 			EntityNotInterfaced -> throwError $ ProcessingException $ SomeException EntityWrongTypeException
