@@ -11,14 +11,17 @@ module Main
 	) where
 
 import Control.Concurrent.STM
+import Control.Exception
 import Control.Monad
 import Data.Monoid
 import qualified Data.Text as T
+import qualified Data.Yaml as Y
 import qualified Network.HTTP.Client as H
 import qualified Options.Applicative as O
 
 import Flaw.App
 import Flaw.Book
+import Flaw.Editor.Project
 import Flaw.Flow
 import Flaw.Graphics
 import Flaw.Math
@@ -47,18 +50,11 @@ main = run =<< O.execParser parser where
 		)
 	opts = Options
 		<$> O.strOption
-			(  O.short 'r'
-			<> O.long "remote-repo"
-			<> O.metavar "REMOTE_REPO"
+			(  O.short 'p'
+			<> O.long "project"
+			<> O.metavar "PROJECT"
 			<> O.value ""
-			<> O.help "Remote repo URL"
-			)
-		<*> O.strOption
-			(  O.short 'l'
-			<> O.long "local-repo"
-			<> O.metavar "LOCAL_REPO"
-			<> O.value ""
-			<> O.help "Local repo path"
+			<> O.help "Project file name"
 			)
 		<*> O.strOption
 			(  O.short 'u'
@@ -73,16 +69,14 @@ main = run =<< O.execParser parser where
 			)
 
 data Options = Options
-	{ optionsRemoteRepo :: !String
-	, optionsLocalRepo :: !String
+	{ optionsProject :: !String
 	, optionsUser :: !String
 	, optionsDebug :: !Bool
 	}
 
 run :: Options -> IO ()
 run Options
-	{ optionsRemoteRepo = optionRemoteRepo
-	, optionsLocalRepo = optionLocalRepo
+	{ optionsProject = optionProject
 	, optionsUser = optionUser
 	, optionsDebug = optionDebug
 	} = withApp appConfig
@@ -101,6 +95,14 @@ run Options
 
 	exitVar <- newTVarIO False
 
+	-- load project
+	Project
+		{ projectRemoteRepoUrl = initialRemoteRepoUrl
+		, projectLocalRepoPath = initialLocalRepoPath
+		, projectProcessingCachePath = initialProcessingCachePath
+		, projectProcessingCacheMaxAge = initialProcessingCacheMaxAge
+		} <- either throwIO return =<< Y.decodeFileEither optionProject
+
 	-- init UI and run app
 	join $ atomically $ do
 		windowPanel <- newPanel True
@@ -117,13 +119,13 @@ run Options
 
 		-- show dialog asking for repo
 		remoteRepoEditBox <- newEditBox
-		setText remoteRepoEditBox $ T.pack optionRemoteRepo
+		setText remoteRepoEditBox initialRemoteRepoUrl
 		userEditBox <- newEditBox
 		setText userEditBox $ T.pack optionUser
 		passwordEditBox <- newEditBox
 		setPasswordMode passwordEditBox True
 		localRepoEditBox <- newEditBox
-		setText localRepoEditBox $ T.pack optionLocalRepo
+		setText localRepoEditBox initialLocalRepoPath
 		connectButton <- newLabeledButton "connect"
 		cancelButton <- newLabeledButton "cancel"
 		frame <- frameFlowLayout metrics $ do

@@ -84,6 +84,7 @@ executable flaw-editor
     , stm
     , text
     , vector
+    , yaml
   if os(windows)
     ld-options:          -Wl,--subsystem,windows
   default-language:    Haskell2010
