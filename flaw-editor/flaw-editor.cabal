@@ -43,6 +43,7 @@ library
     , bytestring
     , cereal
     , cereal-text
+    , containers
     , cryptonite
     , data-default
     , directory
