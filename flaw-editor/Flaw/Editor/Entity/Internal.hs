@@ -1,10 +1,10 @@
 {-|
-Module: Flaw.Oil.Entity.Internal
+Module: Flaw.Editor.Entity.Internal
 Description: Entity internals.
 License: MIT
 -}
 
-module Flaw.Oil.Entity.Internal
+module Flaw.Editor.Entity.Internal
 	( hashTextDecl
 	) where
 

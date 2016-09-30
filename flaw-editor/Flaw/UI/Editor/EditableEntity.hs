@@ -19,8 +19,8 @@ import qualified Data.Text as T
 import qualified GHC.Generics as G
 
 import Flaw.Book
+import Flaw.Editor.Entity
 import Flaw.Flow
-import Flaw.Oil.Entity
 import Flaw.UI.Layout
 import Flaw.UI.Popup
 
@@ -126,11 +126,11 @@ editableLayoutForEntityId :: EditableLayoutState -> EntityId -> (forall a. FlowL
 editableLayoutForEntityId s@EditableLayoutState
 	{ elsBook = bk
 	, elsEntityManager = entityManager
-	} entityId updateLayout = do
+	} entityId makeLayout = do
 	someEntityVar <- getSomeEntityVar entityManager entityId
 
-	-- every time entity changes its type, init is called
-	-- init allocates flow and other stuff for watching entity's history
+	-- every time entity changes its type, initForEntityType is called
+	-- it allocates flow and other stuff for watching entity's history
 	-- while it's of the given type
 	dbk <- book bk newDynamicBook
 	let initForEntityType = join $ atomically $ do -- STM monad
@@ -141,16 +141,16 @@ editableLayoutForEntityId s@EditableLayoutState
 			entityVar = getInitialEntityVar initialEntity
 		entityHistoryChan <- entityVarHistory entityVar
 		return $ do -- IO monad
-			-- -- make layout for entity if it's editable
-			notifyLayout <- case interfaceEntity (Proxy :: Proxy EditableEntity) initialEntity of
-				EntityInterfaced -> atomically $ updateLayout $ runReaderT (editableEntityLayout (applyEntityChange entityVar)) s
+			-- make layout for entity if it's editable
+			updateLayout <- case interfaceEntity (Proxy :: Proxy EditableEntity) initialEntity of
+				EntityInterfaced -> atomically $ makeLayout $ runReaderT (editableEntityLayout (applyEntityChange entityVar)) s
 					{ elsBook = dbk
 					}
 				EntityNotInterfaced -> return $ \_ _ -> return () -- empty layout
 			book dbk $ forkFlow $ forever $ do
 				m <- atomically $ catchSTM (Just <$> readEntityHistoryChan entityHistoryChan) $ \EntityWrongTypeException -> return Nothing
 				case m of
-					Just (newEntity, entityChange) -> atomically $ notifyLayout newEntity entityChange
+					Just (newEntity, entityChange) -> atomically $ updateLayout newEntity entityChange
 					Nothing -> do
 						-- run new init
 						rdbk <- releaseBook dbk

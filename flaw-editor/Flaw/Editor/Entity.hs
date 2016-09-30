@@ -1,5 +1,5 @@
 {-|
-Module: Flaw.Oil.Entity
+Module: Flaw.Editor.Entity
 Description: Entity level of Oil.
 License: MIT
 
@@ -41,7 +41,7 @@ runs in 'IO' monad.
 {-# LANGUAGE ConstraintKinds, DefaultSignatures, GADTs, GeneralizedNewtypeDeriving, PatternSynonyms, TemplateHaskell, TypeFamilies, TypeOperators, ViewPatterns #-}
 {-# OPTIONS_GHC -fno-warn-missing-pattern-synonym-signatures #-}
 
-module Flaw.Oil.Entity
+module Flaw.Editor.Entity
 	( EntityId(..)
 	, pattern ENTITY_ID_SIZE
 	, nullEntityId
@@ -118,7 +118,7 @@ import System.Mem.Weak
 
 import Flaw.Flow
 import Flaw.Oil.ClientRepo
-import Flaw.Oil.Entity.Internal
+import Flaw.Editor.Entity.Internal
 import Flaw.Oil.Repo
 
 -- | Entity id.

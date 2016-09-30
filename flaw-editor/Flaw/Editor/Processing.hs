@@ -23,7 +23,7 @@ import qualified Data.Serialize as S
 import Data.Typeable
 
 import Flaw.Editor.BlobService
-import Flaw.Oil.Entity
+import Flaw.Editor.Entity
 
 data ProcessingContext = ProcessingContext
 	{ processingContextEntityManager :: !EntityManager

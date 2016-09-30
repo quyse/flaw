@@ -22,12 +22,12 @@ import System.Exit
 import System.IO.Unsafe
 
 import Flaw.Book
+import Flaw.Editor.Entity
+import Flaw.Editor.Entity.Basic
+import Flaw.Editor.Entity.Tag
 import Flaw.Flow
 import Flaw.Oil.ClientRepo
 import Flaw.Oil.ServerRepo
-import Flaw.Oil.Entity
-import Flaw.Oil.Entity.Basic
-import Flaw.Oil.Entity.Tag
 import Flaw.Oil.Repo
 
 {-# NOINLINE testFailedRef #-}

@@ -1,5 +1,5 @@
 {-|
-Module: Flaw.Oil.Entity.Basic
+Module: Flaw.Editor.Entity.Basic
 Description: Basic instances of 'Entity' typeclass.
 License: MIT
 -}
@@ -7,7 +7,7 @@ License: MIT
 {-# LANGUAGE OverloadedStrings, TemplateHaskell, TypeFamilies #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
-module Flaw.Oil.Entity.Basic
+module Flaw.Editor.Entity.Basic
 	( registerBasicEntityDeserializators
 	) where
 
@@ -21,7 +21,7 @@ import qualified Data.Set as S
 import qualified Data.Text as T
 import Data.Word
 
-import Flaw.Oil.Entity
+import Flaw.Editor.Entity
 
 instance Entity EntityId where
 	getEntityTypeId _ = $(hashTextToEntityTypeId "EntityId")

@@ -22,9 +22,9 @@ import Data.Serialize.Text()
 import GHC.Generics(Generic)
 
 import Flaw.Editor.BlobService
+import Flaw.Editor.Entity
+import Flaw.Editor.Entity.Basic()
 import Flaw.Editor.Processing
-import Flaw.Oil.Entity
-import Flaw.Oil.Entity.Basic()
 
 class (ProcessableEntity a, ProcessableEntityResult a ~ B.ByteString) => IBlob a
 

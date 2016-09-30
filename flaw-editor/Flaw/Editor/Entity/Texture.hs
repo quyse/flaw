@@ -17,10 +17,10 @@ import Data.Default
 import qualified Data.Serialize as S
 
 import Flaw.Asset.Texture.Dxt
+import Flaw.Editor.Entity
 import Flaw.Editor.Entity.Blob
 import Flaw.Editor.Processing
 import Flaw.Graphics.Texture
-import Flaw.Oil.Entity
 import Flaw.Visual.Texture
 
 -- | Interface for entities representing textures.

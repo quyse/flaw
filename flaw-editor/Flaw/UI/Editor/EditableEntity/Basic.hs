@@ -16,7 +16,7 @@ import Control.Monad.Reader
 import Control.Monad.State.Strict
 import qualified Data.Text as T
 
-import Flaw.Oil.Entity.Basic()
+import Flaw.Editor.Entity.Basic()
 import Flaw.UI
 import Flaw.UI.EditBox
 import Flaw.UI.Editor.EditableEntity

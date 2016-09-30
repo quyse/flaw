@@ -32,7 +32,6 @@ packages:
 - flaw-network
 - flaw-oil
 - flaw-oil-client
-- flaw-oil-entity
 - flaw-oil-server
 - flaw-physics
 - flaw-sdl

@@ -1,12 +1,12 @@
 {-|
-Module: Flaw.Oil.Entity.Tag.Basic
+Module: Flaw.Editor.Entity.Tag.Basic
 Description: Basic entity tags.
 License: MIT
 -}
 
 {-# LANGUAGE DeriveGeneric, GeneralizedNewtypeDeriving, OverloadedStrings, TemplateHaskell #-}
 
-module Flaw.Oil.Entity.Tag.Basic
+module Flaw.Editor.Entity.Tag.Basic
 	( NameEntityTag(..)
 	, nameEntityTagId
 	, nameEntityTagEntityId
@@ -20,9 +20,9 @@ import qualified Data.Serialize as S
 import qualified Data.Text as T
 import GHC.Generics(Generic)
 
-import Flaw.Oil.Entity
-import Flaw.Oil.Entity.Basic()
-import Flaw.Oil.Entity.Tag
+import Flaw.Editor.Entity
+import Flaw.Editor.Entity.Basic()
+import Flaw.Editor.Entity.Tag
 
 -- | Name tag.
 newtype NameEntityTag = NameEntityTag T.Text deriving (Generic, Default, S.Serialize)

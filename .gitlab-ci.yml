@@ -32,7 +32,6 @@ variables:
     flaw-network
     flaw-oil
     flaw-oil-client
-    flaw-oil-entity
     flaw-oil-server
     flaw-physics
     flaw-sdl
@@ -72,7 +71,6 @@ variables:
     flaw-network
     flaw-oil
     flaw-oil-client
-    flaw-oil-entity
     flaw-physics
     flaw-sl
     flaw-sqlite
@@ -108,7 +106,6 @@ variables:
     flaw-network
     flaw-oil
     flaw-oil-client
-    flaw-oil-entity
     flaw-physics
     flaw-sdl
     flaw-sl

@@ -20,7 +20,12 @@ source-repository head
 library
   exposed-modules:
     Flaw.Editor.BlobService
+    Flaw.Editor.Entity
+    Flaw.Editor.Entity.Basic
     Flaw.Editor.Entity.Blob
+    Flaw.Editor.Entity.Internal
+    Flaw.Editor.Entity.Tag
+    Flaw.Editor.Entity.Tag.Basic
     Flaw.Editor.Entity.Texture
     Flaw.Editor.Processing
     Flaw.Editor.ProcessingCache
@@ -44,9 +49,10 @@ library
     , filepath
     , flaw-asset-dxt
     , flaw-base
+    , flaw-build
     , flaw-graphics
     , flaw-math
-    , flaw-oil-entity
+    , flaw-oil
     , flaw-sqlite
     , flaw-ui
     , flaw-visual
@@ -54,6 +60,7 @@ library
     , memory
     , mtl
     , stm
+    , template-haskell
     , text
   -- hs-source-dirs:      
   default-language:    Haskell2010
@@ -74,7 +81,6 @@ executable flaw-editor
     , flaw-input
     , flaw-math
     , flaw-oil
-    , flaw-oil-entity
     , flaw-ui
     , flaw-ui-default-style
     , flaw-visual
@@ -96,4 +102,11 @@ executable model-editor
   build-depends:       base, bytestring, cereal, flaw-app, flaw-asset-dxt, flaw-base, flaw-collada, flaw-editor, flaw-graphics, flaw-input, flaw-math, flaw-ui, flaw-ui-default-style, flaw-visual, flaw-window, mtl, stm, text, transformers, vector
   if os(windows)
     ld-options:          -Wl,--subsystem,windows
+  default-language:    Haskell2010
+
+test-suite entity-test
+  type:                exitcode-stdio-1.0
+  main-is:             entity-test.hs
+  hs-source-dirs:      test
+  build-depends:       base, containers, flaw-base, flaw-editor, flaw-oil, stm
   default-language:    Haskell2010

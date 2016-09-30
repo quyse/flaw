@@ -1,5 +1,5 @@
 {-|
-Module: Flaw.Oil.Entity.Tag
+Module: Flaw.Editor.Entity.Tag
 Description: Entity tags.
 License: MIT
 
@@ -12,7 +12,7 @@ and attached entity's id.
 {-# LANGUAGE PatternSynonyms, TemplateHaskell #-}
 {-# OPTIONS_GHC -fno-warn-missing-pattern-synonym-signatures #-}
 
-module Flaw.Oil.Entity.Tag
+module Flaw.Editor.Entity.Tag
 	( EntityTagId(..)
 	, pattern ENTITY_TAG_ID_SIZE
 	, entityTagEntityId
@@ -24,8 +24,8 @@ import Data.Monoid
 import qualified Data.Text as T
 import Language.Haskell.TH
 
-import Flaw.Oil.Entity
-import Flaw.Oil.Entity.Internal
+import Flaw.Editor.Entity
+import Flaw.Editor.Entity.Internal
 
 -- | Entity tag id, used for prefixing entity id of tag entities.
 newtype EntityTagId = EntityTagId BS.ShortByteString
