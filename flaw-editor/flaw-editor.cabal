@@ -31,7 +31,6 @@ library
     Flaw.Editor.ProcessingCache
     Flaw.Editor.Project
     Flaw.UI.Editor.EditableEntity
-    Flaw.UI.Editor.EditableEntity.Basic
     Flaw.UI.Editor.Elements
     Flaw.UI.Editor.FileDialog
     Flaw.UI.RenderBox
