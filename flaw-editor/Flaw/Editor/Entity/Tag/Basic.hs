@@ -4,7 +4,7 @@ Description: Basic entity tags.
 License: MIT
 -}
 
-{-# LANGUAGE DeriveGeneric, GeneralizedNewtypeDeriving, OverloadedStrings, TemplateHaskell #-}
+{-# LANGUAGE DeriveGeneric, GeneralizedNewtypeDeriving, OverloadedStrings, TemplateHaskell, TypeFamilies #-}
 
 module Flaw.Editor.Entity.Tag.Basic
 	( NameEntityTag(..)
@@ -28,6 +28,9 @@ import Flaw.Editor.Entity.Tag
 newtype NameEntityTag = NameEntityTag T.Text deriving (Generic, Default, S.Serialize)
 
 instance Entity NameEntityTag where
+	type EntityChange NameEntityTag = NameEntityTag
+	processEntityChange = processBasicEntityChange
+	applyEntityChange = applyBasicEntityChange
 	getEntityTypeId _ = $(hashTextToEntityTypeId "NameEntityTag")
 instance BasicEntity NameEntityTag
 
@@ -41,7 +44,10 @@ nameEntityTagEntityId = entityTagEntityId nameEntityTagId
 newtype DescriptionEntityTag = DescriptionEntityTag T.Text deriving (Generic, Default, S.Serialize)
 
 instance Entity DescriptionEntityTag where
+	type EntityChange DescriptionEntityTag = DescriptionEntityTag
 	getEntityTypeId _ = $(hashTextToEntityTypeId "DescriptionEntityTag")
+	processEntityChange = processBasicEntityChange
+	applyEntityChange = applyBasicEntityChange
 instance BasicEntity DescriptionEntityTag
 
 descriptionEntityTagId :: EntityTagId

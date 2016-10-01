@@ -38,7 +38,7 @@ runs in 'IO' monad.
 
 -}
 
-{-# LANGUAGE ConstraintKinds, DefaultSignatures, GADTs, GeneralizedNewtypeDeriving, PatternSynonyms, TemplateHaskell, TypeFamilies, TypeOperators, ViewPatterns #-}
+{-# LANGUAGE ConstraintKinds, DefaultSignatures, FlexibleContexts, FlexibleInstances, GADTs, GeneralizedNewtypeDeriving, PatternSynonyms, TemplateHaskell, TypeFamilies, TypeOperators, UndecidableInstances, ViewPatterns #-}
 {-# OPTIONS_GHC -fno-warn-missing-pattern-synonym-signatures #-}
 
 module Flaw.Editor.Entity
@@ -55,6 +55,8 @@ module Flaw.Editor.Entity
 	, SomeEntityPtr(..)
 	, Entity(..)
 	, BasicEntity(..)
+	, processBasicEntityChange
+	, applyBasicEntityChange
 	, SomeEntity(..)
 	, SomeBasicEntity(..)
 	, SomeBasicOrdEntity(..)
@@ -88,6 +90,12 @@ module Flaw.Editor.Entity
 	, entityVarHistory
 	, readEntityHistoryChan
 	, EntityException(..)
+	, GenericEntityChange
+	, GenericEntityDatatype(..)
+	, GenericEntityConstructor(..)
+	, GenericEntitySelector(..)
+	, GenericEntityValue(..)
+	, hashTextToEntityId
 	, hashTextToEntityTypeId
 	, hashTextToEntityInterfaceId
 	, interfaceEntityExp
@@ -112,7 +120,9 @@ import qualified Data.Serialize as S
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import Data.Typeable
+import Data.Word
 import GHC.Exts(Constraint)
+import qualified GHC.Generics as G
 import Language.Haskell.TH
 import System.Mem.Weak
 
@@ -249,7 +259,7 @@ class Typeable a => Entity (a :: *) where
 
 	-- | Type representing change to entity.
 	type EntityChange a :: *
-	type EntityChange a = a -> a
+	type EntityChange a = GenericEntityChange a
 
 	-- | Return type id of entity.
 	-- Parameter is not used and can be 'undefined'.
@@ -266,26 +276,25 @@ class Typeable a => Entity (a :: *) where
 		-> B.ByteString -- ^ Key suffix of changed record.
 		-> B.ByteString -- ^ New value of changed record.
 		-> Maybe (a, EntityChange a)
-	default processEntityChange :: BasicEntity a => a -> B.ByteString -> B.ByteString -> Maybe (a, a -> a)
-	processEntityChange _oldEntity changedKeySuffix newValue =
-		if B.null changedKeySuffix then
-			let newEntity = deserializeBasicEntity newValue in Just (newEntity, const newEntity)
-		else Nothing
+	default processEntityChange :: (G.Generic a, GenericEntityDatatype (G.Rep a)) => a -> B.ByteString -> B.ByteString -> Maybe (a, GenericEntityChange a)
+	processEntityChange oldEntity keySuffix newValue = do -- Maybe monad
+		(newEntity, change) <- processGenericEntityDatatypeChange (G.from oldEntity) keySuffix newValue
+		return (G.to newEntity, change)
 
 	-- | Apply change to get new entity and write changes to entity var.
 	applyEntityChange
 		:: EntityVar a -- ^ Entity var.
 		-> EntityChange a -- ^ Entity change.
 		-> STM ()
-	default applyEntityChange :: BasicEntity a => EntityVar a -> (a -> a) -> STM ()
-	applyEntityChange entityVar change = writeBasicEntityVar entityVar . change =<< readEntityVar entityVar
+	default applyEntityChange :: (G.Generic a, GenericEntityDatatype (G.Rep a), EntityChange a ~ GenericEntityChange a) => EntityVar a -> EntityChange a -> STM ()
+	applyEntityChange = applyGenericEntityDatatypeChange
 
 	-- | Return witness for entity that it supports specified entity interface.
 	interfaceEntity :: EntityInterface i => Proxy i -> a -> EntityInterfaced i a
 	interfaceEntity _ _ = EntityNotInterfaced
 
 -- | Basic entity is an entity consisting of main record only.
-class (Entity a, EntityChange a ~ (a -> a)) => BasicEntity a where
+class (Entity a, EntityChange a ~ a) => BasicEntity a where
 	-- | Serialize basic entity into main record's value.
 	serializeBasicEntity :: a -> B.ByteString
 	default serializeBasicEntity :: S.Serialize a => a -> B.ByteString
@@ -297,6 +306,17 @@ class (Entity a, EntityChange a ~ (a -> a)) => BasicEntity a where
 	deserializeBasicEntity bytes = case S.decode bytes of
 		Left _e -> def
 		Right r -> r
+
+-- | Implementation of 'processEntityChange' for 'BasicEntity'es.
+processBasicEntityChange :: BasicEntity a => a -> B.ByteString -> B.ByteString -> Maybe (a, a)
+processBasicEntityChange _oldEntity changedKeySuffix newValue =
+	if B.null changedKeySuffix then
+		let newEntity = deserializeBasicEntity newValue in Just (newEntity, newEntity)
+	else Nothing
+
+-- | Implementation of 'applyEntityChange' for 'BasicEntity'es.
+applyBasicEntityChange :: BasicEntity a => EntityVar a -> a -> STM ()
+applyBasicEntityChange = writeBasicEntityVar
 
 -- | Container for any entity.
 data SomeEntity where
@@ -788,7 +808,7 @@ writeBasicEntityVar (EntityVar SomeEntityVar
 	, someEntityVarValueVar = entityValueVar
 	}) newEntity = do
 	-- modify var
-	writeEntityChange entityValueVar 0 newEntity $ const newEntity
+	writeEntityChange entityValueVar 0 newEntity newEntity
 	-- write record
 	let EntityTypeId entityTypeIdBytes = getEntityTypeId newEntity
 	modifyTVar' dirtyRecordsVar $ M.insert (BS.fromShort entityIdBytes) $ BS.fromShort entityTypeIdBytes <> serializeBasicEntity newEntity
@@ -844,6 +864,126 @@ data EntityException
 	deriving (Eq, Show)
 
 instance Exception EntityException
+
+
+type GenericEntityChange a = GenericEntityDatatypeChange (G.Rep a)
+
+-- | Type of index of a field.
+-- We support up to 256 fields.
+type FieldIndex = Word8
+
+-- | Serialize field index.
+encodeFieldIndex :: FieldIndex -> B.ByteString
+encodeFieldIndex = B.singleton
+
+-- | Deserialize field index.
+decodeFieldIndex :: B.ByteString -> Maybe FieldIndex
+decodeFieldIndex bytes = if B.length bytes == 1 then Just $ B.head bytes else Nothing
+
+class GenericEntityDatatype f where
+	type GenericEntityDatatypeChange f :: *
+	processGenericEntityDatatypeChange :: f p -> B.ByteString -> B.ByteString -> Maybe (f p, GenericEntityDatatypeChange f)
+	applyGenericEntityDatatypeChange :: (Entity a, G.Generic a, G.Rep a ~ f, EntityChange a ~ GenericEntityDatatypeChange f) => EntityVar a -> EntityChange a -> STM ()
+
+class GenericEntityConstructor f where
+	type GenericEntityConstructorChange f :: *
+	processGenericEntityConstructorChange :: f p -> FieldIndex -> B.ByteString -> Maybe (f p, GenericEntityConstructorChange f)
+	applyGenericEntityConstructorChange :: f p -> GenericEntityConstructorChange f -> (B.ByteString, B.ByteString)
+
+class GenericEntitySelector f where
+	type GenericEntitySelectorChange f :: *
+	processGenericEntitySelectorChange :: f p -> FieldIndex -> B.ByteString -> Maybe (f p, GenericEntitySelectorChange f)
+	applyGenericEntitySelectorChange :: f p -> FieldIndex -> GenericEntitySelectorChange f -> (B.ByteString, B.ByteString)
+	genericEntitySelectorFieldsCount :: f p -> Word8
+
+class GenericEntityValue f where
+	type GenericEntityValueChange f :: *
+	processGenericEntityValueChange :: f p -> B.ByteString -> Maybe (f p, GenericEntityValueChange f)
+	applyGenericEntityValueChange :: f p -> GenericEntityValueChange f -> B.ByteString
+
+instance GenericEntityConstructor f => GenericEntityDatatype (G.M1 G.D c f) where
+	type GenericEntityDatatypeChange (G.M1 G.D c f) = GenericEntityConstructorChange f
+
+	processGenericEntityDatatypeChange oldEntity keySuffix newValue = do -- Maybe monad
+		fieldIndex <- decodeFieldIndex keySuffix
+		(newEntity, change) <- processGenericEntityConstructorChange (G.unM1 oldEntity) fieldIndex newValue
+		return (G.M1 newEntity, change)
+
+	applyGenericEntityDatatypeChange var change = do
+		entity <- readEntityVar var
+		let (keySuffix, newValue) = applyGenericEntityConstructorChange (G.unM1 $ G.from entity) change
+		writeEntityVarRecord var keySuffix newValue
+
+	{-# INLINEABLE processGenericEntityDatatypeChange #-}
+	{-# INLINEABLE applyGenericEntityDatatypeChange #-}
+
+instance GenericEntitySelector f => GenericEntityConstructor (G.M1 G.C c f) where
+	type GenericEntityConstructorChange (G.M1 G.C c f) = GenericEntitySelectorChange f
+
+	processGenericEntityConstructorChange oldEntity fieldIndex newValue = do -- Maybe monad
+		(newEntity, change) <- processGenericEntitySelectorChange (G.unM1 oldEntity) fieldIndex newValue
+		return (G.M1 newEntity, change)
+
+	applyGenericEntityConstructorChange oldEntity = applyGenericEntitySelectorChange (G.unM1 oldEntity) 0
+
+	{-# INLINEABLE processGenericEntityConstructorChange #-}
+	{-# INLINEABLE applyGenericEntityConstructorChange #-}
+
+instance GenericEntityValue f => GenericEntitySelector (G.M1 G.S c f) where
+	type GenericEntitySelectorChange (G.M1 G.S c f) = GenericEntityValueChange f
+
+	-- field index must be zero here
+	processGenericEntitySelectorChange oldEntity 0 newValue = do -- Maybe monad
+		(newEntity, change) <- processGenericEntityValueChange (G.unM1 oldEntity) newValue
+		return (G.M1 newEntity, change)
+	processGenericEntitySelectorChange _oldEntity _fieldIndex _newValue = Nothing
+
+	genericEntitySelectorFieldsCount _ = 1
+
+	applyGenericEntitySelectorChange oldEntity fieldIndex change = (encodeFieldIndex fieldIndex, applyGenericEntityValueChange (G.unM1 oldEntity) change)
+
+	{-# INLINEABLE processGenericEntitySelectorChange #-}
+	{-# INLINEABLE genericEntitySelectorFieldsCount #-}
+	{-# INLINEABLE applyGenericEntitySelectorChange #-}
+
+instance (GenericEntitySelector a, GenericEntitySelector b) => GenericEntitySelector (a G.:*: b) where
+	type GenericEntitySelectorChange (a G.:*: b) = Either (GenericEntitySelectorChange a) (GenericEntitySelectorChange b)
+
+	processGenericEntitySelectorChange (a G.:*: b) fieldIndex newValue = do -- Maybe monad
+		let aFieldCount = genericEntitySelectorFieldsCount a
+		if fieldIndex < aFieldCount then do
+			(newEntity, change) <- processGenericEntitySelectorChange a fieldIndex newValue
+			return (newEntity G.:*: b, Left change)
+		else do
+			(newEntity, change) <- processGenericEntitySelectorChange b (fieldIndex - aFieldCount) newValue
+			return (a G.:*: newEntity, Right change)
+
+	genericEntitySelectorFieldsCount (a G.:*: b) = genericEntitySelectorFieldsCount a + genericEntitySelectorFieldsCount b
+
+	applyGenericEntitySelectorChange (a G.:*: b) fieldIndex change = case change of
+		Left l -> applyGenericEntitySelectorChange a fieldIndex l
+		Right r -> applyGenericEntitySelectorChange b (fieldIndex + genericEntitySelectorFieldsCount a) r
+
+	{-# INLINEABLE processGenericEntitySelectorChange #-}
+	{-# INLINEABLE genericEntitySelectorFieldsCount #-}
+	{-# INLINEABLE applyGenericEntitySelectorChange #-}
+
+-- value
+instance BasicEntity a => GenericEntityValue (G.K1 G.R a) where
+	type GenericEntityValueChange (G.K1 G.R a) = EntityChange a
+
+	processGenericEntityValueChange _oldEntity newValue = Just (G.K1 newEntity, newEntity) where
+		newEntity = deserializeBasicEntity newValue
+
+	applyGenericEntityValueChange _oldEntity = serializeBasicEntity
+
+	{-# INLINEABLE processGenericEntityValueChange #-}
+	{-# INLINEABLE applyGenericEntityValueChange #-}
+
+
+-- | Handy function to generate compile-time entity id out of text.
+hashTextToEntityId :: T.Text -> Q Exp
+hashTextToEntityId = hashTextDecl "entityIdHash_" [t| EntityId |] $ \e -> [| EntityId (BS.toShort $e) |]
 
 -- | Handy function to generate compile-time entity type id out of text.
 hashTextToEntityTypeId :: T.Text -> Q Exp

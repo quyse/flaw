@@ -33,37 +33,61 @@ import Flaw.UI.Metrics
 import Flaw.UI.Panel
 
 instance Entity EntityId where
+	type EntityChange EntityId = EntityId
 	getEntityTypeId _ = $(hashTextToEntityTypeId "EntityId")
+	processEntityChange = processBasicEntityChange
+	applyEntityChange = applyBasicEntityChange
 instance BasicEntity EntityId
 
 instance Entity Int32 where
+	type EntityChange Int32 = Int32
 	getEntityTypeId _ = $(hashTextToEntityTypeId "Int32")
+	processEntityChange = processBasicEntityChange
+	applyEntityChange = applyBasicEntityChange
 instance BasicEntity Int32
 
 instance Entity Int64 where
+	type EntityChange Int64 = Int64
 	getEntityTypeId _ = $(hashTextToEntityTypeId "Int64")
+	processEntityChange = processBasicEntityChange
+	applyEntityChange = applyBasicEntityChange
 instance BasicEntity Int64
 
 instance Entity Word32 where
+	type EntityChange Word32 = Word32
 	getEntityTypeId _ = $(hashTextToEntityTypeId "Word32")
+	processEntityChange = processBasicEntityChange
+	applyEntityChange = applyBasicEntityChange
 instance BasicEntity Word32
 
 instance Entity Word64 where
+	type EntityChange Word64 = Word64
 	getEntityTypeId _ = $(hashTextToEntityTypeId "Word64")
+	processEntityChange = processBasicEntityChange
+	applyEntityChange = applyBasicEntityChange
 instance BasicEntity Word64
 
 instance Entity Integer where
+	type EntityChange Integer = Integer
 	getEntityTypeId _ = $(hashTextToEntityTypeId "Integer")
+	processEntityChange = processBasicEntityChange
+	applyEntityChange = applyBasicEntityChange
 instance BasicEntity Integer
 
 instance Entity B.ByteString where
+	type EntityChange B.ByteString = B.ByteString
 	getEntityTypeId _ = $(hashTextToEntityTypeId "ByteString")
+	processEntityChange = processBasicEntityChange
+	applyEntityChange = applyBasicEntityChange
 instance BasicEntity B.ByteString
 instance Default B.ByteString where
 	def = B.empty
 
 instance Entity T.Text where
+	type EntityChange T.Text = T.Text
 	getEntityTypeId _ = $(hashTextToEntityTypeId "Text")
+	processEntityChange = processBasicEntityChange
+	applyEntityChange = applyBasicEntityChange
 	interfaceEntity = $(interfaceEntityExp [''EditableEntity])
 instance BasicEntity T.Text
 instance Default T.Text where
@@ -88,7 +112,7 @@ instance EditableEntity T.Text where
 				currentValue <- readTVar currentValueVar
 				when (value /= currentValue) $ do
 					writeTVar currentValueVar value
-					setter $ const value
+					setter value
 			else setText editBox =<< readTVar currentValueVar
 			return True
 		return $ \newValue _change -> do
@@ -107,6 +131,9 @@ entityPtrFirstEntityTypeId :: EntityTypeId
 entityPtrFirstEntityTypeId = $(hashTextToEntityTypeId "EntityPtr")
 
 instance Entity a => Entity (EntityPtr a) where
+	type EntityChange (EntityPtr a) = EntityPtr a
+	processEntityChange = processBasicEntityChange
+	applyEntityChange = applyBasicEntityChange
 	getEntityTypeId = f undefined where
 		f :: Entity a => a -> EntityPtr a -> EntityTypeId
 		f u _ = entityPtrFirstEntityTypeId <> getEntityTypeId u

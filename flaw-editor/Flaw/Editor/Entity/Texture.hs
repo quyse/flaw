@@ -31,7 +31,10 @@ instance EntityInterface ITexture where
 
 -- 'PackedTexture' is itself an entity and a texture.
 instance Entity PackedTexture where
+	type EntityChange PackedTexture = PackedTexture
 	getEntityTypeId _ = $(hashTextToEntityTypeId "PackedTexture")
+	processEntityChange = processBasicEntityChange
+	applyEntityChange = applyBasicEntityChange
 	interfaceEntity = $(interfaceEntityExp [''ProcessableEntity, ''ITexture])
 instance Default PackedTexture where
 	def = PackedTexture
@@ -57,7 +60,10 @@ instance ITexture PackedTexture
 -- | Entity importing texture from blob.
 newtype TextureFromBlob = TextureFromBlob (InterfacedEntityPtr IBlob) deriving (S.Serialize, Default)
 instance Entity TextureFromBlob where
+	type EntityChange TextureFromBlob = TextureFromBlob
 	getEntityTypeId _ = $(hashTextToEntityTypeId "TextureFromBlob")
+	processEntityChange = processBasicEntityChange
+	applyEntityChange = applyBasicEntityChange
 	interfaceEntity = $(interfaceEntityExp [''ProcessableEntity, ''ITexture])
 instance BasicEntity TextureFromBlob
 instance ProcessableEntity TextureFromBlob where
@@ -71,7 +77,10 @@ instance ITexture TextureFromBlob
 -- | Entity compressing texture.
 newtype CompressTexture = CompressTexture (InterfacedEntityPtr ITexture) deriving (S.Serialize, Default)
 instance Entity CompressTexture where
+	type EntityChange CompressTexture = CompressTexture
 	getEntityTypeId _ = $(hashTextToEntityTypeId "CompressTexture")
+	processEntityChange = processBasicEntityChange
+	applyEntityChange = applyBasicEntityChange
 	interfaceEntity = $(interfaceEntityExp [''ProcessableEntity, ''ITexture])
 instance BasicEntity CompressTexture
 instance ProcessableEntity CompressTexture where

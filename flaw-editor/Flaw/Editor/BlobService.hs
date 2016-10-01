@@ -4,7 +4,7 @@ Description: Blob storage service.
 License: MIT
 -}
 
-{-# LANGUAGE DeriveAnyClass, DeriveGeneric, GADTs, OverloadedStrings #-}
+{-# LANGUAGE DeriveAnyClass, DeriveGeneric, GADTs, OverloadedStrings, TemplateHaskell, TypeFamilies #-}
 
 module Flaw.Editor.BlobService
 	( BlobService(..)
@@ -19,6 +19,7 @@ import Control.Monad
 import qualified Crypto.Hash as C
 import qualified Data.ByteArray as BA
 import qualified Data.ByteString as B
+import Data.Default
 import qualified Data.Serialize as S
 import qualified Data.Text as T
 import GHC.Generics(Generic)
@@ -26,6 +27,7 @@ import qualified Network.HTTP.Client as H
 
 import Flaw.BinaryCache
 import Flaw.Book
+import Flaw.Editor.Entity
 
 -- | Blob service supports different ways of obtaining blobs.
 data BlobService where
@@ -38,6 +40,15 @@ data BlobService where
 data BlobHash
 	= BlobHashSHA256 B.ByteString
 	deriving (Generic, S.Serialize)
+
+instance Entity BlobHash where
+	type EntityChange BlobHash = BlobHash
+	getEntityTypeId _ = $(hashTextToEntityTypeId "BlobHash")
+	processEntityChange = processBasicEntityChange
+	applyEntityChange = applyBasicEntityChange
+instance BasicEntity BlobHash
+instance Default BlobHash where
+	def = BlobHashSHA256 B.empty
 
 fetchBlobByUrl :: BlobService -> T.Text -> BlobHash -> IO B.ByteString
 fetchBlobByUrl BlobService

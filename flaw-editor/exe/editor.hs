@@ -21,7 +21,6 @@ import qualified Options.Applicative as O
 
 import Flaw.App
 import Flaw.Book
-import Flaw.Editor.Entity
 import Flaw.Editor.Entity.Sync
 import Flaw.Editor.Project
 import Flaw.Flow
@@ -29,7 +28,6 @@ import Flaw.Graphics
 import Flaw.Math
 import Flaw.Oil.ClientRepo
 import Flaw.Oil.RemoteRepo
-import Flaw.Oil.Repo
 import Flaw.UI
 import Flaw.UI.Button
 import Flaw.UI.DefaultStyle

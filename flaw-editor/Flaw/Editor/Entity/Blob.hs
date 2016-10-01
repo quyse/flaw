@@ -31,10 +31,6 @@ class (ProcessableEntity a, ProcessableEntityResult a ~ B.ByteString) => IBlob a
 instance EntityInterface IBlob where
 	getEntityInterfaceId _ = $(hashTextToEntityInterfaceId "IBlob")
 
--- 'B.ByteString' is itself a blob.
-instance ProcessableEntity B.ByteString
-instance IBlob B.ByteString
-
 -- | Blob which must be fetched using URL and then hash-verified.
 data BlobByUrl = BlobByUrl
 	{ blobByUrlUrl :: !T.Text
@@ -48,7 +44,6 @@ instance Default BlobByUrl where
 		{ blobByUrlUrl = T.empty
 		, blobByUrlHash = BlobHashSHA256 B.empty
 		}
-instance BasicEntity BlobByUrl
 instance ProcessableEntity BlobByUrl where
 	type ProcessableEntityResult BlobByUrl = B.ByteString
 	processEntity BlobByUrl
