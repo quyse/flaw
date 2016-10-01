@@ -17,6 +17,7 @@ module Flaw.Oil.ClientRepo
 	, clientRepoGetKeysPrefixed
 	, ClientRepoPushState(..)
 	, pushClientRepo
+	, isClientRepoPushEmpty
 	, ClientRepoPullInfo(..)
 	, pullClientRepo
 	, cleanupClientRepo
@@ -422,6 +423,11 @@ pushClientRepo repo@ClientRepo
 		}, ClientRepoPushState
 		{ clientRepoPushStateTransientIds = transientIds
 		})
+
+isClientRepoPushEmpty :: ClientRepoPushState -> Bool
+isClientRepoPushEmpty ClientRepoPushState
+	{ clientRepoPushStateTransientIds = transientIds
+	} = null transientIds
 
 data ClientRepoPullInfo = ClientRepoPullInfo
 	{ clientRepoPullRevision :: {-# UNPACK #-} !Revision

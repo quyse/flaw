@@ -75,7 +75,7 @@ module Flaw.Editor.Entity
 	, registerEntityType
 	, registerBasicEntityType
 	, registerBasicOrdEntityType
-	, pullEntityManager
+	, unsafePullEntityManager
 	, getSomeEntityVar
 	, getEntityVar
 	, newEntityVar
@@ -521,13 +521,13 @@ deserializeSomeEntity entityManager@EntityManager
 		Right returnResult -> returnResult
 
 -- | Provide entity manager with changes pulled from remote repo.
-pullEntityManager :: EntityManager -> [(Revision, B.ByteString, B.ByteString)] -> STM ()
-pullEntityManager entityManager@EntityManager
-	{ entityManagerFlow = flow
-	, entityManagerClientRepo = clientRepo
+-- Must be called in entity manager's flow, in the same task as pulling changes into client repo.
+unsafePullEntityManager :: EntityManager -> [(Revision, B.ByteString, B.ByteString)] -> IO ()
+unsafePullEntityManager entityManager@EntityManager
+	{ entityManagerClientRepo = clientRepo
 	, entityManagerCacheRef = cacheRef
 	, entityManagerDirtyRecordsVar = dirtyRecordsVar
-	} changes = asyncRunInFlow flow $ do
+	} changes = do
 	getEntity <- getEntityStateGetter <$> internalGetEntityState entityManager
 	forM_ (filter ((>= ENTITY_ID_SIZE) . B.length) $ map (\(_revision, key, _value) -> key) changes) $ \recordKey -> do
 		-- get entity id

@@ -78,7 +78,7 @@ session sessionName f = handle (\e -> print ("session failed" :: String, session
 			runInFlow (entityManagerFlow entityManager) $ do
 				(push, crps) <- pushClientRepo clientRepo manifest
 				pull <- syncServerRepo serverRepo manifest push 1
-				atomically . pullEntityManager entityManager . clientRepoPullChanges =<< pullClientRepo clientRepo pull crps
+				unsafePullEntityManager entityManager . clientRepoPullChanges =<< pullClientRepo clientRepo pull crps
 			-- wait for async pull
 			runInFlow (entityManagerFlow entityManager) $ return ()
 

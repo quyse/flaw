@@ -4,7 +4,7 @@ Description: Flaw Editor.
 License: MIT
 -}
 
-{-# LANGUAGE OverloadedStrings, RecursiveDo #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Main
 	( main
@@ -22,6 +22,7 @@ import qualified Options.Applicative as O
 import Flaw.App
 import Flaw.Book
 import Flaw.Editor.Entity
+import Flaw.Editor.Entity.Sync
 import Flaw.Editor.Project
 import Flaw.Flow
 import Flaw.Graphics
@@ -147,74 +148,21 @@ run Options
 			_password <- getText passwordEditBox
 			localRepoPath <- getText localRepoEditBox
 			removeFreeChild windowPanel frameChild
-			asyncRunInFlow flow $ mdo
+			asyncRunInFlow flow $ do
 				clientRepo <- book bk $ openClientRepo localRepoPath
 				httpManager <- H.newManager H.defaultManagerSettings
 				(remoteRepo, manifest) <- initHttpRemoteRepo httpManager remoteRepoUrl
 
-				-- repo sync flow
-				syncFlow <- book bk newFlow
-				-- client repo operations flow
-				clientRepoFlow <- book bk newFlow
-				syncInProgressVar <- newTVarIO False -- sync already started
-				needSyncVar <- newTVarIO False -- more changes need to push since sync start
 				-- create entity manager
-				entityManager <- newEntityManager clientRepoFlow clientRepo startSync
-				let startSync = let
-					doSync = do
-						writeTVar needSyncVar False
-						asyncRunInFlow clientRepoFlow $ do
-							(push, pushState) <- pushClientRepo clientRepo manifest
-							-- sync with remote repo in sync flow
-							atomically $ asyncRunInFlow syncFlow $ do
-								pull <- syncHttpRemoteRepo remoteRepo push
-								-- update UI
-								-- merge pull info in client repo flow
-								atomically $ asyncRunInFlow clientRepoFlow $ do
-									ClientRepoPullInfo
-										{ clientRepoPullRevision = revision
-										, clientRepoPullLag = lag
-										, clientRepoPullChanges = changes
-										} <- pullClientRepo clientRepo pull pushState
-									atomically $ do
-										-- notify entity manager
-										pullEntityManager entityManager changes
-										-- update UI
-										setText syncInfoLabel $ T.pack $ "client revision: " <> show revision <> (if lag > 0 then " | pull lag: " <> show lag else "")
-										-- DEBUG: display changes
-										asyncRunInFlow syncFlow $ mapM_ print changes
-										-- check if we need to sync again
-										needSync <- readTVar needSyncVar
-										-- if there was no items to push and pull lag is zero, and startSync hasn't been called again
-										if null (pushItems push) && lag <= 0 && not needSync then
-											-- then sync is over
-											writeTVar syncInProgressVar False
-										else
-											-- otherwise repeat sync
-											doSync
-					in atomically $ do
-					-- have only one sync at a time
-					syncInProgress <- readTVar syncInProgressVar
-					if syncInProgress then writeTVar needSyncVar True
-					else do
-						writeTVar syncInProgressVar True
-						doSync
-
-				-- perform initial sync
-				startSync
-
-				-- start watch flow
-				book bk $ forkFlow $ forever $ do
-					-- don't do watch requests if sync is in progress
-					atomically $ do
-						syncInProgress <- readTVar syncInProgressVar
-						when syncInProgress retry
-					-- get client revision
-					clientRevision <- clientRepoRevision clientRepo
-					-- watch for changes
-					serverRevision <- watchHttpRemoteRepo remoteRepo clientRevision
-					-- if server revision is greater, perform sync
-					when (clientRevision < serverRevision) startSync
+				void $ newSyncedEntityManager clientRepo remoteRepo manifest $ \ClientRepoPullInfo
+					{ clientRepoPullRevision = revision
+					, clientRepoPullLag = lag
+					, clientRepoPullChanges = changes
+					} -> do
+					-- update UI
+					setText syncInfoLabel $ T.pack $ "client revision: " <> show revision <> (if lag > 0 then " | pull lag: " <> show lag else "")
+					-- DEBUG: display changes
+					asyncRunInFlow flow $ mapM_ print changes
 
 		setActionHandler cancelButton $ removeFreeChild windowPanel frameChild
 

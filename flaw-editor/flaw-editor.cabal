@@ -24,6 +24,7 @@ library
     Flaw.Editor.Entity.Basic
     Flaw.Editor.Entity.Blob
     Flaw.Editor.Entity.Internal
+    Flaw.Editor.Entity.Sync
     Flaw.Editor.Entity.Tag
     Flaw.Editor.Entity.Tag.Basic
     Flaw.Editor.Entity.Texture
