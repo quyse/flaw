@@ -332,7 +332,10 @@ instance FreeContainer Panel where
 
 	setLayoutHandler Panel
 		{ panelLayoutHandlerVar = layoutHandlerVar
-		} = writeTVar layoutHandlerVar
+		, panelSizeVar = sizeVar
+		} layoutHandler = do
+		writeTVar layoutHandlerVar layoutHandler
+		layoutHandler =<< readTVar sizeVar
 
 	addFreeChild Panel
 		{ panelChildrenVar = childrenVar
