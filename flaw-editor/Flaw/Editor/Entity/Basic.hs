@@ -141,6 +141,24 @@ instance Entity a => BasicEntity (EntityPtr a) where
 	serializeBasicEntity (EntityPtr underlyingEntityId) = serializeBasicEntity underlyingEntityId
 	deserializeBasicEntity = EntityPtr . deserializeBasicEntity
 
+-- InterfacedEntityPtr
+
+interfacedEntityPtrFirstEntityTypeId :: EntityTypeId
+interfacedEntityPtrFirstEntityTypeId = $(hashTextToEntityTypeId "InterfacedEntityPtr")
+
+instance EntityInterface i => Entity (InterfacedEntityPtr i) where
+	type EntityChange (InterfacedEntityPtr i) = InterfacedEntityPtr i
+	processEntityChange = processBasicEntityChange
+	applyEntityChange = applyBasicEntityChange
+	getEntityTypeId = f Proxy where
+		f :: EntityInterface i => Proxy i -> InterfacedEntityPtr i -> EntityTypeId
+		f proxy _ = let
+			EntityInterfaceId entityInterfaceIdBytes = getEntityInterfaceId proxy
+			in interfacedEntityPtrFirstEntityTypeId <> EntityTypeId entityInterfaceIdBytes
+instance EntityInterface i => BasicEntity (InterfacedEntityPtr i) where
+	serializeBasicEntity (InterfacedEntityPtr underlyingEntityId) = serializeBasicEntity underlyingEntityId
+	deserializeBasicEntity = InterfacedEntityPtr . deserializeBasicEntity
+
 -- Set
 
 setFirstEntityTypeId :: EntityTypeId
@@ -192,6 +210,14 @@ registerBasicEntityDeserializators entityManager = do
 			setType :: a -> EntityPtr a
 			setType _ = EntityPtr nullEntityId
 		return $ SomeBasicOrdEntity $ setType underlyingBaseEntity
+
+	-- register InterfacedEntityPtr's deserializator
+	registerBasicOrdEntityType entityManager interfacedEntityPtrFirstEntityTypeId $ do
+		SomeEntityInterface proxy <- deserializeEntityInterface
+		let
+			setType :: Proxy i -> InterfacedEntityPtr i
+			setType Proxy = InterfacedEntityPtr nullEntityId
+		return $ SomeBasicOrdEntity $ setType proxy
 
 	-- register Set's deserializator
 	registerEntityType entityManager setFirstEntityTypeId $ do

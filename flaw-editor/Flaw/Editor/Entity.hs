@@ -67,16 +67,19 @@ module Flaw.Editor.Entity
 	, EntityInterfaced(..)
 	, SomeInterfacedEntity(..)
 	, InterfacedEntityPtr(..)
+	, SomeEntityInterface(..)
 	, nullInterfacedEntityPtr
 	, EntityManager(..)
 	, GetEntity
 	, getRootBaseEntity
 	, getRootBaseBasicEntity
 	, getRootBaseBasicOrdEntity
+	, deserializeEntityInterface
 	, newEntityManager
 	, registerEntityType
 	, registerBasicEntityType
 	, registerBasicOrdEntityType
+	, registerEntityInterface
 	, unsafePullEntityManager
 	, getSomeEntityVar
 	, getEntityVar
@@ -377,6 +380,10 @@ data SomeInterfacedEntity i where
 -- | Entity pointer pointing at some entity which supports specified interface.
 newtype InterfacedEntityPtr (i :: * -> Constraint) = InterfacedEntityPtr EntityId deriving (Eq, Ord, S.Serialize, Default, Show)
 
+-- | Some entity interface.
+data SomeEntityInterface where
+	SomeEntityInterface :: EntityInterface i => Proxy i -> SomeEntityInterface
+
 nullInterfacedEntityPtr :: InterfacedEntityPtr a
 nullInterfacedEntityPtr = InterfacedEntityPtr nullEntityId
 
@@ -400,6 +407,8 @@ data EntityManager = EntityManager
 	, entityManagerBasicDeserializatorsRef :: {-# UNPACK #-} !(IORef (M.Map EntityTypeId (GetEntity SomeBasicEntity)))
 	-- | Basic ordered entity deserialization functions.
 	, entityManagerBasicOrdDeserializatorsRef :: {-# UNPACK #-} !(IORef (M.Map EntityTypeId (GetEntity SomeBasicOrdEntity)))
+	-- | Entity interfaces.
+	, entityManagerEntityInterfacesRef :: {-# UNPACK #-} !(IORef (M.Map EntityInterfaceId (GetEntity SomeEntityInterface)))
 	-- | Dirty entities.
 	, entityManagerDirtyRecordsVar :: {-# UNPACK #-} !(TVar (M.Map B.ByteString B.ByteString))
 	-- | Is push scheduled?
@@ -413,6 +422,7 @@ data GetEntityState = GetEntityState
 	{ getEntityStateGetter :: !(S.Get SomeEntity)
 	, getEntityStateBasicGetter :: !(S.Get SomeBasicEntity)
 	, getEntityStateBasicOrdGetter :: !(S.Get SomeBasicOrdEntity)
+	, getEntityStateInterfaceGetter :: !(S.Get SomeEntityInterface)
 	}
 
 -- | Deserialize entity type and get base entity for this type.
@@ -426,6 +436,10 @@ getRootBaseBasicEntity = lift . getEntityStateBasicGetter =<< ask
 -- | Deserialize entity type and get basic ordered base entity for this type.
 getRootBaseBasicOrdEntity :: GetEntity SomeBasicOrdEntity
 getRootBaseBasicOrdEntity = lift . getEntityStateBasicOrdGetter =<< ask
+
+-- | Deserialize entity interface.
+deserializeEntityInterface :: GetEntity SomeEntityInterface
+deserializeEntityInterface = lift . getEntityStateInterfaceGetter =<< ask
 
 -- | Entity in cache.
 data CachedEntity = CachedEntity
@@ -446,6 +460,7 @@ newEntityManager flow clientRepo pushAction = do
 	deserializatorsRef <- newIORef M.empty
 	basicDeserializatorsRef <- newIORef M.empty
 	basicOrdDeserializatorsRef <- newIORef M.empty
+	entityInterfacesRef <- newIORef M.empty
 	dirtyRecordsVar <- newTVarIO M.empty
 	pushScheduledVar <- newTVarIO False
 	return EntityManager
@@ -458,6 +473,7 @@ newEntityManager flow clientRepo pushAction = do
 		, entityManagerDeserializatorsRef = deserializatorsRef
 		, entityManagerBasicDeserializatorsRef = basicDeserializatorsRef
 		, entityManagerBasicOrdDeserializatorsRef = basicOrdDeserializatorsRef
+		, entityManagerEntityInterfacesRef = entityInterfacesRef
 		, entityManagerDirtyRecordsVar = dirtyRecordsVar
 		, entityManagerPushScheduledVar = pushScheduledVar
 		}
@@ -488,15 +504,23 @@ registerBasicOrdEntityType entityManager@EntityManager
 		SomeBasicOrdEntity entity <- deserializator
 		return $ SomeBasicEntity entity
 
+-- | Register entity interface.
+registerEntityInterface :: EntityManager -> EntityInterfaceId -> (GetEntity SomeEntityInterface) -> IO ()
+registerEntityInterface EntityManager
+	{ entityManagerEntityInterfacesRef = entityInterfacesRef
+	} entityInterfaceId = modifyIORef' entityInterfacesRef . M.insert entityInterfaceId
+
 internalGetEntityState :: EntityManager -> IO GetEntityState
 internalGetEntityState EntityManager
 	{ entityManagerDeserializatorsRef = deserializatorsRef
 	, entityManagerBasicDeserializatorsRef = basicDeserializatorsRef
 	, entityManagerBasicOrdDeserializatorsRef = basicOrdDeserializatorsRef
+	, entityManagerEntityInterfacesRef = entityInterfacesRef
 	} = do
 	deserializators <- readIORef deserializatorsRef
 	basicDeserializators <- readIORef basicDeserializatorsRef
 	basicOrdDeserializators <- readIORef basicOrdDeserializatorsRef
+	entityInterfaces <- readIORef entityInterfacesRef
 	let
 		f :: M.Map EntityTypeId (GetEntity a) -> S.Get a
 		f ds = do
@@ -508,6 +532,11 @@ internalGetEntityState EntityManager
 			{ getEntityStateGetter = f deserializators
 			, getEntityStateBasicGetter = f basicDeserializators
 			, getEntityStateBasicOrdGetter = f basicOrdDeserializators
+			, getEntityStateInterfaceGetter = do
+				entityInterfaceId <- S.get
+				case M.lookup entityInterfaceId entityInterfaces of
+					Just deserializator -> runReaderT deserializator s
+					Nothing -> fail "unknown entity interface id"
 			}
 	return s
 
