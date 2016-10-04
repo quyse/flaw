@@ -4,7 +4,7 @@ Description: Tests for Oil entities.
 License: MIT
 -}
 
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, TemplateHaskell #-}
 
 module Main
 	( main
@@ -23,7 +23,7 @@ import System.IO.Unsafe
 
 import Flaw.Book
 import Flaw.Editor.Entity
-import Flaw.Editor.Entity.Basic
+import Flaw.Editor.Entity.Basic()
 import Flaw.Editor.Entity.Tag
 import Flaw.Flow
 import Flaw.Oil.ClientRepo
@@ -71,7 +71,7 @@ session sessionName f = handle (\e -> print ("session failed" :: String, session
 		entityManager <- newEntityManager flow clientRepo $ atomically $ writeTVar syncScheduledVar True
 
 		-- register deserializators
-		registerBasicEntityDeserializators entityManager
+		$registerEntitiesAndInterfacesExp entityManager
 
 		let sync = do
 			-- pull

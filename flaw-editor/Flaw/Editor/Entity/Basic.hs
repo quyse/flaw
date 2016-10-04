@@ -8,7 +8,7 @@ License: MIT
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Flaw.Editor.Entity.Basic
-	( registerBasicEntityDeserializators
+	(
 	) where
 
 import Control.Concurrent.STM
@@ -141,6 +141,14 @@ instance Entity a => BasicEntity (EntityPtr a) where
 	serializeBasicEntity (EntityPtr underlyingEntityId) = serializeBasicEntity underlyingEntityId
 	deserializeBasicEntity = EntityPtr . deserializeBasicEntity
 
+instance EntityRegistration EntityPtr where
+	performEntityRegistration entityManager _ = registerBasicOrdEntityType entityManager entityPtrFirstEntityTypeId $ do
+		SomeEntity underlyingBaseEntity <- getRootBaseEntity
+		let
+			setType :: a -> EntityPtr a
+			setType _ = EntityPtr nullEntityId
+		return $ SomeBasicOrdEntity $ setType underlyingBaseEntity
+
 -- InterfacedEntityPtr
 
 interfacedEntityPtrFirstEntityTypeId :: EntityTypeId
@@ -158,6 +166,14 @@ instance EntityInterface i => Entity (InterfacedEntityPtr i) where
 instance EntityInterface i => BasicEntity (InterfacedEntityPtr i) where
 	serializeBasicEntity (InterfacedEntityPtr underlyingEntityId) = serializeBasicEntity underlyingEntityId
 	deserializeBasicEntity = InterfacedEntityPtr . deserializeBasicEntity
+
+instance EntityRegistration InterfacedEntityPtr where
+	performEntityRegistration entityManager _ = registerBasicOrdEntityType entityManager interfacedEntityPtrFirstEntityTypeId $ do
+		SomeEntityInterface proxy <- deserializeEntityInterface
+		let
+			setType :: Proxy i -> InterfacedEntityPtr i
+			setType Proxy = InterfacedEntityPtr nullEntityId
+		return $ SomeBasicOrdEntity $ setType proxy
 
 -- Set
 
@@ -177,6 +193,14 @@ instance (Ord a, BasicEntity a) => Entity (S.Set a) where
 			else (S.insert key, (key, True))
 		key = deserializeBasicEntity $ B.drop 1 keyBytes
 	applyEntityChange var (value, f) = writeEntityVarRecord var (B.singleton 0 <> serializeBasicEntity value) (if f then B.singleton 1 else B.empty)
+
+instance EntityRegistration S.Set where
+	performEntityRegistration entityManager _ = registerEntityType entityManager setFirstEntityTypeId $ do
+		SomeBasicOrdEntity underlyingBaseEntity <- getRootBaseBasicOrdEntity
+		let
+			setType :: a -> S.Set a
+			setType _ = S.empty
+		return $ SomeEntity $ setType underlyingBaseEntity
 
 -- Map
 
@@ -200,35 +224,8 @@ instance (Ord k, BasicEntity k, BasicEntity v) => Entity (M.Map k v) where
 		Just value -> B.singleton 0 <> serializeBasicEntity value
 		Nothing -> B.empty
 
-registerBasicEntityDeserializators :: EntityManager -> IO ()
-registerBasicEntityDeserializators entityManager = do
-
-	-- register EntityPtr's deserializator
-	registerBasicOrdEntityType entityManager entityPtrFirstEntityTypeId $ do
-		SomeEntity underlyingBaseEntity <- getRootBaseEntity
-		let
-			setType :: a -> EntityPtr a
-			setType _ = EntityPtr nullEntityId
-		return $ SomeBasicOrdEntity $ setType underlyingBaseEntity
-
-	-- register InterfacedEntityPtr's deserializator
-	registerBasicOrdEntityType entityManager interfacedEntityPtrFirstEntityTypeId $ do
-		SomeEntityInterface proxy <- deserializeEntityInterface
-		let
-			setType :: Proxy i -> InterfacedEntityPtr i
-			setType Proxy = InterfacedEntityPtr nullEntityId
-		return $ SomeBasicOrdEntity $ setType proxy
-
-	-- register Set's deserializator
-	registerEntityType entityManager setFirstEntityTypeId $ do
-		SomeBasicOrdEntity underlyingBaseEntity <- getRootBaseBasicOrdEntity
-		let
-			setType :: a -> S.Set a
-			setType _ = S.empty
-		return $ SomeEntity $ setType underlyingBaseEntity
-
-	-- register Map's deserializator
-	registerEntityType entityManager mapFirstEntityTypeId $ do
+instance EntityRegistration M.Map where
+	performEntityRegistration entityManager _ = registerEntityType entityManager mapFirstEntityTypeId $ do
 		SomeBasicOrdEntity underlyingKeyBaseEntity <- getRootBaseBasicOrdEntity
 		SomeBasicEntity underlyingValueBaseEntity <- getRootBaseBasicEntity
 		let
@@ -236,15 +233,3 @@ registerBasicEntityDeserializators entityManager = do
 			setType _ _ = M.empty
 		return $ SomeEntity $ setType underlyingKeyBaseEntity underlyingValueBaseEntity
 
-	-- register basic entities
-	f (def :: EntityId)
-	f (def :: Int32)
-	f (def :: Int64)
-	f (def :: Word32)
-	f (def :: Word64)
-	f (def :: Integer)
-	f (def :: B.ByteString)
-	f (def :: T.Text)
-	where
-		f :: (BasicEntity a, Ord a) => a -> IO ()
-		f a = registerBasicOrdEntityType entityManager (getEntityTypeId a) $ return $ SomeBasicOrdEntity a

@@ -38,7 +38,7 @@ runs in 'IO' monad.
 
 -}
 
-{-# LANGUAGE ConstraintKinds, DefaultSignatures, FlexibleContexts, FlexibleInstances, GADTs, GeneralizedNewtypeDeriving, PatternSynonyms, TemplateHaskell, TypeFamilies, TypeOperators, UndecidableInstances, ViewPatterns #-}
+{-# LANGUAGE ConstraintKinds, DefaultSignatures, FlexibleContexts, FlexibleInstances, GADTs, GeneralizedNewtypeDeriving, PatternSynonyms, PolyKinds, TemplateHaskell, TypeFamilies, TypeOperators, UndecidableInstances, ViewPatterns #-}
 {-# OPTIONS_GHC -fno-warn-missing-pattern-synonym-signatures #-}
 
 module Flaw.Editor.Entity
@@ -102,6 +102,8 @@ module Flaw.Editor.Entity
 	, hashTextToEntityTypeId
 	, hashTextToEntityInterfaceId
 	, interfaceEntityExp
+	, EntityRegistration(..)
+	, registerEntitiesAndInterfacesExp
 	-- * Re-exports for convenience
 	, Revision
 	, Proxy(..)
@@ -173,7 +175,7 @@ instance S.Serialize EntityTypeId where
 -- | Entity "pointer" is a typed entity id.
 -- Doesn't keep a reference to cached entity.
 -- You can read or write entity by entity pointer in IO monad.
-newtype EntityPtr a = EntityPtr EntityId deriving (Eq, Ord, S.Serialize, Default, Show)
+newtype EntityPtr (a :: *) = EntityPtr EntityId deriving (Eq, Ord, S.Serialize, Default, Show)
 
 -- | Untyped entity var, stores cached entity.
 -- Entity manager keeps updating the var until it's GC'ed.
@@ -184,7 +186,7 @@ data SomeEntityVar = SomeEntityVar
 	}
 
 -- | Typed entity var.
-newtype EntityVar a = EntityVar SomeEntityVar
+newtype EntityVar (a :: *) = EntityVar SomeEntityVar
 
 -- | Get entity id from entity var.
 entityVarEntityId :: EntityVar a -> EntityId
@@ -340,6 +342,9 @@ instance Entity NullEntity where
 	getEntityTypeId _ = nullEntityTypeId
 	processEntityChange NullEntity _ _ = Nothing
 	applyEntityChange _ _ = return ()
+
+instance Default NullEntity where
+	def = NullEntity
 
 -- | Entity interface id.
 newtype EntityInterfaceId = EntityInterfaceId BS.ShortByteString deriving (Eq, Ord)
@@ -1037,3 +1042,52 @@ interfaceEntityExp interfaceNames = do
 		, match [p| Nothing |] (normalB q) []
 		]
 	lamE [varP p, wildP] $ foldr f (conE 'EntityNotInterfaced) interfaceNames
+
+-- | Typeclass for registration of complex entities.
+class EntityRegistration (a :: k) where
+	performEntityRegistration :: EntityManager -> Proxy a -> IO ()
+
+-- | Register all simple instances of 'Entity' and 'EntityInterface',
+-- perform registration from any 'EntityRegistration' instances in scope.
+-- Type is :: EntityManager -> IO ()
+-- Beware of TH declaration groups!
+registerEntitiesAndInterfacesExp :: ExpQ
+registerEntitiesAndInterfacesExp = do
+	em <- newName "entityManager"
+
+	-- simple Entity instances
+	entityInstancesStmts <- do
+		ClassI _ decs <- reify ''Entity
+		runIO $ print decs
+		(concat <$>) . forM decs $ \(InstanceD Nothing context (AppT _ t) _) ->
+			if null context then do
+				supportDefault <- isInstance ''Default [t]
+				if supportDefault then do
+					supportBasicEntity <- isInstance ''BasicEntity [t]
+					if supportBasicEntity then do
+						supportOrd <- isInstance ''Ord [t]
+						if supportOrd then return [noBindS [| let a = def :: $(return t) in registerBasicOrdEntityType $(varE em) (getEntityTypeId a) $ return $ SomeBasicOrdEntity a |] ]
+						else return [noBindS [| let a = def :: $(return t) in registerBasicEntityType $(varE em) (getEntityTypeId a) $ return $ SomeBasicEntity a |] ]
+					else return [noBindS [| let a = def :: $(return t) in registerEntityType $(varE em) (getEntityTypeId a) $ return $ SomeEntity a |] ]
+				else do
+					reportWarning $ (show t) ++ " doesn't have Default instance. Cannot automatically register its Entity."
+					return []
+			else return []
+
+	-- EntityInterface instances
+	entityInterfaceInstancesStmts <- do
+		ClassI _ decs <- reify ''EntityInterface
+		(concat <$>) . forM decs $ \(InstanceD Nothing context (AppT _ t) _) ->
+			if null context then return [noBindS [| registerEntityInterface $(varE em) (getEntityInterfaceId (Proxy :: Proxy $(return t))) $ return $ SomeEntityInterface (Proxy :: Proxy $(return t)) |] ]
+			else return []
+
+	-- EntityRegistration instances
+	entityRegistrationInstancesStmts <- do
+		ClassI _ decs <- reify ''EntityRegistration
+		(concat <$>) . forM decs $ \(InstanceD Nothing context (AppT _ t) _) ->
+			if null context then return [noBindS [| performEntityRegistration $(varE em) (Proxy :: Proxy $(return t)) |] ]
+			else do
+				reportError $ (show t) ++ " has non-empty context for EntityRegistration instance"
+				return []
+
+	lamE [varP em] $ doE $ entityInstancesStmts ++ entityInterfaceInstancesStmts ++ entityRegistrationInstancesStmts
