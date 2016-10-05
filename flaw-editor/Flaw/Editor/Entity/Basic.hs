@@ -4,7 +4,7 @@ Description: Basic instances of 'Entity' typeclass.
 License: MIT
 -}
 
-{-# LANGUAGE FlexibleInstances, OverloadedStrings, TemplateHaskell, TypeFamilies #-}
+{-# LANGUAGE FlexibleInstances, OverloadedStrings, TemplateHaskell, TypeFamilies, ViewPatterns #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Flaw.Editor.Entity.Basic
@@ -32,10 +32,12 @@ import Text.Read(readMaybe)
 import Flaw.Editor.Entity
 import Flaw.Math
 import Flaw.UI
+import Flaw.UI.Button
 import Flaw.UI.CheckBox
 import Flaw.UI.EditBox
 import Flaw.UI.Editor.EditableEntity
 import Flaw.UI.Layout
+import Flaw.UI.ListBox
 import Flaw.UI.Metrics
 import Flaw.UI.Panel
 
@@ -340,6 +342,7 @@ instance (Ord a, BasicEntity a) => Entity (S.Set a) where
 			else (S.insert key, (key, True))
 		key = deserializeBasicEntity $ B.drop 1 keyBytes
 	applyEntityChange var (value, f) = writeEntityVarRecord var (B.singleton 0 <> serializeBasicEntity value) (if f then B.singleton 1 else B.empty)
+	interfaceEntity = $(interfaceEntityExp [''EditableEntity])
 	entityToText s = editableEntityTypeName s <> T.pack (" {" ++ showsPrec 0 (S.size s) "}")
 
 instance EntityRegistration S.Set where
@@ -349,6 +352,55 @@ instance EntityRegistration S.Set where
 			setType :: a -> S.Set a
 			setType _ = S.empty
 		return $ SomeEntity $ setType underlyingBaseEntity
+
+instance (Ord a, BasicEntity a) => EditableEntity (S.Set a) where
+	editableEntityTypeName = f undefined where
+		f :: Entity a => a -> S.Set a -> T.Text
+		f u@(interfaceEntity (Proxy :: Proxy EditableEntity) -> EntityInterfaced) _ = "Set<" <> editableEntityTypeName u <> ">"
+		f _ _ = "Set"
+	editableEntityConstructorName _ = "Set"
+	editableEntityLayout initialEntity setter = ReaderT $ \EditableLayoutState {} -> do
+		currentValueVar <- lift $ newTVar initialEntity
+		itemHandlesVar <- lift $ newTVar M.empty
+		FlowLayoutState
+			{ flsMetrics = metrics@Metrics
+				{ metricsMainWidth = metricMainWidth
+				}
+			} <- get
+		let keyEntityTypeName = let
+			f :: Entity a => S.Set a -> a -> T.Text
+			f _ u = case interfaceEntity (Proxy :: Proxy EditableEntity) u of
+				EntityInterfaced -> editableEntityTypeName u
+				EntityNotInterfaced -> "value"
+			in f initialEntity undefined
+		listBoxColumn <- lift $ newListBoxTextColumnDesc keyEntityTypeName metricMainWidth id entityToText
+		listBox <- lift $ newListBox metrics [listBoxColumn]
+
+		let onAdd = return ()
+		let onRemove = do
+			selectedItems <- getListBoxSelectedValues listBox
+			forM_ selectedItems $ \selectedItem -> setter (selectedItem, False)
+		addRemoveButtonsLayout listBox onAdd onRemove
+
+		let insertItem item = do
+			itemHandles <- readTVar itemHandlesVar
+			unless (M.member item itemHandles) $ do
+				itemHandle <- addListBoxItem listBox item
+				writeTVar itemHandlesVar $! M.insert item itemHandle itemHandles
+
+		let removeItem item = do
+			itemHandles <- readTVar itemHandlesVar
+			case M.lookup item itemHandles of
+				Just itemHandle -> do
+					removeListBoxItem listBox itemHandle
+					writeTVar itemHandlesVar $! M.delete item itemHandles
+				Nothing -> return ()
+
+		lift $ mapM_ insertItem $ S.toList initialEntity
+
+		return $ \newValue (changedKey, changedFlag) -> do
+			writeTVar currentValueVar newValue
+			(if changedFlag then insertItem else removeItem) changedKey
 
 -- Map
 
@@ -371,6 +423,7 @@ instance (Ord k, BasicEntity k, BasicEntity v) => Entity (M.Map k v) where
 	applyEntityChange var (key, maybeValue) = writeEntityVarRecord var (B.singleton 0 <> serializeBasicEntity key) $ case maybeValue of
 		Just value -> B.singleton 0 <> serializeBasicEntity value
 		Nothing -> B.empty
+	interfaceEntity = $(interfaceEntityExp [''EditableEntity])
 	entityToText m = T.pack ("map{" ++ showsPrec 0 (M.size m) "}")
 
 instance EntityRegistration M.Map where
@@ -382,3 +435,101 @@ instance EntityRegistration M.Map where
 			setType _ _ = M.empty
 		return $ SomeEntity $ setType underlyingKeyBaseEntity underlyingValueBaseEntity
 
+instance (Ord k, BasicEntity k, BasicEntity v) => EditableEntity (M.Map k v) where
+	editableEntityTypeName = f undefined undefined where
+		f :: (Entity k, Entity v) => k -> v -> M.Map k v -> T.Text
+		f
+			uk@(interfaceEntity (Proxy :: Proxy EditableEntity) -> EntityInterfaced)
+			uv@(interfaceEntity (Proxy :: Proxy EditableEntity) -> EntityInterfaced)
+			_ = "Map<" <> editableEntityTypeName uk <> "," <> editableEntityTypeName uv <> ">"
+		f _ _ _ = "Map"
+	editableEntityConstructorName _ = "Map"
+	editableEntityLayout initialEntity setter = ReaderT $ \EditableLayoutState {} -> do
+		currentValueVar <- lift $ newTVar initialEntity
+		itemHandlesVar <- lift $ newTVar M.empty
+		FlowLayoutState
+			{ flsMetrics = metrics@Metrics
+				{ metricsMainWidth = metricMainWidth
+				}
+			} <- get
+
+		let (keyEntityTypeName, valueEntityTypeName) = let
+			f :: (Entity k, Entity v) => M.Map k v -> k -> v -> (T.Text, T.Text)
+			f _ uk uv =
+				( case interfaceEntity (Proxy :: Proxy EditableEntity) uk of
+					EntityInterfaced -> editableEntityTypeName uk
+					EntityNotInterfaced -> "key"
+				, case interfaceEntity (Proxy :: Proxy EditableEntity) uv of
+					EntityInterfaced -> editableEntityTypeName uv
+					EntityNotInterfaced -> "value"
+				)
+			in f initialEntity undefined undefined
+
+		listBoxKeyColumn <- lift $ newListBoxTextColumnDesc keyEntityTypeName (metricMainWidth `quot` 2) fst (entityToText . fst)
+		listBoxValueColumn <- lift $ let f = entityToText . snd in newListBoxTextColumnDesc valueEntityTypeName (metricMainWidth `quot` 2) f f
+		listBox <- lift $ newListBox metrics [listBoxKeyColumn, listBoxValueColumn]
+
+		let onAdd = return ()
+
+		let onRemove = do
+			selectedItems <- getListBoxSelectedValues listBox
+			forM_ selectedItems $ \(selectedKey, _selectedValue) -> setter (selectedKey, Nothing)
+
+		addRemoveButtonsLayout listBox onAdd onRemove
+
+		let insertItem item@(itemKey, _itemValue) = do
+			itemHandles <- readTVar itemHandlesVar
+			unless (M.member itemKey itemHandles) $ do
+				itemHandle <- addListBoxItem listBox item
+				writeTVar itemHandlesVar $! M.insert itemKey itemHandle itemHandles
+
+		let removeItem itemKey = do
+			itemHandles <- readTVar itemHandlesVar
+			case M.lookup itemKey itemHandles of
+				Just itemHandle -> do
+					removeListBoxItem listBox itemHandle
+					writeTVar itemHandlesVar $! M.delete itemKey itemHandles
+				Nothing -> return ()
+
+		lift $ mapM_ insertItem $ M.toList initialEntity
+
+		return $ \newValue (changedKey, changedMaybeInsertedValue) -> do
+			writeTVar currentValueVar newValue
+			case changedMaybeInsertedValue of
+				Just insertedValue -> insertItem (changedKey, insertedValue)
+				Nothing -> removeItem changedKey
+
+-- | Helper function: layout add and remove buttons
+addRemoveButtonsLayout :: ListBox a -> STM () -> STM () -> FlowLayoutM ()
+addRemoveButtonsLayout listBox onAdd onRemove = StateT $ \s@FlowLayoutState
+	{ flsMetrics = Metrics
+		{ metricsGap = metricGap
+		, metricsMainWidth = metricMainWidth
+		, metricsButtonSize = Vec2 _ metricButtonHeight
+		, metricsListBoxItemHeight = metricListBoxItemHeight
+		}
+	, flsParentElement = parentElement
+	, flsLayoutHandler = lh
+	, flsPreSize = Vec2 psx psy
+	} -> do
+	listBoxChild <- addFreeChild parentElement listBox
+
+	addButton <- newLabeledButton "+"
+	setActionHandler addButton onAdd
+	addButtonChild <- addFreeChild parentElement addButton
+	layoutElement addButton $ Vec2 metricButtonHeight metricButtonHeight
+
+	removeButton <- newLabeledButton "-"
+	setActionHandler removeButton onRemove
+	removeButtonChild <- addFreeChild parentElement removeButton
+	layoutElement removeButton $ Vec2 metricButtonHeight metricButtonHeight
+
+	return ((), s
+		{ flsLayoutHandler = lh >=> \(Vec4 px py qx qy) -> do
+			placeFreeChild parentElement listBoxChild $ Vec2 px py
+			layoutElement listBox $ Vec2 (qx - px) (qy - py - metricGap - metricButtonHeight)
+			placeFreeChild parentElement addButtonChild $ Vec2 (qx - metricButtonHeight * 2 - metricGap) (qy - metricButtonHeight)
+			placeFreeChild parentElement removeButtonChild $ Vec2 (qx - metricButtonHeight) (qy - metricButtonHeight)
+			return $ Vec4 px qy qx qy
+		, flsPreSize = Vec2 (max psx metricMainWidth) (psy + metricListBoxItemHeight * 7 + metricGap)
+		})
