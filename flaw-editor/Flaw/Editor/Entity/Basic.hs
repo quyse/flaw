@@ -4,7 +4,7 @@ Description: Basic instances of 'Entity' typeclass.
 License: MIT
 -}
 
-{-# LANGUAGE OverloadedStrings, TemplateHaskell, TypeFamilies #-}
+{-# LANGUAGE FlexibleInstances, OverloadedStrings, TemplateHaskell, TypeFamilies #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Flaw.Editor.Entity.Basic
@@ -30,6 +30,7 @@ import Numeric
 import Text.Read(readMaybe)
 
 import Flaw.Editor.Entity
+import Flaw.Math
 import Flaw.UI
 import Flaw.UI.CheckBox
 import Flaw.UI.EditBox
@@ -116,6 +117,50 @@ instance EditableEntity Float where
 	editableEntityTypeName _ = "Float"
 	editableEntityConstructorName _ = "Float"
 	editableEntityLayout = editBoxEditableLayout (\n -> T.pack $ showFFloat Nothing n "") (readMaybe . T.unpack)
+
+instance Entity (Vec2 Float) where
+	type EntityChange (Vec2 Float) = (Vec2 Float)
+	getEntityTypeId _ = $(hashTextToEntityTypeId "Float2")
+	processEntityChange = processBasicEntityChange
+	applyEntityChange = applyBasicEntityChange
+instance BasicEntity (Vec2 Float)
+instance EditableEntity (Vec2 Float) where
+	editableEntityTypeName _ = "Float2"
+	editableEntityConstructorName _ = "Float2"
+	editableEntityLayout = editBoxVecEditableLayout maybeVecFromList where
+		maybeVecFromList [x, y] = Just $ Float2 x y
+		maybeVecFromList _ = Nothing
+
+instance Entity (Vec3 Float) where
+	type EntityChange (Vec3 Float) = (Vec3 Float)
+	getEntityTypeId _ = $(hashTextToEntityTypeId "Float3")
+	processEntityChange = processBasicEntityChange
+	applyEntityChange = applyBasicEntityChange
+instance BasicEntity (Vec3 Float)
+instance EditableEntity (Vec3 Float) where
+	editableEntityTypeName _ = "Float3"
+	editableEntityConstructorName _ = "Float3"
+	editableEntityLayout = editBoxVecEditableLayout maybeVecFromList where
+		maybeVecFromList [x, y, z] = Just $ Float3 x y z
+		maybeVecFromList _ = Nothing
+
+instance Entity (Vec4 Float) where
+	type EntityChange (Vec4 Float) = (Vec4 Float)
+	getEntityTypeId _ = $(hashTextToEntityTypeId "Float4")
+	processEntityChange = processBasicEntityChange
+	applyEntityChange = applyBasicEntityChange
+instance BasicEntity (Vec4 Float)
+instance EditableEntity (Vec4 Float) where
+	editableEntityTypeName _ = "Float4"
+	editableEntityConstructorName _ = "Float4"
+	editableEntityLayout = editBoxVecEditableLayout maybeVecFromList where
+		maybeVecFromList [x, y, z, w] = Just $ Float4 x y z w
+		maybeVecFromList _ = Nothing
+
+editBoxVecEditableLayout :: (Vec v, VecElement v ~ Float, BasicEntity v, Eq v) => ([Float] -> Maybe v) -> v -> (EntityChange v -> STM ()) -> EditableLayoutM (v -> EntityChange v -> STM ())
+editBoxVecEditableLayout maybeVecFromList = editBoxEditableLayout
+	(T.pack . unwords . map (\e -> showFFloat Nothing e "") . vecToList)
+	((maybeVecFromList =<<) . sequence . map readMaybe . words . T.unpack)
 
 instance Entity Bool where
 	type EntityChange Bool = Bool
