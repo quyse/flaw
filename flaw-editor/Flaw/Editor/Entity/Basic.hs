@@ -14,7 +14,9 @@ module Flaw.Editor.Entity.Basic
 import Control.Concurrent.STM
 import Control.Monad.Reader
 import Control.Monad.State.Strict
+import qualified Data.ByteArray.Encoding as BA
 import qualified Data.ByteString as B
+import qualified Data.ByteString.Short as BS
 import Data.Default
 import Data.Int
 import qualified Data.Map.Strict as M
@@ -22,10 +24,14 @@ import Data.Monoid
 import Data.Serialize.Text()
 import qualified Data.Set as S
 import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
 import Data.Word
+import Numeric
+import Text.Read(readMaybe)
 
 import Flaw.Editor.Entity
 import Flaw.UI
+import Flaw.UI.CheckBox
 import Flaw.UI.EditBox
 import Flaw.UI.Editor.EditableEntity
 import Flaw.UI.Layout
@@ -38,6 +44,12 @@ instance Entity EntityId where
 	processEntityChange = processBasicEntityChange
 	applyEntityChange = applyBasicEntityChange
 instance BasicEntity EntityId
+instance EditableEntity EntityId where
+	editableEntityTypeName _ = "EntityId"
+	editableEntityConstructorName _ = "EntityId"
+	editableEntityLayout = editBoxEditableLayout
+		(\(EntityId bytes) -> T.decodeUtf8 $ BA.convertToBase BA.Base64URLUnpadded $ BS.fromShort bytes)
+		(either (const Nothing) (Just . EntityId . BS.toShort) . BA.convertFromBase BA.Base64URLUnpadded . T.encodeUtf8)
 
 instance Entity Int32 where
 	type EntityChange Int32 = Int32
@@ -45,6 +57,10 @@ instance Entity Int32 where
 	processEntityChange = processBasicEntityChange
 	applyEntityChange = applyBasicEntityChange
 instance BasicEntity Int32
+instance EditableEntity Int32 where
+	editableEntityTypeName _ = "Int32"
+	editableEntityConstructorName _ = "Int32"
+	editableEntityLayout = editBoxShowReadEditableLayout
 
 instance Entity Int64 where
 	type EntityChange Int64 = Int64
@@ -52,6 +68,10 @@ instance Entity Int64 where
 	processEntityChange = processBasicEntityChange
 	applyEntityChange = applyBasicEntityChange
 instance BasicEntity Int64
+instance EditableEntity Int64 where
+	editableEntityTypeName _ = "Int64"
+	editableEntityConstructorName _ = "Int64"
+	editableEntityLayout = editBoxShowReadEditableLayout
 
 instance Entity Word32 where
 	type EntityChange Word32 = Word32
@@ -59,6 +79,10 @@ instance Entity Word32 where
 	processEntityChange = processBasicEntityChange
 	applyEntityChange = applyBasicEntityChange
 instance BasicEntity Word32
+instance EditableEntity Word32 where
+	editableEntityTypeName _ = "Word32"
+	editableEntityConstructorName _ = "Word32"
+	editableEntityLayout = editBoxShowReadEditableLayout
 
 instance Entity Word64 where
 	type EntityChange Word64 = Word64
@@ -66,6 +90,10 @@ instance Entity Word64 where
 	processEntityChange = processBasicEntityChange
 	applyEntityChange = applyBasicEntityChange
 instance BasicEntity Word64
+instance EditableEntity Word64 where
+	editableEntityTypeName _ = "Word64"
+	editableEntityConstructorName _ = "Word64"
+	editableEntityLayout = editBoxShowReadEditableLayout
 
 instance Entity Integer where
 	type EntityChange Integer = Integer
@@ -73,6 +101,50 @@ instance Entity Integer where
 	processEntityChange = processBasicEntityChange
 	applyEntityChange = applyBasicEntityChange
 instance BasicEntity Integer
+instance EditableEntity Integer where
+	editableEntityTypeName _ = "Integer"
+	editableEntityConstructorName _ = "Integer"
+	editableEntityLayout = editBoxShowReadEditableLayout
+
+instance Entity Float where
+	type EntityChange Float = Float
+	getEntityTypeId _ = $(hashTextToEntityTypeId "Float")
+	processEntityChange = processBasicEntityChange
+	applyEntityChange = applyBasicEntityChange
+instance BasicEntity Float
+instance EditableEntity Float where
+	editableEntityTypeName _ = "Float"
+	editableEntityConstructorName _ = "Float"
+	editableEntityLayout = editBoxEditableLayout (\n -> T.pack $ showFFloat Nothing n "") (readMaybe . T.unpack)
+
+instance Entity Bool where
+	type EntityChange Bool = Bool
+	getEntityTypeId _ = $(hashTextToEntityTypeId "Bool")
+	processEntityChange = processBasicEntityChange
+	applyEntityChange = applyBasicEntityChange
+instance BasicEntity Bool
+instance Default Bool where
+	def = False
+instance EditableEntity Bool where
+	editableEntityTypeName _ = "Bool"
+	editableEntityConstructorName _ = "Bool"
+	editableEntityLayout initialEntity setter = ReaderT $ \EditableLayoutState {} -> do
+		currentValueVar <- lift $ newTVar initialEntity
+		checkBox <- lift $ newLabeledCheckBox "enabled"
+		lift $ setChecked checkBox initialEntity
+		FlowLayoutState
+			{ flsMetrics = metrics
+			} <- get
+		elementWithSizeInFlowLayout checkBox (preferredSize metrics checkBox)
+		lift $ setChangeHandler checkBox $ do
+			value <- getChecked checkBox
+			currentValue <- readTVar currentValueVar
+			when (value /= currentValue) $ do
+				writeTVar currentValueVar value
+				setter value
+		return $ \newValue _change -> do
+			writeTVar currentValueVar newValue
+			setChecked checkBox newValue
 
 instance Entity B.ByteString where
 	type EntityChange B.ByteString = B.ByteString
@@ -95,35 +167,50 @@ instance Default T.Text where
 instance EditableEntity T.Text where
 	editableEntityTypeName _ = "Text"
 	editableEntityConstructorName _ = "Text"
-	editableEntityLayout initialEntity setter = ReaderT $ \EditableLayoutState {} -> do
-		currentValueVar <- lift $ newTVar initialEntity
-		panel <- lift $ newPanel False
-		editBox <- lift newEditBox
-		lift $ setText editBox initialEntity
-		_editBoxChild <- lift $ addFreeChild panel editBox
-		lift $ setLayoutHandler panel $ layoutElement editBox
-		FlowLayoutState
-			{ flsMetrics = metrics
-			} <- get
-		elementWithSizeInFlowLayout panel (preferredSize metrics editBox)
-		lift $ setCommitHandler panel $ \commitReason -> do
+	editableEntityLayout = editBoxEditableLayout id Just
+
+-- | Layout with edit box.
+editBoxEditableLayout :: (BasicEntity a, Eq a) => (a -> T.Text) -> (T.Text -> Maybe a) -> a -> (EntityChange a -> STM ()) -> EditableLayoutM (a -> EntityChange a -> STM ())
+editBoxEditableLayout toText fromText initialEntity setter = ReaderT $ \EditableLayoutState {} -> do
+	currentValueVar <- lift $ newTVar initialEntity
+	panel <- lift $ newPanel False
+	editBox <- lift newEditBox
+	lift $ setText editBox $ toText initialEntity
+	_editBoxChild <- lift $ addFreeChild panel editBox
+	lift $ setLayoutHandler panel $ layoutElement editBox
+	FlowLayoutState
+		{ flsMetrics = metrics
+		} <- get
+	elementWithSizeInFlowLayout panel (preferredSize metrics editBox)
+	lift $ setCommitHandler panel $ \commitReason -> do
+		setText editBox =<<
 			if commitReason == CommitAccept || commitReason == CommitLostFocus then do
-				value <- getText editBox
-				currentValue <- readTVar currentValueVar
-				when (value /= currentValue) $ do
-					writeTVar currentValueVar value
-					setter value
-			else setText editBox =<< readTVar currentValueVar
-			return True
-		return $ \newValue _change -> do
-			-- check that it's not equal to current value
-			currentValue <- readTVar currentValueVar
-			when (newValue /= currentValue) $ do
-				-- in any case remember new current value
-				writeTVar currentValueVar newValue
-				-- change text in edit box only if it's not changed
-				value <- getText editBox
-				when (value == currentValue) $ setText editBox newValue
+				maybeValue <- fromText <$> getText editBox
+				case maybeValue of
+					Just value -> do
+						currentValue <- readTVar currentValueVar
+						when (value /= currentValue) $ do
+							writeTVar currentValueVar value
+							setter value
+						return $ toText value
+					Nothing -> toText <$> readTVar currentValueVar
+			else toText <$> readTVar currentValueVar
+		return True
+	return $ \newValue _change -> do
+		-- check that it's not equal to current value
+		currentValue <- readTVar currentValueVar
+		when (newValue /= currentValue) $ do
+			-- in any case remember new current value
+			writeTVar currentValueVar newValue
+			-- change text in edit box only if it's not changed
+			maybeValue <- fromText <$> getText editBox
+			case maybeValue of
+				Just value -> when (value == currentValue) $ setText editBox $ toText newValue
+				Nothing -> return ()
+
+-- | Layout with edit box using 'Show' and 'Read' for conversion.
+editBoxShowReadEditableLayout :: (BasicEntity a, Eq a, Show a, Read a) => a -> (EntityChange a -> STM ()) -> EditableLayoutM (a -> EntityChange a -> STM ())
+editBoxShowReadEditableLayout = editBoxEditableLayout (T.pack . show) (readMaybe . T.unpack)
 
 -- EntityPtr
 
