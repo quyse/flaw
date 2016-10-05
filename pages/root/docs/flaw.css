@@ -136,11 +136,11 @@ ul.links li a {
 .clear { clear: both; }
 
 .collapser {
-  background-image: url(minus.gif);
+  background-image: url(minus.png);
   background-repeat: no-repeat;
 }
 .expander {
-  background-image: url(plus.gif);
+  background-image: url(plus.png);
   background-repeat: no-repeat;
 }
 p.caption.collapser,
@@ -465,7 +465,7 @@ div#style-menu-holder {
 }
 
 .top p.src {
-  border-top: 1px solid #ccc;
+  border-top: 1px solid rgba(255,255,255,0.2);
 }
 
 .subs, .doc {

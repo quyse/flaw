@@ -16,8 +16,8 @@ sed -i -r \
 	-e 's/(<link href=")ocean\.css(" rel="stylesheet" type="text\/css") title="Ocean"( \/>)/\1flaw.css\2\3/' \
 	*.html
 
-# remove ocean.css
-rm ocean.css
+# remove unneeded files
+rm ocean.css plus.gif minus.gif
 
 for i in $(ls -F | grep '/$')
 do
