@@ -65,6 +65,7 @@ module Flaw.Math
 import Control.Monad
 import Data.Bits
 import Data.Char
+import Data.Default
 import Data.List
 import Data.Maybe
 import qualified Data.Serialize as S
@@ -425,7 +426,13 @@ do
 				, funD 'S.get [clause [] (normalB $ doE $ map (\a -> bindS (varP a) [| S.get |]) as ++ [noBindS $ [| return $(foldl appE (conE conName) $ map varE as) |] ]) []]
 				]
 
-		return $ vecInstance : vectorizedFunctorInstance : dotInstance : numInstance : normInstance : normalizeInstance : fractionalInstance : floatingInstance : storableInstance : eqInstance : ordInstance : showInstance : serializeInstance :
+		-- Default instance
+		defaultInstance <-
+			instanceD (sequence [ [t| Vectorized $elemType |], [t| Default $elemType |] ]) [t| Default ($(conT dataName) $elemType) |] =<< addInlines
+				[ funD 'def [clause [] (normalB $ foldl appE (conE conName) $ replicate dim [| def |]) []]
+				]
+
+		return $ vecInstance : vectorizedFunctorInstance : dotInstance : numInstance : normInstance : normalizeInstance : fractionalInstance : floatingInstance : storableInstance : eqInstance : ordInstance : showInstance : serializeInstance : defaultInstance :
 			vecComponentInstances ++ swizzleVecInstances
 
 	-- Cross instance
