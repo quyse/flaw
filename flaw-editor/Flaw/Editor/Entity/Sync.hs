@@ -25,7 +25,7 @@ newSyncedEntityManager :: ClientRepo -> HttpRemoteRepo -> Manifest -> (ClientRep
 newSyncedEntityManager clientRepo remoteRepo manifest callback = withSpecialBook $ \bk -> do
 	-- status variables
 	syncingVar <- newTVarIO False
-	needSyncVar <- newTVarIO False
+	needSyncVar <- newTVarIO True -- force initial sync
 
 	clientFlow <- book bk newFlow
 	entityManager <- newEntityManager clientFlow clientRepo $ atomically $ writeTVar needSyncVar True
