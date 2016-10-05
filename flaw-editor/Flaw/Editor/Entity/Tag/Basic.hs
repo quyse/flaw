@@ -25,7 +25,7 @@ import Flaw.Editor.Entity.Basic()
 import Flaw.Editor.Entity.Tag
 
 -- | Name tag.
-newtype NameEntityTag = NameEntityTag T.Text deriving (Generic, Default, S.Serialize)
+newtype NameEntityTag = NameEntityTag T.Text deriving (Generic, Default, S.Serialize, Show)
 
 instance Entity NameEntityTag where
 	type EntityChange NameEntityTag = NameEntityTag
@@ -41,7 +41,7 @@ nameEntityTagEntityId :: EntityId -> EntityId
 nameEntityTagEntityId = entityTagEntityId nameEntityTagId
 
 -- | Description tag.
-newtype DescriptionEntityTag = DescriptionEntityTag T.Text deriving (Generic, Default, S.Serialize)
+newtype DescriptionEntityTag = DescriptionEntityTag T.Text deriving (Generic, Default, S.Serialize, Show)
 
 instance Entity DescriptionEntityTag where
 	type EntityChange DescriptionEntityTag = DescriptionEntityTag

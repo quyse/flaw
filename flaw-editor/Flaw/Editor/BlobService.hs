@@ -18,10 +18,13 @@ import Control.Exception
 import Control.Monad
 import qualified Crypto.Hash as C
 import qualified Data.ByteArray as BA
+import qualified Data.ByteArray.Encoding as BA
 import qualified Data.ByteString as B
 import Data.Default
+import Data.Monoid
 import qualified Data.Serialize as S
 import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
 import GHC.Generics(Generic)
 import qualified Network.HTTP.Client as H
 
@@ -46,6 +49,8 @@ instance Entity BlobHash where
 	getEntityTypeId _ = $(hashTextToEntityTypeId "BlobHash")
 	processEntityChange = processBasicEntityChange
 	applyEntityChange = applyBasicEntityChange
+	entityToText hash = case hash of
+		BlobHashSHA256 bytes -> "sha256:" <> T.decodeUtf8 (BA.convertToBase BA.Base64URLUnpadded bytes)
 instance BasicEntity BlobHash
 instance Default BlobHash where
 	def = BlobHashSHA256 B.empty

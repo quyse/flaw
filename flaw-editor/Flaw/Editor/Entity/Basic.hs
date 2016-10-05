@@ -44,6 +44,8 @@ instance Entity EntityId where
 	getEntityTypeId _ = $(hashTextToEntityTypeId "EntityId")
 	processEntityChange = processBasicEntityChange
 	applyEntityChange = applyBasicEntityChange
+	interfaceEntity = $(interfaceEntityExp [''EditableEntity])
+	entityToText (EntityId entityIdBytes) = "entityid:" <> T.decodeUtf8 (BA.convertToBase BA.Base64 $ BS.fromShort entityIdBytes)
 instance BasicEntity EntityId
 instance EditableEntity EntityId where
 	editableEntityTypeName _ = "EntityId"
@@ -57,6 +59,7 @@ instance Entity Int32 where
 	getEntityTypeId _ = $(hashTextToEntityTypeId "Int32")
 	processEntityChange = processBasicEntityChange
 	applyEntityChange = applyBasicEntityChange
+	interfaceEntity = $(interfaceEntityExp [''EditableEntity])
 instance BasicEntity Int32
 instance EditableEntity Int32 where
 	editableEntityTypeName _ = "Int32"
@@ -68,6 +71,7 @@ instance Entity Int64 where
 	getEntityTypeId _ = $(hashTextToEntityTypeId "Int64")
 	processEntityChange = processBasicEntityChange
 	applyEntityChange = applyBasicEntityChange
+	interfaceEntity = $(interfaceEntityExp [''EditableEntity])
 instance BasicEntity Int64
 instance EditableEntity Int64 where
 	editableEntityTypeName _ = "Int64"
@@ -79,6 +83,7 @@ instance Entity Word32 where
 	getEntityTypeId _ = $(hashTextToEntityTypeId "Word32")
 	processEntityChange = processBasicEntityChange
 	applyEntityChange = applyBasicEntityChange
+	interfaceEntity = $(interfaceEntityExp [''EditableEntity])
 instance BasicEntity Word32
 instance EditableEntity Word32 where
 	editableEntityTypeName _ = "Word32"
@@ -90,6 +95,7 @@ instance Entity Word64 where
 	getEntityTypeId _ = $(hashTextToEntityTypeId "Word64")
 	processEntityChange = processBasicEntityChange
 	applyEntityChange = applyBasicEntityChange
+	interfaceEntity = $(interfaceEntityExp [''EditableEntity])
 instance BasicEntity Word64
 instance EditableEntity Word64 where
 	editableEntityTypeName _ = "Word64"
@@ -101,6 +107,7 @@ instance Entity Integer where
 	getEntityTypeId _ = $(hashTextToEntityTypeId "Integer")
 	processEntityChange = processBasicEntityChange
 	applyEntityChange = applyBasicEntityChange
+	interfaceEntity = $(interfaceEntityExp [''EditableEntity])
 instance BasicEntity Integer
 instance EditableEntity Integer where
 	editableEntityTypeName _ = "Integer"
@@ -112,17 +119,21 @@ instance Entity Float where
 	getEntityTypeId _ = $(hashTextToEntityTypeId "Float")
 	processEntityChange = processBasicEntityChange
 	applyEntityChange = applyBasicEntityChange
+	interfaceEntity = $(interfaceEntityExp [''EditableEntity])
+	entityToText n = T.pack $ showFFloat Nothing n ""
 instance BasicEntity Float
 instance EditableEntity Float where
 	editableEntityTypeName _ = "Float"
 	editableEntityConstructorName _ = "Float"
-	editableEntityLayout = editBoxEditableLayout (\n -> T.pack $ showFFloat Nothing n "") (readMaybe . T.unpack)
+	editableEntityLayout = editBoxEditableLayout entityToText (readMaybe . T.unpack)
 
 instance Entity (Vec2 Float) where
 	type EntityChange (Vec2 Float) = (Vec2 Float)
 	getEntityTypeId _ = $(hashTextToEntityTypeId "Float2")
 	processEntityChange = processBasicEntityChange
 	applyEntityChange = applyBasicEntityChange
+	interfaceEntity = $(interfaceEntityExp [''EditableEntity])
+	entityToText = T.unwords . map entityToText . vecToList
 instance BasicEntity (Vec2 Float)
 instance EditableEntity (Vec2 Float) where
 	editableEntityTypeName _ = "Float2"
@@ -136,6 +147,8 @@ instance Entity (Vec3 Float) where
 	getEntityTypeId _ = $(hashTextToEntityTypeId "Float3")
 	processEntityChange = processBasicEntityChange
 	applyEntityChange = applyBasicEntityChange
+	interfaceEntity = $(interfaceEntityExp [''EditableEntity])
+	entityToText = T.unwords . map entityToText . vecToList
 instance BasicEntity (Vec3 Float)
 instance EditableEntity (Vec3 Float) where
 	editableEntityTypeName _ = "Float3"
@@ -149,6 +162,8 @@ instance Entity (Vec4 Float) where
 	getEntityTypeId _ = $(hashTextToEntityTypeId "Float4")
 	processEntityChange = processBasicEntityChange
 	applyEntityChange = applyBasicEntityChange
+	interfaceEntity = $(interfaceEntityExp [''EditableEntity])
+	entityToText = T.unwords . map entityToText . vecToList
 instance BasicEntity (Vec4 Float)
 instance EditableEntity (Vec4 Float) where
 	editableEntityTypeName _ = "Float4"
@@ -157,16 +172,15 @@ instance EditableEntity (Vec4 Float) where
 		maybeVecFromList [x, y, z, w] = Just $ Float4 x y z w
 		maybeVecFromList _ = Nothing
 
-editBoxVecEditableLayout :: (Vec v, VecElement v ~ Float, BasicEntity v, Eq v) => ([Float] -> Maybe v) -> v -> (EntityChange v -> STM ()) -> EditableLayoutM (v -> EntityChange v -> STM ())
-editBoxVecEditableLayout maybeVecFromList = editBoxEditableLayout
-	(T.pack . unwords . map (\e -> showFFloat Nothing e "") . vecToList)
-	((maybeVecFromList =<<) . sequence . map readMaybe . words . T.unpack)
+editBoxVecEditableLayout :: (BasicEntity v, Eq v, Read a) => ([a] -> Maybe v) -> v -> (EntityChange v -> STM ()) -> EditableLayoutM (v -> EntityChange v -> STM ())
+editBoxVecEditableLayout maybeVecFromList = editBoxEditableLayout entityToText ((maybeVecFromList =<<) . sequence . map readMaybe . words . T.unpack)
 
 instance Entity Bool where
 	type EntityChange Bool = Bool
 	getEntityTypeId _ = $(hashTextToEntityTypeId "Bool")
 	processEntityChange = processBasicEntityChange
 	applyEntityChange = applyBasicEntityChange
+	interfaceEntity = $(interfaceEntityExp [''EditableEntity])
 instance BasicEntity Bool
 instance Default Bool where
 	def = False
@@ -206,6 +220,7 @@ instance Entity T.Text where
 	processEntityChange = processBasicEntityChange
 	applyEntityChange = applyBasicEntityChange
 	interfaceEntity = $(interfaceEntityExp [''EditableEntity])
+	entityToText = id
 instance BasicEntity T.Text
 instance Default T.Text where
 	def = T.empty
@@ -325,6 +340,7 @@ instance (Ord a, BasicEntity a) => Entity (S.Set a) where
 			else (S.insert key, (key, True))
 		key = deserializeBasicEntity $ B.drop 1 keyBytes
 	applyEntityChange var (value, f) = writeEntityVarRecord var (B.singleton 0 <> serializeBasicEntity value) (if f then B.singleton 1 else B.empty)
+	entityToText s = editableEntityTypeName s <> T.pack (" {" ++ showsPrec 0 (S.size s) "}")
 
 instance EntityRegistration S.Set where
 	performEntityRegistration entityManager _ = registerEntityType entityManager setFirstEntityTypeId $ do
@@ -355,6 +371,7 @@ instance (Ord k, BasicEntity k, BasicEntity v) => Entity (M.Map k v) where
 	applyEntityChange var (key, maybeValue) = writeEntityVarRecord var (B.singleton 0 <> serializeBasicEntity key) $ case maybeValue of
 		Just value -> B.singleton 0 <> serializeBasicEntity value
 		Nothing -> B.empty
+	entityToText m = T.pack ("map{" ++ showsPrec 0 (M.size m) "}")
 
 instance EntityRegistration M.Map where
 	performEntityRegistration entityManager _ = registerEntityType entityManager mapFirstEntityTypeId $ do

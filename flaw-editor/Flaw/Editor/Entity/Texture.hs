@@ -14,7 +14,10 @@ module Flaw.Editor.Entity.Texture
 import Control.Monad.IO.Class
 import qualified Data.ByteString as B
 import Data.Default
+import Data.Monoid
 import qualified Data.Serialize as S
+import qualified Data.Text.Lazy as TL
+import qualified Data.Text.Lazy.Builder as TLB
 
 import Flaw.Asset.Texture.Dxt
 import Flaw.Editor.Entity
@@ -36,6 +39,64 @@ instance Entity PackedTexture where
 	processEntityChange = processBasicEntityChange
 	applyEntityChange = applyBasicEntityChange
 	interfaceEntity = $(interfaceEntityExp [''ProcessableEntity, ''ITexture])
+	entityToText PackedTexture
+		{ packedTextureInfo = TextureInfo
+			{ textureWidth = width
+			, textureHeight = height
+			, textureDepth = depth
+			, textureMips = mips
+			, textureFormat = format
+			, textureCount = count
+			}
+		} = TL.toStrict $ TLB.toLazyText $ "texture:"
+		<> formatStr <> "_"
+		<> TLB.fromString (show width)
+		<> (if height > 0 then TLB.fromString (show height) else mempty)
+		<> (if depth > 0 then TLB.fromString (show depth) else mempty)
+		<> (if mips > 1 then "M" <> TLB.fromString (show mips) else mempty)
+		<> (if count > 0 then "[" <> TLB.fromString (show count) <> "]" else mempty)
+		where
+			formatStr = case format of
+				UncompressedTextureFormat
+					{ textureFormatComponents = components
+					, textureFormatValueType = valueType
+					, textureFormatPixelSize = pixelSize
+					} -> let
+					componentsStr = case components of
+						PixelR -> "R"
+						PixelRG -> "RG"
+						PixelRGB -> "RGB"
+						PixelRGBA -> "RGBA"
+					valueTypeStr = case valueType of
+						PixelUntyped -> "?"
+						PixelUint -> "U"
+						PixelFloat -> "F"
+					pixelSizeStr = case pixelSize of
+						Pixel8bit -> "8b"
+						Pixel16bit -> "16b"
+						Pixel24bit -> "24b"
+						Pixel32bit -> "32b"
+						Pixel64bit -> "64b"
+						Pixel96bit -> "96b"
+						Pixel128bit -> "128b"
+					in colorSpaceStr <> componentsStr <> valueTypeStr <> pixelSizeStr
+				CompressedTextureFormat
+					{ textureFormatCompression = compression
+					} -> let
+					compressionStr = case compression of
+						TextureCompressionBC1 -> "BC1"
+						TextureCompressionBC1Alpha -> "BC1A"
+						TextureCompressionBC2 -> "BC2"
+						TextureCompressionBC3 -> "BC3"
+						TextureCompressionBC4 -> "BC4"
+						TextureCompressionBC4Signed -> "BC4S"
+						TextureCompressionBC5 -> "BC5"
+						TextureCompressionBC5Signed -> "BC5S"
+						in colorSpaceStr <> "_" <> compressionStr
+			colorSpaceStr = case textureFormatColorSpace format of
+				LinearColorSpace -> "L"
+				StandardColorSpace -> "S"
+
 instance Default PackedTexture where
 	def = PackedTexture
 		{ packedTextureBytes = B.empty
@@ -65,6 +126,7 @@ instance Entity TextureFromBlob where
 	processEntityChange = processBasicEntityChange
 	applyEntityChange = applyBasicEntityChange
 	interfaceEntity = $(interfaceEntityExp [''ProcessableEntity, ''ITexture])
+	entityToText (TextureFromBlob ptr) = "texture:" <> entityToText ptr
 instance BasicEntity TextureFromBlob
 instance ProcessableEntity TextureFromBlob where
 	type ProcessableEntityResult TextureFromBlob = PackedTexture
@@ -82,6 +144,7 @@ instance Entity CompressTexture where
 	processEntityChange = processBasicEntityChange
 	applyEntityChange = applyBasicEntityChange
 	interfaceEntity = $(interfaceEntityExp [''ProcessableEntity, ''ITexture])
+	entityToText (CompressTexture ptr) = "compress_texture:" <> entityToText ptr
 instance BasicEntity CompressTexture
 instance ProcessableEntity CompressTexture where
 	type ProcessableEntityResult CompressTexture = PackedTexture

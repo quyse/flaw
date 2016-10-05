@@ -16,6 +16,7 @@ module Flaw.Editor.Entity.Blob
 import Control.Monad.Reader
 import qualified Data.ByteString as B
 import Data.Default
+import Data.Monoid
 import qualified Data.Serialize as S
 import qualified Data.Text as T
 import Data.Serialize.Text()
@@ -39,6 +40,10 @@ data BlobByUrl = BlobByUrl
 instance Entity BlobByUrl where
 	getEntityTypeId _ = $(hashTextToEntityTypeId "BlobByUrl")
 	interfaceEntity = $(interfaceEntityExp [''ProcessableEntity, ''IBlob])
+	entityToText BlobByUrl
+		{ blobByUrlUrl = url
+		, blobByUrlHash = hash
+		} = "blob:" <> url <> " #" <> entityToText hash
 instance Default BlobByUrl where
 	def = BlobByUrl
 		{ blobByUrlUrl = T.empty

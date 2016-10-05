@@ -49,7 +49,7 @@ module Flaw.Editor.Entity
 	, pattern ENTITY_TYPE_ID_SIZE
 	, nullEntityTypeId
 	, EntityPtr(..)
-	, SomeEntityVar()
+	, SomeEntityVar(..)
 	, EntityVar(..)
 	, entityVarEntityId
 	, SomeEntityPtr(..)
@@ -297,6 +297,11 @@ class Typeable a => Entity (a :: *) where
 	-- | Return witness for entity that it supports specified entity interface.
 	interfaceEntity :: EntityInterface i => Proxy i -> a -> EntityInterfaced i a
 	interfaceEntity _ _ = EntityNotInterfaced
+
+	-- | Return some short human-friendly textual representation of entity.
+	entityToText :: a -> T.Text
+	default entityToText :: Show a => a -> T.Text
+	entityToText = T.pack . show
 
 -- | Basic entity is an entity consisting of main record only.
 class (Entity a, EntityChange a ~ a) => BasicEntity a where
