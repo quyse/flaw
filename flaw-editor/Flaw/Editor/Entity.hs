@@ -1058,7 +1058,6 @@ registerEntitiesAndInterfacesExp = do
 	-- simple Entity instances
 	entityInstancesStmts <- do
 		ClassI _ decs <- reify ''Entity
-		runIO $ print decs
 		(concat <$>) . forM decs $ \(InstanceD Nothing context (AppT _ t) _) ->
 			if null context then do
 				supportDefault <- isInstance ''Default [t]
