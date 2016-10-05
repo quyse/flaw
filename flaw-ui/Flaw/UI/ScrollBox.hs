@@ -260,14 +260,14 @@ scrollBarPiece ScrollBar
 		contentLength = dot scrollableSize direction
 		barLength = dot barSize direction - padding * 2
 		minPieceLength = min sx sy - padding * 2
-		pieceLength = max minPieceLength $ (barLength * boxLength) `quot` contentLength
-		pieceOffset = (negate contentOffset * (barLength - pieceLength)) `quot` (contentLength - boxLength)
+		pieceLength = max minPieceLength $ (barLength * boxLength) `quot` (max 1 contentLength)
+		pieceOffset = (negate contentOffset * (barLength - pieceLength)) `quot` (max 1 $ contentLength - boxLength)
 		Vec2 ppx ppy = vecFromScalar padding + direction * vecFromScalar pieceOffset
 		Vec2 psx psy = vecfmap (max minPieceLength) $ direction * vecFromScalar pieceLength
 		piece = if contentLength > boxLength then
 			Just ScrollBarPiece
 				{ scrollBarPieceRect = Vec4 ppx ppy (ppx + psx) (ppy + psy)
-				, scrollBarPieceOffsetMultiplier = direction * vecFromScalar (negate $ (contentLength - boxLength) `quot` (barLength - pieceLength))
+				, scrollBarPieceOffsetMultiplier = direction * vecFromScalar (negate $ (contentLength - boxLength) `quot` (max 1 $ barLength - pieceLength))
 				}
 			else Nothing
 	return piece
