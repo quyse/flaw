@@ -1,12 +1,12 @@
 {-|
-Module: Flaw.UI.Editor.EditableEntity
+Module: Flaw.Editor.EditableEntity
 Description: Class for defining layout to edit entities.
 License: MIT
 -}
 
 {-# LANGUAGE DefaultSignatures, FlexibleContexts, FlexibleInstances, OverloadedStrings, RankNTypes, TemplateHaskell, TypeFamilies, TypeOperators #-}
 
-module Flaw.UI.Editor.EditableEntity
+module Flaw.Editor.EditableEntity
 	( EditableLayoutState(..)
 	, EditableLayoutM
 	, EditableEntity(..)

@@ -1,12 +1,12 @@
 {-|
-Module: Flaw.UI.Editor.FileDialog
+Module: Flaw.Editor.UI.FileDialog
 Description: Dialog allowing user to select a file.
 License: MIT
 -}
 
 {-# LANGUAGE OverloadedStrings #-}
 
-module Flaw.UI.Editor.FileDialog
+module Flaw.Editor.UI.FileDialog
 	( FileDialogService(..)
 	, newFileDialogService
 	, FileDialogConfig(..)

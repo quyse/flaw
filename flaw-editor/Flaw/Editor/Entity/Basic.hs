@@ -29,13 +29,13 @@ import Data.Word
 import Numeric
 import Text.Read(readMaybe)
 
+import Flaw.Editor.EditableEntity
 import Flaw.Editor.Entity
 import Flaw.Math
 import Flaw.UI
 import Flaw.UI.Button
 import Flaw.UI.CheckBox
 import Flaw.UI.EditBox
-import Flaw.UI.Editor.EditableEntity
 import Flaw.UI.Layout
 import Flaw.UI.ListBox
 import Flaw.UI.Metrics

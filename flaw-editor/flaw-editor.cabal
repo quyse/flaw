@@ -20,6 +20,7 @@ source-repository head
 library
   exposed-modules:
     Flaw.Editor.BlobService
+    Flaw.Editor.EditableEntity
     Flaw.Editor.Entity
     Flaw.Editor.Entity.Basic
     Flaw.Editor.Entity.Blob
@@ -31,9 +32,8 @@ library
     Flaw.Editor.Processing
     Flaw.Editor.ProcessingCache
     Flaw.Editor.Project
-    Flaw.UI.Editor.EditableEntity
-    Flaw.UI.Editor.Elements
-    Flaw.UI.Editor.FileDialog
+    Flaw.Editor.UI.Elements
+    Flaw.Editor.UI.FileDialog
     Flaw.UI.RenderBox
   other-modules:
   -- other-extensions:    

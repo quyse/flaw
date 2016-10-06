@@ -27,6 +27,8 @@ import Flaw.App
 import Flaw.Asset.Collada
 import Flaw.Asset.Texture.Dxt
 import Flaw.Book
+import Flaw.Editor.UI.Elements
+import Flaw.Editor.UI.FileDialog
 import Flaw.Exception
 import Flaw.Flow
 import Flaw.Graphics
@@ -42,8 +44,6 @@ import Flaw.UI.CheckBox
 import Flaw.UI.DefaultStyle
 import Flaw.UI.Drawer
 import Flaw.UI.EditBox
-import Flaw.UI.Editor.Elements
-import Flaw.UI.Editor.FileDialog
 import Flaw.UI.Layout
 import Flaw.UI.Panel
 import Flaw.UI.RenderBox

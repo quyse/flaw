@@ -1,12 +1,12 @@
 {-|
-Module: Flaw.UI.Editor.Elements
+Module: Flaw.Editor.UI.Elements
 Description: UI elements specific to editor
 License: MIT
 -}
 
 {-# LANGUAGE OverloadedStrings #-}
 
-module Flaw.UI.Editor.Elements
+module Flaw.Editor.UI.Elements
 	( FileElement(..)
 	, newFileElement
 	) where
@@ -14,11 +14,11 @@ module Flaw.UI.Editor.Elements
 import Control.Concurrent.STM
 import Control.Monad
 
+import Flaw.Editor.UI.FileDialog
 import Flaw.Math
 import Flaw.UI
 import Flaw.UI.Button
 import Flaw.UI.EditBox
-import Flaw.UI.Editor.FileDialog
 import Flaw.UI.Metrics
 import Flaw.UI.Panel
 
