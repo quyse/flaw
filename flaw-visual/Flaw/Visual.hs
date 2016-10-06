@@ -65,19 +65,13 @@ tangentFrame position normal texcoord = do
 	dxTexcoord <- temp $ ddx texcoord
 	dyTexcoord <- temp $ ddy texcoord
 
-	nn <- temp $ normalize normal
-	r1 <- temp $ cross dyPosition nn
-	r2 <- temp $ cross nn dxPosition
+	r1 <- temp $ cross dyPosition normal
+	r2 <- temp $ cross normal dxPosition
 
-	t <- temp $ r1 * xxx__ dxTexcoord + r2 * xxx__ dyTexcoord
-	b <- temp $ r1 * yyy__ dxTexcoord + r2 * yyy__ dyTexcoord
+	t <- temp $ normalize $ r1 * xxx__ dxTexcoord + r2 * xxx__ dyTexcoord
+	b <- temp $ normalize $ r1 * yyy__ dxTexcoord + r2 * yyy__ dyTexcoord
 
-	s <- temp $ invSqrt $ max_ (dot t t) (dot b b)
-
-	tt <- temp $ t * vecFromScalar s
-	bb <- temp $ b * vecFromScalar s
-
-	return (tt, bb, nn)
+	return (t, b, normal)
 
 -- | Encode normalized 3-float into 2 floats using lambert azimuthal equal-area projection.
 encodeLambertAzimuthalEqualArea :: Node Float3 -> Program (Node Float2)

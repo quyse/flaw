@@ -372,8 +372,8 @@ main = withApp appConfig
 				--bentNormalXY <- temp $ (sample (sampler2D2f 1) aTexcoord * vecFromScalar (255 / 127) - vecFromScalar 1) * cvec11 0 0
 				--bentNormalXY <- temp $ (sample (sampler2D2f 1) aTexcoord * vecFromScalar (255 / 127) - vecFromScalar 1) * vecFromScalar 0 + (cvec11 (128 / 255) (127 / 255) * vecFromScalar (255 / 127) - vecFromScalar 1)
 				bentNormal <- temp $ cvec21 bentNormalXY $ sqrt $ max_ 0 $ 1 - dot bentNormalXY bentNormalXY
-				temp $ normalize $ viewTangent * xxx__ bentNormal + viewBinormal * yyy__ bentNormal + viewNormal * zzz__ bentNormal
-				else temp $ normalize vertexViewNormal
+				temp $ viewTangent * xxx__ bentNormal + viewBinormal * yyy__ bentNormal + viewNormal * zzz__ bentNormal
+				else return vertexViewNormal
 			let
 				emission = 0
 				occlusion = 1
