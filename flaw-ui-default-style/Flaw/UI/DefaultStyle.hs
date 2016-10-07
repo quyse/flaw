@@ -127,7 +127,7 @@ initDefaultStyleDrawer device = withSpecialBook $ \bk -> do
 			{ styleVariantNormalStyle = Style
 				{ styleTextColor = color "ffffffff"
 				, styleFillColor = color "12122bff"
-				, styleBorderColor = color "ffffffff"
+				, styleBorderColor = color "ffffff80"
 				}
 			, styleVariantMousedStyle = Style
 				{ styleTextColor = color "ffffffff"
@@ -154,7 +154,7 @@ initDefaultStyleDrawer device = withSpecialBook $ \bk -> do
 			{ styleVariantNormalStyle = Style
 				{ styleTextColor = color "ffffffff"
 				, styleFillColor = color "515182ff"
-				, styleBorderColor = color "ffffffff"
+				, styleBorderColor = color "ffffff80"
 				}
 			, styleVariantMousedStyle = Style
 				{ styleTextColor = color "ffa500ff"
