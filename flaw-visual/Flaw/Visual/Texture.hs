@@ -12,6 +12,7 @@ module Flaw.Visual.Texture
 	, convertTextureToLinearRG
 	, emitTextureAsset
 	, emitDxtCompressedTextureAsset
+	, emitDxtCompressedLinearRGTextureAsset
 	, loadTextureAsset
 	) where
 
@@ -216,10 +217,23 @@ emitDxtCompressedTextureAsset fileName = do
 		, packedTextureInfo = compressedTextureInfo
 		}
 
-loadTextureAsset :: Device d => d -> B.ByteString -> IO (TextureId d, IO ())
-loadTextureAsset device bytes = case S.decode bytes of
+emitDxtCompressedLinearRGTextureAsset :: FilePath -> Q B.ByteString
+emitDxtCompressedLinearRGTextureAsset fileName = do
+	bytes <- loadFile fileName
+	Just PackedTexture
+		{ packedTextureBytes = textureBytes
+		, packedTextureInfo = textureInfo
+		} <- convertTextureToLinearRG <$> runIO (loadTexture $ BL.toStrict bytes)
+	(compressedTextureInfo, compressedTextureBytes) <- runIO $ dxtCompressTexture textureInfo textureBytes
+	return $ S.encode PackedTexture
+		{ packedTextureBytes = compressedTextureBytes
+		, packedTextureInfo = compressedTextureInfo
+		}
+
+loadTextureAsset :: Device d => d -> SamplerStateInfo -> B.ByteString -> IO (TextureId d, IO ())
+loadTextureAsset device samplerStateInfo bytes = case S.decode bytes of
 	Right PackedTexture
 		{ packedTextureBytes = textureBytes
 		, packedTextureInfo = textureInfo
-		} -> createStaticTexture device textureInfo defaultSamplerStateInfo textureBytes
+		} -> createStaticTexture device textureInfo samplerStateInfo textureBytes
 	Left err -> throwIO $ DescribeFirstException $ "failed to load texture asset: " ++ err
