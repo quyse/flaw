@@ -34,7 +34,7 @@ data Canvas d = Canvas
 	, canvasUY :: !(Node Float4)
 	, canvasUFillColor :: !(Node Float4)
 	, canvasUBorderColor :: !(Node Float4)
-	, canvasUThickness :: !(Node Float)
+	, canvasUScaleParams :: !(Node Float4)
 	, canvasVbBorderedRectangle :: !(VertexBufferId d)
 	, canvasBorderedRectangleProgram :: !(ProgramId d)
 	, canvasVbCubicBezierCurve :: !(VertexBufferId d)
@@ -59,8 +59,8 @@ initCanvas device = withSpecialBook $ \bk -> do
 	uFillColor <- uniform ubs
 	-- uniform with border color
 	uBorderColor <- uniform ubs
-	-- thickness
-	uThickness <- uniform ubs
+	-- uniform with scale params
+	let uScaleParams = uBorderColor -- same uniform
 	us <- book bk $ createUniformStorage device ubs
 
 	-- bordered rectangle
@@ -100,16 +100,18 @@ initCanvas device = withSpecialBook $ \bk -> do
 			vbStride = sizeOf (undefined :: Float) * 8
 			vertices = do
 				i <- [0 .. (CUBIC_BEZIER_PIECES_COUNT - 1)]
-				(l, k) <- [(0, -1), (1, -1), (0, 1), (0, 1), (1, -1), (1, 1)] -- 6 vertices per quad
+				(l, k) <- [(1, -1), (0, -1), (0, 1), (1, -1), (0, 1), (1, 1)] -- 6 vertices per quad
 				let
 					t = fromIntegral (i + l) * (1 / fromIntegral CUBIC_BEZIER_PIECES_COUNT)
 				let r =
+					-- coefs for bezier point
 					[ (1 - t) * (1 - t) * (1 - t)
 					, (1 - t) * (1 - t) * t * 3
 					, (1 - t) * t * t * 3
 					, t * t * t
+					-- coefs for bezier tangent (derivative)
 					, ((-3) + t * 6 - t * t * 3) * k
-					, (t * 3 - t * t * 9) * k
+					, (3 - t * 12 + t * t * 9) * k
 					, (t * 6 - t * t * 9) * k
 					, (t * t * 3) * k
 					]
@@ -120,7 +122,10 @@ initCanvas device = withSpecialBook $ \bk -> do
 	cubicBezierCurveProgram <- book bk $ createProgram device $ do
 		aP <- attribute 0 0 0 (AttributeVec4 AttributeFloat32)
 		aQ <- attribute 0 16 0 (AttributeVec4 AttributeFloat32)
-		p <- temp $ cvec11 (dot uX aP) (dot uY aP) + normalize (cvec11 (dot uY aQ) (-(dot uX aQ))) * vecFromScalar uThickness
+		p <- temp $
+			( cvec11 (dot uX aP) (dot uY aP)
+			+ normalize (cvec11 (dot uY aQ) (-(dot uX aQ))) * zz__ uScaleParams
+			) * xy__ uScaleParams
 		rasterize (cvec211 p 0 1) $ colorTarget 0 uFillColor
 
 	return Canvas
@@ -130,7 +135,7 @@ initCanvas device = withSpecialBook $ \bk -> do
 		, canvasUY = uY
 		, canvasUFillColor = uFillColor
 		, canvasUBorderColor = uBorderColor
-		, canvasUThickness = uThickness
+		, canvasUScaleParams = uScaleParams
 		, canvasVbBorderedRectangle = vbBorderedRectangle
 		, canvasBorderedRectangleProgram = borderedRectangleProgram
 		, canvasVbCubicBezierCurve = vbCubicBezierCurve
@@ -191,25 +196,27 @@ drawCubicBezierCurve Canvas
 	, canvasUX = uX
 	, canvasUY = uY
 	, canvasUFillColor = uFillColor
-	, canvasUThickness = uThickness
+	, canvasUScaleParams = uScaleParams
 	, canvasVbCubicBezierCurve = vbCubicBezierCurve
 	, canvasCubicBezierCurveProgram = cubicBezierCurveProgram
 	} (Int4 x1 x2 x3 x4) (Int4 y1 y2 y3 y4) color thickness = renderScope $ do
 
 	Vec4 viewportLeft viewportTop viewportRight viewportBottom <- renderGetViewport
 	let
-		scaleX = 2 / fromIntegral (viewportRight - viewportLeft)
-		scaleY = 2 / fromIntegral (viewportTop - viewportBottom)
+		viewportHalfWidth = fromIntegral (viewportRight - viewportLeft) * 0.5
+		viewportHalfHeight = fromIntegral (viewportTop - viewportBottom) * 0.5
+		scaleX = 1 / viewportHalfWidth
+		scaleY = 1 / viewportHalfHeight
 		xs = Float4
-			(fromIntegral x1 * scaleX - 1)
-			(fromIntegral x2 * scaleX - 1)
-			(fromIntegral x3 * scaleX - 1)
-			(fromIntegral x4 * scaleX - 1)
+			(fromIntegral x1 - viewportHalfWidth)
+			(fromIntegral x2 - viewportHalfWidth)
+			(fromIntegral x3 - viewportHalfWidth)
+			(fromIntegral x4 - viewportHalfWidth)
 		ys = Float4
-			(fromIntegral y1 * scaleY + 1)
-			(fromIntegral y2 * scaleY + 1)
-			(fromIntegral y3 * scaleY + 1)
-			(fromIntegral y4 * scaleY + 1)
+			(fromIntegral y1 + viewportHalfHeight)
+			(fromIntegral y2 + viewportHalfHeight)
+			(fromIntegral y3 + viewportHalfHeight)
+			(fromIntegral y4 + viewportHalfHeight)
 
 	-- setup stuff
 	renderVertexBuffer 0 vbCubicBezierCurve
@@ -223,7 +230,7 @@ drawCubicBezierCurve Canvas
 	renderUniform us uX xs
 	renderUniform us uY ys
 	renderUniform us uFillColor color
-	renderUniform us uThickness thickness
+	renderUniform us uScaleParams (Vec4 scaleX scaleY thickness 0)
 	renderUploadUniformStorage us
 
 	-- draw
