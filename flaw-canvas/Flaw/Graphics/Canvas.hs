@@ -10,6 +10,7 @@ module Flaw.Graphics.Canvas
 	( Canvas
 	, initCanvas
 	, drawBorderedRectangle
+	, drawCubicBezierCurve
 	) where
 
 import Flaw.Book
@@ -29,12 +30,15 @@ data Canvas d = Canvas
 	-- | Blend state for usual blending.
 	  canvasBlendState :: !(BlendStateId d)
 	, canvasUs :: !(UniformStorage d)
-	, canvasVbBorderedRectangle :: !(VertexBufferId d)
 	, canvasUX :: !(Node Float4)
 	, canvasUY :: !(Node Float4)
 	, canvasUFillColor :: !(Node Float4)
 	, canvasUBorderColor :: !(Node Float4)
+	, canvasUThickness :: !(Node Float)
+	, canvasVbBorderedRectangle :: !(VertexBufferId d)
 	, canvasBorderedRectangleProgram :: !(ProgramId d)
+	, canvasVbCubicBezierCurve :: !(VertexBufferId d)
+	, canvasCubicBezierCurveProgram :: !(ProgramId d)
 	}
 
 initCanvas :: Device d => d -> IO (Canvas d, IO ())
@@ -46,6 +50,20 @@ initCanvas device = withSpecialBook $ \bk -> do
 		, blendDestColor = ColorSourceInvSrcAlpha
 		}
 
+	ubs <- uniformBufferSlot 0
+	-- uniform containing four X coordinates (from left to right)
+	uX <- uniform ubs
+	-- uniform containing four Y coordinates (from bottom to top)
+	uY <- uniform ubs
+	-- uniform with fill color
+	uFillColor <- uniform ubs
+	-- uniform with border color
+	uBorderColor <- uniform ubs
+	-- thickness
+	uThickness <- uniform ubs
+	us <- book bk $ createUniformStorage device ubs
+
+	-- bordered rectangle
 	vbBorderedRectangle <- do
 		let
 			vbStride = sizeOf (undefined :: Float) * 10
@@ -69,17 +87,6 @@ initCanvas device = withSpecialBook $ \bk -> do
 		book bk $ withArray (vertices :: [Float]) $ \ptr -> do
 			bytes <- B.unsafePackCStringLen (castPtr ptr, vbStride * BORDERED_RECTANGLE_INDEX_COUNT)
 			createStaticVertexBuffer device bytes vbStride
-
-	ubs <- uniformBufferSlot 0
-	-- uniform containing four X coordinates (from left to right)
-	uX <- uniform ubs
-	-- uniform containing four Y coordinates (from bottom to top)
-	uY <- uniform ubs
-	-- uniform with fill color
-	uFillColor <- uniform ubs :: IO (Node Float4)
-	-- uniform with border color
-	uBorderColor <- uniform ubs :: IO (Node Float4)
-	us <- book bk $ createUniformStorage device ubs
 	borderedRectangleProgram <- book bk $ createProgram device $ do
 		aX <- attribute 0 0 0 (AttributeVec4 AttributeFloat32)
 		aY <- attribute 0 16 0 (AttributeVec4 AttributeFloat32)
@@ -87,15 +94,47 @@ initCanvas device = withSpecialBook $ \bk -> do
 		color <- temp (uFillColor * vecFromScalar (x_ aC) + uBorderColor * vecFromScalar (y_ aC))
 		rasterize (cvec1111 (dot aX uX) (dot aY uY) (constf 0) (constf 1)) $ colorTarget 0 color
 
+	-- cubic bezier curve
+	vbCubicBezierCurve <- do
+		let
+			vbStride = sizeOf (undefined :: Float) * 8
+			vertices = do
+				i <- [0 .. (CUBIC_BEZIER_PIECES_COUNT - 1)]
+				(l, k) <- [(0, -1), (1, -1), (0, 1), (0, 1), (1, -1), (1, 1)] -- 6 vertices per quad
+				let
+					t = fromIntegral (i + l) * (1 / fromIntegral CUBIC_BEZIER_PIECES_COUNT)
+				let r =
+					[ (1 - t) * (1 - t) * (1 - t)
+					, (1 - t) * (1 - t) * t * 3
+					, (1 - t) * t * t * 3
+					, t * t * t
+					, ((-3) + t * 6 - t * t * 3) * k
+					, (t * 3 - t * t * 9) * k
+					, (t * 6 - t * t * 9) * k
+					, (t * t * 3) * k
+					]
+				r
+		book bk $ withArray (vertices :: [Float]) $ \ptr -> do
+			bytes <- B.unsafePackCStringLen (castPtr ptr, vbStride * CUBIC_BEZIER_INDEX_COUNT)
+			createStaticVertexBuffer device bytes vbStride
+	cubicBezierCurveProgram <- book bk $ createProgram device $ do
+		aP <- attribute 0 0 0 (AttributeVec4 AttributeFloat32)
+		aQ <- attribute 0 16 0 (AttributeVec4 AttributeFloat32)
+		p <- temp $ cvec11 (dot uX aP) (dot uY aP) + normalize (cvec11 (dot uY aQ) (-(dot uX aQ))) * vecFromScalar uThickness
+		rasterize (cvec211 p 0 1) $ colorTarget 0 uFillColor
+
 	return Canvas
 		{ canvasBlendState = blendState
 		, canvasUs = us
-		, canvasVbBorderedRectangle = vbBorderedRectangle
 		, canvasUX = uX
 		, canvasUY = uY
 		, canvasUFillColor = uFillColor
 		, canvasUBorderColor = uBorderColor
+		, canvasUThickness = uThickness
+		, canvasVbBorderedRectangle = vbBorderedRectangle
 		, canvasBorderedRectangleProgram = borderedRectangleProgram
+		, canvasVbCubicBezierCurve = vbCubicBezierCurve
+		, canvasCubicBezierCurveProgram = cubicBezierCurveProgram
 		}
 
 -- | Draw bordered rectangle.
@@ -104,11 +143,11 @@ drawBorderedRectangle :: Context c d => Canvas d -> Int4 -> Int4 -> Float4 -> Fl
 drawBorderedRectangle Canvas
 	{ canvasBlendState = blendState
 	, canvasUs = us
-	, canvasVbBorderedRectangle = vbBorderedRectangle
 	, canvasUX = uX
 	, canvasUY = uY
 	, canvasUFillColor = uFillColor
 	, canvasUBorderColor = uBorderColor
+	, canvasVbBorderedRectangle = vbBorderedRectangle
 	, canvasBorderedRectangleProgram = borderedRectangleProgram
 	} (Int4 x1 x2 x3 x4) (Int4 y1 y2 y3 y4) fillColor borderColor = renderScope $ do
 
@@ -145,5 +184,56 @@ drawBorderedRectangle Canvas
 	-- draw
 	renderDraw BORDERED_RECTANGLE_INDEX_COUNT
 
+drawCubicBezierCurve :: Context c d => Canvas d -> Int4 -> Int4 -> Float4 -> Float -> Render c ()
+drawCubicBezierCurve Canvas
+	{ canvasBlendState = blendState
+	, canvasUs = us
+	, canvasUX = uX
+	, canvasUY = uY
+	, canvasUFillColor = uFillColor
+	, canvasUThickness = uThickness
+	, canvasVbCubicBezierCurve = vbCubicBezierCurve
+	, canvasCubicBezierCurveProgram = cubicBezierCurveProgram
+	} (Int4 x1 x2 x3 x4) (Int4 y1 y2 y3 y4) color thickness = renderScope $ do
+
+	Vec4 viewportLeft viewportTop viewportRight viewportBottom <- renderGetViewport
+	let
+		scaleX = 2 / fromIntegral (viewportRight - viewportLeft)
+		scaleY = 2 / fromIntegral (viewportTop - viewportBottom)
+		xs = Float4
+			(fromIntegral x1 * scaleX - 1)
+			(fromIntegral x2 * scaleX - 1)
+			(fromIntegral x3 * scaleX - 1)
+			(fromIntegral x4 * scaleX - 1)
+		ys = Float4
+			(fromIntegral y1 * scaleY + 1)
+			(fromIntegral y2 * scaleY + 1)
+			(fromIntegral y3 * scaleY + 1)
+			(fromIntegral y4 * scaleY + 1)
+
+	-- setup stuff
+	renderVertexBuffer 0 vbCubicBezierCurve
+	renderIndexBuffer nullIndexBuffer
+	renderUniformStorage us
+	renderProgram cubicBezierCurveProgram
+	-- enable blending only if needed
+	renderBlendState $ if w_ color >= 1 then nullBlendState else blendState
+
+	-- set uniforms
+	renderUniform us uX xs
+	renderUniform us uY ys
+	renderUniform us uFillColor color
+	renderUniform us uThickness thickness
+	renderUploadUniformStorage us
+
+	-- draw
+	renderDraw CUBIC_BEZIER_INDEX_COUNT
+
+
 pattern BORDERED_RECTANGLE_INDEX_COUNT :: Int
 pattern BORDERED_RECTANGLE_INDEX_COUNT = 54
+
+pattern CUBIC_BEZIER_PIECES_COUNT :: Int
+pattern CUBIC_BEZIER_PIECES_COUNT = 32
+pattern CUBIC_BEZIER_INDEX_COUNT :: Int
+pattern CUBIC_BEZIER_INDEX_COUNT = 192 -- CUBIC_BEZIER_PIECES_COUNT * 6
