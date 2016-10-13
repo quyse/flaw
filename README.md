@@ -3,7 +3,7 @@
 [![Gitlab Build Status](https://gitlab.com/quyse/flaw/badges/master/build.svg)](https://gitlab.com/quyse/flaw/pipelines)
 [![Code Climate](https://codeclimate.com/github/quyse/flaw/badges/gpa.svg)](https://codeclimate.com/github/quyse/flaw)
 
-[github](https://github.com/quyse/flaw) | [documentation](https://quyse.gitlab.io/flaw/docs/) | [gitlab ci](https://gitlab.com/quyse/flaw/pipelines) | [code climate](https://codeclimate.com/github/quyse/flaw) | [itch.io](https://quyse.itch.io/flaw) | [openhub](https://www.openhub.net/p/flaw-engine) | [hlint report](https://quyse.gitlab.io/flaw/hlint.html) | [hpc report](https://quyse.gitlab.io/flaw/hpc/combined/all/hpc_index.html)
+[github](https://github.com/quyse/flaw) | [documentation](https://flaw.quyse.net/docs/) | [gitlab ci](https://gitlab.com/quyse/flaw/pipelines) | [code climate](https://codeclimate.com/github/quyse/flaw) | [itch.io](https://quyse.itch.io/flaw) | [openhub](https://www.openhub.net/p/flaw-engine) | [hlint report](https://flaw.quyse.net/hlint.html) | [hpc report](https://flaw.quyse.net/hpc/combined/all/hpc_index.html)
 
 **FLAW** is a highly experimental open source game engine written in Haskell.
 
@@ -24,21 +24,23 @@ This project is mostly a playground for absolutely crazy ideas. Surely if someon
 * Simple windowing API
 * Fast text rendering with subpixel anti-aliasing
 * Collada import (rigid and skinned geometries, animations)
+* Basic physics (integration with Bullet physics engine)
 
 ## In progress
 
 * Visual effects (deferred rendering, materials, lighting, shadowing, etc)
 * High-level GUI framework made from scratch (i.e. neither using native GUIs nor frameworks like Qt)
 * Real-time collaborative asset editor
+* Type-safe multiplayer framework
 
 ## Experiments
 
 * TH-based Lua-to-Haskell compiler.
 
-## Dreams
+## Plans
 
 * TH-generated bindings for scripting languages
-* Type-safe multiplayer framework
+* Vulkan support
 
 ## Packages and platform support
 
