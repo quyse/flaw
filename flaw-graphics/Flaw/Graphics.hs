@@ -2,6 +2,38 @@
 Module: Flaw.Graphics
 Description: Graphics abstraction.
 License: MIT
+
+Graphics system is mostly abstracted from backend. Almost everything from
+uploading textures to writing shader programs can be done with zero amount
+of backend-dependent code.
+
+Initialization of graphics subsystem is still backend-dependent though.
+Initialization includes creating instances of 'System', 'Device' and 'Presenter'
+classes.
+
+* 'System' instance allows to enumerate graphics hardware supported by backend,
+get information about displays and display modes.
+
+* 'Device' instance creates graphics resources such as render targets, textures,
+shader programs, etc.
+
+* 'Context' instance performs actual drawing. Draw operations run in 'Render' monad.
+
+* 'Presenter' instance shows rendering results onto screen or window.
+
+Abstraction is mostly follows DirectX 11 / OpenGL 3 model.
+In a few places the lowest common denominator was choosen for certain features,
+to allow one-to-one mapping from abstraction to implementation. Examples:
+
+* Textures accept default sampling parameters, used when no sampler is bound;
+
+* Program objects are created explicitly;
+
+* There's no separate texture and sampler slots. Both a texture and a sampler are bound
+into combined slot indexed by numeric index;
+
+* Default framebuffer is bound automatically as part of initial state inside 'present'.
+
 -}
 
 {-# LANGUAGE FlexibleContexts, FunctionalDependencies, MultiParamTypeClasses, RankNTypes, TypeFamilies #-}
@@ -59,8 +91,8 @@ import Flaw.Math
 import Flaw.Stack
 
 -- | Class of graphics system.
-{- Initialization of graphics system depends on implementation.
-There're just a little number of some general routines.
+{- Initialization of graphics system is backend-dependent.
+There're just a few general functions.
 -}
 class System s where
 	-- | Type for id of graphics device.
