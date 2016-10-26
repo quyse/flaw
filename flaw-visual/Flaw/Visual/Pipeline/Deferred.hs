@@ -47,6 +47,7 @@ import Flaw.Visual.ScreenQuad
 
 data DeferredPipeline d = DeferredPipeline
 	{ deferredPipelineOpaquePassFrameBuffer :: !(FrameBufferId d)
+	, deferredPipelineOpaqueDST :: !(DepthStencilTargetId d)
 	, deferredPipelineLightPassFrameBuffer :: !(FrameBufferId d)
 	, deferredPipelineAlbedoOcclusionRTT :: !(TextureId d)
 	, deferredPipelineMaterialRTT :: !(TextureId d)
@@ -116,6 +117,7 @@ newDeferredPipeline device width height = withSpecialBook $ \bk -> do
 
 	return DeferredPipeline
 		{ deferredPipelineOpaquePassFrameBuffer = opaquePassFrameBuffer
+		, deferredPipelineOpaqueDST = opaqueDST
 		, deferredPipelineLightPassFrameBuffer = lightPassFrameBuffer
 		, deferredPipelineAlbedoOcclusionRTT = albedoOcclusionRTT
 		, deferredPipelineMaterialRTT = materialRTT
