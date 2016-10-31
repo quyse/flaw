@@ -144,6 +144,8 @@ data EditorState d = EditorState
 	, editorStateMetalnessTextureEnabled :: !Bool
 	, editorStateGlossinessTextureCell :: !(TextureCell d)
 	, editorStateGlossinessTextureEnabled :: !Bool
+	, editorStateEmissionTextureCell :: !(TextureCell d)
+	, editorStateEmissionTextureEnabled :: !Bool
 	, editorStateLinearFiltering :: !Bool
 	} deriving Generic
 
@@ -157,7 +159,8 @@ pattern SHADER_FLAG_DIFFUSE_MAP = 2
 pattern SHADER_FLAG_SPECULAR_MAP = 4
 pattern SHADER_FLAG_METALNESS_MAP = 8
 pattern SHADER_FLAG_GLOSSINESS_MAP = 16
-pattern SHADER_FLAGS_COUNT = 32
+pattern SHADER_FLAG_EMISSION_MAP = 32
+pattern SHADER_FLAGS_COUNT = 64
 
 pattern SHADOW_MAP_SIZE = 1024
 
@@ -228,6 +231,8 @@ main = withApp appConfig
 			, editorStateMetalnessTextureEnabled = False
 			, editorStateGlossinessTextureCell = nullTextureCell
 			, editorStateGlossinessTextureEnabled = False
+			, editorStateEmissionTextureCell = nullTextureCell
+			, editorStateEmissionTextureEnabled = False
 			, editorStateLinearFiltering = False
 			}
 		Right es -> es
@@ -311,6 +316,7 @@ main = withApp appConfig
 		initialSpecularTextureCell <- newGrayTextureCell
 		initialMetalnessTextureCell <- newGrayTextureCell
 		initialGlossinessTextureCell <- newGrayTextureCell
+		initialEmissionTextureCell <- newGrayTextureCell
 		newTVarIO templateEditorState
 			{ editorStateGeometryCell = GeometryCell
 				{ geometryCellGeometry = sphereGeometry
@@ -323,6 +329,7 @@ main = withApp appConfig
 			, editorStateSpecularTextureCell = initialSpecularTextureCell
 			, editorStateMetalnessTextureCell = initialMetalnessTextureCell
 			, editorStateGlossinessTextureCell = initialGlossinessTextureCell
+			, editorStateEmissionTextureCell = initialEmissionTextureCell
 			}
 
 	-- render pipeline
@@ -375,14 +382,14 @@ main = withApp appConfig
 				temp $ viewTangent * xxx__ bentNormal + viewBinormal * yyy__ bentNormal + viewNormal * zzz__ bentNormal
 				else return vertexViewNormal
 			let
-				emission = 0
 				occlusion = 1
 				diffuse    = if (shaderFlags .&. SHADER_FLAG_DIFFUSE_MAP   ) > 0 then sample (sampler2Df 2) aTexcoord else x_ uMaterial
 				specular   = if (shaderFlags .&. SHADER_FLAG_SPECULAR_MAP  ) > 0 then sample (sampler2Df 3) aTexcoord else y_ uMaterial
 				metalness  = if (shaderFlags .&. SHADER_FLAG_METALNESS_MAP ) > 0 then sample (sampler2Df 4) aTexcoord else z_ uMaterial
 				glossiness = if (shaderFlags .&. SHADER_FLAG_GLOSSINESS_MAP) > 0 then sample (sampler2Df 5) aTexcoord else w_ uMaterial
+				emission   = if (shaderFlags .&. SHADER_FLAG_EMISSION_MAP  ) > 0 then sample (sampler2D3f 6) aTexcoord else 0
 
-			outputDeferredPipelineOpaquePass (albedo * vecFromScalar emission) (cvec31 albedo occlusion) (cvec1111 diffuse specular metalness glossiness) resultViewNormal
+			outputDeferredPipelineOpaquePass emission (cvec31 albedo occlusion) (cvec1111 diffuse specular metalness glossiness) resultViewNormal
 	-- lightbulb opaque program
 	lightbulbOpaqueProgram <- book bk $ createProgram device $ do
 		let v = undefined :: VertexPNT
@@ -608,6 +615,9 @@ main = withApp appConfig
 		glossinessTextureFileElement <- textureFileElement editorStateGlossinessTextureCell $ \c s -> s
 			{ editorStateGlossinessTextureCell = c
 			}
+		emissionTextureFileElement <- textureFileElement editorStateEmissionTextureCell $ \c s -> s
+			{ editorStateEmissionTextureCell = c
+			}
 		linearFilteringCheckBox <- newLabeledCheckBox "enable"
 		setChecked linearFilteringCheckBox $ editorStateLinearFiltering initialEditorState
 		setChangeHandler linearFilteringCheckBox $ do
@@ -664,6 +674,14 @@ main = withApp appConfig
 					checked <- getChecked checkBox
 					modifyTVar' editorStateVar $ \s -> s
 						{ editorStateGlossinessTextureEnabled = checked
+						}
+			checkBoxedFlowLayout "emission texture" $ \checkBox -> do
+				elementInFlowLayout emissionTextureFileElement
+				lift $ setChecked checkBox $ editorStateEmissionTextureEnabled initialEditorState
+				lift $ setChangeHandler checkBox $ do
+					checked <- getChecked checkBox
+					modifyTVar' editorStateVar $ \s -> s
+						{ editorStateEmissionTextureEnabled = checked
 						}
 			labeledFlowLayout "linear filtering" $ elementInFlowLayout linearFilteringCheckBox
 		setText propertiesFrame "properties"
@@ -773,6 +791,10 @@ main = withApp appConfig
 					{ textureCellTexture = tGlossiness
 					}
 				, editorStateGlossinessTextureEnabled = glossinessTextureEnabled
+				, editorStateEmissionTextureCell = TextureCell
+					{ textureCellTexture = tEmission
+					}
+				, editorStateEmissionTextureEnabled = emissionTextureEnabled
 				, editorStateLinearFiltering = linearFiltering
 				} <- liftIO $ readTVarIO editorStateVar
 
@@ -846,6 +868,7 @@ main = withApp appConfig
 						.|. (if specularTextureEnabled then SHADER_FLAG_SPECULAR_MAP else 0)
 						.|. (if metalnessTextureEnabled then SHADER_FLAG_METALNESS_MAP else 0)
 						.|. (if glossinessTextureEnabled then SHADER_FLAG_GLOSSINESS_MAP else 0)
+						.|. (if emissionTextureEnabled then SHADER_FLAG_EMISSION_MAP else 0)
 						)
 					renderUniformStorage usObject
 					renderVertexBuffer 0 vbObject
@@ -857,6 +880,7 @@ main = withApp appConfig
 					renderSampler 3 tSpecular ss
 					renderSampler 4 tMetalness ss
 					renderSampler 5 tGlossiness ss
+					renderSampler 6 tEmission ss
 					renderUniform usObject uWorld (affineIdentity :: Float4x4)
 					renderUniform usObject uMaterial material
 					renderUploadUniformStorage usObject
