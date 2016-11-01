@@ -11,7 +11,6 @@ module Flaw.Editor.Entity.Texture
 	(
 	) where
 
-import Control.Monad.IO.Class
 import qualified Data.ByteString as B
 import Data.Default
 import Data.Monoid
@@ -132,8 +131,7 @@ instance ProcessableEntity TextureFromBlob where
 	type ProcessableEntityResult TextureFromBlob = PackedTexture
 	processEntity (TextureFromBlob blobPtr) = do
 		SomeInterfacedEntity blob <- readInterfacedEntityPtr blobPtr
-		blobBytes <- processEntity blob
-		liftIO $ loadTexture blobBytes
+		loadTexture <$> processEntity blob
 instance ITexture TextureFromBlob
 
 -- | Entity compressing texture.
@@ -154,7 +152,7 @@ instance ProcessableEntity CompressTexture where
 			{ packedTextureBytes = sourceTextureBytes
 			, packedTextureInfo = sourceTextureInfo
 			} <- processEntity sourceTextureEntity
-		(compressedTextureInfo, compressedTextureBytes) <- liftIO $ dxtCompressTexture sourceTextureInfo sourceTextureBytes
+		let (compressedTextureInfo, compressedTextureBytes) = dxtCompressTexture sourceTextureInfo sourceTextureBytes
 		return PackedTexture
 			{ packedTextureBytes = compressedTextureBytes
 			, packedTextureInfo = compressedTextureInfo

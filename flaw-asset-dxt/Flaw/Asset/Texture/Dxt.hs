@@ -10,21 +10,22 @@ module Flaw.Asset.Texture.Dxt
 
 import Control.Exception
 import Control.Monad
+import qualified Data.ByteArray as BA
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Unsafe as B
 import Foreign.C.Types
-import Foreign.Marshal.Alloc
 import Foreign.Ptr
+import System.IO.Unsafe
 
 import Flaw.Exception
 import Flaw.Graphics.Texture
 
-dxtCompressTexture :: TextureInfo -> B.ByteString -> IO (TextureInfo, B.ByteString)
+dxtCompressTexture :: TextureInfo -> B.ByteString -> (TextureInfo, B.ByteString)
 dxtCompressTexture textureInfo@TextureInfo
 	{ textureHeight = height
 	, textureFormat = format
 	, textureCount = count
-	} bytes = do
+	} bytes = unsafePerformIO $ do
 
 	-- texture must be at least 2D
 	when (height == 0) $ throwIO $ DescribeFirstException "DXT compression doesn't support 1D textures"
@@ -78,19 +79,13 @@ dxtCompressTexture textureInfo@TextureInfo
 	-- number of images
 	let ncount = if count > 0 then count else 1
 
-	-- total size of new image array
-	let newTotalImageSize = newImageSize * ncount
-
 	-- size of input pixel
 	let pixelByteSize = pixelSizeByteSize $ textureFormatPixelSize format
 	-- size of output block
 	let blockByteSize = compressed4x4BlockSize $ textureFormatCompression newFormat
 
-	-- allocate memory
-	newBytesPtr <- mallocBytes newTotalImageSize
-
 	-- process source image
-	B.unsafeUseAsCString bytes $ \bytesPtr ->
+	let newBytes = BA.allocAndFreeze (newImageSize * ncount) $ \newBytesPtr -> B.unsafeUseAsCString bytes $ \bytesPtr ->
 		-- loop for textures in the array
 		forM_ [0..(ncount - 1)] $ \c -> do
 			let imageSrcPtr = bytesPtr `plusPtr` (c * imageSize)
@@ -127,8 +122,6 @@ dxtCompressTexture textureInfo@TextureInfo
 							-- TODO: handle source final (partial) blocks
 							compressBlock blockSrcPtr cMipLinePitch blockDestPtr
 
-	-- pack memory into bytestring
-	newBytes <- B.unsafePackMallocCStringLen (newBytesPtr, newTotalImageSize)
 	return (newTextureInfo, newBytes)
 
 foreign import ccall unsafe "flaw_squish_compress_bc1" compressBC1Block :: Ptr () -> CInt -> Ptr () -> IO ()

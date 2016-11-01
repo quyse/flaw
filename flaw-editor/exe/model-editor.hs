@@ -194,7 +194,7 @@ main = withApp appConfig
 			, f_VertexPNT_texcoord = Vec2 (alpha / (pi * 2)) (beta / pi + 0.5)
 			}
 			where p = Vec3 (cos alpha * cos beta) (sin alpha * cos beta) (sin beta)
-		loadPackedGeometry device =<< packGeometry (sphereVertices f 16 16)
+		loadPackedGeometry device $ packGeometry (sphereVertices f 16 16)
 
 	let configFileName = "config.bin"
 
@@ -266,7 +266,7 @@ main = withApp appConfig
 				width = 1024
 				height = 1024
 				step = 64
-			(compressedTextureInfo, compressedTextureBytes) <- dxtCompressTexture TextureInfo
+			let (compressedTextureInfo, compressedTextureBytes) = dxtCompressTexture TextureInfo
 				{ textureWidth = width
 				, textureHeight = height
 				, textureDepth = 0
@@ -440,7 +440,7 @@ main = withApp appConfig
 			createColladaVertices =<< parseGeometry =<< getElementById elementId
 		case eitherVertices of
 			Right vertices -> do
-				geometry <- book bk (loadPackedGeometry device =<< packGeometry (vertices :: V.Vector VertexPNT))
+				geometry <- book bk $ loadPackedGeometry device $ packGeometry (vertices :: V.Vector VertexPNT)
 				runInFlow stateFlow $ atomically $ modifyTVar' editorStateVar $ \s@EditorState
 					{ editorStateGeometryCell = geometryCell
 					} -> s
@@ -453,16 +453,12 @@ main = withApp appConfig
 			Left err -> putStrLn $ T.unpack err
 
 	let loadTextureFile fileName isNormalTexture = do
-		bytes <- B.readFile $ T.unpack fileName
-		loadedTexture <- loadTexture bytes
-		PackedTexture
+		loadedTexture <- loadTexture <$> B.readFile (T.unpack fileName)
+		let PackedTexture
 			{ packedTextureBytes = textureBytes
 			, packedTextureInfo = textureInfo
-			} <- if isNormalTexture then case convertTextureToLinearRG loadedTexture of
-			Just t -> return t
-			Nothing -> throwIO $ DescribeFirstException ("failed to convert texture to RG" :: T.Text)
-			else return loadedTexture
-		(compressedTextureInfo, compressedTextureBytes) <- dxtCompressTexture textureInfo textureBytes
+			} = if isNormalTexture then convertTextureToLinearRG loadedTexture else loadedTexture
+		let (compressedTextureInfo, compressedTextureBytes) = dxtCompressTexture textureInfo textureBytes
 		createStaticTexture device compressedTextureInfo defaultSamplerStateInfo compressedTextureBytes
 
 	-- input callback

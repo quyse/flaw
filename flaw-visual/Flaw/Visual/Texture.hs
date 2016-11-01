@@ -46,26 +46,24 @@ data PackedTexture = PackedTexture
 
 instance S.Serialize PackedTexture
 
-loadDynamicImageWithFormat :: Storable (PixelBaseComponent a) => Image a -> TextureFormat -> IO PackedTexture
+loadDynamicImageWithFormat :: Storable (PixelBaseComponent a) => Image a -> TextureFormat -> PackedTexture
 loadDynamicImageWithFormat Image
 	{ imageWidth = width
 	, imageHeight = height
 	, imageData = dataVector
-	} format = do
-	bytes <- packVector dataVector
-	return PackedTexture
-		{ packedTextureBytes = bytes
-		, packedTextureInfo = TextureInfo
-			{ textureWidth = width
-			, textureHeight = height
-			, textureDepth = 0
-			, textureMips = 1
-			, textureFormat = format
-			, textureCount = 0
-			}
+	} format = PackedTexture
+	{ packedTextureBytes = packVector dataVector
+	, packedTextureInfo = TextureInfo
+		{ textureWidth = width
+		, textureHeight = height
+		, textureDepth = 0
+		, textureMips = 1
+		, textureFormat = format
+		, textureCount = 0
 		}
+	}
 
-loadDynamicImage :: DynamicImage -> IO PackedTexture
+loadDynamicImage :: DynamicImage -> PackedTexture
 loadDynamicImage dynamicImage = case dynamicImage of
 	ImageY8 pixel8Image -> loadDynamicImageWithFormat pixel8Image UncompressedTextureFormat
 		{ textureFormatComponents = PixelR
@@ -116,16 +114,16 @@ loadDynamicImage dynamicImage = case dynamicImage of
 	ImageCMYK8 pixelCMYK8Image -> loadDynamicImage $ ImageRGB8 $ convertImage pixelCMYK8Image
 	ImageCMYK16 pixelCMYK16Image -> loadDynamicImage $ ImageRGB16 $ convertImage pixelCMYK16Image
 
-loadTexture :: B.ByteString -> IO PackedTexture
+loadTexture :: B.ByteString -> PackedTexture
 loadTexture bytes = case decodeImage bytes of
 	Right dynamicImage -> loadDynamicImage dynamicImage
-	Left err -> fail err
+	Left err -> error err
 
 -- | Convert texture from whatever format to linear RG.
 -- Useful for normal map textures.
 -- Actual standard->linear conversion is not happening,
 -- it's presumed that texture data is in linear space already.
-convertTextureToLinearRG :: PackedTexture -> Maybe PackedTexture
+convertTextureToLinearRG :: PackedTexture -> PackedTexture
 convertTextureToLinearRG packedTexture = case packedTexture of
 	-- texture is uncompressed RG: just ensure linear color space
 	PackedTexture
@@ -134,7 +132,7 @@ convertTextureToLinearRG packedTexture = case packedTexture of
 				{ textureFormatComponents = PixelRG
 				}
 			}
-		} -> Just packedTexture
+		} -> packedTexture
 		{ packedTextureInfo = info
 			{ textureFormat = format
 				{ textureFormatColorSpace = LinearColorSpace
@@ -148,7 +146,7 @@ convertTextureToLinearRG packedTexture = case packedTexture of
 				{ textureFormatCompression = compression
 				}
 			}
-		} | compression == TextureCompressionBC5 || compression == TextureCompressionBC5Signed -> Just packedTexture
+		} | compression == TextureCompressionBC5 || compression == TextureCompressionBC5Signed -> packedTexture
 		{ packedTextureInfo = info
 			{ textureFormat = format
 				{ textureFormatColorSpace = LinearColorSpace
@@ -190,45 +188,43 @@ convertTextureToLinearRG packedTexture = case packedTexture of
 				}
 			}
 		in case (components, pixelSize) of
-			(PixelRGB, Pixel24bit) -> Just $ newTexture 3 2 Pixel16bit
-			(PixelRGB, Pixel96bit) -> Just $ newTexture 12 8 Pixel64bit
-			(PixelRGBA, Pixel32bit) -> Just $ newTexture 4 2 Pixel16bit
-			(PixelRGBA, Pixel64bit) -> Just $ newTexture 8 4 Pixel32bit
-			(PixelRGBA, Pixel128bit) -> Just $ newTexture 16 8 Pixel64bit
-			_ -> Nothing
+			(PixelRGB, Pixel24bit) -> newTexture 3 2 Pixel16bit
+			(PixelRGB, Pixel96bit) -> newTexture 12 8 Pixel64bit
+			(PixelRGBA, Pixel32bit) -> newTexture 4 2 Pixel16bit
+			(PixelRGBA, Pixel64bit) -> newTexture 8 4 Pixel32bit
+			(PixelRGBA, Pixel128bit) -> newTexture 16 8 Pixel64bit
+			_ -> error "wrong texture for linear RG conversion"
 	-- others are unsupported
-	_ -> Nothing
+	_ -> error "wrong texture for linear RG conversion"
 
 emitTextureAsset :: FilePath -> Q B.ByteString
-emitTextureAsset fileName = do
-	bytes <- loadFile fileName
-	fmap S.encode $ runIO $ loadTexture $ BL.toStrict bytes
+emitTextureAsset fileName = S.encode . loadTexture . BL.toStrict <$> loadFile fileName
 
 emitDxtCompressedTextureAsset :: FilePath -> Q B.ByteString
-emitDxtCompressedTextureAsset fileName = do
-	bytes <- loadFile fileName
-	PackedTexture
-		{ packedTextureBytes = textureBytes
-		, packedTextureInfo = textureInfo
-		} <- runIO $ loadTexture $ BL.toStrict bytes
-	(compressedTextureInfo, compressedTextureBytes) <- runIO $ dxtCompressTexture textureInfo textureBytes
-	return $ S.encode PackedTexture
-		{ packedTextureBytes = compressedTextureBytes
-		, packedTextureInfo = compressedTextureInfo
-		}
+emitDxtCompressedTextureAsset fileName = f <$> loadFile fileName where
+	f bytes = let
+		PackedTexture
+			{ packedTextureBytes = textureBytes
+			, packedTextureInfo = textureInfo
+			} = loadTexture $ BL.toStrict bytes
+		(compressedTextureInfo, compressedTextureBytes) = dxtCompressTexture textureInfo textureBytes
+		in S.encode PackedTexture
+			{ packedTextureBytes = compressedTextureBytes
+			, packedTextureInfo = compressedTextureInfo
+			}
 
 emitDxtCompressedLinearRGTextureAsset :: FilePath -> Q B.ByteString
-emitDxtCompressedLinearRGTextureAsset fileName = do
-	bytes <- loadFile fileName
-	Just PackedTexture
-		{ packedTextureBytes = textureBytes
-		, packedTextureInfo = textureInfo
-		} <- convertTextureToLinearRG <$> runIO (loadTexture $ BL.toStrict bytes)
-	(compressedTextureInfo, compressedTextureBytes) <- runIO $ dxtCompressTexture textureInfo textureBytes
-	return $ S.encode PackedTexture
-		{ packedTextureBytes = compressedTextureBytes
-		, packedTextureInfo = compressedTextureInfo
-		}
+emitDxtCompressedLinearRGTextureAsset fileName = f <$> loadFile fileName where
+	f bytes = let
+		PackedTexture
+			{ packedTextureBytes = textureBytes
+			, packedTextureInfo = textureInfo
+			} = convertTextureToLinearRG $ loadTexture $ BL.toStrict bytes
+		(compressedTextureInfo, compressedTextureBytes) = dxtCompressTexture textureInfo textureBytes
+		in S.encode PackedTexture
+			{ packedTextureBytes = compressedTextureBytes
+			, packedTextureInfo = compressedTextureInfo
+			}
 
 loadTextureAsset :: Device d => d -> SamplerStateInfo -> B.ByteString -> IO (TextureId d, IO ())
 loadTextureAsset device samplerStateInfo bytes = case S.decode bytes of

@@ -90,7 +90,7 @@ emitTextureAnimatedSkinnedGeometryAsset fileName getNodeElement getSkinElement t
 			reportError msg
 			return B.empty
 		Right (vertices, skin, animations) -> do
-			packedGeometry <- runIO $ packGeometry (vertices :: V.Vector VertexPNTWB)
+			let packedGeometry = packGeometry (vertices :: V.Vector VertexPNTWB)
 			let framesCount = floor $ timeLength / timeStep
 			let width = framesCount
 			let bones = cskinBones skin
@@ -126,14 +126,13 @@ emitTextureAnimatedSkinnedGeometryAsset fileName getNodeElement getSkinElement t
 			let animationOffsets = V.generate (V.length animations) $ \i -> Float4
 				(2 / fromIntegral height) (1 / fromIntegral height)
 				(0.5 / fromIntegral width) (fromIntegral i / fromIntegral (V.length animations) + 0.5 / fromIntegral height)
-			animationOffsetsBytes <- runIO $ packVector animationOffsets
 			return $ S.encode PackedSkinnedGeometry
 				{ packedSkinnedGeometryGeometry = packedGeometry
 				, packedSkinnedGeometryAnimationTexture = PackedTexture
 					{ packedTextureBytes = textureBytes
 					, packedTextureInfo = textureInfo
 					}
-				, packedSkinnedGeometryAnimationOffsetsBytes = animationOffsetsBytes
+				, packedSkinnedGeometryAnimationOffsetsBytes = packVector animationOffsets
 				, packedSkinnedGeometryAnimationInvLength = 1 / timeLength
 				}
 
@@ -158,7 +157,7 @@ loadTextureAnimatedSkinnedGeometryAsset device bytes = case S.decode bytes of
 			, samplerWrapV = SamplerWrapClamp
 			, samplerWrapW = SamplerWrapClamp
 			} textureBytes
-		animationOffsets <- unpackVector animationOffsetsBytes
+		let animationOffsets = unpackVector animationOffsetsBytes
 		let animations = flip V.map animationOffsets $ \animationOffset -> SkinnedGeometryAnimation
 			{ skinnedGeometryAnimationOffset = animationOffset
 			, skinnedGeometryAnimationInvLength = animationInvLength

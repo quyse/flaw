@@ -146,16 +146,16 @@ fileExp :: FilePath -> Q Exp
 fileExp filePath = embedIOExp =<< loadFile filePath
 
 -- | Pack storable list to bytestring.
-packList :: Storable a => [a] -> IO B.ByteString
-packList vs = do
+packList :: Storable a => [a] -> B.ByteString
+packList vs = unsafePerformIO $ do
 	let len = length vs
 	bytesPtr <- mallocArray len
 	pokeArray bytesPtr vs
 	B.unsafePackMallocCStringLen (castPtr bytesPtr, len * sizeOf (head vs))
 
 -- | Pack storable vector to bytestring.
-packVector :: (Storable a, VG.Vector v a) => v a -> IO B.ByteString
-packVector v = do
+packVector :: (Storable a, VG.Vector v a) => v a -> B.ByteString
+packVector v = unsafePerformIO $ do
 	let len = VG.length v
 	bytesPtr <- mallocArray len
 	VS.unsafeWith (VG.convert v) $ \vecPtr -> do
@@ -163,8 +163,8 @@ packVector v = do
 	B.unsafePackMallocCStringLen (castPtr bytesPtr, len * sizeOf (VG.head v))
 
 -- | Unpack storable vector from bytestring.
-unpackVector :: (Storable a, VG.Vector v a) => B.ByteString -> IO (v a)
-unpackVector bytes = wu $ \u -> B.unsafeUseAsCStringLen bytes $ \(ptr, len) -> VG.generateM (len `quot` sizeOf u) $ peekElemOff $ castPtr ptr
+unpackVector :: (Storable a, VG.Vector v a) => B.ByteString -> v a
+unpackVector bytes = unsafePerformIO $ wu $ \u -> B.unsafeUseAsCStringLen bytes $ \(ptr, len) -> VG.generateM (len `quot` sizeOf u) $ peekElemOff $ castPtr ptr
 	where
 		wu :: (a -> IO (v a)) -> IO (v a)
 		wu m = m undefined

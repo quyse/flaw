@@ -32,7 +32,7 @@ newScreenQuadRenderer device = withSpecialBook $ \bk -> do
 		v1 = QuadVertex (Vec4   1  (-1) 0 1)
 		v2 = QuadVertex (Vec4   1    1  0 1)
 		v3 = QuadVertex (Vec4 (-1)   1  0 1)
-	bytes <- packVector $ V.fromList [v0, v2, v1, v0, v3, v2]
+		bytes = packVector $ V.fromList [v0, v2, v1, v0, v3, v2]
 	vb <- book bk $ createStaticVertexBuffer device bytes (sizeOf (undefined :: QuadVertex))
 	return ScreenQuadRenderer
 		{ screenQuadRendererVertexBuffer = vb

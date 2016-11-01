@@ -18,7 +18,6 @@ module Flaw.Visual.Geometry
 	) where
 
 import Control.Exception
-import Control.Monad.Primitive
 import qualified Data.ByteString as B
 import Data.Foldable
 import qualified Data.Serialize as S
@@ -33,6 +32,7 @@ import Data.Word
 import Foreign.Storable
 import GHC.Generics(Generic)
 import Language.Haskell.TH
+import System.IO.Unsafe
 
 import Flaw.Asset.Collada
 import Flaw.Book
@@ -58,28 +58,25 @@ data PackedGeometry = PackedGeometry
 instance S.Serialize PackedGeometry
 
 -- | Pack raw vertices.
-packGeometry :: (Ord a, Storable a) => V.Vector a -> IO PackedGeometry
-packGeometry rawVertices = uncurry packIndexedGeometry =<< indexGeometryVertices rawVertices
+packGeometry :: (Ord a, Storable a) => V.Vector a -> PackedGeometry
+packGeometry rawVertices = uncurry packIndexedGeometry $ indexGeometryVertices rawVertices
 
 -- | Pack geometry with indices.
 -- Chooses indices format.
-packIndexedGeometry :: Storable a => V.Vector a -> VU.Vector Int -> IO PackedGeometry
-packIndexedGeometry vertices indices = do
-	verticesBytes <- packVector vertices
-	(isIndices32Bit, indicesBytes) <-
-		if length vertices > 0x10000 then do
-			indicesBytes <- packVector (VG.map fromIntegral indices :: VU.Vector Word32)
-			return (True, indicesBytes)
-		else do
-			indicesBytes <- packVector (VG.map fromIntegral indices :: VU.Vector Word16)
-			return (False, indicesBytes)
-	return PackedGeometry
-		{ packedGeometryVerticesBytes = verticesBytes
-		, packedGeometryIndicesBytes = indicesBytes
-		, packedGeometryIndicesCount = VG.length indices
-		, packedGeometryVertexStride = sizeOf (VG.head vertices)
-		, packedGeometryIsIndices32Bit = isIndices32Bit
-		}
+packIndexedGeometry :: Storable a => V.Vector a -> VU.Vector Int -> PackedGeometry
+packIndexedGeometry vertices indices = PackedGeometry
+	{ packedGeometryVerticesBytes = verticesBytes
+	, packedGeometryIndicesBytes = indicesBytes
+	, packedGeometryIndicesCount = VG.length indices
+	, packedGeometryVertexStride = sizeOf (VG.head vertices)
+	, packedGeometryIsIndices32Bit = isIndices32Bit
+	} where
+	verticesBytes = packVector vertices
+	(isIndices32Bit, indicesBytes) =
+		if length vertices > 0x10000 then
+			(True, packVector (VG.map fromIntegral indices :: VU.Vector Word32))
+		else
+			(False, packVector (VG.map fromIntegral indices :: VU.Vector Word16))
 
 -- | Load geometry into device.
 loadPackedGeometry :: Device d => d -> PackedGeometry -> IO (Geometry d, IO ())
@@ -106,7 +103,7 @@ emitGeometryAsset fileName getElement = do
 		initColladaCache bytes
 		createColladaVertices =<< parseGeometry =<< getElement
 	case eitherVertices of
-		Right vertices -> fmap S.encode $ runIO $ packGeometry (vertices :: V.Vector VertexPNT)
+		Right vertices -> return $ S.encode $ packGeometry (vertices :: V.Vector VertexPNT)
 		Left err -> do
 			let msg = "failed to emit geometry asset " ++ fileName ++ ": " ++ T.unpack err
 			reportError msg
@@ -119,24 +116,23 @@ loadGeometryAsset device bytes = case S.decode bytes of
 	Left err -> throwIO $ DescribeFirstException $ "failed to load geometry asset: " ++ err
 
 -- | Create indices for raw vertices.
-indexGeometryVertices :: (PrimMonad m, Ord a) => V.Vector a -> m (V.Vector a, VU.Vector Int)
-indexGeometryVertices vertices = do
+indexGeometryVertices :: Ord a => V.Vector a -> (V.Vector a, VU.Vector Int)
+indexGeometryVertices vertices = unsafePerformIO $ do
 	mVertices <- VG.thaw vertices
 	VAI.sort mVertices
 	uniqueVertices <- unique mVertices
 	indices <- VG.mapM (VAS.binarySearchL uniqueVertices) vertices
 	resultVertices <- VG.freeze uniqueVertices
 	return (resultVertices, VG.convert indices)
-
-unique :: (PrimMonad m, Eq a, VGM.MVector v a) => v (PrimState m) a -> m (v (PrimState m) a)
-unique v = if VGM.null v then return v else do
-	let f p i = do
-		a <- VGM.unsafeRead v i
-		b <- VGM.unsafeRead v p
-		if a == b then return p
-		else do
-			let q = p + 1
-			VGM.write v q a
-			return q
-	end <- foldlM f 0 [0..(VGM.length v - 1)]
-	return $ VGM.slice 0 (end + 1) v
+	where
+	unique v = if VGM.null v then return v else do
+		let f p i = do
+			a <- VGM.unsafeRead v i
+			b <- VGM.unsafeRead v p
+			if a == b then return p
+			else do
+				let q = p + 1
+				VGM.write v q a
+				return q
+		end <- foldlM f 0 [0..(VGM.length v - 1)]
+		return $ VGM.slice 0 (end + 1) v
