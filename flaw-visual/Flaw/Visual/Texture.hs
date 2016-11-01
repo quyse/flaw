@@ -38,6 +38,7 @@ import Flaw.Exception
 import Flaw.Graphics
 import Flaw.Graphics.Sampler
 import Flaw.Graphics.Texture
+import Flaw.Visual.Texture.Mip
 
 data PackedTexture = PackedTexture
 	{ packedTextureBytes :: !B.ByteString
@@ -207,7 +208,7 @@ emitDxtCompressedTextureAsset fileName = f <$> loadFile fileName where
 			{ packedTextureBytes = textureBytes
 			, packedTextureInfo = textureInfo
 			} = loadTexture $ BL.toStrict bytes
-		(compressedTextureInfo, compressedTextureBytes) = dxtCompressTexture textureInfo textureBytes
+		(compressedTextureInfo, compressedTextureBytes) = uncurry dxtCompressTexture $ generateMips 0 textureInfo textureBytes
 		in S.encode PackedTexture
 			{ packedTextureBytes = compressedTextureBytes
 			, packedTextureInfo = compressedTextureInfo
@@ -220,7 +221,7 @@ emitDxtCompressedLinearRGTextureAsset fileName = f <$> loadFile fileName where
 			{ packedTextureBytes = textureBytes
 			, packedTextureInfo = textureInfo
 			} = convertTextureToLinearRG $ loadTexture $ BL.toStrict bytes
-		(compressedTextureInfo, compressedTextureBytes) = dxtCompressTexture textureInfo textureBytes
+		(compressedTextureInfo, compressedTextureBytes) = uncurry dxtCompressTexture $ generateMips 0 textureInfo textureBytes
 		in S.encode PackedTexture
 			{ packedTextureBytes = compressedTextureBytes
 			, packedTextureInfo = compressedTextureInfo

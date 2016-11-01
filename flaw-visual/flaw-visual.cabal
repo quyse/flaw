@@ -32,8 +32,9 @@ library
     Flaw.Visual.ScreenQuad
     Flaw.Visual.Skydome
     Flaw.Visual.Texture
+    Flaw.Visual.Texture.Mip
   -- other-extensions:    
-  build-depends:       base, bytestring, cereal, flaw-asset-dxt, flaw-base, flaw-build, flaw-collada, flaw-ffi, flaw-graphics, flaw-math, JuicyPixels, primitive, template-haskell, text, transformers, vector, vector-algorithms
+  build-depends:       base, bytestring, cereal, flaw-asset-dxt, flaw-base, flaw-build, flaw-collada, flaw-ffi, flaw-graphics, flaw-math, JuicyPixels, memory, primitive, template-haskell, text, transformers, vector, vector-algorithms
   -- hs-source-dirs:      
   default-language:    Haskell2010
 
