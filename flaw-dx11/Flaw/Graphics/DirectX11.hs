@@ -329,7 +329,7 @@ instance Device Dx11Device where
 			, f_D3D11_SAMPLER_DESC_AddressV = convertWrap wrapV
 			, f_D3D11_SAMPLER_DESC_AddressW = convertWrap wrapW
 			, f_D3D11_SAMPLER_DESC_MipLODBias = 0
-			, f_D3D11_SAMPLER_DESC_MaxAnisotropy = maxAnisotropy
+			, f_D3D11_SAMPLER_DESC_MaxAnisotropy = fromIntegral maxAnisotropy
 			, f_D3D11_SAMPLER_DESC_ComparisonFunc = D3D11_COMPARISON_NEVER
 			, f_D3D11_SAMPLER_DESC_BorderColor = vecToList borderColor
 			, f_D3D11_SAMPLER_DESC_MinLOD = minLod

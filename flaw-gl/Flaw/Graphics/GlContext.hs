@@ -1718,8 +1718,7 @@ glSetupTextureSampling target samplerStateInfo@SamplerStateInfo
 	glCheckErrors0 "wrap V"
 
 #if defined(ghcjs_HOST_OS)
-	let _ = (wrapW, minLod, maxLod, borderColor, maxAnisotropy)
-	return ()
+	let _ = (wrapW, minLod, maxLod, borderColor)
 #else
 	-- wrap W
 	glTexParameteri target GL_TEXTURE_WRAP_R $ fromIntegral $ glSamplerWrap wrapW
@@ -1735,12 +1734,12 @@ glSetupTextureSampling target samplerStateInfo@SamplerStateInfo
 	-- border color
 	with borderColor $ glTexParameterfv target GL_TEXTURE_BORDER_COLOR . castPtr
 	glCheckErrors0 "border color"
+#endif
 
 	-- max anisotropy
 	when (maxAnisotropy > 1) $ do
 		glTexParameterf target GL_TEXTURE_MAX_ANISOTROPY_EXT $ fromIntegral maxAnisotropy
 		glCheckErrors0 "max anisotropy"
-#endif
 
 refSetup :: Eq a => IORef a -> IORef a -> (a -> IO ()) -> IO Bool
 refSetup actualRef desiredRef setup = do

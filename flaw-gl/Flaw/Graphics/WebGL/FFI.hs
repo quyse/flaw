@@ -439,6 +439,7 @@ module Flaw.Graphics.WebGL.FFI
 	, pattern GL_TEXTURE_WRAP_S
 	, pattern GL_TEXTURE_WRAP_T
 	, pattern GL_TEXTURE_WRAP_R
+	, pattern GL_TEXTURE_MAX_ANISOTROPY_EXT
 	, pattern GL_TEXTURE
 	, pattern GL_TEXTURE_1D
 	, pattern GL_TEXTURE_1D_ARRAY
@@ -1404,6 +1405,7 @@ pattern GL_TEXTURE_MIN_FILTER = 0x2801
 pattern GL_TEXTURE_WRAP_S = 0x2802
 pattern GL_TEXTURE_WRAP_T = 0x2803
 pattern GL_TEXTURE_WRAP_R = 0x8072
+pattern GL_TEXTURE_MAX_ANISOTROPY_EXT = 0x84FE
 
 -- TextureTarget
 pattern GL_TEXTURE = 0x1702
