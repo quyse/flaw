@@ -62,6 +62,7 @@ import Graphics.GL.ARB.UniformBufferObject
 import Graphics.GL.ARB.VertexAttribBinding
 import Graphics.GL.Core33
 import Graphics.GL.EXT.TextureCompressionS3TC
+import Graphics.GL.EXT.TextureFilterAnisotropic
 import Graphics.GL.EXT.TextureSRGB
 
 import Flaw.Graphics.OpenGL.FFI
@@ -357,6 +358,7 @@ instance Device GlContext where
 		, samplerMinLod = minLod
 		, samplerMaxLod = maxLod
 		, samplerBorderColor = borderColor
+		, samplerMaxAnisotropy = maxAnisotropy
 		} = invoke $ describeException "failed to create OpenGL sampler state" $ do
 
 		samplerName <- glAllocSamplerName
@@ -390,6 +392,11 @@ instance Device GlContext where
 		-- border color
 		glSamplerParameterfv_4 samplerName GL_TEXTURE_BORDER_COLOR borderColor
 		glCheckErrors0 "border color"
+
+		-- max anisotropy
+		when (maxAnisotropy > 1) $ do
+			glSamplerParameterf samplerName GL_TEXTURE_MAX_ANISOTROPY_EXT $ fromIntegral maxAnisotropy
+			glCheckErrors0 "max anisotropy"
 
 		glCheckErrors1 "create sampler"
 
@@ -1694,6 +1701,7 @@ glSetupTextureSampling target samplerStateInfo@SamplerStateInfo
 	, samplerMinLod = minLod
 	, samplerMaxLod = maxLod
 	, samplerBorderColor = borderColor
+	, samplerMaxAnisotropy = maxAnisotropy
 	} = do
 	-- min filter
 	glTexParameteri target GL_TEXTURE_MIN_FILTER $ fromIntegral $ glSamplerMinFilter samplerStateInfo
@@ -1710,7 +1718,7 @@ glSetupTextureSampling target samplerStateInfo@SamplerStateInfo
 	glCheckErrors0 "wrap V"
 
 #if defined(ghcjs_HOST_OS)
-	let _ = (wrapW, minLod, maxLod, borderColor)
+	let _ = (wrapW, minLod, maxLod, borderColor, maxAnisotropy)
 	return ()
 #else
 	-- wrap W
@@ -1727,6 +1735,11 @@ glSetupTextureSampling target samplerStateInfo@SamplerStateInfo
 	-- border color
 	with borderColor $ glTexParameterfv target GL_TEXTURE_BORDER_COLOR . castPtr
 	glCheckErrors0 "border color"
+
+	-- max anisotropy
+	when (maxAnisotropy > 1) $ do
+		glTexParameterf target GL_TEXTURE_MAX_ANISOTROPY_EXT $ fromIntegral maxAnisotropy
+		glCheckErrors0 "max anisotropy"
 #endif
 
 refSetup :: Eq a => IORef a -> IORef a -> (a -> IO ()) -> IO Bool

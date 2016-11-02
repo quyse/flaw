@@ -298,6 +298,7 @@ instance Device Dx11Device where
 		, samplerMinLod = minLod
 		, samplerMaxLod = maxLod
 		, samplerBorderColor = borderColor
+		, samplerMaxAnisotropy = maxAnisotropy
 		} = describeException ("failed to create DirectX11 sampler state", samplerStateInfo) $ do
 		-- conversion function
 		let convertWrap wrap = case wrap of
@@ -308,26 +309,27 @@ instance Device Dx11Device where
 
 		-- desc
 		let desc = D3D11_SAMPLER_DESC
-			{ f_D3D11_SAMPLER_DESC_Filter = case minFilter of
-				SamplerPointFilter -> case magFilter of
-					SamplerPointFilter -> case mipFilter of
-						SamplerPointFilter -> D3D11_FILTER_MIN_MAG_MIP_POINT
-						SamplerLinearFilter -> D3D11_FILTER_MIN_MAG_POINT_MIP_LINEAR
-					SamplerLinearFilter -> case mipFilter of
-						SamplerPointFilter -> D3D11_FILTER_MIN_POINT_MAG_LINEAR_MIP_POINT
-						SamplerLinearFilter -> D3D11_FILTER_MIN_POINT_MAG_MIP_LINEAR
-				SamplerLinearFilter -> case magFilter of
-					SamplerPointFilter -> case mipFilter of
-						SamplerPointFilter -> D3D11_FILTER_MIN_LINEAR_MAG_MIP_POINT
-						SamplerLinearFilter -> D3D11_FILTER_MIN_LINEAR_MAG_POINT_MIP_LINEAR
-					SamplerLinearFilter -> case mipFilter of
-						SamplerPointFilter -> D3D11_FILTER_MIN_MAG_LINEAR_MIP_POINT
-						SamplerLinearFilter -> D3D11_FILTER_MIN_MAG_MIP_LINEAR
+			{ f_D3D11_SAMPLER_DESC_Filter = if maxAnisotropy > 1 then D3D11_FILTER_ANISOTROPIC else
+				case minFilter of
+					SamplerPointFilter -> case magFilter of
+						SamplerPointFilter -> case mipFilter of
+							SamplerPointFilter -> D3D11_FILTER_MIN_MAG_MIP_POINT
+							SamplerLinearFilter -> D3D11_FILTER_MIN_MAG_POINT_MIP_LINEAR
+						SamplerLinearFilter -> case mipFilter of
+							SamplerPointFilter -> D3D11_FILTER_MIN_POINT_MAG_LINEAR_MIP_POINT
+							SamplerLinearFilter -> D3D11_FILTER_MIN_POINT_MAG_MIP_LINEAR
+					SamplerLinearFilter -> case magFilter of
+						SamplerPointFilter -> case mipFilter of
+							SamplerPointFilter -> D3D11_FILTER_MIN_LINEAR_MAG_MIP_POINT
+							SamplerLinearFilter -> D3D11_FILTER_MIN_LINEAR_MAG_POINT_MIP_LINEAR
+						SamplerLinearFilter -> case mipFilter of
+							SamplerPointFilter -> D3D11_FILTER_MIN_MAG_LINEAR_MIP_POINT
+							SamplerLinearFilter -> D3D11_FILTER_MIN_MAG_MIP_LINEAR
 			, f_D3D11_SAMPLER_DESC_AddressU = convertWrap wrapU
 			, f_D3D11_SAMPLER_DESC_AddressV = convertWrap wrapV
 			, f_D3D11_SAMPLER_DESC_AddressW = convertWrap wrapW
 			, f_D3D11_SAMPLER_DESC_MipLODBias = 0
-			, f_D3D11_SAMPLER_DESC_MaxAnisotropy = 16
+			, f_D3D11_SAMPLER_DESC_MaxAnisotropy = maxAnisotropy
 			, f_D3D11_SAMPLER_DESC_ComparisonFunc = D3D11_COMPARISON_NEVER
 			, f_D3D11_SAMPLER_DESC_BorderColor = vecToList borderColor
 			, f_D3D11_SAMPLER_DESC_MinLOD = minLod

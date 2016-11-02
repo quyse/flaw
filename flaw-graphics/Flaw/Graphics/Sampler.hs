@@ -38,6 +38,7 @@ data SamplerStateInfo = SamplerStateInfo
 	, samplerMinLod :: {-# UNPACK #-} !Float
 	, samplerMaxLod :: {-# UNPACK #-} !Float
 	, samplerBorderColor :: {-# UNPACK #-} !Float4
+	, samplerMaxAnisotropy :: {-# UNPACK #-} !Int
 	} deriving Show
 
 defaultSamplerStateInfo :: SamplerStateInfo
@@ -51,4 +52,5 @@ defaultSamplerStateInfo = SamplerStateInfo
 	, samplerMinLod = -1000
 	, samplerMaxLod = 1000
 	, samplerBorderColor = Vec4 0 0 0 0
+	, samplerMaxAnisotropy = 1
 	}
