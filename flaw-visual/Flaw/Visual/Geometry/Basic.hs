@@ -4,6 +4,8 @@ Description: Basic geometry generation.
 License: MIT
 -}
 
+{-# LANGUAGE FlexibleContexts #-}
+
 module Flaw.Visual.Geometry.Basic
 	( patchTopology
 	, sphereVertices
@@ -11,12 +13,12 @@ module Flaw.Visual.Geometry.Basic
 	, openCylinderVertices
 	) where
 
-import qualified Data.Vector as V
+import qualified Data.Vector.Generic as VG
 
 -- | Permute and duplicate vertices to produce a patch.
-patchTopology :: V.Vector v -> Int -> Int -> V.Vector v
-patchTopology vertices width height = V.backpermute vertices indices where
-	indices = V.fromList $ do
+patchTopology :: (VG.Vector v a, VG.Vector v Int) => v a -> Int -> Int -> v a
+patchTopology vertices width height = VG.backpermute vertices indices where
+	indices = VG.fromList $ do
 		i <- [0 .. height - 2]
 		j <- [0 .. width - 2]
 		let ni = i + 1
@@ -34,53 +36,56 @@ patchTopology vertices width height = V.backpermute vertices indices where
 -- For 0th meridian it produces double vertices (with longitude = 0 and pi * 2), giving a chance for different vertices
 -- (for example, to use different texture coordinates).
 sphereVertices
-	:: (Float -> Float -> v) -- ^ Function producing vertex for specified longitude (from 0 to pi * 2) and latitude (from -pi / 2 to pi / 2).
+	:: (VG.Vector v a, VG.Vector v Int)
+	=> (Float -> Float -> a) -- ^ Function producing vertex for specified longitude (from 0 to pi * 2) and latitude (from -pi / 2 to pi / 2).
 	-> Int -- ^ Meridians count.
 	-> Int -- ^ Parallels half-count.
-	-> V.Vector v
+	-> v a
 sphereVertices f meridiansCount halfParallelsCount = patchTopology vertices (halfParallelsCount * 2 + 1) (meridiansCount + 1) where
 	meridianCoef = pi * 2 / fromIntegral meridiansCount
 	parallelCoef = pi * 0.5 / fromIntegral halfParallelsCount
-	angles = V.fromList
+	angles =
 		[ ( fromIntegral i * meridianCoef
 			, fromIntegral j * parallelCoef
 			)
 		| i <- [0 .. meridiansCount]
 		, j <- [-halfParallelsCount .. halfParallelsCount]
 		]
-	vertices = V.map (uncurry f) angles
+	vertices = VG.fromList $ map (uncurry f) angles
 
 -- | Raw vertices for sphere with different number of parallels for top and bottom hemispheres.
 twoHemispheresVertices
-	:: (Float -> Float -> v)
+	:: (VG.Vector v a, VG.Vector v Int)
+	=> (Float -> Float -> a)
 	-> Int -- ^ Meridians count.
 	-> Int -- ^ Top parallels count.
 	-> Int -- ^ Bottom parallels count.
-	-> V.Vector v
+	-> v a
 twoHemispheresVertices f meridiansCount topParallelsCount bottomParallelsCount = patchTopology vertices (bottomParallelsCount + 1 + topParallelsCount) (meridiansCount + 1) where
 	meridianCoef = pi * 2 / fromIntegral meridiansCount
 	topParallelCoef = pi * 0.5 / fromIntegral topParallelsCount
 	bottomParallelCoef = pi * 0.5 / fromIntegral bottomParallelsCount
 	parallels = map ((* bottomParallelCoef) . fromIntegral) [(-bottomParallelsCount) .. (-1)] ++ 0 : map ((* topParallelCoef) . fromIntegral) [1 .. topParallelsCount]
-	angles = V.fromList
+	angles =
 		[ ( fromIntegral i * meridianCoef
 			, parallel
 			)
 		| i <- [0 .. meridiansCount]
 		, parallel <- parallels
 		]
-	vertices = V.map (uncurry f) angles
+	vertices = VG.fromList $ map (uncurry f) angles
 
 -- | Raw vertices for an open cylinder.
 openCylinderVertices
-	:: (Float -> Float -> v) -- ^ Function producing vertex for specified longitude (from 0 to pi * 2) and parallel (from 0 to 1).
+	:: (VG.Vector v a, VG.Vector v Int)
+	=> (Float -> Float -> a) -- ^ Function producing vertex for specified longitude (from 0 to pi * 2) and parallel (from 0 to 1).
 	-> Int -- ^ Meridians count.
 	-> Int -- ^ Parallels count.
-	-> V.Vector v
+	-> v a
 openCylinderVertices f meridiansCount parallelsCount = patchTopology vertices parallelsCount (meridiansCount + 1) where
 	meridianCoef = pi * 2 / fromIntegral meridiansCount
 	parallelCoef = 1 / fromIntegral (parallelsCount - 1)
-	vertices = V.map (uncurry f) $ V.fromList
+	vertices = VG.fromList $ map (uncurry f) $
 		[ ( fromIntegral i * meridianCoef
 			, fromIntegral j * parallelCoef
 			)

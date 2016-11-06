@@ -4,7 +4,7 @@ Description: Geometry.
 License: MIT
 -}
 
-{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveGeneric, FlexibleContexts #-}
 
 module Flaw.Visual.Geometry
 	( Geometry(..)
@@ -22,12 +22,11 @@ import qualified Data.ByteString as B
 import Data.Foldable
 import qualified Data.Serialize as S
 import qualified Data.Text as T
-import qualified Data.Vector as V
 import qualified Data.Vector.Algorithms.Intro as VAI
 import qualified Data.Vector.Algorithms.Search as VAS
 import qualified Data.Vector.Generic as VG
 import qualified Data.Vector.Generic.Mutable as VGM
-import qualified Data.Vector.Unboxed as VU
+import qualified Data.Vector.Storable as VS
 import Data.Word
 import Foreign.Storable
 import GHC.Generics(Generic)
@@ -58,12 +57,12 @@ data PackedGeometry = PackedGeometry
 instance S.Serialize PackedGeometry
 
 -- | Pack raw vertices.
-packGeometry :: (Ord a, Storable a) => V.Vector a -> PackedGeometry
+packGeometry :: (Ord a, Storable a, VG.Vector v a, VG.Vector v Word32) => v a -> PackedGeometry
 packGeometry rawVertices = uncurry packIndexedGeometry $ indexGeometryVertices rawVertices
 
 -- | Pack geometry with indices.
 -- Chooses indices format.
-packIndexedGeometry :: Storable a => V.Vector a -> VU.Vector Int -> PackedGeometry
+packIndexedGeometry :: (Storable a, VG.Vector v a) => v a -> VS.Vector Word32 -> PackedGeometry
 packIndexedGeometry vertices indices = PackedGeometry
 	{ packedGeometryVerticesBytes = verticesBytes
 	, packedGeometryIndicesBytes = indicesBytes
@@ -73,10 +72,10 @@ packIndexedGeometry vertices indices = PackedGeometry
 	} where
 	verticesBytes = packVector vertices
 	(isIndices32Bit, indicesBytes) =
-		if length vertices > 0x10000 then
-			(True, packVector (VG.map fromIntegral indices :: VU.Vector Word32))
+		if VG.length vertices > 0x10000 then
+			(True, packVector indices)
 		else
-			(False, packVector (VG.map fromIntegral indices :: VU.Vector Word16))
+			(False, packVector (VG.map fromIntegral indices :: VS.Vector Word16))
 
 -- | Load geometry into device.
 loadPackedGeometry :: Device d => d -> PackedGeometry -> IO (Geometry d, IO ())
@@ -103,7 +102,7 @@ emitGeometryAsset fileName getElement = do
 		initColladaCache bytes
 		createColladaVertices =<< parseGeometry =<< getElement
 	case eitherVertices of
-		Right vertices -> return $ S.encode $ packGeometry (vertices :: V.Vector VertexPNT)
+		Right vertices -> return $ S.encode $ packGeometry (vertices :: VS.Vector VertexPNT)
 		Left err -> do
 			let msg = "failed to emit geometry asset " ++ fileName ++ ": " ++ T.unpack err
 			reportError msg
@@ -116,12 +115,12 @@ loadGeometryAsset device bytes = case S.decode bytes of
 	Left err -> throwIO $ DescribeFirstException $ "failed to load geometry asset: " ++ err
 
 -- | Create indices for raw vertices.
-indexGeometryVertices :: Ord a => V.Vector a -> (V.Vector a, VU.Vector Int)
+indexGeometryVertices :: (Ord a, VG.Vector v a, VG.Vector v Word32) => v a -> (v a, VS.Vector Word32)
 indexGeometryVertices vertices = unsafePerformIO $ do
 	mVertices <- VG.thaw vertices
 	VAI.sort mVertices
 	uniqueVertices <- unique mVertices
-	indices <- VG.mapM (VAS.binarySearchL uniqueVertices) vertices
+	indices <- VG.mapM ((fromIntegral <$>) . VAS.binarySearchL uniqueVertices) vertices
 	resultVertices <- VG.freeze uniqueVertices
 	return (resultVertices, VG.convert indices)
 	where

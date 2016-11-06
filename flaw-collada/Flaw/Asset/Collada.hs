@@ -4,7 +4,7 @@ Description: Collada support.
 License: MIT
 -}
 
-{-# LANGUAGE FlexibleInstances, FunctionalDependencies, MultiParamTypeClasses, OverloadedStrings, RankNTypes #-}
+{-# LANGUAGE FlexibleContexts, FlexibleInstances, FunctionalDependencies, MultiParamTypeClasses, OverloadedStrings, RankNTypes #-}
 
 module Flaw.Asset.Collada
 	( Parse()
@@ -36,7 +36,6 @@ module Flaw.Asset.Collada
 
 import Control.Monad
 import Control.Monad.Except
-import Control.Monad.ST
 import Control.Monad.State
 import qualified Data.ByteString.Lazy as BL
 import Data.List
@@ -48,10 +47,15 @@ import qualified Data.Text as T
 import qualified Data.Vector as V
 import qualified Data.Vector.Algorithms.Intro as VAI
 import qualified Data.Vector.Generic as VG
+import qualified Data.Vector.Generic.Mutable as VGM
 import qualified Data.Vector.Mutable as VM
+import qualified Data.Vector.Storable as VS
+import qualified Data.Vector.Storable.Mutable as VSM
 import qualified Data.Vector.Unboxed as VU
 import qualified Data.Vector.Unboxed.Mutable as VUM
 import Data.Word
+import Foreign.Storable
+import System.IO.Unsafe
 import qualified Text.XML as XML
 
 import Flaw.Math
@@ -61,8 +65,8 @@ data ColladaCache = ColladaCache
 	{ ccSettings :: !ColladaSettings
 	, ccRootElement :: !XML.Element
 	, ccElementsById :: !(MS.Map T.Text XML.Element)
-	, ccIntArrays :: !(MS.Map T.Text (VU.Vector Int))
-	, ccFloatArrays :: !(MS.Map T.Text (VU.Vector Float))
+	, ccWord32Arrays :: !(MS.Map T.Text (VS.Vector Word32))
+	, ccFloatArrays :: !(MS.Map T.Text (VS.Vector Float))
 	, ccNameArrays :: !(MS.Map T.Text (V.Vector T.Text))
 	}
 
@@ -130,7 +134,7 @@ initColladaCache fileData = do
 			}
 		, ccRootElement = rootElement
 		, ccElementsById = MS.empty
-		, ccIntArrays = MS.empty
+		, ccWord32Arrays = MS.empty
 		, ccFloatArrays = MS.empty
 		, ccNameArrays = MS.empty
 		}
@@ -209,40 +213,48 @@ getAllElementsByTag tag = do
 			XML.NodeElement element -> traverseElement element results
 			_ -> results
 
-class VG.Vector v a => Parse a v | a -> v where
+class Parse a where
 	parse :: T.Text -> a
+
+class (Parse a, VG.Vector v a) => ParseArray a v | a -> v where
 	getParsedArrays :: ColladaM (MS.Map T.Text (v a))
 	putParsedArrays :: (MS.Map T.Text (v a) -> MS.Map T.Text (v a)) -> ColladaM ()
 
-instance Parse Int VU.Vector where
+instance Parse Int where
 	parse = read . T.unpack
-	getParsedArrays = ccIntArrays <$> get
+
+instance Parse Word32 where
+	parse = read . T.unpack
+instance ParseArray Word32 VS.Vector where
+	getParsedArrays = ccWord32Arrays <$> get
 	putParsedArrays f = do
 		cache <- get
-		put cache { ccIntArrays = f $ ccIntArrays cache }
+		put cache { ccWord32Arrays = f $ ccWord32Arrays cache }
 
-instance Parse Float VU.Vector where
+instance Parse Float where
 	parse = read . T.unpack
+instance ParseArray Float VS.Vector where
 	getParsedArrays = ccFloatArrays <$> get
 	putParsedArrays f = do
 		cache <- get
 		put cache { ccFloatArrays = f $ ccFloatArrays cache }
 
-instance Parse T.Text V.Vector where
+instance Parse T.Text where
 	parse = id
+instance ParseArray T.Text V.Vector where
 	getParsedArrays = ccNameArrays <$> get
 	putParsedArrays f = do
 		cache <- get
 		put cache { ccNameArrays = f $ ccNameArrays cache }
 
 -- | Get contents of an element as CData, split into words and parse.
-parseArrayUncached :: Parse a v => XML.Element -> ColladaM (v a)
+parseArrayUncached :: ParseArray a v => XML.Element -> ColladaM (v a)
 parseArrayUncached element = case XML.elementNodes element of
 	[XML.NodeContent content] -> return $ VG.fromList $ map parse $ T.words content
 	_ -> throwError "wrong array"
 
 -- | Get contents of an element as CData, split into words, parse and cache.
-parseArray :: Parse a v => XML.Element -> ColladaM (v a)
+parseArray :: ParseArray a v => XML.Element -> ColladaM (v a)
 parseArray element = catchError withId withoutId where
 	withId = do
 		elementId <- getElementAttr "id" element
@@ -256,7 +268,7 @@ parseArray element = catchError withId withoutId where
 	withoutId _err = parseArrayUncached element
 
 -- | Parse "source" tag. Right now it just returns underlying array with stride.
-parseSource :: Parse a v => XML.Element -> ColladaM (v a, Int)
+parseSource :: ParseArray a v => XML.Element -> ColladaM (v a, Int)
 parseSource element@XML.Element
 	{ XML.elementName = XML.Name
 		{ XML.nameLocalName = name
@@ -277,9 +289,9 @@ parseSource element@XML.Element
 
 -- | "Input" tag structure.
 data ColladaInputTag = ColladaInputTag
-	{ citSemantic :: T.Text
-	, citOffset :: Int
-	, citSourceElement :: XML.Element
+	{ citSemantic :: !T.Text
+	, citOffset :: {-# UNPACK #-} !Int
+	, citSourceElement :: !XML.Element
 	}
 
 -- | Parse "input" tag.
@@ -295,13 +307,13 @@ parseInput inputElement = do
 		}
 
 data ColladaVerticesData = ColladaVerticesData
-	{ cvdCount :: !Int
-	, cvdPositionIndices :: ColladaM (VU.Vector Int)
-	, cvdPositions :: ColladaM (V.Vector Float3)
-	, cvdNormals :: ColladaM (V.Vector Float3)
-	, cvdTexcoords :: ColladaM (V.Vector Float2)
-	, cvdWeights :: ColladaM (V.Vector Float4)
-	, cvdBones :: ColladaM (V.Vector (Vec4 Word8))
+	{ cvdCount :: {-# UNPACK #-} !Int
+	, cvdPositionIndices :: ColladaM (VS.Vector Word32)
+	, cvdPositions :: ColladaM (VS.Vector Float3)
+	, cvdNormals :: ColladaM (VS.Vector Float3)
+	, cvdTexcoords :: ColladaM (VS.Vector Float2)
+	, cvdWeights :: ColladaM (VS.Vector Float4)
+	, cvdBones :: ColladaM (VS.Vector (Vec4 Word8))
 	}
 
 parseTrianglesOrPolyList :: XML.Element -> ColladaM ColladaVerticesData
@@ -314,8 +326,8 @@ parseTrianglesOrPolyList element = do
 	case vcountElements of
 		[vcountElement] -> do
 			vcounts <- parseArray vcountElement
-			if VU.length vcounts /= trianglesCount then throwError "wrong number of vcounts"
-			else unless (VU.all (== (3 :: Int)) vcounts) $ throwError "only triangles are supported"
+			if VG.length vcounts /= trianglesCount then throwError "wrong number of vcounts"
+			else unless (VG.all (== (3 :: Word32)) vcounts) $ throwError "only triangles are supported"
 		[] -> return ()
 		_ -> throwError "must be 0 or 1 vcount element"
 	-- parse indices
@@ -324,13 +336,13 @@ parseTrianglesOrPolyList element = do
 	inputs <- mapM parseInput =<< getChildrenWithTag "input" element
 	-- calculate stride and count
 	let stride = 1 + maximum (map citOffset inputs)
-	let count = VU.length indices `quot` stride
+	let count = VG.length indices `quot` stride
 
 	-- check
 	when (trianglesCount * 3 /= count) $ throwError "wrong number of triangles or indices"
 
 	-- flip indices to fix vertex order in triangles
-	let flippedIndices = VU.generate (count * stride) $ \i -> let
+	let flippedIndices = VS.generate (count * stride) $ \i -> let
 		(p, q) = i `divMod` stride
 		(pp, pq) = p `divMod` 3
 		f k = case k of
@@ -338,7 +350,7 @@ parseTrianglesOrPolyList element = do
 			1 -> 0
 			2 -> 2
 			_ -> undefined
-		in indices VU.! ((pp * 3 + f pq) * stride + q)
+		in indices VG.! ((pp * 3 + f pq) * stride + q)
 
 	let stream semantic = case filter (\i -> citSemantic i == semantic) inputs of
 		[ColladaInputTag
@@ -346,14 +358,14 @@ parseTrianglesOrPolyList element = do
 			, citSourceElement = sourceElement
 			}] -> do
 			values <- parseStridables =<< parseSource sourceElement
-			return $ VG.generate count $ \i -> values VG.! (flippedIndices VU.! (i * stride + offset))
+			return $ VG.generate count $ \i -> values VG.! (fromIntegral $ flippedIndices VG.! (i * stride + offset))
 		[] -> return VG.empty
 		_ -> throwError $ "parseTrianglesOrPolyList: wrong semantic: " <> semantic
 
 	let positionIndices = case filter (\i -> citSemantic i == "VERTEX") inputs of
 		[ColladaInputTag
 			{ citOffset = offset
-			}] -> return $ VU.generate count $ \i -> flippedIndices VU.! (i * stride + offset)
+			}] -> return $ VG.generate count $ \i -> flippedIndices VG.! (i * stride + offset)
 		_ -> throwError "no position indices"
 
 	unit <- (csUnit . ccSettings) <$> get
@@ -364,11 +376,11 @@ parseTrianglesOrPolyList element = do
 	return ColladaVerticesData
 		{ cvdCount = count
 		, cvdPositionIndices = positionIndices
-		, cvdPositions = (V.map (* vecFromScalar unit)) <$> stream "VERTEX"
+		, cvdPositions = (VG.map (* vecFromScalar unit)) <$> stream "VERTEX"
 		, cvdNormals = stream "NORMAL"
 		, cvdTexcoords = texcoords
-		, cvdWeights = return V.empty
-		, cvdBones = return V.empty
+		, cvdWeights = return VG.empty
+		, cvdBones = return VG.empty
 		}
 
 parseMesh :: XML.Element -> ColladaM ColladaVerticesData
@@ -454,7 +466,7 @@ parseNode element@XML.Element
 
 -- | Parse "sampler" tag.
 -- Essentially just resolves INPUT and OUTPUT sources.
-parseSampler :: (Parse i vi, Parse o vo) => XML.Element -> ColladaM ((vi i, Int), (vo o, Int))
+parseSampler :: (ParseArray i vi, ParseArray o vo) => XML.Element -> ColladaM ((vi i, Int), (vo o, Int))
 parseSampler element = do
 	inputElements <- getChildrenWithTag "input" element
 	inputs <- mapM parseInput inputElements
@@ -600,22 +612,22 @@ instance Vectorized a => Stridable Mat4x4 a where
 		where q j = v VG.! (i + j)
 
 -- | Convert vector of primitive values to vector of Stridables.
-stridableStream :: (Stridable s a, VG.Vector v a) => v a -> V.Vector (s a)
+stridableStream :: (Storable a, Storable (s a), Stridable s a) => VS.Vector a -> VS.Vector (s a)
 stridableStream q = f undefined q where
-	f :: (Stridable s a, VG.Vector v a) => s a -> v a -> V.Vector (s a)
-	f u v = V.generate (VG.length v `quot` stride) $ \i -> constructStridable v $ i * stride where
+	f :: (Storable a, Storable (s a), Stridable s a) => s a -> VS.Vector a -> VS.Vector (s a)
+	f u v = VS.generate (VG.length v `quot` stride) $ \i -> constructStridable v $ i * stride where
 		stride = stridableStride u
 
-parseStridables :: (Stridable s a, VG.Vector v a) => (v a, Int) -> ColladaM (V.Vector (s a))
+parseStridables :: (Storable a, Storable (s a), Stridable s a) => (VS.Vector a, Int) -> ColladaM (VS.Vector (s a))
 parseStridables (q, stride) = f undefined q where
-	f :: (Stridable s a, VG.Vector v a) => s a -> v a -> ColladaM (V.Vector (s a))
+	f :: (Storable a, Storable (s a), Stridable s a) => s a -> VS.Vector a -> ColladaM (VS.Vector (s a))
 	f u v = if stride == stridableStride u
 		then return $ stridableStream v
 		else throwError "wrong stride"
 
 class Animatable a where
 	animatableStride :: a -> Int
-	animatableConstructor :: VU.Vector Float -> Int -> a
+	animatableConstructor :: VS.Vector Float -> Int -> a
 	interpolateAnimatable :: Float -> a -> a -> a
 
 instance Animatable Float where
@@ -662,7 +674,7 @@ newtype ColladaSkeleton = ColladaSkeleton (V.Vector ColladaSkeletonNode) derivin
 
 data ColladaSkeletonNode = ColladaSkeletonNode
 	{ csklnNodeTag :: ColladaNodeTag
-	, csklnParentId :: !Int
+	, csklnParentId :: {-# UNPACK #-} !Int
 	} deriving Show
 
 -- | Create flat skeleton structure for node hierarchy.
@@ -735,19 +747,18 @@ parseSkin (ColladaSkeleton nodes) skinElement = do
 	jointsInvBindMatrixInput <- findInput jointsInputs "INV_BIND_MATRIX" "joints"
 	jointsInvBindTransforms <- parseStridables =<< parseSource (citSourceElement jointsInvBindMatrixInput)
 
-	skinBones <- forM (V.zip jointsJointNames jointsInvBindTransforms) $ \(jointName, jointInvBindTransform) -> do
-		case V.findIndex (\ColladaSkeletonNode
-			{ csklnNodeTag = ColladaNodeTag
-				{ cntSID = sid
-				}
-			} -> sid == jointName) nodes of
-			Just nodeIndex -> return ColladaBone
-				{ cboneSkeletonIndex = nodeIndex
-				, cboneInvBindTransform = transformFromMatrix $ unitMat `mul` (jointInvBindTransform :: Float4x4) `mul` bindShapeTransform `mul` invUnitMat
-				}
-			Nothing -> throwError $ "missing skeleton node for joint " <> jointName
+	skinBones <- flip VG.imapM jointsJointNames $ \i jointName -> case V.findIndex (\ColladaSkeletonNode
+		{ csklnNodeTag = ColladaNodeTag
+			{ cntSID = sid
+			}
+		} -> sid == jointName) nodes of
+		Just nodeIndex -> return ColladaBone
+			{ cboneSkeletonIndex = nodeIndex
+			, cboneInvBindTransform = transformFromMatrix $ unitMat `mul` (jointsInvBindTransforms VG.! i :: Float4x4) `mul` bindShapeTransform `mul` invUnitMat
+			}
+		Nothing -> throwError $ "missing skeleton node for joint " <> jointName
 
-	let namedBones = MS.fromList $ zip (V.toList jointsJointNames) [0..]
+	let namedBones = MS.fromList $ zip (VG.toList jointsJointNames) [0..]
 
 	vertexWeightsElement <- getSingleChildWithTag "vertex_weights" skinElement
 	vertexWeightsInputs <- mapM parseInput =<< getChildrenWithTag "input" vertexWeightsElement
@@ -756,7 +767,7 @@ parseSkin (ColladaSkeleton nodes) skinElement = do
 	vertexWeightsJointInput <- findInput vertexWeightsInputs "JOINT" "vertex_weights"
 	vertexWeightsJointNames <- fmap fst $ parseSource $ citSourceElement vertexWeightsJointInput
 	let vertexWeightsJointOffset = citOffset vertexWeightsJointInput
-	vertexWeightsJointBones <- fmap V.convert $ V.forM vertexWeightsJointNames $ \jointName -> case MS.lookup jointName namedBones of
+	vertexWeightsJointBones <- VG.forM vertexWeightsJointNames $ \jointName -> case MS.lookup jointName namedBones of
 		Just bone -> return bone
 		Nothing -> throwError $ "missing bone for joint " <> jointName
 
@@ -771,47 +782,44 @@ parseSkin (ColladaSkeleton nodes) skinElement = do
 	-- constant
 	let bonesPerVertex = 4
 
-	let (rawWeights, rawBones) = runST $ do
-		weights <- VUM.new $ count * bonesPerVertex
-		bones <- VUM.new $ count * bonesPerVertex
-		let
-			sums ps (s:ss) = ps : sums (ps + s) ss
-			sums _ [] = []
-		let is = [0..(count - 1)]
-		let vcountList = VU.toList vcount
+	let (rawWeights, rawBones) = unsafePerformIO $ do
+		weights <- VSM.new $ count * bonesPerVertex
+		bones <- VSM.new $ count * bonesPerVertex
 		-- loop for vertices
-		forM_ (zip3 is vcountList $ sums 0 vcountList) $ \(i, bonesCount, j) -> do
-
-			weightJointPairs <- VM.new bonesCount
+		let f j i bonesCount = do
+			weightJointPairs <- VUM.new $ fromIntegral (bonesCount :: Word32)
 
 			-- loop for bones of vertex
-			forM_ [0..(bonesCount - 1)] $ \k -> do
+			forM_ [0..(fromIntegral bonesCount - 1)] $ \k -> do
 				let o = (j + k) * vertexWeightsStride
-				let jointIndex = v VU.! (o + vertexWeightsJointOffset)
-				let weightIndex = v VU.! (o + vertexWeightsWeightOffset)
-				VM.write weightJointPairs k (vertexWeightsWeights VU.! weightIndex, vertexWeightsJointBones VU.! jointIndex)
+				let jointIndex = v VG.! (o + vertexWeightsJointOffset) :: Word32
+				let weightIndex = v VG.! (o + vertexWeightsWeightOffset)
+				VGM.write weightJointPairs k (vertexWeightsWeights VG.! (fromIntegral weightIndex), vertexWeightsJointBones VG.! (fromIntegral jointIndex))
 
 			-- sort weight-joint pairs
 			VAI.sort weightJointPairs
 
 			-- pick up most weighted
-			freezedWeightJointPairs <- V.unsafeFreeze weightJointPairs
-			let len = V.length freezedWeightJointPairs
+			freezedWeightJointPairs <- VU.unsafeFreeze weightJointPairs
+			let len = VG.length freezedWeightJointPairs
 			let bestWeightJointPairs =
-				if len >= bonesPerVertex then V.drop (len - bonesPerVertex) freezedWeightJointPairs
-				else freezedWeightJointPairs V.++ V.fromList (replicate (bonesPerVertex - len) (0, 0))
+				if len >= bonesPerVertex then VG.drop (len - bonesPerVertex) freezedWeightJointPairs
+				else freezedWeightJointPairs VG.++ VG.fromList (replicate (bonesPerVertex - len) (0, 0))
 
 			-- calc sum of weights to normalize
-			let weightSum = V.sum $ V.map fst bestWeightJointPairs
+			let weightSum = VG.sum $ VG.map fst bestWeightJointPairs
 
 			-- write weights and bones
 			forM_ [0..(bonesPerVertex - 1)] $ \k -> do
-				let (weight, bone) = bestWeightJointPairs V.! k
-				VUM.write weights (i * bonesPerVertex + k) $ weight / weightSum
-				VUM.write bones (i * bonesPerVertex + k) bone
+				let (weight, bone) = bestWeightJointPairs VG.! k
+				VGM.write weights (i * bonesPerVertex + k) $ weight / weightSum
+				VGM.write bones (i * bonesPerVertex + k) bone
 
-		freezedWeights <- VU.unsafeFreeze weights
-		freezedBones <- VU.unsafeFreeze bones
+			return $ j + fromIntegral bonesCount
+		VG.ifoldM'_ f 0 vcount
+
+		freezedWeights <- VG.unsafeFreeze weights
+		freezedBones <- VG.unsafeFreeze bones
 		return (stridableStream freezedWeights, stridableStream freezedBones)
 
 	verticesData <- parseGeometry =<< resolveElement =<< getElementAttr "source" skinElement
@@ -819,8 +827,8 @@ parseSkin (ColladaSkeleton nodes) skinElement = do
 	positionIndices <- cvdPositionIndices verticesData
 
 	return (verticesData
-		{ cvdWeights = return $ V.generate (VU.length positionIndices) $ \i -> rawWeights V.! (positionIndices VU.! i)
-		, cvdBones = return $ V.generate (VU.length positionIndices) $ \i -> rawBones V.! (positionIndices VU.! i)
+		{ cvdWeights = return $ VS.generate (VG.length positionIndices) $ \i -> rawWeights VG.! (fromIntegral $ positionIndices VG.! i)
+		, cvdBones = return $ VS.generate (VG.length positionIndices) $ \i -> rawBones VG.! (fromIntegral $ positionIndices VG.! i)
 		}, ColladaSkin
 		{ cskinBones = skinBones
 		})

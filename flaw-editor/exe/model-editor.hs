@@ -20,6 +20,7 @@ import qualified Data.ByteString.Lazy as BL
 import qualified Data.Serialize as S
 import qualified Data.Text as T
 import qualified Data.Vector as V
+import qualified Data.Vector.Storable as VS
 import GHC.Generics(Generic)
 import System.IO.Unsafe
 
@@ -194,7 +195,7 @@ main = withApp appConfig
 			, f_VertexPNT_texcoord = Vec2 (alpha / (pi * 2)) (beta / pi + 0.5)
 			}
 			where p = Vec3 (cos alpha * cos beta) (sin alpha * cos beta) (sin beta)
-		loadPackedGeometry device $ packGeometry (sphereVertices f 16 16)
+		loadPackedGeometry device $ packGeometry (sphereVertices f 16 16 :: VS.Vector VertexPNT)
 
 	let configFileName = "config.bin"
 
@@ -440,7 +441,7 @@ main = withApp appConfig
 			createColladaVertices =<< parseGeometry =<< getElementById elementId
 		case eitherVertices of
 			Right vertices -> do
-				geometry <- book bk $ loadPackedGeometry device $ packGeometry (vertices :: V.Vector VertexPNT)
+				geometry <- book bk $ loadPackedGeometry device $ packGeometry (vertices :: VS.Vector VertexPNT)
 				runInFlow stateFlow $ atomically $ modifyTVar' editorStateVar $ \s@EditorState
 					{ editorStateGeometryCell = geometryCell
 					} -> s

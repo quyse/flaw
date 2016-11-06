@@ -9,6 +9,8 @@ module Flaw.Visual.Skydome
 	, skydomeTransform
 	) where
 
+import qualified Data.Vector.Storable as VS
+
 import Flaw.Graphics
 import Flaw.Graphics.Program
 import Flaw.Math
@@ -18,7 +20,7 @@ import Flaw.Visual.Geometry.Vertex
 
 skydomeGeometry :: Device d => d -> Int -> Int -> Int -> IO (Geometry d, IO ())
 skydomeGeometry device meridiansCount topParallelsCount bottomParallelsCount =
-	loadPackedGeometry device $ packGeometry vertices where
+	loadPackedGeometry device $ packGeometry (vertices :: VS.Vector VertexPT) where
 
 	vertices = twoHemispheresVertices f meridiansCount topParallelsCount bottomParallelsCount
 	f alpha beta = VertexPT

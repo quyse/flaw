@@ -23,7 +23,9 @@ module Flaw.Visual.Geometry.Vertex
 	, VertexPNTWB(..)
 	) where
 
-import qualified Data.Vector as V
+import qualified Data.Vector.Generic as VG
+import qualified Data.Vector.Storable as VS
+import Foreign.Storable
 
 import Flaw.Asset.Collada
 import Flaw.FFI
@@ -57,12 +59,12 @@ genStruct "QuadVertex"
 	[ ([t| Float4 |], "position")
 	]
 
-class ColladaVertex q where
-	createColladaVertices :: ColladaVerticesData -> ColladaM (V.Vector q)
+class Storable q => ColladaVertex q where
+	createColladaVertices :: ColladaVerticesData -> ColladaM (VS.Vector q)
 
 -- | Replace empty vector with sequence of fallback values.
-fallbackVertexData :: Int -> a -> V.Vector a -> V.Vector a
-fallbackVertexData count fallbackValue inputVector = if V.null inputVector then V.replicate count fallbackValue else inputVector
+fallbackVertexData :: VG.Vector v a => Int -> a -> v a -> v a
+fallbackVertexData count fallbackValue inputVector = if VG.null inputVector then VG.replicate count fallbackValue else inputVector
 
 genStruct "VertexPT"
 	[ ([t| Float3 |], "position")
@@ -84,9 +86,9 @@ instance ColladaVertex VertexPT where
 		} = do
 		positions <- cvdPositions verticesData
 		texcoords <- fallbackVertexData count (Vec2 0 0) <$> cvdTexcoords verticesData
-		return $ V.generate count $ \i -> VertexPT
-			{ f_VertexPT_position = positions V.! i
-			, f_VertexPT_texcoord = let Vec2 tx ty = texcoords V.! i in Vec2 tx (1 - ty)
+		return $ VG.generate count $ \i -> VertexPT
+			{ f_VertexPT_position = positions VG.! i
+			, f_VertexPT_texcoord = let Vec2 tx ty = texcoords VG.! i in Vec2 tx (1 - ty)
 			}
 
 genStruct "VertexPNT"
@@ -114,10 +116,10 @@ instance ColladaVertex VertexPNT where
 		positions <- cvdPositions verticesData
 		normals <- cvdNormals verticesData
 		texcoords <- fallbackVertexData count (Vec2 0 0) <$> cvdTexcoords verticesData
-		return $ V.generate count $ \i -> VertexPNT
-			{ f_VertexPNT_position = positions V.! i
-			, f_VertexPNT_normal = normals V.! i
-			, f_VertexPNT_texcoord = let Vec2 tx ty = texcoords V.! i in Vec2 tx (1 - ty)
+		return $ VG.generate count $ \i -> VertexPNT
+			{ f_VertexPNT_position = positions VG.! i
+			, f_VertexPNT_normal = normals VG.! i
+			, f_VertexPNT_texcoord = let Vec2 tx ty = texcoords VG.! i in Vec2 tx (1 - ty)
 			}
 
 genStruct "VertexPNTWB"
@@ -153,10 +155,10 @@ instance ColladaVertex VertexPNTWB where
 		texcoords <- fallbackVertexData count (Vec2 0 0) <$> cvdTexcoords verticesData
 		bones <- cvdBones verticesData
 		weights <- cvdWeights verticesData
-		return $ V.generate count $ \i -> VertexPNTWB
-			{ f_VertexPNTWB_position = positions V.! i
-			, f_VertexPNTWB_normal = normals V.! i
-			, f_VertexPNTWB_texcoord = let Vec2 tx ty = texcoords V.! i in Vec2 tx (1 - ty)
-			, f_VertexPNTWB_bones = bones V.! i
-			, f_VertexPNTWB_weights = weights V.! i
+		return $ VG.generate count $ \i -> VertexPNTWB
+			{ f_VertexPNTWB_position = positions VG.! i
+			, f_VertexPNTWB_normal = normals VG.! i
+			, f_VertexPNTWB_texcoord = let Vec2 tx ty = texcoords VG.! i in Vec2 tx (1 - ty)
+			, f_VertexPNTWB_bones = bones VG.! i
+			, f_VertexPNTWB_weights = weights VG.! i
 			}

@@ -22,6 +22,7 @@ import qualified Data.ByteString.Unsafe as B
 import qualified Data.Serialize as S
 import qualified Data.Text as T
 import qualified Data.Vector as V
+import qualified Data.Vector.Storable as VS
 import Foreign.Marshal.Array
 import Foreign.Ptr
 import Foreign.Storable
@@ -90,7 +91,7 @@ emitTextureAnimatedSkinnedGeometryAsset fileName getNodeElement getSkinElement t
 			reportError msg
 			return B.empty
 		Right (vertices, skin, animations) -> do
-			let packedGeometry = packGeometry (vertices :: V.Vector VertexPNTWB)
+			let packedGeometry = packGeometry (vertices :: VS.Vector VertexPNTWB)
 			let framesCount = floor $ timeLength / timeStep
 			let width = framesCount
 			let bones = cskinBones skin
