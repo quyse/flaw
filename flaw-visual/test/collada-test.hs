@@ -14,6 +14,7 @@ import Control.Exception
 import Control.Monad
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.Vector as V
+import qualified Data.Vector.Storable as VS
 import System.Exit
 
 import Flaw.Asset.Collada
@@ -41,8 +42,8 @@ main = do
 			print err
 			exitFailure
 
-	void $ evaluate $ packGeometry (geomVert :: V.Vector VertexPNT)
-	void $ evaluate $ packGeometry (skinVert :: V.Vector VertexPNTWB)
+	void $ evaluate $ packGeometry (geomVert :: VS.Vector VertexPNT)
+	void $ evaluate $ packGeometry (skinVert :: VS.Vector VertexPNTWB)
 	forM_ (animateSkel identityTransform 0 :: V.Vector Float4x4) evaluate
 	void $ evaluate skeleton
 	void $ evaluate skin
