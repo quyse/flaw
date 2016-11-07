@@ -36,7 +36,7 @@ into combined slot indexed by numeric index;
 
 -}
 
-{-# LANGUAGE FlexibleContexts, FunctionalDependencies, MultiParamTypeClasses, RankNTypes, TypeFamilies #-}
+{-# LANGUAGE DeriveGeneric, FlexibleContexts, FunctionalDependencies, MultiParamTypeClasses, RankNTypes, TypeFamilies #-}
 
 module Flaw.Graphics
 	( System(..)
@@ -46,6 +46,7 @@ module Flaw.Graphics
 	, DeviceInfo(..)
 	, DisplayInfo(..)
 	, DisplayModeInfo(..)
+	, IndexStride(..)
 	, DepthTestFunc(..)
 	, Render
 	, renderScope
@@ -80,7 +81,9 @@ import Control.Exception
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Reader
 import qualified Data.ByteString as B
+import qualified Data.Serialize as S
 import qualified Data.Text as T
+import GHC.Generics(Generic)
 
 import Flaw.Exception
 import Flaw.Graphics.Blend
@@ -186,7 +189,7 @@ class Device d where
 		-> Int -- ^ Stride in bytes.
 		-> IO (VertexBufferId d, IO ())
 	-- | Create index buffer.
-	createStaticIndexBuffer :: d -> B.ByteString -> Bool -> IO (IndexBufferId d, IO ())
+	createStaticIndexBuffer :: d -> B.ByteString -> IndexStride -> IO (IndexBufferId d, IO ())
 	-- | Create program.
 	createProgram
 		:: d -- ^ Device.
@@ -276,6 +279,13 @@ data DisplayModeInfo = DisplayModeInfo
 	, displayModeHeight :: !Int
 	, displayModeRefreshRate :: !Rational
 	} deriving Show
+
+-- | Index stride.
+data IndexStride
+	= IndexStride32Bit
+	| IndexStride16Bit
+	deriving (Eq, Generic)
+instance S.Serialize IndexStride
 
 -- | Depth test function.
 data DepthTestFunc

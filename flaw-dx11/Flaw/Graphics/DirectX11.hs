@@ -594,7 +594,7 @@ instance Device Dx11Device where
 
 	createStaticIndexBuffer Dx11Device
 		{ dx11DeviceInterface = deviceInterface
-		} bytes is32bit = describeException "failed to create DirectX11 index buffer" $ do
+		} bytes stride = describeException "failed to create DirectX11 index buffer" $ do
 		-- desc
 		let desc = D3D11_BUFFER_DESC
 			{ f_D3D11_BUFFER_DESC_ByteWidth = fromIntegral $ B.length bytes
@@ -616,8 +616,12 @@ instance Device Dx11Device where
 				with (subresourceData $ castPtr bytesPtr) $ \subresourceDataPtr ->
 					createCOMObjectViaPtr $ m_ID3D11Device_CreateBuffer deviceInterface descPtr subresourceDataPtr
 
+		let format = case stride of
+			IndexStride32Bit -> DXGI_FORMAT_R32_UINT
+			IndexStride16Bit -> DXGI_FORMAT_R16_UINT
+
 		return
-			( Dx11IndexBufferId bufferInterface (if is32bit then DXGI_FORMAT_R32_UINT else DXGI_FORMAT_R16_UINT) D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST
+			( Dx11IndexBufferId bufferInterface format D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST
 			, releaseBufferInterface
 			)
 

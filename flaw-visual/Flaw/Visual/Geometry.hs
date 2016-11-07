@@ -51,7 +51,7 @@ data PackedGeometry = PackedGeometry
 	, packedGeometryIndicesBytes :: !B.ByteString
 	, packedGeometryIndicesCount :: {-# UNPACK #-} !Int
 	, packedGeometryVertexStride :: {-# UNPACK #-} !Int
-	, packedGeometryIsIndices32Bit :: !Bool
+	, packedGeometryIndexStride :: !IndexStride
 	} deriving Generic
 
 instance S.Serialize PackedGeometry
@@ -68,14 +68,14 @@ packIndexedGeometry vertices indices = PackedGeometry
 	, packedGeometryIndicesBytes = indicesBytes
 	, packedGeometryIndicesCount = VG.length indices
 	, packedGeometryVertexStride = sizeOf (VG.head vertices)
-	, packedGeometryIsIndices32Bit = isIndices32Bit
+	, packedGeometryIndexStride = indexStride
 	} where
 	verticesBytes = packVector vertices
-	(isIndices32Bit, indicesBytes) =
+	(indexStride, indicesBytes) =
 		if VG.length vertices > 0x10000 then
-			(True, packVector indices)
+			(IndexStride32Bit, packVector indices)
 		else
-			(False, packVector (VG.map fromIntegral indices :: VS.Vector Word16))
+			(IndexStride16Bit, packVector (VG.map fromIntegral indices :: VS.Vector Word16))
 
 -- | Load geometry into device.
 loadPackedGeometry :: Device d => d -> PackedGeometry -> IO (Geometry d, IO ())
@@ -84,10 +84,10 @@ loadPackedGeometry device PackedGeometry
 	, packedGeometryIndicesBytes = indicesBytes
 	, packedGeometryIndicesCount = indicesCount
 	, packedGeometryVertexStride = vertexStride
-	, packedGeometryIsIndices32Bit = isIndices32Bit
+	, packedGeometryIndexStride = indexStride
 	} = withSpecialBook $ \bk -> do
 	vertexBuffer <- book bk $ createStaticVertexBuffer device verticesBytes vertexStride
-	indexBuffer <- book bk $ createStaticIndexBuffer device indicesBytes isIndices32Bit
+	indexBuffer <- book bk $ createStaticIndexBuffer device indicesBytes indexStride
 	return Geometry
 		{ geometryVertexBuffer = vertexBuffer
 		, geometryIndexBuffer = indexBuffer

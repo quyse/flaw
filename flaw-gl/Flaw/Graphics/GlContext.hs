@@ -572,14 +572,16 @@ instance Device GlContext where
 		, glContextActualState = GlContextState
 			{ glContextStateIndexBuffer = actualIndexBufferRef
 			}
-		} bytes is32Bit = invoke $ describeException "failed to create OpenGL static index buffer" $ do
+		} bytes stride = invoke $ describeException "failed to create OpenGL static index buffer" $ do
 		bufferName <- glAllocBufferName
 		glBindBuffer GL_ELEMENT_ARRAY_BUFFER bufferName
 		glCheckErrors0 "bind buffer"
 		glBufferData_bs GL_ELEMENT_ARRAY_BUFFER bytes GL_STATIC_DRAW
 		glCheckErrors0 "buffer data"
 
-		let indexBufferId = GlIndexBufferId bufferName (if is32Bit then GL_UNSIGNED_INT else GL_UNSIGNED_SHORT)
+		let indexBufferId = GlIndexBufferId bufferName $ case stride of
+			IndexStride32Bit -> GL_UNSIGNED_INT
+			IndexStride16Bit -> GL_UNSIGNED_SHORT
 
 		-- element array buffer is a part of VAO; unbind it in order to re-bind with actual VAO during drawing
 		glBindBuffer GL_ELEMENT_ARRAY_BUFFER glNullBufferName
