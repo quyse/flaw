@@ -57,6 +57,7 @@ import Flaw.Graphics.WebGL.FFI
 
 import Foreign.Marshal.Utils
 import Graphics.GL.ARB.GetProgramBinary
+import Graphics.GL.ARB.TessellationShader
 import Graphics.GL.ARB.TextureStorage
 import Graphics.GL.ARB.UniformBufferObject
 import Graphics.GL.ARB.VertexAttribBinding
@@ -167,7 +168,7 @@ instance Device GlContext where
 		, glFrameBufferHeight :: {-# UNPACK #-} !Int
 		} deriving Eq
 	data VertexBufferId GlContext = GlVertexBufferId {-# UNPACK #-} !BufferName {-# UNPACK #-} !GLsizei deriving Eq
-	data IndexBufferId GlContext = GlIndexBufferId {-# UNPACK #-} !BufferName {-# UNPACK #-} !GLenum
+	data IndexBufferId GlContext = GlIndexBufferId {-# UNPACK #-} !BufferName !IndexTopology {-# UNPACK #-} !GLenum
 	data ProgramId GlContext = GlProgramId
 		{ glProgramName :: {-# UNPACK #-} !ProgramName
 		, glProgramVertexArrayName :: {-# UNPACK #-} !VertexArrayName
@@ -195,7 +196,7 @@ instance Device GlContext where
 		, glDepthStencilHeight = 0
 		}
 	nullVertexBuffer = GlVertexBufferId glNullBufferName 0
-	nullIndexBuffer = GlIndexBufferId glNullBufferName GL_UNSIGNED_SHORT
+	nullIndexBuffer = GlIndexBufferId glNullBufferName IndexTopologyTriangles GL_UNSIGNED_SHORT
 	nullUniformBuffer = GlNullUniformBufferId
 
 	createStaticTexture GlContext
@@ -572,14 +573,14 @@ instance Device GlContext where
 		, glContextActualState = GlContextState
 			{ glContextStateIndexBuffer = actualIndexBufferRef
 			}
-		} bytes stride = invoke $ describeException "failed to create OpenGL static index buffer" $ do
+		} bytes topology stride = invoke $ describeException "failed to create OpenGL static index buffer" $ do
 		bufferName <- glAllocBufferName
 		glBindBuffer GL_ELEMENT_ARRAY_BUFFER bufferName
 		glCheckErrors0 "bind buffer"
 		glBufferData_bs GL_ELEMENT_ARRAY_BUFFER bytes GL_STATIC_DRAW
 		glCheckErrors0 "buffer data"
 
-		let indexBufferId = GlIndexBufferId bufferName $ case stride of
+		let indexBufferId = GlIndexBufferId bufferName topology $ case stride of
 			IndexStride32Bit -> GL_UNSIGNED_INT
 			IndexStride16Bit -> GL_UNSIGNED_SHORT
 
@@ -587,7 +588,7 @@ instance Device GlContext where
 		glBindBuffer GL_ELEMENT_ARRAY_BUFFER glNullBufferName
 		glCheckErrors0 "unbind buffer"
 
-		writeIORef actualIndexBufferRef $ GlIndexBufferId glNullBufferName GL_UNSIGNED_SHORT
+		writeIORef actualIndexBufferRef nullIndexBuffer
 
 		glCheckErrors1 "create static index buffer"
 
@@ -1001,17 +1002,24 @@ instance Context GlContext GlContext where
 			}
 		} instancesCount indicesCount = do
 		glUpdateContext context
-		GlIndexBufferId indexBufferName indicesType <- readIORef indexBufferRef
+		GlIndexBufferId indexBufferName topology indicesType <- readIORef indexBufferRef
+		let t = case topology of
+			IndexTopologyPoints -> GL_POINTS
+			IndexTopologyLines -> GL_LINES
+			IndexTopologyLineStrip -> GL_LINE_STRIP
+			IndexTopologyTriangles -> GL_TRIANGLES
+			IndexTopologyTriangleStrip -> GL_TRIANGLE_STRIP
+			IndexTopologyPatches _ -> GL_PATCHES -- GL_PATCH_VERTICES parameter is set in glUpdateContext
 		if indexBufferName /= glNullBufferName then
 			if instancesCount > 1 then
-				glDrawElementsInstanced GL_TRIANGLES (fromIntegral indicesCount) indicesType (glIntToOffset 0) (fromIntegral instancesCount)
+				glDrawElementsInstanced t (fromIntegral indicesCount) indicesType (glIntToOffset 0) (fromIntegral instancesCount)
 			else
-				glDrawElements GL_TRIANGLES (fromIntegral indicesCount) indicesType (glIntToOffset 0)
+				glDrawElements t (fromIntegral indicesCount) indicesType (glIntToOffset 0)
 		else
 			if instancesCount > 1 then
-				glDrawArraysInstanced GL_TRIANGLES 0 (fromIntegral indicesCount) (fromIntegral instancesCount)
+				glDrawArraysInstanced t 0 (fromIntegral indicesCount) (fromIntegral instancesCount)
 			else
-				glDrawArrays GL_TRIANGLES 0 (fromIntegral indicesCount)
+				glDrawArrays t 0 (fromIntegral indicesCount)
 		glCheckErrors0 "draw"
 
 	contextRender GlContext
@@ -1195,7 +1203,7 @@ glCreateContextState = do
 	viewport <- newIORef $ Vec4 0 0 0 0
 	scissor <- newIORef Nothing
 	vertexBuffers <- VM.replicate 8 $ GlVertexBufferId glNullBufferName 0
-	indexBuffer <- newIORef $ GlIndexBufferId glNullBufferName GL_UNSIGNED_SHORT
+	indexBuffer <- newIORef nullIndexBuffer
 	uniformBuffers <- VM.replicate 8 GlNullUniformBufferId
 	samplers <- VM.replicate 8 (GlTextureId glNullTextureName, GlSamplerStateId glNullSamplerName)
 	program <- newIORef glNullProgram
@@ -1238,7 +1246,7 @@ glSetDefaultContextState GlContextState
 	writeIORef viewportRef $ Vec4 0 0 0 0
 	writeIORef scissorRef Nothing
 	VM.set vertexBuffersVector $ GlVertexBufferId glNullBufferName 0
-	writeIORef indexBufferRef $ GlIndexBufferId glNullBufferName GL_UNSIGNED_SHORT
+	writeIORef indexBufferRef nullIndexBuffer
 	VM.set uniformBuffersVector GlNullUniformBufferId
 	VM.set samplersVector (GlTextureId glNullTextureName, GlSamplerStateId glNullSamplerName)
 	writeIORef programRef glNullProgram
@@ -1353,7 +1361,7 @@ glUpdateContext context@GlContext
 			glBindVertexArray vertexArrayName
 			glCheckErrors0 "bind vertex array"
 			-- reset current index buffer binding in order to refresh (as element array buffer is part of VAO state)
-			writeIORef actualIndexBufferRef $ GlIndexBufferId glUndefinedBufferName 0
+			writeIORef actualIndexBufferRef $ GlIndexBufferId glUndefinedBufferName IndexTopologyTriangles 0
 
 	-- uniform buffers
 	uniformBindings <- glProgramUniforms <$> readIORef desiredProgramRef
@@ -1477,9 +1485,16 @@ glUpdateContext context@GlContext
 	writeIORef boundAttributesCountRef newBoundAttributesCount
 
 	-- index buffer
-	refSetup_ actualIndexBufferRef desiredIndexBufferRef $ \(GlIndexBufferId indexBufferName _indicesType) -> do
+	refSetup_ actualIndexBufferRef desiredIndexBufferRef $ \(GlIndexBufferId indexBufferName topology _indicesType) -> do
 		glBindBuffer GL_ELEMENT_ARRAY_BUFFER indexBufferName
 		glCheckErrors0 "bind index buffer"
+#if !defined(ghcjs_HOST_OS)
+		case topology of
+			IndexTopologyPatches verticesCount -> do
+				glPatchParameteri GL_PATCH_VERTICES $ fromIntegral verticesCount
+				glCheckErrors0 "patch vertices"
+			_ -> return ()
+#endif
 
 	-- depth test func & depth write
 	do
@@ -1770,7 +1785,7 @@ vectorSetup :: Eq a => VM.IOVector a -> VM.IOVector a -> (Int -> a -> IO ()) -> 
 vectorSetup = vectorSetupCond False
 
 instance Eq (IndexBufferId GlDevice) where
-	GlIndexBufferId indexBufferName1 _indicesType1 == GlIndexBufferId indexBufferName2 _indicesType2 = indexBufferName1 == indexBufferName2
+	GlIndexBufferId indexBufferName1 _topology1 _indicesType1 == GlIndexBufferId indexBufferName2 _topology2 _indicesType2 = indexBufferName1 == indexBufferName2
 
 instance Eq (ProgramId GlDevice) where
 	GlProgramId { glProgramName = name1 } == GlProgramId { glProgramName = name2 } = name1 == name2

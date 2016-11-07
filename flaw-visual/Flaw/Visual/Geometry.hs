@@ -51,6 +51,7 @@ data PackedGeometry = PackedGeometry
 	, packedGeometryIndicesBytes :: !B.ByteString
 	, packedGeometryIndicesCount :: {-# UNPACK #-} !Int
 	, packedGeometryVertexStride :: {-# UNPACK #-} !Int
+	, packedGeometryIndexTopology :: !IndexTopology
 	, packedGeometryIndexStride :: !IndexStride
 	} deriving Generic
 
@@ -68,6 +69,7 @@ packIndexedGeometry vertices indices = PackedGeometry
 	, packedGeometryIndicesBytes = indicesBytes
 	, packedGeometryIndicesCount = VG.length indices
 	, packedGeometryVertexStride = sizeOf (VG.head vertices)
+	, packedGeometryIndexTopology = IndexTopologyTriangles
 	, packedGeometryIndexStride = indexStride
 	} where
 	verticesBytes = packVector vertices
@@ -84,10 +86,11 @@ loadPackedGeometry device PackedGeometry
 	, packedGeometryIndicesBytes = indicesBytes
 	, packedGeometryIndicesCount = indicesCount
 	, packedGeometryVertexStride = vertexStride
+	, packedGeometryIndexTopology = indexTopology
 	, packedGeometryIndexStride = indexStride
 	} = withSpecialBook $ \bk -> do
 	vertexBuffer <- book bk $ createStaticVertexBuffer device verticesBytes vertexStride
-	indexBuffer <- book bk $ createStaticIndexBuffer device indicesBytes indexStride
+	indexBuffer <- book bk $ createStaticIndexBuffer device indicesBytes indexTopology indexStride
 	return Geometry
 		{ geometryVertexBuffer = vertexBuffer
 		, geometryIndexBuffer = indexBuffer

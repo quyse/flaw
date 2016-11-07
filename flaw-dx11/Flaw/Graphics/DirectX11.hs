@@ -594,7 +594,7 @@ instance Device Dx11Device where
 
 	createStaticIndexBuffer Dx11Device
 		{ dx11DeviceInterface = deviceInterface
-		} bytes stride = describeException "failed to create DirectX11 index buffer" $ do
+		} bytes topology stride = describeException "failed to create DirectX11 index buffer" $ do
 		-- desc
 		let desc = D3D11_BUFFER_DESC
 			{ f_D3D11_BUFFER_DESC_ByteWidth = fromIntegral $ B.length bytes
@@ -620,8 +620,16 @@ instance Device Dx11Device where
 			IndexStride32Bit -> DXGI_FORMAT_R32_UINT
 			IndexStride16Bit -> DXGI_FORMAT_R16_UINT
 
+		let topology' = case topology of
+			IndexTopologyPoints -> D3D11_PRIMITIVE_TOPOLOGY_POINTLIST
+			IndexTopologyLines -> D3D11_PRIMITIVE_TOPOLOGY_LINELIST
+			IndexTopologyLineStrip -> D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP
+			IndexTopologyTriangles -> D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST
+			IndexTopologyTriangleStrip -> D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP
+			IndexTopologyPatches n -> D3D11_PRIMITIVE_TOPOLOGY_1_CONTROL_POINT_PATCHLIST + fromIntegral n - 1
+
 		return
-			( Dx11IndexBufferId bufferInterface format D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST
+			( Dx11IndexBufferId bufferInterface format topology'
 			, releaseBufferInterface
 			)
 

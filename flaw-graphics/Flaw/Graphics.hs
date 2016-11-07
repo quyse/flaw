@@ -46,6 +46,7 @@ module Flaw.Graphics
 	, DeviceInfo(..)
 	, DisplayInfo(..)
 	, DisplayModeInfo(..)
+	, IndexTopology(..)
 	, IndexStride(..)
 	, DepthTestFunc(..)
 	, Render
@@ -189,7 +190,7 @@ class Device d where
 		-> Int -- ^ Stride in bytes.
 		-> IO (VertexBufferId d, IO ())
 	-- | Create index buffer.
-	createStaticIndexBuffer :: d -> B.ByteString -> IndexStride -> IO (IndexBufferId d, IO ())
+	createStaticIndexBuffer :: d -> B.ByteString -> IndexTopology -> IndexStride -> IO (IndexBufferId d, IO ())
 	-- | Create program.
 	createProgram
 		:: d -- ^ Device.
@@ -279,6 +280,17 @@ data DisplayModeInfo = DisplayModeInfo
 	, displayModeHeight :: !Int
 	, displayModeRefreshRate :: !Rational
 	} deriving Show
+
+-- | Index topology.
+data IndexTopology
+	= IndexTopologyPoints
+	| IndexTopologyLines
+	| IndexTopologyLineStrip
+	| IndexTopologyTriangles
+	| IndexTopologyTriangleStrip
+	| IndexTopologyPatches {-# UNPACK #-} !Int
+	deriving (Eq, Generic)
+instance S.Serialize IndexTopology
 
 -- | Index stride.
 data IndexStride
