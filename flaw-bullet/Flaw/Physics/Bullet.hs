@@ -12,7 +12,7 @@ module Flaw.Physics.Bullet
 	) where
 
 import Data.Coerce
-import qualified Data.Vector as V
+import qualified Data.Vector.Generic as VG
 import Foreign.C.Types
 import Foreign.Marshal.Alloc
 import Foreign.Marshal.Array
@@ -21,6 +21,7 @@ import Foreign.Ptr
 import Foreign.Storable
 
 import Flaw.Math
+import Flaw.Math.Transform
 import Flaw.Physics
 
 newtype BulletWorld = BulletWorld (Ptr C_BulletWorld)
@@ -40,12 +41,12 @@ instance World BulletWorld where
 		return (BulletShape pShape, flaw_bullet_freeShape pShape)
 
 	createConvexHullShape (BulletWorld pWorld) points = do
-		pShape <- allocaArray (V.length points) $ \pPoints -> do
-			V.imapM_ (pokeElemOff pPoints) points
-			flaw_bullet_newConvexHullShape pWorld (castPtr pPoints) (fromIntegral $ V.length points)
+		pShape <- allocaArray (VG.length points) $ \pPoints -> do
+			VG.imapM_ (pokeElemOff pPoints) points
+			flaw_bullet_newConvexHullShape pWorld (castPtr pPoints) (fromIntegral $ VG.length points)
 		return (BulletShape pShape, flaw_bullet_freeShape pShape)
 
-	createBody (BulletWorld pWorld) (BulletShape pShape) motion position (FloatQ orientation) = do
+	createBody (BulletWorld pWorld) (BulletShape pShape) motion (QuatOffset (FloatQ orientation) position) = do
 		let mass = case motion of
 			MotionStatic -> 0
 			MotionDynamic m -> m
@@ -57,13 +58,13 @@ instance World BulletWorld where
 		flaw_bullet_getRigidBodyTransform pBody positionPtr orientationPtr
 		position <- peek $ castPtr positionPtr
 		orientation <- peek $ castPtr orientationPtr
-		return (position, FloatQ orientation)
+		return $ QuatOffset (FloatQ orientation) position
 
-	createGhost (BulletWorld pWorld) (BulletShape pShape) position (FloatQ orientation) = do
+	createGhost (BulletWorld pWorld) (BulletShape pShape) (QuatOffset (FloatQ orientation) position) = do
 		pGhost <- with position $ \positionPtr -> with orientation $ \orientationPtr -> flaw_bullet_newGhost pWorld pShape (castPtr positionPtr) (castPtr orientationPtr)
 		return (BulletGhost pGhost, flaw_bullet_freeGhost pWorld pGhost)
 
-	setGhostTransform (BulletWorld pWorld) (BulletGhost pGhost) position (FloatQ orientation) =
+	setGhostTransform (BulletWorld pWorld) (BulletGhost pGhost) (QuatOffset (FloatQ orientation) position) =
 		with position $ \positionPtr -> with orientation $ \orientationPtr -> flaw_bullet_setGhostTransform pWorld pGhost (castPtr positionPtr) (castPtr orientationPtr)
 
 	simulate (BulletWorld pWorld) step stepCount = flaw_bullet_stepWorld pWorld (coerce step) (fromIntegral stepCount)

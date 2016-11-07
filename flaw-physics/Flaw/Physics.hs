@@ -4,16 +4,17 @@ Description: Main file with types for physics.
 License: MIT
 -}
 
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE FlexibleContexts, TypeFamilies #-}
 
 module Flaw.Physics
 	( World(..)
 	, Motion(..)
 	) where
 
-import qualified Data.Vector as V
+import qualified Data.Vector.Generic as VG
 
 import Flaw.Math
+import Flaw.Math.Transform
 
 data Motion
 	-- | Static body.
@@ -28,20 +29,19 @@ class World w where
 	data Ghost w :: *
 	createBoxShape :: w -> Float3 -> IO (Shape w, IO ())
 	createSphereShape :: w -> Float -> IO (Shape w, IO ())
-	createConvexHullShape :: w -> V.Vector Float3 -> IO (Shape w, IO ())
+	createConvexHullShape :: VG.Vector v Float3 => w -> v Float3 -> IO (Shape w, IO ())
 	-- | Create rigid body.
 	createBody
 		:: w
 		-> Shape w
 		-> Motion
-		-> Float3 -- ^ Initial position.
-		-> FloatQ -- ^ Initial orientation.
+		-> FloatQO -- ^ Initial transform.
 		-> IO (Body w, IO ())
-	getBodyTransform :: w -> Body w -> IO (Float3, FloatQ)
+	getBodyTransform :: w -> Body w -> IO FloatQO
 	-- | Create ghost object.
-	createGhost :: w -> Shape w -> Float3 -> FloatQ -> IO (Ghost w, IO ())
+	createGhost :: w -> Shape w -> FloatQO -> IO (Ghost w, IO ())
 	-- | Set ghost transform.
-	setGhostTransform :: w -> Ghost w -> Float3 -> FloatQ -> IO ()
+	setGhostTransform :: w -> Ghost w -> FloatQO -> IO ()
 	-- | Advance simulation.
 	simulate
 		:: w
