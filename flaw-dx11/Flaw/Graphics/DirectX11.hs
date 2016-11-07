@@ -626,7 +626,7 @@ instance Device Dx11Device where
 			IndexTopologyLineStrip -> D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP
 			IndexTopologyTriangles -> D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST
 			IndexTopologyTriangleStrip -> D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP
-			IndexTopologyPatches n -> D3D11_PRIMITIVE_TOPOLOGY_1_CONTROL_POINT_PATCHLIST + fromIntegral n - 1
+			IndexTopologyPatches n -> toEnum $ fromEnum D3D11_PRIMITIVE_TOPOLOGY_1_CONTROL_POINT_PATCHLIST + n - 1
 
 		return
 			( Dx11IndexBufferId bufferInterface format topology'

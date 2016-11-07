@@ -1120,6 +1120,7 @@ pattern GL_LINE_STRIP = 0x0003
 pattern GL_TRIANGLES = 0x0004
 pattern GL_TRIANGLE_STRIP = 0x0005
 pattern GL_TRIANGLE_FAN = 0x0006
+pattern GL_PATCHES = 0x000E
 
 -- BlendingFactorDest
 pattern GL_ZERO = 0
