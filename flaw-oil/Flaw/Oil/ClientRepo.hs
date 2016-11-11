@@ -11,7 +11,6 @@ module Flaw.Oil.ClientRepo
 	( ClientRepo()
 	, openClientRepo
 	, clientRepoRevision
-	, clientRepoGetRevision
 	, clientRepoGetRevisionValue
 	, clientRepoChange
 	, clientRepoGetKeysPrefixed
@@ -30,8 +29,6 @@ import qualified Data.ByteString as B
 import Data.Int
 import Data.Monoid
 import qualified Data.Text as T
-import qualified Data.Vector.Unboxed as VU
-import qualified Data.Vector.Unboxed.Mutable as VUM
 import Foreign.C.Types
 
 import Flaw.Book
@@ -45,15 +42,15 @@ data ClientRepo = ClientRepo
 	, clientRepoStmtManifestSet            :: !SqliteStmt
 	, clientRepoStmtGetKeyItems            :: !SqliteStmt
 	, clientRepoStmtGetKeyItemsByOneItemId :: !SqliteStmt
+	, clientRepoStmtGetKeyServerItem       :: !SqliteStmt
 	, clientRepoStmtGetKeyItemKey          :: !SqliteStmt
-	, clientRepoStmtGetKeyItemRev          :: !SqliteStmt
 	, clientRepoStmtGetKeyItemRevValue     :: !SqliteStmt
 	, clientRepoStmtAddKeyItem             :: !SqliteStmt
-	, clientRepoStmtChangeKeyItemRevStatus :: !SqliteStmt
+	, clientRepoStmtChangeKeyItemRev       :: !SqliteStmt
 	, clientRepoStmtChangeKeyItemRevValue  :: !SqliteStmt
 	, clientRepoStmtSelectKeysToPush       :: !SqliteStmt
 	, clientRepoStmtGetPushLag             :: !SqliteStmt
-	, clientRepoStmtMassChangeStatus       :: !SqliteStmt
+	, clientRepoStmtMassChangeRev          :: !SqliteStmt
 	, clientRepoStmtEnumerateKeysBegin     :: !SqliteStmt
 	, clientRepoStmtEnumerateKeysBeginEnd  :: !SqliteStmt
 	, clientRepoStmtAddChunk               :: !SqliteStmt
@@ -83,17 +80,16 @@ openClientRepo fileName = describeException "failed to open oil client repo" $ w
 		\id INTEGER PRIMARY KEY, \
 		\value BLOB NOT NULL, \
 		\key BLOB NOT NULL, \
-		\rev INTEGER NOT NULL, \
-		\status INTEGER NOT NULL)"
-	-- items_key_status index
+		\rev INTEGER NOT NULL)"
+	-- items_key_rev index
 	sqliteExec db $ T.pack
-		"CREATE UNIQUE INDEX IF NOT EXISTS items_key_status ON items (key, status)"
-	-- items_status_partial index
+		"CREATE UNIQUE INDEX IF NOT EXISTS items_key_rev ON items (key, rev)"
+	-- items_rev_partial index
 	sqliteExec db $ T.pack $
-		"CREATE INDEX IF NOT EXISTS items_status_partial ON items (status) WHERE\
-		\ status = " ++ show (ItemStatusClient :: Int) ++
-		" OR status = " ++ show (ItemStatusTransient :: Int) ++
-		" OR status = " ++ show (ItemStatusPostponed :: Int)
+		"CREATE INDEX IF NOT EXISTS items_rev_partial ON items (rev) WHERE\
+		\ rev = " ++ show (ItemRevClient :: Int) ++
+		" OR rev = " ++ show (ItemRevTransient :: Int) ++
+		" OR rev = " ++ show (ItemRevPostponed :: Int)
 	-- chunks table
 	sqliteExec db $ T.pack
 		"CREATE TABLE IF NOT EXISTS chunks (\
@@ -104,17 +100,17 @@ openClientRepo fileName = describeException "failed to open oil client repo" $ w
 	let createStmt str = book bk $ sqliteStmt db $ T.pack str
 	stmtManifestGet            <- createStmt "SELECT value FROM manifest WHERE key = ?1"
 	stmtManifestSet            <- createStmt "INSERT OR REPLACE INTO manifest (key, value) VALUES (?1, ?2)"
-	stmtGetKeyItems            <- createStmt "SELECT id, status FROM items WHERE key = ?1"
-	stmtGetKeyItemsByOneItemId <- createStmt "SELECT id, status FROM items WHERE key = (SELECT key FROM items WHERE id = ?1)"
+	stmtGetKeyItems            <- createStmt "SELECT id, rev FROM items WHERE key = ?1 AND rev < 0"
+	stmtGetKeyItemsByOneItemId <- createStmt "SELECT id, rev FROM items WHERE key = (SELECT key FROM items WHERE id = ?1) AND rev < 0"
+	stmtGetKeyServerItem       <- createStmt "SELECT id, rev FROM items WHERE key = ?1 AND rev > 0 ORDER BY rev DESC LIMIT 1"
 	stmtGetKeyItemKey          <- createStmt "SELECT key FROM items WHERE id = ?1"
-	stmtGetKeyItemRev          <- createStmt "SELECT rev FROM items WHERE id = ?1"
 	stmtGetKeyItemRevValue     <- createStmt "SELECT rev, value FROM items WHERE id = ?1"
-	stmtAddKeyItem             <- createStmt "INSERT OR REPLACE INTO items (key, value, rev, status) VALUES (?1, ?2, ?3, ?4)"
-	stmtChangeKeyItemRevStatus <- createStmt "UPDATE OR REPLACE items SET rev = ?2, status = ?3 WHERE id = ?1"
+	stmtAddKeyItem             <- createStmt "INSERT OR REPLACE INTO items (key, value, rev) VALUES (?1, ?2, ?3)"
+	stmtChangeKeyItemRev       <- createStmt "UPDATE OR REPLACE items SET rev = ?2 WHERE id = ?1"
 	stmtChangeKeyItemRevValue  <- createStmt "UPDATE items SET rev = ?2, value = ?3 WHERE id = ?1"
-	stmtSelectKeysToPush       <- createStmt $ "SELECT id, key, value FROM items WHERE status = " ++ show (ItemStatusClient :: Int) ++ " ORDER BY id LIMIT ?1"
-	stmtGetPushLag             <- createStmt $ "SELECT COUNT(*) FROM items WHERE status = " ++ show (ItemStatusClient :: Int)
-	stmtMassChangeStatus       <- createStmt "UPDATE OR REPLACE items SET status = ?2 WHERE status = ?1"
+	stmtSelectKeysToPush       <- createStmt $ "SELECT id, key, value FROM items WHERE rev = " ++ show (ItemRevClient :: Int) ++ " ORDER BY id LIMIT ?1"
+	stmtGetPushLag             <- createStmt $ "SELECT COUNT(*) FROM items WHERE rev = " ++ show (ItemRevClient :: Int)
+	stmtMassChangeRev          <- createStmt "UPDATE OR REPLACE items SET rev = ?2 WHERE rev = ?1"
 	stmtEnumerateKeysBegin     <- createStmt "SELECT DISTINCT key FROM items WHERE key >= ?1 ORDER BY key"
 	stmtEnumerateKeysBeginEnd  <- createStmt "SELECT DISTINCT key FROM items WHERE key >= ?1 AND key < ?2 ORDER BY key"
 	stmtAddChunk               <- createStmt "INSERT INTO chunks (prerev, postrev) VALUES (?1, ?2)"
@@ -128,15 +124,15 @@ openClientRepo fileName = describeException "failed to open oil client repo" $ w
 		, clientRepoStmtManifestSet            = stmtManifestSet
 		, clientRepoStmtGetKeyItems            = stmtGetKeyItems
 		, clientRepoStmtGetKeyItemsByOneItemId = stmtGetKeyItemsByOneItemId
+		, clientRepoStmtGetKeyServerItem       = stmtGetKeyServerItem
 		, clientRepoStmtGetKeyItemKey          = stmtGetKeyItemKey
-		, clientRepoStmtGetKeyItemRev          = stmtGetKeyItemRev
 		, clientRepoStmtGetKeyItemRevValue     = stmtGetKeyItemRevValue
 		, clientRepoStmtAddKeyItem             = stmtAddKeyItem
-		, clientRepoStmtChangeKeyItemRevStatus = stmtChangeKeyItemRevStatus
+		, clientRepoStmtChangeKeyItemRev       = stmtChangeKeyItemRev
 		, clientRepoStmtChangeKeyItemRevValue  = stmtChangeKeyItemRevValue
 		, clientRepoStmtSelectKeysToPush       = stmtSelectKeysToPush
 		, clientRepoStmtGetPushLag             = stmtGetPushLag
-		, clientRepoStmtMassChangeStatus       = stmtMassChangeStatus
+		, clientRepoStmtMassChangeRev          = stmtMassChangeRev
 		, clientRepoStmtEnumerateKeysBegin     = stmtEnumerateKeysBegin
 		, clientRepoStmtEnumerateKeysBeginEnd  = stmtEnumerateKeysBeginEnd
 		, clientRepoStmtAddChunk               = stmtAddChunk
@@ -145,17 +141,16 @@ openClientRepo fileName = describeException "failed to open oil client repo" $ w
 		, clientRepoStmtGetUpperRevision       = stmtGetUpperRevision
 		}
 
--- Item statuses.
--- server version
-pattern ItemStatusServer = 0
+-- Item pseudo revs.
+-- Correct revisions (commited to server) are > 0.
+-- If it's < 0, it's a special pseudo-revision.
+-- Zero revision means no revision.
 -- client change based on 'server' in case of no conflict
-pattern ItemStatusClient = 1
+pattern ItemRevClient = -1
 -- client change based on 'server' which is in process of committing to server
-pattern ItemStatusTransient = 2
+pattern ItemRevTransient = -2
 -- client change based on 'transient', waiting for results of commit of 'transient'
-pattern ItemStatusPostponed = 3
--- count
-pattern ItemStatusesCount = 4
+pattern ItemRevPostponed = -3
 
 -- Manifest keys.
 pattern ManifestKeyGlobalRevision = 0
@@ -208,33 +203,22 @@ clientRepoRevision repo@ClientRepo
 		sqliteFinalStep query
 	return globalRevision
 
-addKeyItem :: ClientRepo -> B.ByteString -> B.ByteString -> Revision -> CInt -> IO ()
+addKeyItem :: ClientRepo -> B.ByteString -> B.ByteString -> Revision -> IO ()
 addKeyItem ClientRepo
 	{ clientRepoStmtAddKeyItem = stmtAddKeyItem
-	} key value revision status = sqliteQuery stmtAddKeyItem $ \query -> do
+	} key value revision = sqliteQuery stmtAddKeyItem $ \query -> do
 	sqliteBind query 1 key
 	sqliteBind query 2 value
 	sqliteBind query 3 revision
-	sqliteBind query 4 status
 	sqliteFinalStep query
 
-changeKeyItemRevisionStatus :: ClientRepo -> ItemId -> Revision -> CInt -> IO ()
-changeKeyItemRevisionStatus ClientRepo
-	{ clientRepoStmtChangeKeyItemRevStatus = stmtChangeKeyItemRevStatus
-	} itemId newRevision newStatus = sqliteQuery stmtChangeKeyItemRevStatus $ \query -> do
+changeKeyItemRevision :: ClientRepo -> ItemId -> Revision -> IO ()
+changeKeyItemRevision ClientRepo
+	{ clientRepoStmtChangeKeyItemRev = stmtChangeKeyItemRev
+	} itemId newRevision = sqliteQuery stmtChangeKeyItemRev $ \query -> do
 	sqliteBind query 1 itemId
 	sqliteBind query 2 newRevision
-	sqliteBind query 3 newStatus
 	sqliteFinalStep query
-
-getKeyItemRevision :: ClientRepo -> ItemId -> IO Revision
-getKeyItemRevision ClientRepo
-	{ clientRepoStmtGetKeyItemRev = stmtGetKeyItemRev
-	} itemId = sqliteQuery stmtGetKeyItemRev $ \query -> do
-	sqliteBind query 1 itemId
-	r <- sqliteStep query
-	unless r $ throwIO $ DescribeFirstException "failed to get key item revision"
-	sqliteColumn query 0
 
 getKeyItemRevisionValue :: ClientRepo -> ItemId -> IO (Revision, B.ByteString)
 getKeyItemRevisionValue ClientRepo
@@ -245,7 +229,7 @@ getKeyItemRevisionValue ClientRepo
 	unless r $ throwIO $ DescribeFirstException "failed to get key item revision and value"
 	revision <- sqliteColumn query 0
 	value <- sqliteColumn query 1
-	return (revision, value)
+	return (if revision > 0 then revision else 0, value)
 
 changeKeyItemRevisionValue :: ClientRepo -> ItemId -> Revision -> B.ByteString -> IO ()
 changeKeyItemRevisionValue ClientRepo
@@ -257,21 +241,35 @@ changeKeyItemRevisionValue ClientRepo
 	sqliteFinalStep query
 
 -- | Collection of items with the same key.
-newtype KeyItems = KeyItems (VU.Vector ItemId)
+data KeyItems = KeyItems
+	{ keyItemsClientItemId :: {-# UNPACK #-} !ItemId
+	, keyItemsTransientItemId :: {-# UNPACK #-} !ItemId
+	, keyItemsPostponedItemId :: {-# UNPACK #-} !ItemId
+	} deriving Show
 
 fillKeyItems :: SqliteQuery -> IO KeyItems
-fillKeyItems query = do
-	v <- VUM.replicate ItemStatusesCount 0
-	let step = do
+fillKeyItems query = step KeyItems
+	{ keyItemsClientItemId = 0
+	, keyItemsTransientItemId = 0
+	, keyItemsPostponedItemId = 0
+	} where
+	step keyItems = do
 		r <- sqliteStep query
-		when r $ do
-			itemStatus <- sqliteColumn query 1
-			when (itemStatus < 0 || itemStatus >= ItemStatusesCount) $ throwIO $ DescribeFirstException "wrong item status"
+		if r then do
 			itemId <- sqliteColumn query 0
-			VUM.write v (fromIntegral (itemStatus :: CInt)) itemId
-			step
-	step
-	KeyItems <$> VU.unsafeFreeze v
+			itemRevision <- sqliteColumn query 1
+			case itemRevision :: Revision of
+				ItemRevClient -> step keyItems
+					{ keyItemsClientItemId = itemId
+					}
+				ItemRevTransient -> step keyItems
+					{ keyItemsTransientItemId = itemId
+					}
+				ItemRevPostponed -> step keyItems
+					{ keyItemsPostponedItemId = itemId
+					}
+				_ -> throwIO $ DescribeFirstException "wrong item status rev"
+		else return keyItems
 
 getKeyItems :: ClientRepo -> B.ByteString -> IO KeyItems
 getKeyItems ClientRepo
@@ -287,29 +285,34 @@ getKeyItemsByOneItemId ClientRepo
 	sqliteBind query 1 itemId
 	fillKeyItems query
 
+getKeyServerItem :: ClientRepo -> B.ByteString -> IO ItemId
+getKeyServerItem ClientRepo
+	{ clientRepoStmtGetKeyServerItem = stmtGetKeyServerItem
+	} key = sqliteQuery stmtGetKeyServerItem $ \query -> do
+	sqliteBind query 1 key
+	r <- sqliteStep query
+	if r then sqliteColumn query 0
+	else return 0
+
 mapKeyRevisionItem :: ClientRepo -> B.ByteString -> a -> (ItemId -> IO a) -> IO a
 mapKeyRevisionItem repo key defaultResult f = do
-	KeyItems keyItemIds <- getKeyItems repo key
-	let
-		step (status : restStatuses) = do
-			let itemId = keyItemIds VU.! status
-			if itemId > 0 then f itemId
-			else step restStatuses
-		step [] = return defaultResult
+	KeyItems
+		{ keyItemsClientItemId = clientItemId
+		, keyItemsTransientItemId = transientItemId
+		, keyItemsPostponedItemId = postponedItemId
+		} <- getKeyItems repo key
 	-- check key items in this particular order
-	step [ItemStatusPostponed, ItemStatusTransient, ItemStatusClient, ItemStatusServer]
-
-getKeyRevision :: ClientRepo -> B.ByteString -> IO Revision
-getKeyRevision repo key = mapKeyRevisionItem repo key 0 $ getKeyItemRevision repo
+	if postponedItemId > 0 then f postponedItemId
+	else if transientItemId > 0 then f transientItemId
+	else if clientItemId > 0 then f clientItemId
+	else do
+		-- check server item
+		serverItemId <- getKeyServerItem repo key
+		if serverItemId > 0 then f serverItemId
+		else return defaultResult
 
 getKeyRevisionValue :: ClientRepo -> B.ByteString -> IO (Revision, B.ByteString)
 getKeyRevisionValue repo key = mapKeyRevisionItem repo key (0, B.empty) $ getKeyItemRevisionValue repo
-
--- | Get revision by key.
-clientRepoGetRevision :: ClientRepo -> B.ByteString -> IO Revision
-clientRepoGetRevision repo@ClientRepo
-	{ clientRepoDb = db
-	} key = sqliteTransaction db $ \_commit -> getKeyRevision repo key
 
 -- | Get revision and value by key.
 clientRepoGetRevisionValue :: ClientRepo -> B.ByteString -> IO (Revision, B.ByteString)
@@ -322,11 +325,17 @@ clientRepoChange :: ClientRepo -> B.ByteString -> B.ByteString -> IO ()
 clientRepoChange repo@ClientRepo
 	{ clientRepoDb = db
 	} key value = sqliteTransaction db $ \commit -> do
-	KeyItems keyItemIds <- getKeyItems repo key
-	let status = if (keyItemIds VU.! ItemStatusTransient) > 0 then ItemStatusPostponed else ItemStatusClient
-	let statusItemId = keyItemIds VU.! status
-	if statusItemId > 0 then changeKeyItemRevisionValue repo statusItemId 0 value
-	else addKeyItem repo key value 0 $ fromIntegral status
+	KeyItems
+		{ keyItemsClientItemId = clientItemId
+		, keyItemsTransientItemId = transientItemId
+		, keyItemsPostponedItemId = postponedItemId
+		} <- getKeyItems repo key
+	let (newRev, revItemId) =
+		if transientItemId > 0 then (ItemRevPostponed, postponedItemId)
+		else (ItemRevClient, clientItemId)
+	if revItemId > 0 then changeKeyItemRevisionValue repo revItemId newRev value
+	else addKeyItem repo key value newRev
+	void $ getKeyItems repo key
 	commit
 
 -- | Get all keys having the string given as a prefix.
@@ -406,7 +415,7 @@ pushClientRepo repo@ClientRepo
 					-- get id of item
 					itemId <- sqliteColumn query 0
 					-- change status of item to 'transient'
-					changeKeyItemRevisionStatus repo itemId 0 ItemStatusTransient
+					changeKeyItemRevision repo itemId ItemRevTransient
 					-- get rest of the items and return
 					(restItems, restItemIds) <- step newPushValuesTotalSize
 					return ((key, value) : restItems, itemId : restItemIds)
@@ -453,13 +462,14 @@ pullClientRepo repo@ClientRepo
 	-- process commited keys
 	forM_ (zip [(prePushRevision + 1)..] transientIds) $ \(revision, transientItemId) -> do
 		-- get key items
-		KeyItems keyItemIds <- getKeyItemsByOneItemId repo transientItemId
+		KeyItems
+			{ keyItemsPostponedItemId = postponedItemId
+			} <- getKeyItemsByOneItemId repo transientItemId
 
 		-- 'transient' becomes 'server'
-		changeKeyItemRevisionStatus repo transientItemId revision ItemStatusServer
+		changeKeyItemRevision repo transientItemId revision
 		-- 'postponed' becomes 'client'
-		let postponedItemId = keyItemIds VU.! ItemStatusPostponed
-		when (postponedItemId > 0) $ changeKeyItemRevisionStatus repo postponedItemId 0 ItemStatusClient
+		when (postponedItemId > 0) $ changeKeyItemRevision repo postponedItemId ItemRevClient
 
 	-- add chunk if something has been committed
 	when (prePushRevision < postPushRevision) $ do
@@ -470,13 +480,11 @@ pullClientRepo repo@ClientRepo
 
 	-- pull keys
 	forM_ itemsToPull $ \(revision, key, value) -> do
-		-- get key items
-		KeyItems keyItemIds <- getKeyItems repo key
 		-- value always becomes 'server'
 		-- see what we need to do
-		let serverItemId = keyItemIds VU.! ItemStatusServer
+		serverItemId <- getKeyServerItem repo key
 		if serverItemId > 0 then changeKeyItemRevisionValue repo serverItemId revision value
-		else when (B.length value > 0) $ addKeyItem repo key value revision ItemStatusServer
+		else when (B.length value > 0) $ addKeyItem repo key value revision
 
 	-- set new client revision
 	setManifestValue repo ManifestKeyGlobalRevision newClientRevision
@@ -495,17 +503,17 @@ pullClientRepo repo@ClientRepo
 cleanupClientRepo :: ClientRepo -> IO ()
 cleanupClientRepo ClientRepo
 	{ clientRepoDb = db
-	, clientRepoStmtMassChangeStatus = stmtMassChangeStatus
+	, clientRepoStmtMassChangeRev = stmtMassChangeStatus
 	} = sqliteTransaction db $ \commit -> do
 	-- change 'transient' items to 'client'
 	sqliteQuery stmtMassChangeStatus $ \query -> do
-		sqliteBind query 1 (ItemStatusTransient :: CInt)
-		sqliteBind query 2 (ItemStatusClient :: CInt)
+		sqliteBind query 1 (ItemRevTransient :: Revision)
+		sqliteBind query 2 (ItemRevClient :: Revision)
 		sqliteFinalStep query
 	-- change 'postponed' items to 'client' (possibly replacing former 'transient' items)
 	sqliteQuery stmtMassChangeStatus $ \query -> do
-		sqliteBind query 1 (ItemStatusPostponed :: CInt)
-		sqliteBind query 2 (ItemStatusClient :: CInt)
+		sqliteBind query 1 (ItemRevPostponed :: Revision)
+		sqliteBind query 2 (ItemRevClient :: Revision)
 		sqliteFinalStep query
 	-- commit
 	commit

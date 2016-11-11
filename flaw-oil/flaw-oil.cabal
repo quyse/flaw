@@ -25,7 +25,7 @@ library
     Flaw.Oil.ServerRepo
   other-modules:
   -- other-extensions:    
-  build-depends:       base, bytestring, cereal, flaw-base, flaw-sqlite, http-client, http-types, text, time, vector
+  build-depends:       base, bytestring, cereal, flaw-base, flaw-sqlite, http-client, http-types, text, time
   -- hs-source-dirs:      
   default-language:    Haskell2010
 
