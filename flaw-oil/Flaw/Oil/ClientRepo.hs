@@ -4,7 +4,7 @@ Description: Oil client repo.
 License: MIT
 -}
 
-{-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE PatternSynonyms, ViewPatterns #-}
 {-# OPTIONS_GHC -fno-warn-missing-pattern-synonym-signatures #-}
 
 module Flaw.Oil.ClientRepo
@@ -398,9 +398,9 @@ pushClientRepo repo@ClientRepo
 		sqliteColumn query 0
 
 	-- select keys to push
-	(items, transientIds) <- sqliteQuery stmtSelectKeysToPush $ \query -> do
+	(reverse -> items, reverse -> transientIds) <- sqliteQuery stmtSelectKeysToPush $ \query -> do
 		sqliteBind query 1 (fromIntegral maxPushItemsCount :: Int64)
-		let step pushValuesTotalSize = do
+		let step pushValuesTotalSize prevItems prevItemsIds = do
 			-- get next row
 			r <- sqliteStep query
 			if r then do
@@ -417,10 +417,9 @@ pushClientRepo repo@ClientRepo
 					-- change status of item to 'transient'
 					changeKeyItemRevision repo itemId ItemRevTransient
 					-- get rest of the items and return
-					(restItems, restItemIds) <- step newPushValuesTotalSize
-					return ((key, value) : restItems, itemId : restItemIds)
-			else return ([], [])
-		step 0
+					step newPushValuesTotalSize ((key, value) : prevItems) (itemId : prevItemsIds)
+			else return (prevItems, prevItemsIds)
+		step 0 [] []
 
 	-- commit and return
 	commit
