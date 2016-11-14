@@ -217,6 +217,7 @@ module Flaw.Graphics.WebGL.FFI
 	, pattern GL_TRIANGLES
 	, pattern GL_TRIANGLE_STRIP
 	, pattern GL_TRIANGLE_FAN
+	, pattern GL_PATCHES
 	, pattern GL_ZERO
 	, pattern GL_ONE
 	, pattern GL_SRC_COLOR
