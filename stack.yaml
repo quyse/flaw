@@ -1,4 +1,4 @@
-resolver: nightly-2016-08-26
+resolver: lts-7.9
 
 packages:
 - flaw-al
@@ -55,9 +55,6 @@ packages:
     git: https://github.com/quyse/wai-routes.git
     commit: 49762a3bc415fa198ad108f7a7764a0e38bea6ca
   extra-dep: true
-
-extra-deps:
-- cereal-text-0.1.0.2
 
 ghc-options:
   "*": -O3 -threaded -with-rtsopts=-N -Wall -fno-warn-unsupported-calling-conventions -fno-warn-tabs
