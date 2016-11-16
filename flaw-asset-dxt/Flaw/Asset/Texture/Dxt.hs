@@ -42,6 +42,15 @@ dxtCompressTexture textureInfo@TextureInfo
 			, textureFormatColorSpace = colorSpace
 			})
 		UncompressedTextureFormat
+			{ textureFormatComponents = PixelRGBA
+			, textureFormatValueType = PixelUint
+			, textureFormatPixelSize = Pixel32bit
+			, textureFormatColorSpace = colorSpace
+			} -> return (compressBC2Block, CompressedTextureFormat
+			{ textureFormatCompression = TextureCompressionBC2
+			, textureFormatColorSpace = colorSpace
+			})
+		UncompressedTextureFormat
 			{ textureFormatComponents = PixelR
 			, textureFormatValueType = PixelUint
 			, textureFormatPixelSize = Pixel8bit
@@ -125,5 +134,6 @@ dxtCompressTexture textureInfo@TextureInfo
 	return (newTextureInfo, newBytes)
 
 foreign import ccall unsafe "flaw_squish_compress_bc1" compressBC1Block :: Ptr () -> CInt -> Ptr () -> IO ()
+foreign import ccall unsafe "flaw_squish_compress_bc2" compressBC2Block :: Ptr () -> CInt -> Ptr () -> IO ()
 foreign import ccall unsafe "flaw_squish_compress_bc4" compressBC4Block :: Ptr () -> CInt -> Ptr () -> IO ()
 foreign import ccall unsafe "flaw_squish_compress_bc5" compressBC5Block :: Ptr () -> CInt -> Ptr () -> IO ()

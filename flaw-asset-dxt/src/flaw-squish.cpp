@@ -18,7 +18,7 @@ extern "C" void flaw_squish_compress_bc1(u8 const* input, int inputLinePitch, u8
 		rgbaInput[i * 4 + 3] = 255;
 	}
 
-	int flags = kDxt1 | kColourIterativeClusterFit;
+	const int flags = kDxt1 | kColourIterativeClusterFit;
 
 	// calculate color set
 	ColourSet colours(rgbaInput, 0xffff, flags);
@@ -33,6 +33,33 @@ extern "C" void flaw_squish_compress_bc1(u8 const* input, int inputLinePitch, u8
 		ClusterFit fit(&colours, flags, NULL);
 		fit.Compress(output);
 	}
+}
+
+extern "C" void flaw_squish_compress_bc2(u8 const* input, int inputLinePitch, u8* output)
+{
+	// make rgba input block
+	u8 rgbaInput[64];
+	for(int i = 0; i < 4; ++i)
+		memcpy(rgbaInput + i * 16, input + i * inputLinePitch, 16);
+
+	const int flags = kDxt1 | kColourIterativeClusterFit;
+
+	// calculate color set
+	ColourSet colours(rgbaInput, 0xffff, flags);
+	// if there's just one color, do single color fit
+	if(colours.GetCount() == 1)
+	{
+		SingleColourFit fit(&colours, flags);
+		fit.Compress(output);
+	}
+	else
+	{
+		ClusterFit fit(&colours, flags, NULL);
+		fit.Compress(output);
+	}
+
+	// compress alpha
+	CompressAlphaDxt5(rgbaInput, 0xffff, output + 8);
 }
 
 // Compress 16-byte alpha block to 8 bytes using BC4 format.
