@@ -898,20 +898,31 @@ glBufferData_null target size usage = glBufferData_val target (pToJSVal size) us
 
 -- Texture uploading.
 
+-- | Helper for calling functions with typed array.
+{-# INLINE texImageBytes #-}
+texImageBytes :: GLenum -> B.ByteString -> JSVal
+texImageBytes type_ bytes = case type_ of
+	GL_UNSIGNED_BYTE -> byteStringToJsUint8Array bytes
+	GL_UNSIGNED_SHORT -> byteStringToJsUint16Array bytes
+	GL_UNSIGNED_INT -> byteStringToJsUint32Array bytes
+	GL_FLOAT -> byteStringToJsFloatArray bytes
+	_ -> byteStringToJsDataView bytes
+
+
 {-# INLINABLE glTexImage1D_bs #-}
 glTexImage1D_bs :: GLenum -> GLint -> GLint -> GLsizei -> GLint -> GLenum -> GLenum -> B.ByteString -> IO ()
 glTexImage1D_bs target level internalFormat width border format type_ bytes =
-	glTexImage1D_val target level internalFormat width border format type_ $ byteStringToJsDataView bytes
+	glTexImage1D_val target level internalFormat width border format type_ $ texImageBytes type_ bytes
 
 {-# INLINABLE glTexImage2D_bs #-}
 glTexImage2D_bs :: GLenum -> GLint -> GLint -> GLsizei -> GLsizei -> GLint -> GLenum -> GLenum -> B.ByteString -> IO ()
 glTexImage2D_bs target level internalFormat width height border format type_ bytes =
-	glTexImage2D_val target level internalFormat width height border format type_ $ byteStringToJsDataView bytes
+	glTexImage2D_val target level internalFormat width height border format type_ $ texImageBytes type_ bytes
 
 {-# INLINABLE glTexImage3D_bs #-}
 glTexImage3D_bs :: GLenum -> GLint -> GLint -> GLsizei -> GLsizei -> GLsizei -> GLint -> GLenum -> GLenum -> B.ByteString -> IO ()
 glTexImage3D_bs target level internalFormat width height depth border format type_ bytes =
-	glTexImage3D_val target level internalFormat width height depth border format type_ $ byteStringToJsDataView bytes
+	glTexImage3D_val target level internalFormat width height depth border format type_ $ texImageBytes type_ bytes
 
 {-# INLINABLE glCompressedTexImage1D_bs #-}
 glCompressedTexImage1D_bs :: GLenum -> GLint -> GLenum -> GLsizei -> GLint -> B.ByteString -> IO ()
@@ -1301,30 +1312,31 @@ pattern GL_FLOAT = 0x1406
 pattern GL_HALF_FLOAT = 0x140B
 
 -- PixelFormat
+-- WebGL 1.0 doesn't support a lot of values; replacing them with supported ones.
 pattern GL_DEPTH_COMPONENT = 0x1902
-pattern GL_RED = 0x1903
+pattern GL_RED = GL_LUMINANCE -- (0x1903) not supported in WebGL 1.0
 pattern GL_ALPHA = 0x1906
 pattern GL_RGB = 0x1907
 pattern GL_RGBA = 0x1908
 pattern GL_LUMINANCE = 0x1909
 pattern GL_LUMINANCE_ALPHA = 0x190A
-pattern GL_RGB8 = 0x8051
-pattern GL_RGBA8 = 0x8058
-pattern GL_RGBA16 = 0x805B
-pattern GL_RG = 0x8227
-pattern GL_R8 = 0x8229
-pattern GL_R16 = 0x822A
-pattern GL_RG8 = 0x822B
-pattern GL_RG16 = 0x822C
-pattern GL_R16F = 0x822D
-pattern GL_R32F = 0x822E
-pattern GL_RG16F = 0x822F
-pattern GL_RG32F = 0x8230
-pattern GL_RGBA32F = 0x8814
-pattern GL_RGB32F = 0x8815
-pattern GL_RGBA16F = 0x881A
-pattern GL_R11F_G11F_B10F = 0x8C3A
-pattern GL_SRGB8_ALPHA8 = 0x8C43
+pattern GL_RGB8 = GL_RGB -- (0x8051) not supported in WebGL 1.0
+pattern GL_RGBA8 = GL_RGBA -- (0x8058) not supported in WebGL 1.0
+pattern GL_RGBA16 = GL_RGBA -- (0x805B) not supported in WebGL 1.0
+pattern GL_RG = 0x8227 -- not supported in WebGL 1.0
+pattern GL_R8 = GL_RED -- (0x8229) not supported in WebGL 1.0
+pattern GL_R16 = GL_RED -- (0x822A) not supported in WebGL 1.0
+pattern GL_RG8 = 0x822B -- not supported in WebGL 1.0
+pattern GL_RG16 = 0x822C -- not supported in WebGL 1.0
+pattern GL_R16F = GL_RED -- (0x822D) not supported in WebGL 1.0
+pattern GL_R32F = GL_RED -- (0x822E) not supported in WebGL 1.0
+pattern GL_RG16F = 0x822F -- not supported in WebGL 1.0
+pattern GL_RG32F = 0x8230 -- not supported in WebGL 1.0
+pattern GL_RGBA32F = GL_RGBA -- (0x8814) not supported in WebGL 1.0
+pattern GL_RGB32F = GL_RGB -- (0x8815) not supported in WebGL 1.0
+pattern GL_RGBA16F = GL_RGBA -- (0x881A) not supported in WebGL 1.0
+pattern GL_R11F_G11F_B10F = GL_RGB -- (0x8C3A) not supported in WebGL 1.0
+pattern GL_SRGB8_ALPHA8 = 0x8C42 -- TEST 0x8C43
 
 -- Compressed pixel formats
 -- WEBGL_compressed_texture_s3tc extension

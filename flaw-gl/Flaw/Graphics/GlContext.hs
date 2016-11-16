@@ -276,6 +276,8 @@ instance Device GlContext where
 				mipOffset = fromIntegral $ textureMipOffset mipMetrics
 				mipSize = fromIntegral $ textureMipSize mipMetrics
 
+			-- supported only in WebGL 2.0
+#if !defined(ghcjs_HOST_OS)
 			-- set unpack image height if needed
 			when (textureType == Texture3D || textureType == Texture2DArray) $ do
 				glPixelStorei GL_UNPACK_IMAGE_HEIGHT $ if compressed then 0 else mipSlicePitch `quot` pixelSize
@@ -285,6 +287,7 @@ instance Device GlContext where
 			when (textureType == Texture3D || textureType == Texture2DArray || textureType == Texture2D || textureType == Texture1DArray) $ do
 				glPixelStorei GL_UNPACK_ROW_LENGTH $ if compressed then 0 else mipLinePitch `quot` pixelSize
 				glCheckErrors0 "set unpack row length"
+#endif
 
 			-- get mip data
 			let mipBytes = B.take mipSize $ B.drop mipOffset bytes
@@ -322,13 +325,18 @@ instance Device GlContext where
 						Texture1D      -> glTexImage1D_bs glTarget mip glInternalFormatS mipWidth                    0 glFormat glType mipBytes
 			glCheckErrors0 "tex image"
 
+#if !defined(ghcjs_HOST_OS)
 		unless useTextureStorage $ do
 			glTexParameteri glTarget GL_TEXTURE_BASE_LEVEL 0
 			glTexParameteri glTarget GL_TEXTURE_MAX_LEVEL $ mips - 1
 			glCheckErrors0 "texture parameters"
+#endif
 
 		-- setup sampling
-		glSetupTextureSampling glTarget samplerStateInfo
+		glSetupTextureSampling glTarget $ if mips > 1 then samplerStateInfo else samplerStateInfo
+			{ samplerMipFilter = SamplerPointFilter
+			, samplerMaxLod = 0
+			}
 
 		-- unbind texture, so we don't hold a reference
 		glBindTexture glTarget glNullTextureName
@@ -1263,21 +1271,27 @@ glFormatFromTextureFormat format = case format of
 		, textureFormatPixelSize = pixelSize
 		, textureFormatColorSpace = colorSpace
 		} -> case (components, vt, pixelSize, colorSpace) of
-		(PixelR, PixelUint, Pixel8bit, LinearColorSpace) -> (False, GL_R8, GL_RED, GL_UNSIGNED_BYTE)
-		(PixelR, PixelUint, Pixel16bit, LinearColorSpace) -> (False, GL_R16, GL_RED, GL_UNSIGNED_SHORT)
-		(PixelR, PixelFloat, Pixel16bit, LinearColorSpace) -> (False, GL_R16F, GL_RED, GL_FLOAT)
-		(PixelR, PixelFloat, Pixel32bit, LinearColorSpace) -> (False, GL_R32F, GL_RED, GL_FLOAT)
-		(PixelRG, PixelUint, Pixel16bit, LinearColorSpace) -> (False, GL_RG8, GL_RG, GL_UNSIGNED_BYTE)
-		(PixelRG, PixelUint, Pixel32bit, LinearColorSpace) -> (False, GL_RG16, GL_RG, GL_UNSIGNED_SHORT)
-		(PixelRG, PixelFloat, Pixel32bit, LinearColorSpace) -> (False, GL_RG16F, GL_RG, GL_FLOAT)
-		(PixelRG, PixelFloat, Pixel64bit, LinearColorSpace) -> (False, GL_RG32F, GL_RG, GL_FLOAT)
-		(PixelRGB, PixelFloat, Pixel32bit, LinearColorSpace) -> (False, GL_R11F_G11F_B10F, GL_RGB, GL_FLOAT)
-		(PixelRGB, PixelFloat, Pixel96bit, LinearColorSpace) -> (False, GL_RGB32F, GL_RGB, GL_FLOAT)
-		(PixelRGBA, PixelUint, Pixel32bit, LinearColorSpace) -> (False, GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE)
-		(PixelRGBA, PixelUint, Pixel32bit, StandardColorSpace) -> (False, GL_SRGB8_ALPHA8, GL_RGBA, GL_UNSIGNED_BYTE)
-		(PixelRGBA, PixelUint, Pixel64bit, LinearColorSpace) -> (False, GL_RGBA16, GL_RGBA, GL_UNSIGNED_SHORT)
-		(PixelRGBA, PixelFloat, Pixel64bit, LinearColorSpace) -> (False, GL_RGBA16F, GL_RGBA, GL_FLOAT)
-		(PixelRGBA, PixelFloat, Pixel128bit, LinearColorSpace) -> (False, GL_RGBA32F, GL_RGBA, GL_FLOAT)
+#if defined(ghcjs_HOST_OS)
+#define FORMAT(internalFormat, format) internalFormat, internalFormat
+#else
+#define FORMAT(internalFormat, format) internalFormat, format
+#endif
+		(PixelR, PixelUint, Pixel8bit, LinearColorSpace) -> (False, FORMAT(GL_R8, GL_RED), GL_UNSIGNED_BYTE)
+		(PixelR, PixelUint, Pixel16bit, LinearColorSpace) -> (False, FORMAT(GL_R16, GL_RED), GL_UNSIGNED_SHORT)
+		(PixelR, PixelFloat, Pixel16bit, LinearColorSpace) -> (False, FORMAT(GL_R16F, GL_RED), GL_FLOAT)
+		(PixelR, PixelFloat, Pixel32bit, LinearColorSpace) -> (False, FORMAT(GL_R32F, GL_RED), GL_FLOAT)
+		(PixelRG, PixelUint, Pixel16bit, LinearColorSpace) -> (False, FORMAT(GL_RG8, GL_RG), GL_UNSIGNED_BYTE)
+		(PixelRG, PixelUint, Pixel32bit, LinearColorSpace) -> (False, FORMAT(GL_RG16, GL_RG), GL_UNSIGNED_SHORT)
+		(PixelRG, PixelFloat, Pixel32bit, LinearColorSpace) -> (False, FORMAT(GL_RG16F, GL_RG), GL_FLOAT)
+		(PixelRG, PixelFloat, Pixel64bit, LinearColorSpace) -> (False, FORMAT(GL_RG32F, GL_RG), GL_FLOAT)
+		(PixelRGB, PixelFloat, Pixel32bit, LinearColorSpace) -> (False, FORMAT(GL_R11F_G11F_B10F, GL_RGB), GL_FLOAT)
+		(PixelRGB, PixelFloat, Pixel96bit, LinearColorSpace) -> (False, FORMAT(GL_RGB32F, GL_RGB), GL_FLOAT)
+		(PixelRGBA, PixelUint, Pixel32bit, LinearColorSpace) -> (False, FORMAT(GL_RGBA8, GL_RGBA), GL_UNSIGNED_BYTE)
+		(PixelRGBA, PixelUint, Pixel32bit, StandardColorSpace) -> (False, FORMAT(GL_SRGB8_ALPHA8, GL_RGBA), GL_UNSIGNED_BYTE)
+		(PixelRGBA, PixelUint, Pixel64bit, LinearColorSpace) -> (False, FORMAT(GL_RGBA16, GL_RGBA), GL_UNSIGNED_SHORT)
+		(PixelRGBA, PixelFloat, Pixel64bit, LinearColorSpace) -> (False, FORMAT(GL_RGBA16F, GL_RGBA), GL_FLOAT)
+		(PixelRGBA, PixelFloat, Pixel128bit, LinearColorSpace) -> (False, FORMAT(GL_RGBA32F, GL_RGBA), GL_FLOAT)
+#undef FORMAT
 		_ -> error $ show ("uncompressed texture format unsupported by OpenGL", format)
 	CompressedTextureFormat
 		{ textureFormatCompression = compression

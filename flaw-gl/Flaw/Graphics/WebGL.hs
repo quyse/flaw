@@ -156,6 +156,7 @@ webglInit canvas@Canvas
 		, "WEBGL_compressed_texture_atc"
 		, "WEBGL_compressed_texture_pvrtc"
 		, "WEBGL_compressed_texture_s3tc"
+		, "WEBGL_compressed_texture_s3tc_srgb"
 		, "WEBGL_depth_texture"
 		, "WEBGL_draw_buffers"
 		, "WEBGL_shared_resources"
