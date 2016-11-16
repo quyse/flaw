@@ -9,6 +9,10 @@ License: MIT
 module Flaw.Js
 	( initJs
 	, byteStringToJsDataView
+	, byteStringToJsUint8Array
+	, byteStringToJsUint16Array
+	, byteStringToJsUint32Array
+	, byteStringToJsFloatArray
 	, arrayBufferToByteString
 	, blobToArrayBuffer
 	, ptrToFloat32Array
@@ -38,7 +42,31 @@ byteStringToJsDataView :: B.ByteString -> JSVal
 byteStringToJsDataView bytes = js_dataViewFromBuffer buf off len where
 	(buf, off, len) = GHCJS.Buffer.fromByteString bytes
 
+-- | Convert bytestring to Javascript Uint8Array object.
+byteStringToJsUint8Array :: B.ByteString -> JSVal
+byteStringToJsUint8Array bytes = js_uint8ArrayFromBuffer buf off len where
+	(buf, off, len) = GHCJS.Buffer.fromByteString bytes
+
+-- | Convert bytestring to Javascript Uint16Array object.
+byteStringToJsUint16Array :: B.ByteString -> JSVal
+byteStringToJsUint16Array bytes = js_uint16ArrayFromBuffer buf off len where
+	(buf, off, len) = GHCJS.Buffer.fromByteString bytes
+
+-- | Convert bytestring to Javascript Uint32Array object.
+byteStringToJsUint32Array :: B.ByteString -> JSVal
+byteStringToJsUint32Array bytes = js_uint32ArrayFromBuffer buf off len where
+	(buf, off, len) = GHCJS.Buffer.fromByteString bytes
+
+-- | Convert bytestring to Javascript FloatArray object.
+byteStringToJsFloatArray :: B.ByteString -> JSVal
+byteStringToJsFloatArray bytes = js_floatArrayFromBuffer buf off len where
+	(buf, off, len) = GHCJS.Buffer.fromByteString bytes
+
 foreign import javascript unsafe "new DataView($1.buf, $2, $3)" js_dataViewFromBuffer :: GHCJS.Buffer.Buffer -> Int -> Int -> JSVal
+foreign import javascript unsafe "new Uint8Array($1.buf, $2, $3)" js_uint8ArrayFromBuffer :: GHCJS.Buffer.Buffer -> Int -> Int -> JSVal
+foreign import javascript unsafe "new Uint16Array($1.buf, $2, $3)" js_uint16ArrayFromBuffer :: GHCJS.Buffer.Buffer -> Int -> Int -> JSVal
+foreign import javascript unsafe "new Uint32Array($1.buf, $2, $3)" js_uint32ArrayFromBuffer :: GHCJS.Buffer.Buffer -> Int -> Int -> JSVal
+foreign import javascript unsafe "new FloatArray($1.buf, $2, $3)" js_floatArrayFromBuffer :: GHCJS.Buffer.Buffer -> Int -> Int -> JSVal
 
 arrayBufferToByteString :: ArrayBuffer -> B.ByteString
 arrayBufferToByteString = GHCJS.Buffer.toByteString 0 Nothing . GHCJS.Buffer.createFromArrayBuffer
