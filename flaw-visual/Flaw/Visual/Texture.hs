@@ -198,8 +198,45 @@ convertTextureToLinearRG packedTexture = case packedTexture of
 	-- others are unsupported
 	_ -> error "wrong texture for linear RG conversion"
 
+ensureTextureInLoadableFormat :: PackedTexture -> PackedTexture
+ensureTextureInLoadableFormat packedTexture = case packedTexture of
+	-- 24-bit RGB: add alpha channel
+	PackedTexture
+		{ packedTextureBytes = bytes
+		, packedTextureInfo = info@TextureInfo
+			{ textureFormat = format@UncompressedTextureFormat
+				{ textureFormatComponents = PixelRGB
+				, textureFormatValueType = PixelUint
+				, textureFormatPixelSize = Pixel24bit
+				}
+			}
+		} -> unsafePerformIO $ B.unsafeUseAsCStringLen bytes $ \(ptr, len) -> do
+		let pixelsCount = len `quot` 3
+		let newLen = pixelsCount * 4
+		newPtr <- mallocBytes newLen
+		let loop i = when (i < pixelsCount) $ do
+			let oi = i * 3
+			let ni = i * 4
+			pokeElemOff newPtr (ni + 0) =<< peekElemOff ptr (oi + 0)
+			pokeElemOff newPtr (ni + 1) =<< peekElemOff ptr (oi + 1)
+			pokeElemOff newPtr (ni + 2) =<< peekElemOff ptr (oi + 2)
+			pokeElemOff newPtr (ni + 3) 255
+			loop $ i + 1
+		loop 0
+		newBytes <- B.unsafePackMallocCStringLen (newPtr, newLen)
+		return packedTexture
+			{ packedTextureBytes = newBytes
+			, packedTextureInfo = info
+				{ textureFormat = format
+					{ textureFormatComponents = PixelRGBA
+					, textureFormatPixelSize = Pixel32bit
+					}
+				}
+			}
+	_ -> packedTexture
+
 emitTextureAsset :: FilePath -> Q B.ByteString
-emitTextureAsset fileName = S.encode . loadTexture . BL.toStrict <$> loadFile fileName
+emitTextureAsset fileName = S.encode . ensureTextureInLoadableFormat . loadTexture . BL.toStrict <$> loadFile fileName
 
 emitDxtCompressedTextureAsset :: FilePath -> Q B.ByteString
 emitDxtCompressedTextureAsset fileName = f <$> loadFile fileName where
