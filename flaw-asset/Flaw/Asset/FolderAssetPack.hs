@@ -4,7 +4,7 @@ Description: Asset pack loading assets from files (or via AJAX request in case o
 License: MIT
 -}
 
-{-# LANGUAGE CPP, JavaScriptFFI, TemplateHaskell, TypeFamilies #-}
+{-# LANGUAGE CPP, JavaScriptFFI, OverloadedStrings, TemplateHaskell, TypeFamilies #-}
 
 module Flaw.Asset.FolderAssetPack
 	( FolderAssetPack(..)
@@ -14,6 +14,7 @@ module Flaw.Asset.FolderAssetPack
 import qualified Data.ByteString as B
 import Data.Monoid
 import qualified Data.Text as T
+import System.Directory
 
 import Flaw.Asset
 import Flaw.Build
@@ -44,7 +45,10 @@ instance AssetPack FolderAssetPack where
 #endif
 
 	newtype AssetPackBuilder FolderAssetPack = FolderAssetPackBuilder T.Text
-	putAsset (FolderAssetPackBuilder prefix) fileName = B.writeFile (T.unpack $ prefix <> fileName)
+	putAsset (FolderAssetPackBuilder prefix) fileName asset = do
+		let path = prefix <> fileName
+		createDirectoryIfMissing True $ T.unpack $ fst $ T.breakOnEnd "/" path
+		B.writeFile (T.unpack path) asset
 
 instance WebAssetPack FolderAssetPack where
 	getWebAssetUrl (FolderAssetPack prefix) fileName = return $ prefix <> fileName

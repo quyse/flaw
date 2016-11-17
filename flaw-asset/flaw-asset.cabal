@@ -23,7 +23,7 @@ library
     Flaw.Asset.FolderAssetPack
     Flaw.Asset.HashMapAssetPack
     Flaw.Asset.RemapAssetPack
-  build-depends:       base, bytestring, cereal, flaw-build, hashable, stm, template-haskell, text, unordered-containers
+  build-depends:       base, bytestring, cereal, directory, flaw-build, hashable, stm, template-haskell, text, unordered-containers
   default-language:    Haskell2010
   if impl(ghcjs)
     build-depends:     flaw-js, ghcjs-base
