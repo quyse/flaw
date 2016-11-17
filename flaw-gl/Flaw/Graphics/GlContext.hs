@@ -353,6 +353,9 @@ instance Device GlContext where
 		} samplerStateInfo bytes = invoke $ describeException "failed to create OpenGL native texture" $ do
 		(glTarget, jsTexture) <- glNativeTexture bytes
 		glSetupTextureSampling glTarget samplerStateInfo
+			{ samplerMipFilter = SamplerPointFilter
+			, samplerMaxLod = 0
+			}
 		-- unbind texture, so we don't hold a reference
 		glBindTexture glTarget glNullTextureName
 		return (GlTextureId jsTexture, invoke $ glDeleteTextureName jsTexture)
