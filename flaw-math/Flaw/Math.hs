@@ -806,4 +806,11 @@ do
 				]]
 			]
 
-	return [vecInstance, normInstance, normalizeInstance, numInstance, conjugateInstance, eqInstance, ordInstance, showInstance]
+	-- Serialize instance
+	serializeInstance <-
+		instanceD (sequence [ [t| Quaternionized $elemType |], [t| S.Serialize $elemType |] ]) [t| S.Serialize (Quat $elemType) |] =<< addInlines
+			[ funD 'S.put [clause [conP 'Quat [varP av]] (normalB [| S.put $(varE av) |]) []]
+			, funD 'S.get [clause [] (normalB [| Quat <$> S.get |]) []]
+			]
+
+	return [vecInstance, normInstance, normalizeInstance, numInstance, conjugateInstance, eqInstance, ordInstance, showInstance, serializeInstance]

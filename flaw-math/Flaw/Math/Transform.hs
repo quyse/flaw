@@ -4,7 +4,7 @@ Description: Geometric functions.
 License: MIT
 -}
 
-{-# LANGUAGE Safe #-}
+{-# LANGUAGE DeriveGeneric, Trustworthy #-}
 
 module Flaw.Math.Transform
 	(
@@ -19,6 +19,9 @@ module Flaw.Math.Transform
 	-- * Helper functions
 	, quatAxisRotation
 	) where
+
+import qualified Data.Serialize as S
+import GHC.Generics(Generic)
 
 import Flaw.Math
 
@@ -66,7 +69,9 @@ quatAxisRotation (Vec3 x y z) angle = r where
 	r = Quat $ Vec4 (x * sa) (y * sa) (z * sa) ca
 
 -- | 3D transformation represented by normalized quaternion and offset.
-data QuatOffset a = QuatOffset (Quat a) (Vec3 a) deriving (Eq, Ord, Show)
+data QuatOffset a = QuatOffset (Quat a) (Vec3 a) deriving (Eq, Ord, Show, Generic)
+
+instance (Quaternionized a, S.Serialize a) => S.Serialize (QuatOffset a)
 
 type FloatQO = QuatOffset Float
 type DoubleQO = QuatOffset Double
@@ -114,7 +119,9 @@ instance Transform QuatOffset where
 	transformAxisRotation axis angle = QuatOffset (quatAxisRotation axis angle) (Vec3 0 0 0)
 
 -- | Dual quaternion representing transforms in 3D space.
-data DualQuat a = DualQuat !(Quat a) !(Quat a) deriving (Eq, Ord, Show)
+data DualQuat a = DualQuat !(Quat a) !(Quat a) deriving (Eq, Ord, Show, Generic)
+
+instance (Quaternionized a, S.Serialize a) => S.Serialize (DualQuat a)
 
 type FloatDQ = DualQuat Float
 type DoubleDQ = DualQuat Double
