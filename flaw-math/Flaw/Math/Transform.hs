@@ -21,6 +21,8 @@ module Flaw.Math.Transform
 	) where
 
 import qualified Data.Serialize as S
+import Foreign.Ptr
+import Foreign.Storable
 import GHC.Generics(Generic)
 
 import Flaw.Math
@@ -73,6 +75,17 @@ data QuatOffset a = QuatOffset (Quat a) (Vec3 a) deriving (Eq, Ord, Show, Generi
 
 instance (Quaternionized a, S.Serialize a) => S.Serialize (QuatOffset a)
 
+instance (Quaternionized a, Storable a) => Storable (QuatOffset a) where
+	sizeOf (QuatOffset q p) = sizeOf q + sizeOf p
+	alignment (QuatOffset q _p) = alignment q
+	peek ptr = do
+		q <- peek $ castPtr ptr
+		p <- peek $ castPtr $ plusPtr ptr $ sizeOf q
+		return $ QuatOffset q p
+	poke ptr (QuatOffset q p) = do
+		poke (castPtr ptr) q
+		poke (castPtr $ plusPtr ptr $ sizeOf q) p
+
 type FloatQO = QuatOffset Float
 type DoubleQO = QuatOffset Double
 
@@ -122,6 +135,17 @@ instance Transform QuatOffset where
 data DualQuat a = DualQuat !(Quat a) !(Quat a) deriving (Eq, Ord, Show, Generic)
 
 instance (Quaternionized a, S.Serialize a) => S.Serialize (DualQuat a)
+
+instance (Quaternionized a, Storable a) => Storable (DualQuat a) where
+	sizeOf (DualQuat q p) = sizeOf q + sizeOf p
+	alignment (DualQuat q _p) = alignment q
+	peek ptr = do
+		q <- peek $ castPtr ptr
+		p <- peek $ castPtr $ plusPtr ptr $ sizeOf q
+		return $ DualQuat q p
+	poke ptr (DualQuat q p) = do
+		poke (castPtr ptr) q
+		poke (castPtr $ plusPtr ptr $ sizeOf q) p
 
 type FloatDQ = DualQuat Float
 type DoubleDQ = DualQuat Double

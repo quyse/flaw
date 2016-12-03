@@ -780,6 +780,15 @@ do
 		[ funD 'conjugate [clause [conP 'Quat [conP 'Vec4 $ map varP as]] (normalB [| Quat (Vec4 (- $ax) (- $ay) (- $az) $aw) |]) []]
 		]
 
+	-- Storable instance
+	storableInstance <-
+		instanceD (sequence [ [t| Quaternionized $elemType |], [t| Storable $elemType |] ]) [t| Storable (Quat $elemType) |] =<< addInlines
+			[ funD 'sizeOf [clause [conP 'Quat [varP av]] (normalB [| sizeOf $(varE av) |]) []]
+			, funD 'alignment [clause [conP 'Quat [varP av]] (normalB [| alignment $(varE av) |]) []]
+			, funD 'peek [clause [varP a] (normalB [| Quat <$> peek (castPtr $(varE a)) |]) []]
+			, funD 'poke [clause [varP a, conP 'Quat [varP av]] (normalB [| poke (castPtr $(varE a)) $(varE av) |]) []]
+			]
+
 	-- Eq instance
 	eqInstance <- instanceD (sequence [ [t| Quaternionized $elemType |], [t| Eq $elemType |] ]) [t| Eq (Quat $elemType) |] =<< addInlines
 		[ funD '(==) [clause [conP 'Quat [varP av], conP 'Quat [varP bv]] (normalB [| $(varE av) == $(varE bv) |]) []]
@@ -813,4 +822,4 @@ do
 			, funD 'S.get [clause [] (normalB [| Quat <$> S.get |]) []]
 			]
 
-	return [vecInstance, normInstance, normalizeInstance, numInstance, conjugateInstance, eqInstance, ordInstance, showInstance, serializeInstance]
+	return [vecInstance, normInstance, normalizeInstance, numInstance, conjugateInstance, storableInstance, eqInstance, ordInstance, showInstance, serializeInstance]
