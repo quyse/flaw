@@ -11,10 +11,13 @@ module Flaw.Asset.Collada
 	, ColladaM()
 	, ColladaCache(..)
 	, ColladaSettings(..)
+	, tryGetElementAttr
 	, getElementAttr
+	, getChildrenWithTag
 	, getSingleChildWithTag
 	, runCollada
 	, initColladaCache
+	, tryGetElementById
 	, getElementById
 	, resolveElement
 	, getAllElementsByTag
@@ -22,7 +25,9 @@ module Flaw.Asset.Collada
 	, parseTrianglesOrPolyList
 	, parseMesh
 	, parseGeometry
+	, ColladaNodeTag(..)
 	, parseNode
+	, nullAnimation
 	, parseAnimation
 	, animateNode
 	, ColladaSkeleton()
@@ -179,6 +184,10 @@ initColladaCache fileData = do
 		traverseNode node = case node of
 			XML.NodeElement element -> traverseElement element
 			_ -> return ()
+
+-- | Try to get element by id.
+tryGetElementById :: T.Text -> ColladaM (Maybe XML.Element)
+tryGetElementById name = MS.lookup name . ccElementsById <$> get
 
 -- | Get element by id.
 getElementById :: T.Text -> ColladaM XML.Element
@@ -404,7 +413,8 @@ data ColladaTransformTag
 
 -- | Node.
 data ColladaNodeTag = ColladaNodeTag
-	{ cntID :: !T.Text
+	{ cntElement :: !XML.Element
+	, cntID :: !T.Text
 	, cntSID :: !T.Text
 	, cntTransforms :: [(Maybe T.Text, ColladaTransformTag)]
 	, cntSubnodes :: [ColladaNodeTag]
@@ -458,7 +468,8 @@ parseNode element@XML.Element
 			_ -> return node
 		_ -> return node
 	foldM f ColladaNodeTag
-		{ cntID = nodeId
+		{ cntElement = element
+		, cntID = nodeId
 		, cntSID = sid
 		, cntTransforms = []
 		, cntSubnodes = []
@@ -482,6 +493,10 @@ parseSampler element = do
 
 -- | Animation is just a collection of channels.
 newtype ColladaAnimation = ColladaAnimation [ColladaChannelTag]
+
+-- | Empty animation.
+nullAnimation :: ColladaAnimation
+nullAnimation = ColladaAnimation []
 
 -- | "Channel" tag structure.
 data ColladaChannelTag = ColladaChannelTag
