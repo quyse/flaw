@@ -38,6 +38,7 @@ extern "C" BulletWorld* flaw_bullet_newWorld()
 	world->dynamicsWorld = new btDiscreteDynamicsWorld(world->collisionDispatcher, world->broadphase, world->solver, world->collisionConfiguration);
 	world->broadphase->getOverlappingPairCache()->setInternalGhostPairCallback(new btGhostPairCallback());
 	world->dynamicsWorld->setGravity(btVector3(0, 0, -9.8));
+	return world;
 }
 
 extern "C" void flaw_bullet_freeWorld(BulletWorld* world)
