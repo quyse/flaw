@@ -783,8 +783,8 @@ do
 	-- Storable instance
 	storableInstance <-
 		instanceD (sequence [ [t| Quaternionized $elemType |], [t| Storable $elemType |] ]) [t| Storable (Quat $elemType) |] =<< addInlines
-			[ funD 'sizeOf [clause [conP 'Quat [varP av]] (normalB [| sizeOf $(varE av) |]) []]
-			, funD 'alignment [clause [conP 'Quat [varP av]] (normalB [| alignment $(varE av) |]) []]
+			[ funD 'sizeOf [clause [wildP] (normalB [| sizeOf (undefined :: Vec4 $elemType) |]) []]
+			, funD 'alignment [clause [wildP] (normalB [| alignment (undefined :: Vec4 $elemType) |]) []]
 			, funD 'peek [clause [varP a] (normalB [| Quat <$> peek (castPtr $(varE a)) |]) []]
 			, funD 'poke [clause [varP a, conP 'Quat [varP av]] (normalB [| poke (castPtr $(varE a)) $(varE av) |]) []]
 			]

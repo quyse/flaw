@@ -4,7 +4,7 @@ Description: Geometric functions.
 License: MIT
 -}
 
-{-# LANGUAGE DeriveGeneric, Trustworthy #-}
+{-# LANGUAGE DeriveGeneric, ScopedTypeVariables, Trustworthy #-}
 
 module Flaw.Math.Transform
 	(
@@ -76,8 +76,8 @@ data QuatOffset a = QuatOffset (Quat a) (Vec3 a) deriving (Eq, Ord, Show, Generi
 instance (Quaternionized a, S.Serialize a) => S.Serialize (QuatOffset a)
 
 instance (Quaternionized a, Storable a) => Storable (QuatOffset a) where
-	sizeOf (QuatOffset q p) = sizeOf q + sizeOf p
-	alignment (QuatOffset q _p) = alignment q
+	sizeOf _ = sizeOf (undefined :: Quat a) + sizeOf (undefined :: Vec3 a)
+	alignment _ = alignment (undefined :: Quat a)
 	peek ptr = do
 		q <- peek $ castPtr ptr
 		p <- peek $ castPtr $ plusPtr ptr $ sizeOf q
@@ -137,8 +137,8 @@ data DualQuat a = DualQuat !(Quat a) !(Quat a) deriving (Eq, Ord, Show, Generic)
 instance (Quaternionized a, S.Serialize a) => S.Serialize (DualQuat a)
 
 instance (Quaternionized a, Storable a) => Storable (DualQuat a) where
-	sizeOf (DualQuat q p) = sizeOf q + sizeOf p
-	alignment (DualQuat q _p) = alignment q
+	sizeOf _ = sizeOf (undefined :: Quat a) * 2
+	alignment _ = alignment (undefined :: Quat a)
 	peek ptr = do
 		q <- peek $ castPtr ptr
 		p <- peek $ castPtr $ plusPtr ptr $ sizeOf q
