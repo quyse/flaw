@@ -18,6 +18,7 @@ module Flaw.Visual.Geometry.Vertex
 	, QuadVertex(..)
 	-- ** Predefined Collada vertices
 	, ColladaVertex(..)
+	, VertexP(..)
 	, VertexPT(..)
 	, VertexPNT(..)
 	, VertexPNTWB(..)
@@ -65,6 +66,25 @@ class Storable q => ColladaVertex q where
 -- | Replace empty vector with sequence of fallback values.
 fallbackVertexData :: VG.Vector v a => Int -> a -> v a -> v a
 fallbackVertexData count fallbackValue inputVector = if VG.null inputVector then VG.replicate count fallbackValue else inputVector
+
+genStruct "VertexP"
+	[ ([t| Float3 |], "position")
+	]
+
+deriving instance Eq VertexP
+deriving instance Ord VertexP
+
+instance HasPositionAttribute VertexP where
+	vertexPositionAttribute _ = (0, AttributeVec3 AttributeFloat32)
+
+instance ColladaVertex VertexP where
+	createColladaVertices verticesData@ColladaVerticesData
+		{ cvdCount = count
+		} = do
+		positions <- cvdPositions verticesData
+		return $ VG.generate count $ \i -> VertexP
+			{ f_VertexP_position = positions VG.! i
+			}
 
 genStruct "VertexPT"
 	[ ([t| Float3 |], "position")
