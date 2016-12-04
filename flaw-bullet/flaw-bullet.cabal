@@ -172,3 +172,4 @@ library
     src/bullet/src/LinearMath/btVector3.cpp
   include-dirs:        src/bullet/src
   cc-options:          -O3 -fno-exceptions
+  extra-libraries:     stdc++
