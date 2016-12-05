@@ -30,7 +30,8 @@ module Flaw.Asset.Collada
 	, nullAnimation
 	, parseAnimation
 	, animateNode
-	, ColladaSkeleton()
+	, ColladaSkeleton(..)
+	, ColladaSkeletonNode(..)
 	, parseSkeleton
 	, animateSkeleton
 	, ColladaSkin(..)
