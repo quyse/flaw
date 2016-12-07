@@ -27,6 +27,7 @@ class World w where
 	data Shape w :: *
 	data Body w :: *
 	data Ghost w :: *
+	data Character w :: *
 	createBoxShape :: w -> Float3 -> IO (Shape w, IO ())
 	createSphereShape :: w -> Float -> IO (Shape w, IO ())
 	createConvexHullShape :: VG.Vector v Float3 => w -> v Float3 -> IO (Shape w, IO ())
@@ -42,6 +43,17 @@ class World w where
 	createGhost :: w -> Shape w -> FloatQO -> IO (Ghost w, IO ())
 	-- | Set ghost transform.
 	setGhostTransform :: w -> Ghost w -> FloatQO -> IO ()
+	-- | Create character object.
+	createCharacter
+		:: w
+		-> Shape w
+		-> Float -- ^ Max step height.
+		-> FloatQO -- ^ Initial transform.
+		-> IO (Character w, IO ())
+	-- | Move character object.
+	walkCharacter :: w -> Character w -> Float3 -> IO ()
+	-- | Get character transform.
+	getCharacterTransform :: w -> Character w -> IO FloatQO
 	-- | Advance simulation.
 	simulateWorld
 		:: w
