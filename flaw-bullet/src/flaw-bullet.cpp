@@ -63,7 +63,9 @@ extern "C" btCollisionShape* flaw_bullet_newSphereShape(BulletWorld* world, floa
 
 extern "C" btCollisionShape* flaw_bullet_newConvexHullShape(BulletWorld* world, float* points, int pointsCount)
 {
-	return new btConvexHullShape(points, pointsCount);
+	btConvexHullShape* shape = new btConvexHullShape(points, pointsCount, sizeof(float) * 3);
+	shape->optimizeConvexHull();
+	return shape;
 }
 
 extern "C" void flaw_bullet_freeShape(btCollisionShape* shape)
