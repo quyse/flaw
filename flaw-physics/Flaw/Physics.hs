@@ -43,8 +43,8 @@ class World w where
 	-- | Set ghost transform.
 	setGhostTransform :: w -> Ghost w -> FloatQO -> IO ()
 	-- | Advance simulation.
-	simulate
+	simulateWorld
 		:: w
-		-> Float -- ^ Time of one step.
-		-> Int -- ^ Number of steps.
+		-> Float -- ^ Step time.
+		-> Float -- ^ Substep time.
 		-> IO ()

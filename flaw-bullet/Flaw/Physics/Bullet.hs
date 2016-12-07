@@ -67,7 +67,7 @@ instance World BulletWorld where
 	setGhostTransform (BulletWorld pWorld) (BulletGhost pGhost) (QuatOffset (FloatQ orientation) position) =
 		with position $ \positionPtr -> with orientation $ \orientationPtr -> flaw_bullet_setGhostTransform pWorld pGhost (castPtr positionPtr) (castPtr orientationPtr)
 
-	simulate (BulletWorld pWorld) step stepCount = flaw_bullet_stepWorld pWorld (coerce step) (fromIntegral stepCount)
+	simulateWorld (BulletWorld pWorld) stepTime substepTime = flaw_bullet_stepWorld pWorld (coerce stepTime) (coerce substepTime)
 
 initBulletWorld :: IO (BulletWorld, IO ())
 initBulletWorld = do
@@ -91,4 +91,4 @@ foreign import ccall unsafe flaw_bullet_getRigidBodyTransform :: Ptr C_BulletRig
 foreign import ccall safe flaw_bullet_newGhost :: Ptr C_BulletWorld -> Ptr C_btCollisionShape -> Ptr CFloat -> Ptr CFloat -> IO (Ptr C_BulletGhost)
 foreign import ccall safe flaw_bullet_freeGhost :: Ptr C_BulletWorld -> Ptr C_BulletGhost -> IO ()
 foreign import ccall unsafe flaw_bullet_setGhostTransform :: Ptr C_BulletWorld -> Ptr C_BulletGhost -> Ptr CFloat -> Ptr CFloat -> IO ()
-foreign import ccall safe flaw_bullet_stepWorld :: Ptr C_BulletWorld -> CFloat -> CInt -> IO ()
+foreign import ccall safe flaw_bullet_stepWorld :: Ptr C_BulletWorld -> CFloat -> CFloat -> IO ()

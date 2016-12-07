@@ -125,7 +125,7 @@ extern "C" void flaw_bullet_setGhostTransform(BulletWorld* world, btGhostObject*
 	ghostObject->setWorldTransform(btTransform(btQuaternion(orientation[0], orientation[1], orientation[2], orientation[3]), btVector3(position[0], position[1], position[2])));
 }
 
-extern "C" void flaw_bullet_stepWorld(BulletWorld* world, float step, int stepCount)
+extern "C" void flaw_bullet_stepWorld(BulletWorld* world, float stepTime, float substepTime)
 {
-	world->dynamicsWorld->stepSimulation(step * stepCount, stepCount, step);
+	world->dynamicsWorld->stepSimulation(stepTime, 10, substepTime);
 }
