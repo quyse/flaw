@@ -29,11 +29,11 @@ import Flaw.Visual.ScreenQuad
 -- | Sampler state used for sampling shadow values.
 -- Uses border for getting "shadowed" values outside of shadow map.
 shadowSamplerStateInfo :: Float -> SamplerStateInfo
-shadowSamplerStateInfo nearDepth = defaultSamplerStateInfo
+shadowSamplerStateInfo border = defaultSamplerStateInfo
 	{ samplerWrapU = SamplerWrapBorder
 	, samplerWrapV = SamplerWrapBorder
 	, samplerWrapW = SamplerWrapBorder
-	, samplerBorderColor = vecFromScalar nearDepth
+	, samplerBorderColor = vecFromScalar border
 	}
 
 -- | Pipeline for casting shadows.
@@ -100,8 +100,8 @@ newShadowBlurPipeline device width height = withSpecialBook $ \bk -> do
 		, textureFormatColorSpace = LinearColorSpace
 		}
 
-	(rt1, rtt1) <- book bk $ createReadableRenderTarget device width height format $ shadowSamplerStateInfo 0
-	(rt2, rtt2) <- book bk $ createReadableRenderTarget device width height format $ (shadowSamplerStateInfo 0)
+	(rt1, rtt1) <- book bk $ createReadableRenderTarget device width height format $ shadowSamplerStateInfo 1e8
+	(rt2, rtt2) <- book bk $ createReadableRenderTarget device width height format $ (shadowSamplerStateInfo 1e8)
 		{ samplerMinFilter = SamplerLinearFilter
 		, samplerMagFilter = SamplerLinearFilter
 		}
@@ -201,4 +201,5 @@ shadowBlurerESMInput shadowTransform viewPosition samplerIndex projCoordToLinear
 	shadowCoordH <- temp $ shadowTransform `mul` cvec31 viewPosition 1
 	shadowCoord <- temp $ xyz__ shadowCoordH / www__ shadowCoordH
 	shadowDepth <- temp $ sample (sampler2Df samplerIndex) (screenToTexture $ xy__ shadowCoord)
-	temp $ max_ 0 $ exp (min_ 0 $ (projCoordToLinearDepth shadowCoordH - shadowDepth) * constf 4)
+	shadowCoordLinearDepth <- temp $ projCoordToLinearDepth shadowCoordH
+	temp $ max_ 0 $ exp (min_ 0 $ (shadowCoordLinearDepth - shadowDepth) * constf 4) * (cast $ shadowCoordLinearDepth `less_` 0)
