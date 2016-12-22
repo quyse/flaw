@@ -8,6 +8,7 @@ License: MIT
 
 module Flaw.Visual.Geometry.Basic
 	( patchTopology
+	, planeVertices
 	, sphereVertices
 	, twoHemispheresVertices
 	, openCylinderVertices
@@ -31,6 +32,24 @@ patchTopology vertices width height = VG.backpermute vertices indices where
 			, vertexIndex ni j
 			]
 	vertexIndex i j = i * width + j
+
+-- | Raw vertices for a plane.
+planeVertices
+	:: (VG.Vector v a, VG.Vector v Int)
+	=> (Float -> Float -> a) -- ^ Function producing vertex for specified coordinates (from 0 to 1).
+	-> Int -- ^ Width in cells (i.e. 1 for a simple quad).
+	-> Int -- ^ Height in cells (i.e. 1 for a simple quad).
+	-> v a
+planeVertices f width height = patchTopology (VG.fromList $ map (uncurry f) vertices) (width + 1) (height + 1) where
+	vertices =
+		[ ( fromIntegral i * heightCoef
+			, fromIntegral j * widthCoef
+			)
+		| i <- [0 .. height]
+		, j <- [0 .. width]
+		]
+	widthCoef = 1 / fromIntegral width
+	heightCoef = 1 / fromIntegral height
 
 -- | Raw vertices for a sphere.
 -- For 0th meridian it produces double vertices (with longitude = 0 and pi * 2), giving a chance for different vertices
