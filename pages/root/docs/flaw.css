@@ -83,7 +83,7 @@ pre, code, kbd, samp, tt, .src {
 /* @group Common */
 
 .caption, h1, h2, h3, h4, h5, h6 {
-  font-weight: bold;
+  font-weight: normal;
   color: #000;
   margin: 0.8em 0 0.4em;
 }
@@ -127,14 +127,21 @@ ul.links li a {
   background-image: url(plus.png);
   background-repeat: no-repeat;
 }
-p.caption.collapser,
-p.caption.expander {
-  background-position: 0 0.4em;
-}
 .collapser, .expander {
   padding-left: 14px;
   margin-left: -14px;
   cursor: pointer;
+}
+p.caption.collapser,
+p.caption.expander {
+  background-position: 0 0.4em;
+}
+
+.instance.collapser, .instance.expander {
+  margin-left: 0px;
+  background-position: left center;
+  min-width: 9px;
+  min-height: 9px;
 }
 
 pre {
@@ -155,6 +162,9 @@ pre {
 .keyword { font-weight: normal; }
 .def { font-weight: bold; }
 
+@media print {
+  #footer { display: none; }
+}
 
 /* @end */
 
@@ -352,19 +362,15 @@ div#style-menu-holder {
 #interface h5 + div.top {
   margin-top: 1em;
 }
-#interface p.src .link {
+#interface .src .selflink,
+#interface .src .link {
   float: right;
   color: #000;
-  border-left: 1px solid #888;
   padding: 0 0.5em 0.2em;
-  margin: 0 -0.5em 0 0.5em;
+  margin: 0 -0.5em 0 0;
 }
-
-#interface td.src .link {
-  float: right;
-  color: #000;
+#interface .src .selflink {
   border-left: 1px solid #888;
-  padding: 0 0.5em 0.2em;
   margin: 0 -0.5em 0 0.5em;
 }
 
@@ -404,30 +410,31 @@ div#style-menu-holder {
   visibility: hidden;
 }
 
-.subs dl {
+.subs ul {
+  list-style: none;
+  display: table;
   margin: 0;
 }
 
-.subs dt {
-  float: left;
-  clear: left;
-  display: block;
-  margin: 1px 0;
+.subs ul li {
+  display: table-row;
 }
 
-.subs dd {
-  float: right;
-  width: 90%;
-  display: block;
+.subs ul li dfn {
+  display: table-cell;
+  font-style: normal;
+  font-weight: bold;
+  margin: 1px 0;
+  white-space: nowrap;
+}
+
+.subs ul li > .doc {
+  display: table-cell;
   padding-left: 0.5em;
   margin-bottom: 0.5em;
 }
 
-.subs dd.empty {
-  display: none;
-}
-
-.subs dd p {
+.subs ul li > .doc p {
   margin: 0;
 }
 
