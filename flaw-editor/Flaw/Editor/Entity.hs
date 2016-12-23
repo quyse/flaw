@@ -42,45 +42,56 @@ runs in 'IO' monad.
 {-# OPTIONS_GHC -fno-warn-missing-pattern-synonym-signatures #-}
 
 module Flaw.Editor.Entity
-	( EntityId(..)
+	(
+	-- * Ids
+	  EntityId(..)
 	, pattern ENTITY_ID_SIZE
-	, nullEntityId
 	, EntityTypeId(..)
 	, pattern ENTITY_TYPE_ID_SIZE
-	, nullEntityTypeId
+	-- * Entity pointers and vars
+	, SomeEntityPtr(..)
 	, EntityPtr(..)
+	, InterfacedEntityPtr(..)
 	, SomeEntityVar(..)
 	, EntityVar(..)
 	, entityVarEntityId
-	, SomeEntityPtr(..)
+	-- * Entity classes
 	, Entity(..)
 	, BasicEntity(..)
 	, processBasicEntityChange
 	, applyBasicEntityChange
+	-- * Entity interfaces
+	, EntityInterfaceId(..)
+	, EntityInterface(..)
+	, EntityInterfaced(..)
+	-- * Entity containers
 	, SomeEntity(..)
 	, SomeBasicEntity(..)
 	, SomeBasicOrdEntity(..)
-	, NullEntity(..)
-	, EntityInterfaceId(..)
-	, nullEntityInterfaceId
-	, EntityInterface(..)
-	, EntityInterfaced(..)
 	, SomeInterfacedEntity(..)
-	, InterfacedEntityPtr(..)
 	, SomeEntityInterface(..)
+	-- * Null things
+	, NullEntity(..)
+	, nullEntityId
+	, nullEntityTypeId
+	, nullEntityInterfaceId
 	, nullInterfacedEntityPtr
-	, EntityManager(..)
-	, GetEntity
+	-- * Deserializers
 	, getRootBaseEntity
 	, getRootBaseBasicEntity
 	, getRootBaseBasicOrdEntity
 	, deserializeEntityInterface
+	-- * Entity manager
+	, EntityManager(..)
+	, GetEntity
 	, newEntityManager
+	, unsafePullEntityManager
+	-- ** Registration
 	, registerEntityType
 	, registerBasicEntityType
 	, registerBasicOrdEntityType
 	, registerEntityInterface
-	, unsafePullEntityManager
+	-- * Entity operations
 	, getSomeEntityVar
 	, getEntityVar
 	, newEntityVar
@@ -89,15 +100,18 @@ module Flaw.Editor.Entity
 	, readSomeEntityWithRevisionVar
 	, writeEntityVarRecord
 	, writeBasicEntityVar
+	-- * Entity history
 	, EntityHistoryChan(..)
 	, entityVarHistory
 	, readEntityHistoryChan
+	-- * Miscellaneous
 	, EntityException(..)
 	, GenericEntityChange
 	, GenericEntityDatatype(..)
 	, GenericEntityConstructor(..)
 	, GenericEntitySelector(..)
 	, GenericEntityValue(..)
+	-- * TH helpers
 	, hashTextToEntityId
 	, hashTextToEntityTypeId
 	, hashTextToEntityInterfaceId
