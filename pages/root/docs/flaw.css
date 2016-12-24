@@ -52,7 +52,7 @@ a[href]:hover { text-decoration:underline; }
 
 body {
   font-family: 'Droid Sans', sans-serif;
-  font-size: 1em;
+  font-size: 0.9em;
 }
 
 h1 { font-size: 146.5%; /* 19pt */ }
@@ -62,7 +62,7 @@ h4 { font-size: 100%;   /* 13pt */ }
 h5 { font-size: 100%;   /* 13pt */ }
 
 pre, code, kbd, samp, tt, .src {
-  font-family: monospace;
+  font-family: 'Droid Sans Mono', monospace;
 }
 
 #module-header .caption {
