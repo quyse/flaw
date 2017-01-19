@@ -79,7 +79,7 @@ variables:
     flaw-visual
     flaw-vulkan
     flaw-window
-  PACKAGES_OSX: >-
+  PACKAGES_MACOS: >-
     flaw-al
     flaw-app
     flaw-asset
@@ -181,17 +181,17 @@ windows:
   - arm
   - pages
 
-osx:
+macos:
   script:
-  - "mkdir -p flaw-osx/bin"
-  - "stack --no-terminal build --test --copy-bins --local-bin-path flaw-osx/bin $PACKAGES_OSX"
+  - "mkdir -p flaw-macos/bin"
+  - "stack --no-terminal build --test --copy-bins --local-bin-path flaw-macos/bin $PACKAGES_MACOS"
   artifacts:
-    name: "flaw-osx_x64-$CI_BUILD_ID"
+    name: "flaw-macos_x64-$CI_BUILD_ID"
     paths:
-    - flaw-osx
+    - flaw-macos
   tags:
   - haskellstack
-  - osx
+  - macos
   - x64
   except:
   - arm
@@ -232,14 +232,14 @@ itch:
   dependencies:
   - linux
   - windows
-  - osx
+  - macos
   script:
   - "mkdir linux && mv flaw-linux/bin/model-editor linux/"
   - "mkdir windows && mv flaw-windows/bin/model-editor.exe windows/"
-  - "mkdir osx && mv flaw-osx/bin/model-editor osx/"
+  - "mkdir macos && mv flaw-macos/bin/model-editor macos/"
   - "butler push linux quyse/flaw:model-editor-linux"
   - "butler push windows quyse/flaw:model-editor-windows"
-  - "butler push osx quyse/flaw:model-editor-osx"
+  - "butler push macos quyse/flaw:model-editor-macos"
   tags:
   - linux
   - butler
