@@ -56,6 +56,9 @@ packages:
     commit: 49762a3bc415fa198ad108f7a7764a0e38bea6ca
   extra-dep: true
 
+extra-deps:
+- scientific-0.3.4.9
+
 ghc-options:
   "*": -O3 -threaded -with-rtsopts=-N -Wall -fno-warn-unsupported-calling-conventions -fno-warn-tabs
 
