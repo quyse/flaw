@@ -150,6 +150,7 @@ linux:
     name: "flaw-linux_x64-$CI_BUILD_ID"
     paths:
     - flaw-linux
+    expire_in: 1 week
   tags:
   - haskellstack
   - linux
@@ -169,6 +170,7 @@ windows:
     name: "flaw-windows_x64-$CI_BUILD_ID"
     paths:
     - flaw-windows
+    expire_in: 1 week
   tags:
   - haskellstack
   - windows
@@ -185,6 +187,7 @@ macos:
     name: "flaw-macos_x64-$CI_BUILD_ID"
     paths:
     - flaw-macos
+    expire_in: 1 week
   tags:
   - haskellstack
   - macos
@@ -213,6 +216,7 @@ linux-arm:
     name: "flaw-linux_arm-$CI_BUILD_ID"
     paths:
     - flaw-linux-arm
+    expire_in: 1 week
   tags:
   - haskellstack
   - linux
@@ -261,6 +265,7 @@ pages:
   artifacts:
     paths:
     - public
+    expire_in: 1 week
   only:
   - master
   - pages
