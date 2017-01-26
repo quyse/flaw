@@ -140,9 +140,6 @@ variables:
     --flag hashable:-integer-gmp
     --flag cryptonite:-integer-gmp
     --flag scientific:integer-simple
-  FIX_TH_WINDOWS: >-
-    powershell
-    "Add-Content flaw-font-fthb\flaw-font-fthb.cabal \"  extra-ghci-libraries: all\""
 
 linux:
   script:
@@ -163,7 +160,6 @@ linux:
 
 windows:
   script:
-  - "%FIX_TH_WINDOWS%"
   - "mkdir flaw-windows\\bin"
   - "stack --no-terminal build --test --copy-bins --local-bin-path flaw-windows/bin %INTEGERSIMPLE_FLAGS_WINDOWS% %PACKAGES_WINDOWS%"
   - "stack --no-terminal build --test --flag flaw-app:vulkan %INTEGERSIMPLE_FLAGS_WINDOWS% flaw-app"
