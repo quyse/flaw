@@ -42,9 +42,9 @@ import Control.Monad.IO.Class
 import qualified Data.ByteArray as BA
 import qualified Data.ByteString.Builder as B
 import qualified Data.ByteString.Lazy as BL
-import qualified Network.Wai.Middleware.Routes as W
 import qualified Text.Blaze.Html5 as H
 import qualified Text.Blaze.Html5.Attributes as A
+import qualified Wai.Routes as W
 
 #endif
 

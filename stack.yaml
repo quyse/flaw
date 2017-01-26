@@ -50,11 +50,6 @@ packages:
     git: https://github.com/quyse/sdl2.git
     commit: cc66bf8d7bd1ca5bb01712d7a890dee647e1f351
   extra-dep: true
-# wai-routes for GHC 8
-- location:
-    git: https://github.com/quyse/wai-routes.git
-    commit: 49762a3bc415fa198ad108f7a7764a0e38bea6ca
-  extra-dep: true
 
 extra-deps:
 - scientific-0.3.4.9

@@ -22,7 +22,7 @@ import qualified Data.Serialize as S
 
 #else
 
-import qualified Network.Wai.Middleware.Routes as W
+import qualified Wai.Routes as W
 
 #endif
 

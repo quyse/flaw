@@ -27,7 +27,7 @@ import GHCJS.Types
 
 #else
 
-import qualified Network.Wai.Middleware.Routes as W
+import qualified Wai.Routes as W
 
 #endif
 

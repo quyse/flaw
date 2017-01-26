@@ -19,8 +19,8 @@ import qualified Data.ByteString as B
 import qualified Network.HTTP.Types as HT
 import qualified Network.Wai as W
 import qualified Network.Wai.Handler.WebSockets as WS
-import qualified Network.Wai.Middleware.Routes as W
 import qualified Network.WebSockets as WS
+import qualified Wai.Routes as W
 
 import Flaw.Network
 import Flaw.Network.BiuoSocket
