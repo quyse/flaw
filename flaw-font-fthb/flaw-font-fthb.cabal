@@ -32,6 +32,7 @@ library
     src/freetype/src/autofit/autofit.c
     src/freetype/src/base/ftbase.c
     src/freetype/src/base/ftinit.c
+    src/freetype/src/base/ftmm.c
     src/freetype/src/base/ftsystem.c
     src/freetype/src/base/ftbitmap.c
     src/freetype/src/base/ftglyph.c
@@ -77,6 +78,7 @@ library
     -- OpenType
     src/harfbuzz/src/hb-ot-layout.cc
     src/harfbuzz/src/hb-ot-map.cc
+    src/harfbuzz/src/hb-ot-math.cc
     src/harfbuzz/src/hb-ot-shape.cc
     src/harfbuzz/src/hb-ot-shape-complex-arabic.cc
     src/harfbuzz/src/hb-ot-shape-complex-default.cc
@@ -92,6 +94,7 @@ library
     src/harfbuzz/src/hb-ot-shape-fallback.cc
     src/harfbuzz/src/hb-ot-shape-normalize.cc
     src/harfbuzz/src/hb-ot-tag.cc
+    src/harfbuzz/src/hb-ot-var.cc
     -- UCDN
     src/ucdn/ucdn.c
     -- Helpers
