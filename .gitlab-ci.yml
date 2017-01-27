@@ -140,6 +140,7 @@ variables:
     --flag hashable:-integer-gmp
     --flag cryptonite:-integer-gmp
     --flag scientific:integer-simple
+    --flag integer-logarithms:-integer-gmp
 
 linux:
   script:
