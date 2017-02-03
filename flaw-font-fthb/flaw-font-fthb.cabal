@@ -101,8 +101,3 @@ library
     src/flaw-ft.c
   include-dirs:        src/freetype/include, src/harfbuzz-generated, src/harfbuzz/src, src/harfbuzz/src/hb-ucdn, src/ucdn
   cc-options:          -DFT2_BUILD_LIBRARY -DHAVE_OT -DHAVE_UCDN -DHB_NO_MT -O3 -fno-exceptions
-  if os(windows)
-    if arch(x86_64)
-      extra-ghci-libraries: gcc_s_seh-1
-    else
-      extra-ghci-libraries: gcc_s_dw2-1
