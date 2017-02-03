@@ -53,7 +53,6 @@ packages:
     commit: cc66bf8d7bd1ca5bb01712d7a890dee647e1f351
   extra-dep: true
 
-ghc-options:
-  "*": -O3 -threaded -with-rtsopts=-N -Wall -fno-warn-unsupported-calling-conventions -fno-warn-tabs
-
-rebuild-ghc-options: true
+# recommended ghc-options for all packages (to put in global config.yaml):
+# ghc-options:
+#   "*": -O3 -threaded -with-rtsopts=-N -Wall -fno-warn-unsupported-calling-conventions -fno-warn-tabs
