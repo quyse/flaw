@@ -134,13 +134,6 @@ variables:
     flaw-social
     flaw-websocket-client
     flaw-window
-  INTEGERSIMPLE_FLAGS_WINDOWS: >-
-    --ghc-variant integersimple
-    --flag text:integer-simple
-    --flag hashable:-integer-gmp
-    --flag cryptonite:-integer-gmp
-    --flag scientific:integer-simple
-    --flag integer-logarithms:-integer-gmp
 
 linux:
   script:
@@ -163,10 +156,10 @@ linux:
 windows:
   script:
   - "mkdir flaw-windows\\bin"
-  - "stack --no-terminal build --test --copy-bins --local-bin-path flaw-windows/bin %INTEGERSIMPLE_FLAGS_WINDOWS% %PACKAGES_WINDOWS%"
-  - "stack --no-terminal build --test --flag flaw-app:vulkan %INTEGERSIMPLE_FLAGS_WINDOWS% flaw-app"
-  - "stack --no-terminal build --test --flag flaw-app:-dx11 %INTEGERSIMPLE_FLAGS_WINDOWS% flaw-app"
-  - "stack --no-terminal build --test --flag flaw-app:-gl %INTEGERSIMPLE_FLAGS_WINDOWS% flaw-app"
+  - "stack --no-terminal build --test --copy-bins --local-bin-path flaw-windows/bin %PACKAGES_WINDOWS%"
+  - "stack --no-terminal build --test --flag flaw-app:vulkan flaw-app"
+  - "stack --no-terminal build --test --flag flaw-app:-dx11 flaw-app"
+  - "stack --no-terminal build --test --flag flaw-app:-gl flaw-app"
   artifacts:
     name: "flaw-windows_x64-$CI_BUILD_ID"
     paths:

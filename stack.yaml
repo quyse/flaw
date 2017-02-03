@@ -1,4 +1,6 @@
-resolver: nightly-2017-01-27
+resolver:
+  name: integer-simple-snapshot
+  location: integer-simple-snapshot.yaml
 
 packages:
 - flaw-al

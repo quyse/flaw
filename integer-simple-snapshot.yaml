@@ -1,0 +1,20 @@
+resolver: nightly-2017-02-03
+
+packages:
+- text-1.2.2.1
+- hashable-1.2.5.0
+- cryptonite-0.21
+- scientific-0.3.4.10
+- integer-logarithms-1.0.1
+
+flags:
+  text:
+    integer-simple: true
+  hashable:
+    integer-gmp: false
+  cryptonite:
+    integer-gmp: false
+  scientific:
+    integer-simple: true
+  integer-logarithms:
+    integer-gmp: false
