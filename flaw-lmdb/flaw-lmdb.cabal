@@ -1,0 +1,34 @@
+name:                flaw-lmdb
+version:             0.1.0.0
+-- synopsis:            
+-- description:         
+license:             MIT
+license-file:        ../LICENSE
+author:              Alexander Bich
+maintainer:          quyse0@gmail.com
+category:            Game
+build-type:          Simple
+cabal-version:       >=1.10
+
+source-repository head
+  type: git
+  location: https://github.com/quyse/flaw.git
+  subdir: flaw-lmdb
+
+library
+  exposed-modules:
+    Flaw.Data.Lmdb
+  other-modules:
+  build-depends:       base, bytestring, flaw-base, text
+  default-language:    Haskell2010
+  c-sources:
+    src/lmdb/mdb.c
+    src/lmdb/midl.c
+  cc-options: -W -Wall -Wno-unused-parameter -Wbad-function-cast -Wuninitialized -lpthread -O3
+
+test-suite lmdb-test
+  type:                exitcode-stdio-1.0
+  main-is:             lmdb-test.hs
+  hs-source-dirs:      test
+  build-depends:       base, cereal, flaw-base, flaw-lmdb
+  default-language:    Haskell2010

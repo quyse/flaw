@@ -28,6 +28,7 @@ packages:
 - flaw-graphics
 - flaw-input
 - flaw-js
+- flaw-lmdb
 - flaw-lua
 - flaw-lua-refimpl
 - flaw-math

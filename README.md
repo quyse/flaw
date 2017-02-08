@@ -77,6 +77,7 @@ Here are all packages in A-Z order. Checkmark against a platform means that the 
 | `flaw-graphics` | General interface for graphics | ✔ | ✔ | ✔ | ✔ |
 | `flaw-input` | General user input interface | ✔ | ✔ | ✔ | ✔ |
 | `flaw-js` | Some generic javascript routines |   |   |   | ✔ |
+| `flaw-lmdb` | LMDB binding | ✔ | ✔ | ✔ |   |
 | `flaw-lua` | Experimental Lua-to-Haskell translator | ✔ | ✔ | ✔ |   |
 | `flaw-lua-refimpl` | Lua reference implementation from lua.org | ✔ | ✔ | ✔ |   |
 | `flaw-math` | Math library | ✔ | ✔ | ✔ | ✔ |
