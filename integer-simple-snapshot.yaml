@@ -1,4 +1,4 @@
-resolver: nightly-2017-02-03
+resolver: lts-8.5
 
 packages:
 - text-1.2.2.1
