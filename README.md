@@ -15,12 +15,12 @@ This project is mostly a playground for absolutely crazy ideas. Surely if someon
 
 ## What works
 
-* Platform support: Windows, Linux, OS X, web (via GHCJS)
+* Platform support: Windows, Linux, macOS, web (via GHCJS)
 * Abstracted graphics API: DirectX 11, OpenGL, WebGL
 * Abstracted inline shaders in Haskell, with HLSL and GLSL backends
 * TH-generated math library, with efficient unboxed fixed-length vectors/matrices
 * TH-based game build, type-safe game assets
-* Low-level user input library (via Raw Input on Windows, SDL on Linux and OS X, browser DOM APIs on Web)
+* Low-level user input library (via Raw Input on Windows, SDL on Linux and macOS, browser DOM APIs on Web)
 * Simple windowing API
 * Fast text rendering with subpixel anti-aliasing
 * Collada import (rigid and skinned geometries, animations)
@@ -46,11 +46,11 @@ This project is mostly a playground for absolutely crazy ideas. Surely if someon
 
 FLAW has moved to GHC 8.
 
-Linux is the primary development platform. It also considered the only "server" platform, hence several "server" packages are tested only on Linux, although it's probably possible to compile and run them on Windows or OS X.
+Linux is the primary development platform. It also considered the only "server" platform, hence several "server" packages are tested only on Linux, although it's probably possible to compile and run them on Windows or macOS.
 
 Here are all packages in A-Z order. Checkmark against a platform means that the package is being actually built and tested (if it has tests :D) on this platform during CI.
 
-| Package | Description | Linux | Windows | OS X | Web (GHCJS) |
+| Package | Description | Linux | Windows | macOS | Web (GHCJS) |
 |---------------|-------------------------------------------------------------|:---:|:---:|:---:|:---:|
 | `flaw-al` | OpenAL integration - implementation of `flaw-audio` interface | ✔ | ✔ | ✔ |   |
 | `flaw-app` | Handy engine initialization and main loop routines | ✔ | ✔ | ✔ | ✔ |
