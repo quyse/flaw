@@ -54,9 +54,7 @@ newtype SqliteQuery = SqliteQuery SqliteStmt
 
 -- | Open SQLite database.
 sqliteDb :: T.Text -> IO (SqliteDb, IO ())
-sqliteDb fileName = do
-	bk <- newBook
-
+sqliteDb fileName = withSpecialBook $ \bk -> do
 	-- open db
 	dbPtr <- book bk $ B.useAsCString (T.encodeUtf8 fileName) $ \fileNamePtr -> alloca $ \dbPtrPtr -> do
 		r <- sqlite3_open fileNamePtr dbPtrPtr
@@ -78,12 +76,12 @@ sqliteDb fileName = do
 	releaseStmtPtr <- createStmt "RELEASE T"
 	rollbackToStmtPtr <- createStmt "ROLLBACK TO T"
 
-	return (SqliteDb
+	return SqliteDb
 		{ sqliteDbPtr = dbPtr
 		, sqliteDbSavePointStmtPtr = savePointStmtPtr
 		, sqliteDbReleaseStmtPtr = releaseStmtPtr
 		, sqliteDbRollbackToStmtPtr = rollbackToStmtPtr
-		}, freeBook bk)
+		}
 
 -- | Execute one-time query.
 sqliteExec :: SqliteDb -> T.Text -> IO ()
