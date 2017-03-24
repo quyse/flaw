@@ -21,6 +21,7 @@ packages:
 - flaw-font
 - flaw-font-fthb
 - flaw-game
+- flaw-gamejolt-webapi
 - flaw-gl
 - flaw-gl-mesa
 - flaw-gl-sdl

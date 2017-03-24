@@ -1,0 +1,24 @@
+name:                flaw-gamejolt-webapi
+version:             0.1.0.0
+-- synopsis:            
+-- description:         
+license:             MIT
+license-file:        ../LICENSE
+author:              Alexander Bich
+maintainer:          quyse0@gmail.com
+-- copyright:           
+category:            Game
+build-type:          Simple
+-- extra-source-files:  
+cabal-version:       >=1.10
+
+source-repository head
+  type: git
+  location: https://github.com/quyse/flaw.git
+  subdir: flaw-gamejolt-webapi
+
+library
+  exposed-modules:
+    Flaw.GameJolt.WebApi
+  build-depends:       aeson, base, bytestring, cryptonite, http-client, memory, network-uri, text, unordered-containers
+  default-language:    Haskell2010

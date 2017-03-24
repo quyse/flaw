@@ -70,6 +70,7 @@ Here are all packages in A-Z order. Checkmark against a platform means that the 
 | `flaw-font` | General interface for font rendering | ✔ | ✔ | ✔ |   |
 | `flaw-font-fthb` | Implementation of `flaw-font` interface using FreeType 2 and Harfbuzz | ✔ | ✔ | ✔ |   |
 | `flaw-game` | Non-finished experimental stuff about game synchronization | ✔ | ✔ | ✔ | ✔ |
+| `flaw-gamejolt-webapi` | GameJolt Web API | ✔ |   |   |   |
 | `flaw-gl` | OpenGL integration - implementation of `flaw-graphics` interface | ✔ | ✔ | ✔ | ✔ |
 | `flaw-gl-mesa` | Experimental MESA integration for offscreen software rendering | ✔ |   |   |   |
 | `flaw-gl-sdl` | OpenGL-to-windowing binding via SDL | ✔ |   | ✔ |   |
