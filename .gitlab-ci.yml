@@ -40,6 +40,8 @@ variables:
     flaw-sl
     flaw-social
     flaw-sqlite
+    flaw-steam
+    flaw-steam-webapi
     flaw-ui
     flaw-ui-default-style
     flaw-visual
@@ -77,6 +79,7 @@ variables:
     flaw-physics
     flaw-sl
     flaw-sqlite
+    flaw-steam
     flaw-ui
     flaw-ui-default-style
     flaw-visual
@@ -114,6 +117,7 @@ variables:
     flaw-sdl
     flaw-sl
     flaw-sqlite
+    flaw-steam
     flaw-ui
     flaw-ui-default-style
     flaw-visual

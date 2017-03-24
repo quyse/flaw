@@ -90,6 +90,8 @@ Here are all packages in A-Z order. Checkmark against a platform means that the 
 | `flaw-sl` | Generic shader languages helping code | ✔ | ✔ | ✔ | ✔ |
 | `flaw-social` | Some social network integration | ✔ |   |   | ✔ |
 | `flaw-sqlite` | SQLite binding | ✔ | ✔ | ✔ |   |
+| `flaw-steam` | General definitions for Steam API | ✔ | ✔ | ✔ |   |
+| `flaw-steam-webapi` | Steam Web API | ✔ |   |   |   |
 | `flaw-ui` | UI library using `flaw-graphics` for rendering | ✔ | ✔ | ✔ |   |
 | `flaw-ui-default-style` | Hardcoded "default" UI styles | ✔ | ✔ | ✔ |   |
 | `flaw-visual` | High-level rendering techniques | ✔ | ✔ | ✔ |   |

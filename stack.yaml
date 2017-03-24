@@ -41,6 +41,8 @@ packages:
 - flaw-sl
 - flaw-social
 - flaw-sqlite
+- flaw-steam
+- flaw-steam-webapi
 - flaw-ui
 - flaw-ui-default-style
 - flaw-visual
