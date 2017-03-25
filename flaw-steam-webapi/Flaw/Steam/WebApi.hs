@@ -18,7 +18,6 @@ import qualified Data.Aeson as A
 import qualified Data.Aeson.Types as A
 import qualified Data.ByteArray.Encoding as BA
 import qualified Data.ByteString as B
-import qualified Data.ByteString.Lazy as BL
 import qualified Data.HashMap.Strict as HM
 import Data.Monoid
 import Data.String
@@ -51,31 +50,30 @@ newSteamWebApi httpManager appId apiKey = return SteamWebApi
 	, steamWebApiKey = T.encodeUtf8 apiKey
 	}
 
-steamWebApiRequest :: SteamWebApi -> B.ByteString -> [(B.ByteString, Maybe B.ByteString)] -> IO BL.ByteString
+steamWebApiRequest :: SteamWebApi -> B.ByteString -> [(B.ByteString, Maybe B.ByteString)] -> IO A.Value
 steamWebApiRequest SteamWebApi
 	{ steamWebApiHttpManager = httpManager
 	, steamWebApiHttpRequest = httpRequest
 	, steamWebApiAppId = appId
 	, steamWebApiKey = apiKey
 	} path params = do
-	response <- H.httpLbs (H.setQueryString (("appid", Just appId) : ("key", Just apiKey) : params) httpRequest
+	Just value <- A.decode . H.responseBody <$> H.httpLbs (H.setQueryString (("appid", Just appId) : ("key", Just apiKey) : params) httpRequest
 		{ H.path = H.path httpRequest <> path
 		}) httpManager
-	return $ H.responseBody response
+	return value
 
 steamWebApiAuthenticateUserTicket :: SteamWebApi -> B.ByteString -> IO SteamTicket
 steamWebApiAuthenticateUserTicket api ticket = do
-	response <- steamWebApiRequest api "ISteamUserAuth/AuthenticateUserTicket/V0001/"
-		[ ("ticket", Just $ BA.convertToBase BA.Base16 ticket)
-		]
-	(A.decode -> Just (A.Object (HM.lookup "response" -> Just (A.Object (HM.lookup "params" -> Just
+	A.Object (HM.lookup "response" -> Just (A.Object (HM.lookup "params" -> Just
 		(A.fromJSON -> A.Success AuthenticatedUserTicket
 			{ aut_result = "OK"
 			, aut_steamid = SteamId . read . T.unpack -> steamId
 			, aut_ownersteamid = SteamId . read . T.unpack -> ownerSteamId
 			, aut_vacbanned = vacBanned
 			, aut_publisherbanned = publisherBanned
-			})))))) <- return response
+			})))) <- steamWebApiRequest api "ISteamUserAuth/AuthenticateUserTicket/V0001/"
+		[ ("ticket", Just $ BA.convertToBase BA.Base16 ticket)
+		]
 	return SteamTicket
 		{ steamTicketSteamId = steamId
 		, steamTicketOwnerSteamId = ownerSteamId
@@ -104,13 +102,12 @@ instance A.FromJSON AuthenticatedUserTicket where
 
 steamWebApiCheckAppOwnership :: SteamWebApi -> SteamId -> IO Bool
 steamWebApiCheckAppOwnership api (SteamId steamId) = do
-	response <- steamWebApiRequest api "ISteamUser/CheckAppOwnership/V0001/"
-		[ ("steamid", Just $ fromString $ show steamId)
-		]
-	(A.decode -> Just (A.Object (HM.lookup "appownership" -> Just (A.fromJSON -> A.Success AppOwnership
+	A.Object (HM.lookup "appownership" -> Just (A.fromJSON -> A.Success AppOwnership
 		{ ao_result = "OK"
 		, ao_ownsapp = ownsApp
-		})))) <- return response
+		})) <- steamWebApiRequest api "ISteamUser/CheckAppOwnership/V0001/"
+		[ ("steamid", Just $ fromString $ show steamId)
+		]
 	return ownsApp
 
 data AppOwnership = AppOwnership

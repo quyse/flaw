@@ -67,8 +67,7 @@ gameJoltWebApiRequest GameJoltWebApi
 		fixedUri = maybe uri ("http://gamejolt.com/" <>) $ T.stripPrefix "http://gamejolt.com:80/" uri
 		signature = BA.convertToBase BA.Base16 (C.hash (T.encodeUtf8 fixedUri <> apiKey) :: C.Digest C.SHA1)
 		signedRequest = H.setQueryString (params ++ [("signature", Just signature)]) request
-	response <- H.responseBody <$> H.httpLbs signedRequest httpManager
-	Just value <- return $ A.decode response
+	Just value <- A.decode . H.responseBody <$> H.httpLbs signedRequest httpManager
 	return value
 
 gameJoltWebApiUsersAuth :: GameJoltWebApi -> T.Text -> T.Text -> IO Bool
