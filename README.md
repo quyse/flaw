@@ -77,6 +77,7 @@ Here are all packages in A-Z order. Checkmark against a platform means that the 
 | `flaw-gl-win32` | OpenGL-to-windowing binding via Win32 API |   | ✔ |   |   |
 | `flaw-graphics` | General interface for graphics | ✔ | ✔ | ✔ | ✔ |
 | `flaw-input` | General user input interface | ✔ | ✔ | ✔ | ✔ |
+| `flaw-itch-webapi` | Itch.io Web API | ✔ |   |   |   |
 | `flaw-js` | Some generic javascript routines |   |   |   | ✔ |
 | `flaw-lmdb` | LMDB binding | ✔ | ✔ | ✔ |   |
 | `flaw-lua` | Experimental Lua-to-Haskell translator | ✔ | ✔ | ✔ |   |

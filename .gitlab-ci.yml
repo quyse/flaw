@@ -28,6 +28,7 @@ variables:
     flaw-gl-sdl
     flaw-graphics
     flaw-input
+    flaw-itch-webapi
     flaw-lmdb
     flaw-lua
     flaw-lua-refimpl

@@ -28,6 +28,7 @@ packages:
 - flaw-gl-win32
 - flaw-graphics
 - flaw-input
+- flaw-itch-webapi
 - flaw-js
 - flaw-lmdb
 - flaw-lua
