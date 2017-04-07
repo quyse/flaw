@@ -21,6 +21,7 @@ module Flaw.Itch.WebApi
 import qualified Data.Aeson as A
 import qualified Data.Aeson.Types as A
 import qualified Data.ByteString as B
+import Data.Hashable
 import qualified Data.HashMap.Strict as HM
 import Data.Monoid
 import Data.String
@@ -80,7 +81,7 @@ itchWebApiDownloadKeys api (ItchGameId gameId) (ItchUserId userId) = do
 		A.Object (HM.lookup "download_key" -> Just (A.fromJSON -> A.Success downloadKey)) -> Just downloadKey
 		_ -> Nothing
 
-newtype ItchUserId = ItchUserId Word64 deriving (Generic, Show, A.FromJSON)
+newtype ItchUserId = ItchUserId Word64 deriving (Eq, Ord, Hashable, Generic, Show, A.FromJSON)
 data ItchUser = ItchUser
 	{ itchUser_id :: !ItchUserId
 	, itchUser_username :: !T.Text
@@ -100,9 +101,9 @@ instance A.FromJSON ItchJwtResponse where
 		{ A.fieldLabelModifier = drop 16
 		}
 
-newtype ItchGameId = ItchGameId Word64 deriving (Generic, Show, A.FromJSON)
+newtype ItchGameId = ItchGameId Word64 deriving (Eq, Ord, Hashable, Generic, Show, A.FromJSON)
 
-newtype ItchDownloadKeyId = ItchDownloadKeyId Word64 deriving (Generic, Show, A.FromJSON)
+newtype ItchDownloadKeyId = ItchDownloadKeyId Word64 deriving (Eq, Ord, Hashable, Generic, Show, A.FromJSON)
 data ItchDownloadKey = ItchDownloadKey
 	{ itchDownloadKey_id :: !ItchDownloadKeyId
 	, itchDownloadKey_game_id :: !ItchGameId
