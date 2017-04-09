@@ -150,11 +150,11 @@ linux:
   - "mkdir -p flaw-linux/bin"
   - "stack --no-terminal build --test --copy-bins --local-bin-path flaw-linux/bin $PACKAGES_LINUX"
   - "stack --no-terminal build --test --flag flaw-app:vulkan flaw-app"
-  artifacts:
-    name: "flaw-linux_x64-$CI_BUILD_ID"
-    paths:
-    - flaw-linux
-    expire_in: 1 week
+  # artifacts:
+  #   name: "flaw-linux_x64-$CI_BUILD_ID"
+  #   paths:
+  #   - flaw-linux
+  #   expire_in: 1 week
   tags:
   - haskellstack
   - linux
@@ -170,11 +170,11 @@ windows:
   - "stack --no-terminal build --test --flag flaw-app:vulkan flaw-app"
   - "stack --no-terminal build --test --flag flaw-app:-dx11 flaw-app"
   - "stack --no-terminal build --test --flag flaw-app:-gl flaw-app"
-  artifacts:
-    name: "flaw-windows_x64-$CI_BUILD_ID"
-    paths:
-    - flaw-windows
-    expire_in: 1 week
+  # artifacts:
+  #   name: "flaw-windows_x64-$CI_BUILD_ID"
+  #   paths:
+  #   - flaw-windows
+  #   expire_in: 1 week
   tags:
   - haskellstack
   - windows
@@ -187,11 +187,11 @@ macos:
   script:
   - "mkdir -p flaw-macos/bin"
   - "stack --no-terminal build --test --copy-bins --local-bin-path flaw-macos/bin $PACKAGES_MACOS"
-  artifacts:
-    name: "flaw-macos_x64-$CI_BUILD_ID"
-    paths:
-    - flaw-macos
-    expire_in: 1 week
+  # artifacts:
+  #   name: "flaw-macos_x64-$CI_BUILD_ID"
+  #   paths:
+  #   - flaw-macos
+  #   expire_in: 1 week
   tags:
   - haskellstack
   - macos
@@ -200,7 +200,7 @@ macos:
   - arm
   - pages
 
-web:
+.web:
   script:
   - "stack --no-terminal --compiler ghcjs-0.2.0_ghc-8.0.1 build --test $PACKAGES_WEB"
   tags:
@@ -212,25 +212,7 @@ web:
   - arm
   - pages
 
-linux-arm:
-  script:
-  - "mkdir -p flaw-linux-arm/bin"
-  - "stack --no-terminal build --test --copy-bins --local-bin-path flaw-linux-arm/bin $PACKAGES_LINUX"
-  artifacts:
-    name: "flaw-linux_arm-$CI_BUILD_ID"
-    paths:
-    - flaw-linux-arm
-    expire_in: 1 week
-  tags:
-  - haskellstack
-  - linux
-  - arm
-  only:
-  - arm
-  except:
-  - pages
-
-itch:
+.itch:
   stage: deploy
   environment: itch
   dependencies:
@@ -250,7 +232,7 @@ itch:
   only:
   - master
 
-pages:
+.pages:
   stage: deploy
   environment: pages
   dependencies: []
