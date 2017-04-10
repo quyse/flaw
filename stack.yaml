@@ -47,6 +47,7 @@ packages:
 - flaw-steam-webapi
 - flaw-ui
 - flaw-ui-default-style
+- flaw-ui-default-style-data
 - flaw-visual
 - flaw-vulkan
 - flaw-websocket-client

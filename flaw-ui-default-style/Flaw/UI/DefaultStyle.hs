@@ -4,19 +4,15 @@ Description: Just some single UI style (fonts, metrics and colors).
 License: MIT
 -}
 
-{-# LANGUAGE TemplateHaskell #-}
-
 module Flaw.UI.DefaultStyle
 	( defaultStyleMetrics
 	, initDefaultStyleDrawer
 	) where
 
 import Control.Concurrent.STM
-import qualified Data.ByteString.Lazy as BL
 import Data.Char
 
 import Flaw.Book
-import Flaw.Build
 import Flaw.Graphics
 import Flaw.Graphics.Canvas
 import Flaw.Graphics.Font.FreeType
@@ -24,6 +20,7 @@ import Flaw.Graphics.Font.Harfbuzz
 import Flaw.Graphics.Font.Render
 import Flaw.Graphics.Font.Util
 import Flaw.Math
+import Flaw.UI.DefaultStyle.Data
 import Flaw.UI.Drawer
 import Flaw.UI.Metrics
 
@@ -56,7 +53,7 @@ initDefaultStyleDrawer device = withSpecialBook $ \bk -> do
 	freeTypeLibrary <- book bk initFreeType
 
 	-- embedded font
-	fontData <- $(embedIOExp =<< fmap BL.toStrict (loadFile "src/DejaVuSans.ttf"))
+	fontData <- loadFontData
 	let loadFont size xscale yscale = do
 		font <- book bk $ loadFreeTypeFont freeTypeLibrary size fontData
 		fontShaper <- book bk $ createHarfbuzzShaper font
