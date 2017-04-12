@@ -1088,7 +1088,7 @@ registerEntitiesAndInterfacesExp = do
 						else return [noBindS [| let a = def :: $(return t) in registerBasicEntityType $(varE em) (getEntityTypeId a) $ return $ SomeBasicEntity a |] ]
 					else return [noBindS [| let a = def :: $(return t) in registerEntityType $(varE em) (getEntityTypeId a) $ return $ SomeEntity a |] ]
 				else do
-					reportWarning $ (show t) ++ " doesn't have Default instance. Cannot automatically register its Entity."
+					reportWarning $ shows t " doesn't have Default instance. Cannot automatically register its Entity."
 					return []
 			else return []
 
@@ -1105,7 +1105,7 @@ registerEntitiesAndInterfacesExp = do
 		(concat <$>) . forM decs $ \(InstanceD Nothing context (AppT _ t) _) ->
 			if null context then return [noBindS [| performEntityRegistration $(varE em) (Proxy :: Proxy $(return t)) |] ]
 			else do
-				reportError $ (show t) ++ " has non-empty context for EntityRegistration instance"
+				reportError $ shows t " has non-empty context for EntityRegistration instance"
 				return []
 
 	lamE [varP em] $ doE $ entityInstancesStmts ++ entityInterfaceInstancesStmts ++ entityRegistrationInstancesStmts

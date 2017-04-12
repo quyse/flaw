@@ -48,11 +48,8 @@ main = run =<< O.execParser parser where
 		<> O.header "flaw-editor"
 		)
 	opts = Options
-		<$> O.strOption
-			(  O.short 'p'
-			<> O.long "project"
-			<> O.metavar "PROJECT"
-			<> O.value ""
+		<$> O.strArgument
+			(  O.metavar "PROJECT"
 			<> O.help "Project file name"
 			)
 		<*> O.strOption
