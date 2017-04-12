@@ -18,8 +18,8 @@ import Flaw.Input.Mouse
 import Flaw.Input.Keyboard
 
 data BasicInputManager = BasicInputManager
-	{ mKeyboardChan :: TChan KeyboardEvent
-	, mMouseChan :: TChan MouseEvent
+	{ mKeyboardChan :: {-# UNPACK #-} !(TChan KeyboardEvent)
+	, mMouseChan :: {-# UNPACK #-} !(TChan MouseEvent)
 	}
 
 instance InputManager BasicInputManager KeyboardEvent where

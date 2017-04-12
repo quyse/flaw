@@ -20,6 +20,7 @@ source-repository head
 library
   exposed-modules:
     Flaw.Input
+    Flaw.Input.Gamepad
     Flaw.Input.Mouse
     Flaw.Input.Keyboard
   other-modules:
@@ -40,4 +41,4 @@ library
     else
       exposed-modules:
         Flaw.Input.Sdl
-      build-depends:       bytestring, sdl2 >= 2, text
+      build-depends:       bytestring, sdl2 >= 2, unordered-containers, text

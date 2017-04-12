@@ -4,8 +4,11 @@ Description: User input for SDL.
 License: MIT
 -}
 
+{-# LANGUAGE MultiParamTypeClasses, ViewPatterns #-}
+
 module Flaw.Input.Sdl
-	( SdlInputManager()
+	( SdlInputManager(..)
+	, SdlGamepad(..)
 	, initSdlInput
 	) where
 
@@ -13,13 +16,18 @@ import Control.Concurrent.STM
 import Control.Exception
 import Control.Monad
 import qualified Data.ByteString.Unsafe as B
+import qualified Data.HashMap.Strict as HM
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import Foreign.Marshal.Array
+import Foreign.Ptr
 import qualified SDL.Raw.Enum as SDL
+import qualified SDL.Raw.Event as SDL
 import qualified SDL.Raw.Types as SDL
 
+import Flaw.Input
 import Flaw.Input.Basic
+import Flaw.Input.Gamepad
 import Flaw.Input.Keyboard
 import Flaw.Input.Mouse
 import Flaw.Window.Sdl
@@ -113,71 +121,175 @@ keyFromSdlScancode scancode = case scancode of
 	SDL.SDL_SCANCODE_KP_0 -> KeyPad0
 	_ -> KeyUnknown
 
-type SdlInputManager = BasicInputManager
+gamepadButtonFromSdlButton :: SDL.GameControllerButton -> GamepadButton
+gamepadButtonFromSdlButton button = case button of
+	SDL.SDL_CONTROLLER_BUTTON_A -> GamepadButtonA
+	SDL.SDL_CONTROLLER_BUTTON_B -> GamepadButtonB
+	SDL.SDL_CONTROLLER_BUTTON_X -> GamepadButtonX
+	SDL.SDL_CONTROLLER_BUTTON_Y -> GamepadButtonY
+	SDL.SDL_CONTROLLER_BUTTON_BACK -> GamepadButtonBack
+	SDL.SDL_CONTROLLER_BUTTON_GUIDE -> GamepadButtonGuide
+	SDL.SDL_CONTROLLER_BUTTON_START -> GamepadButtonStart
+	SDL.SDL_CONTROLLER_BUTTON_LEFTSTICK -> GamepadButtonLeftStick
+	SDL.SDL_CONTROLLER_BUTTON_RIGHTSTICK -> GamepadButtonRightStick
+	SDL.SDL_CONTROLLER_BUTTON_LEFTSHOULDER -> GamepadButtonLeftShoulder
+	SDL.SDL_CONTROLLER_BUTTON_RIGHTSHOULDER -> GamepadButtonRightShoulder
+	SDL.SDL_CONTROLLER_BUTTON_DPAD_UP -> GamepadButtonDPadUp
+	SDL.SDL_CONTROLLER_BUTTON_DPAD_DOWN -> GamepadButtonDPadDown
+	SDL.SDL_CONTROLLER_BUTTON_DPAD_LEFT -> GamepadButtonDPadLeft
+	SDL.SDL_CONTROLLER_BUTTON_DPAD_RIGHT -> GamepadButtonDPadRight
+	_ -> GamepadButtonUnknown
+
+gamepadAxisFromSdlAxis :: SDL.GameControllerAxis -> GamepadAxis
+gamepadAxisFromSdlAxis axis = case axis of
+	SDL.SDL_CONTROLLER_AXIS_LEFTX -> GamepadAxisLeftX
+	SDL.SDL_CONTROLLER_AXIS_LEFTY -> GamepadAxisLeftY
+	SDL.SDL_CONTROLLER_AXIS_RIGHTX -> GamepadAxisRightX
+	SDL.SDL_CONTROLLER_AXIS_RIGHTY -> GamepadAxisRightY
+	SDL.SDL_CONTROLLER_AXIS_TRIGGERLEFT -> GamepadAxisTriggerLeft
+	SDL.SDL_CONTROLLER_AXIS_TRIGGERRIGHT -> GamepadAxisTriggerRight
+	_ -> GamepadAxisUnknown
+
+data SdlInputManager = SdlInputManager
+	{ sdlInputManagerBasic :: {-# UNPACK #-} !BasicInputManager
+	, sdlInputManagerGamepadsVar :: {-# UNPACK #-} !(TVar (HM.HashMap SDL.JoystickID SdlGamepad))
+	}
+
+instance InputManager SdlInputManager KeyboardEvent where
+	chanInputEvents = chanInputEvents . sdlInputManagerBasic
+
+instance InputManager SdlInputManager MouseEvent where
+	chanInputEvents = chanInputEvents . sdlInputManagerBasic
+
+data SdlGamepad = SdlGamepad
+	{ sdlGamepadGameController :: {-# UNPACK #-} !SDL.GameController
+	, sdlGamepadChan :: {-# UNPACK #-} !(TChan GamepadEvent)
+	}
 
 initSdlInput :: SdlWindow -> IO SdlInputManager
 initSdlInput window = do
 	-- init basic manager
-	inputManager@BasicInputManager
+	basicInputManager@BasicInputManager
 		{ mKeyboardChan = keyboardChan
 		, mMouseChan = mouseChan
 		} <- initBasicInputManager
 
-	addSdlWindowCallback window $ \event -> do
-		-- helper routines
-		let addKeyboardEvent e = atomically $ writeTChan keyboardChan e
-		let addMouseEvent e = atomically $ writeTChan mouseChan e
+	-- init gamepads var
+	gamepadsVar <- newTVarIO HM.empty
 
-		case event of
-			SDL.KeyboardEvent
-				{ SDL.eventType = eventType
-				, SDL.keyboardEventKeysym = SDL.Keysym
-					{ SDL.keysymScancode = scancode
-					}
-				} -> do
-				let key = keyFromSdlScancode scancode
-				case eventType of
-					SDL.SDL_KEYDOWN -> addKeyboardEvent $ KeyDownEvent key
-					SDL.SDL_KEYUP -> addKeyboardEvent $ KeyUpEvent key
+	-- helper routines
+	let
+		addKeyboardEvent = atomically . writeTChan keyboardChan
+		addMouseEvent = atomically . writeTChan mouseChan
+		addGamepadEvent joystickId event = atomically $ do
+			gamepads <- readTVar gamepadsVar
+			case HM.lookup joystickId gamepads of
+				Just SdlGamepad
+					{ sdlGamepadChan = chan
+					} -> writeTChan chan event
+				Nothing -> return ()
+
+	addSdlWindowCallback window $ \event -> case event of
+
+		SDL.KeyboardEvent
+			{ SDL.eventType = eventType
+			, SDL.keyboardEventKeysym = SDL.Keysym
+				{ SDL.keysymScancode = scancode
+				}
+			} -> do
+			let key = keyFromSdlScancode scancode
+			case eventType of
+				SDL.SDL_KEYDOWN -> addKeyboardEvent $ KeyDownEvent key
+				SDL.SDL_KEYUP -> addKeyboardEvent $ KeyUpEvent key
+				_ -> return ()
+
+		SDL.TextInputEvent
+			{ SDL.textInputEventText = text
+			} -> withArrayLen text $ \len ptr -> do
+			bytes <- B.unsafePackCStringLen (ptr, len)
+			case T.decodeUtf8' bytes of
+				Left _e -> return ()
+				Right t -> unless (T.length t == 0) $ do
+					char <- evaluate $ T.head t
+					addKeyboardEvent $ CharEvent char
+
+		SDL.MouseButtonEvent
+			{ SDL.eventType = eventType
+			, SDL.mouseButtonEventButton = sdlButton
+			, SDL.mouseButtonEventX = x
+			, SDL.mouseButtonEventY = y
+			} -> do
+			addMouseEvent $ CursorMoveEvent (fromIntegral x) (fromIntegral y)
+			let maybeButton = case sdlButton of
+				SDL.SDL_BUTTON_LEFT -> Just LeftMouseButton
+				SDL.SDL_BUTTON_RIGHT -> Just RightMouseButton
+				SDL.SDL_BUTTON_MIDDLE -> Just MiddleMouseButton
+				_ -> Nothing
+			case maybeButton of
+				Just button -> case eventType of
+					SDL.SDL_MOUSEBUTTONDOWN -> addMouseEvent $ MouseDownEvent button
+					SDL.SDL_MOUSEBUTTONUP -> addMouseEvent $ MouseUpEvent button
 					_ -> return ()
-			SDL.TextInputEvent
-				{ SDL.textInputEventText = text
-				} -> withArrayLen text $ \len ptr -> do
-				bytes <- B.unsafePackCStringLen (ptr, len)
-				case T.decodeUtf8' bytes of
-					Left _e -> return ()
-					Right t -> unless (T.length t == 0) $ do
-						char <- evaluate $ T.head t
-						addKeyboardEvent $ CharEvent char
-			SDL.MouseButtonEvent
-				{ SDL.eventType = eventType
-				, SDL.mouseButtonEventButton = sdlButton
-				, SDL.mouseButtonEventX = x
-				, SDL.mouseButtonEventY = y
-				} -> do
-				addMouseEvent $ CursorMoveEvent (fromIntegral x) (fromIntegral y)
-				let maybeButton = case sdlButton of
-					SDL.SDL_BUTTON_LEFT -> Just LeftMouseButton
-					SDL.SDL_BUTTON_RIGHT -> Just RightMouseButton
-					SDL.SDL_BUTTON_MIDDLE -> Just MiddleMouseButton
-					_ -> Nothing
-				case maybeButton of
-					Just button -> case eventType of
-						SDL.SDL_MOUSEBUTTONDOWN -> addMouseEvent $ MouseDownEvent button
-						SDL.SDL_MOUSEBUTTONUP -> addMouseEvent $ MouseUpEvent button
-						_ -> return ()
-					Nothing -> return ()
-			SDL.MouseMotionEvent
-				{ SDL.mouseMotionEventX = x
-				, SDL.mouseMotionEventY = y
-				, SDL.mouseMotionEventXRel = xrel
-				, SDL.mouseMotionEventYRel = yrel
-				} -> do
-				addMouseEvent $ RawMouseMoveEvent (fromIntegral xrel) (fromIntegral yrel) 0
-				addMouseEvent $ CursorMoveEvent (fromIntegral x) (fromIntegral y)
-			SDL.MouseWheelEvent
-				{ SDL.mouseWheelEventY = y
-				} -> addMouseEvent $ RawMouseMoveEvent 0 0 $ fromIntegral y
+				Nothing -> return ()
+
+		SDL.MouseMotionEvent
+			{ SDL.mouseMotionEventX = x
+			, SDL.mouseMotionEventY = y
+			, SDL.mouseMotionEventXRel = xrel
+			, SDL.mouseMotionEventYRel = yrel
+			} -> do
+			addMouseEvent $ RawMouseMoveEvent (fromIntegral xrel) (fromIntegral yrel) 0
+			addMouseEvent $ CursorMoveEvent (fromIntegral x) (fromIntegral y)
+
+		SDL.MouseWheelEvent
+			{ SDL.mouseWheelEventY = y
+			} -> addMouseEvent $ RawMouseMoveEvent 0 0 $ fromIntegral y
+
+		SDL.ControllerDeviceEvent
+			{ SDL.eventType = eventType
+			, SDL.controllerDeviceEventWhich = deviceId
+			} -> case eventType of
+			SDL.SDL_CONTROLLERDEVICEADDED -> do
+				gameController <- SDL.gameControllerOpen (fromIntegral deviceId)
+				when (gameController /= nullPtr) $ do
+					joystick <- SDL.gameControllerGetJoystick gameController
+					when (joystick /= nullPtr) $ do
+						joystickId <- SDL.joystickInstanceID joystick
+						chan <- newTChanIO
+						atomically $ modifyTVar' gamepadsVar $ HM.insert joystickId SdlGamepad
+							{ sdlGamepadGameController = gameController
+							, sdlGamepadChan = chan
+							}
+			SDL.SDL_CONTROLLERDEVICEREMOVED -> join $ atomically $ do
+				gamepads <- readTVar gamepadsVar
+				case HM.lookup deviceId gamepads of
+					Just SdlGamepad
+						{ sdlGamepadGameController = gameController
+						} -> do
+						writeTVar gamepadsVar $! HM.delete deviceId gamepads
+						return $ SDL.gameControllerClose gameController
+					Nothing -> return $ return ()
 			_ -> return ()
 
-	return inputManager
+		SDL.ControllerButtonEvent
+			{ SDL.eventType = eventType
+			, SDL.controllerButtonEventWhich = joystickId
+			, SDL.controllerButtonEventButton = gamepadButtonFromSdlButton . fromIntegral -> button
+			} -> when (button /= GamepadButtonUnknown) $ case eventType of
+			SDL.SDL_CONTROLLERBUTTONDOWN -> addGamepadEvent joystickId $ GamepadButtonDownEvent button
+			SDL.SDL_CONTROLLERBUTTONUP -> addGamepadEvent joystickId $ GamepadButtonUpEvent button
+			_ -> return ()
+
+		SDL.ControllerAxisEvent
+			{ SDL.eventType = SDL.SDL_CONTROLLERAXISMOTION
+			, SDL.controllerAxisEventWhich = joystickId
+			, SDL.controllerAxisEventAxis = gamepadAxisFromSdlAxis . fromIntegral -> axis
+			, SDL.controllerAxisEventValue = value
+			} -> when (axis /= GamepadAxisUnknown) $ addGamepadEvent joystickId $ GamepadAxisEvent axis (fromIntegral value * (1 / 0x8000))
+
+		_ -> return ()
+
+	return SdlInputManager
+		{ sdlInputManagerBasic = basicInputManager
+		, sdlInputManagerGamepadsVar = gamepadsVar
+		}
