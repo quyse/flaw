@@ -481,8 +481,12 @@ glslGenerateProgram GlslConfig
 			ClampNode _ a b c -> func3Source "clamp" a b c
 			LerpNode _ a b c -> func3Source "mix" a b c
 			EqualNode _ a b -> binaryOpSource "==" a b
-			LessNode _ a b -> func2Source "lessThan" a b
-			LessEqualNode _ a b -> func2Source "lessThanEqual" a b
+			LessNode t a b -> case t of
+				ScalarValueType _ -> binaryOpSource "<" a b
+				_ -> func2Source "lessThan" a b
+			LessEqualNode t a b -> case t of
+				ScalarValueType _ -> binaryOpSource "<=" a b
+				_ -> func2Source "lessThanEqual" a b
 			IfNode _ c a b -> "(" <> nodeSource c <> ") ? (" <> nodeSource a <> ") : (" <> nodeSource b <> ")"
 			PiNode t -> let
 				typedPi :: Floating a => Node a -> a
