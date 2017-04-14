@@ -42,8 +42,7 @@ data VulkanSystem = VulkanSystem
 	, vulkanSystem_vkGetPhysicalDeviceFeatures :: !FN_vkGetPhysicalDeviceFeatures
 	, vulkanSystem_vkGetPhysicalDeviceQueueFamilyProperties :: !FN_vkGetPhysicalDeviceQueueFamilyProperties
 	, vulkanSystem_vkCreateDevice :: !FN_vkCreateDevice
-	, vulkanSystem_vkDestroyDevice :: !FN_vkDestroyDevice
-	, vulkanSystem_vkGetDeviceQueue :: !FN_vkGetDeviceQueue
+	, vulkanSystem_vkGetDeviceProcAddr :: !FN_vkGetDeviceProcAddr
 	}
 
 initVulkanSystem :: T.Text -> IO (VulkanSystem, IO ())
@@ -84,8 +83,7 @@ initVulkanSystem appName = describeException "failed to init Vulkan system" $ wi
 		<*> $(vkGetInstanceProc "vkGetPhysicalDeviceFeatures")
 		<*> $(vkGetInstanceProc "vkGetPhysicalDeviceQueueFamilyProperties")
 		<*> $(vkGetInstanceProc "vkCreateDevice")
-		<*> $(vkGetInstanceProc "vkDestroyDevice")
-		<*> $(vkGetInstanceProc "vkGetDeviceQueue")
+		<*> $(vkGetInstanceProc "vkGetDeviceProcAddr")
 
 instance System VulkanSystem where
 	newtype DeviceId VulkanSystem = VulkanDeviceId VkPhysicalDevice
@@ -119,16 +117,21 @@ instance System VulkanSystem where
 	createDisplayMode _ _ _ _ = undefined
 
 data VulkanDevice = VulkanDevice
-	{ vulkanDeviceDevice :: {-# UNPACK #-} !VkDevice
-	, vulkanDeviceGraphicsQueue :: {-# UNPACK #-} !VkQueue
+	{ vulkanDevice_device :: {-# UNPACK #-} !VkDevice
+	, vulkanDevice_graphicsQueue :: {-# UNPACK #-} !VkQueue
+	, vulkanDevice_vkDestroyDevice :: !FN_vkDestroyDevice
+	, vulkanDevice_vkGetDeviceQueue :: !FN_vkGetDeviceQueue
+	, vulkanDevice_vkCreateImage :: !FN_vkCreateImage
+	, vulkanDevice_vkCreateImageView :: !FN_vkCreateImageView
+	, vulkanDevice_vkCreateRenderPass :: !FN_vkCreateRenderPass
+	, vulkanDevice_vkCreateFramebuffer :: !FN_vkCreateFramebuffer
 	}
 
 newVulkanDevice :: VulkanSystem -> DeviceId VulkanSystem -> IO (VulkanDevice, IO ())
 newVulkanDevice VulkanSystem
 	{ vulkanSystem_vkGetPhysicalDeviceQueueFamilyProperties = vkGetPhysicalDeviceQueueFamilyProperties
 	, vulkanSystem_vkCreateDevice = vkCreateDevice
-	, vulkanSystem_vkDestroyDevice = vkDestroyDevice
-	, vulkanSystem_vkGetDeviceQueue = vkGetDeviceQueue
+	, vulkanSystem_vkGetDeviceProcAddr = vkGetDeviceProcAddr
 	} (VulkanDeviceId physicalDevice) = describeException "failed to create Vulkan device" $ withSpecialBook $ \bk -> do
 
 	-- get info about device queues
@@ -172,6 +175,14 @@ newVulkanDevice VulkanSystem
 				vulkanCheckResult $ vkCreateDevice physicalDevice deviceCreateInfoPtr nullPtr devicePtr
 				peek devicePtr
 
+	-- get functions
+	vkDestroyDevice <- $(vkGetDeviceProc "vkDestroyDevice")
+	vkGetDeviceQueue <- $(vkGetDeviceProc "vkGetDeviceQueue")
+	vkCreateImage <- $(vkGetDeviceProc "vkCreateImage")
+	vkCreateImageView <- $(vkGetDeviceProc "vkCreateImageView")
+	vkCreateRenderPass <- $(vkGetDeviceProc "vkCreateRenderPass")
+	vkCreateFramebuffer <- $(vkGetDeviceProc "vkCreateFramebuffer")
+
 	-- book finalizer
 	book bk $ return ((), vkDestroyDevice device nullPtr)
 
@@ -181,8 +192,14 @@ newVulkanDevice VulkanSystem
 		peek queuePtr
 
 	return VulkanDevice
-		{ vulkanDeviceDevice = device
-		, vulkanDeviceGraphicsQueue = graphicsQueue
+		{ vulkanDevice_device = device
+		, vulkanDevice_graphicsQueue = graphicsQueue
+		, vulkanDevice_vkDestroyDevice = vkDestroyDevice
+		, vulkanDevice_vkGetDeviceQueue = vkGetDeviceQueue
+		, vulkanDevice_vkCreateImage = vkCreateImage
+		, vulkanDevice_vkCreateImageView = vkCreateImageView
+		, vulkanDevice_vkCreateRenderPass = vkCreateRenderPass
+		, vulkanDevice_vkCreateFramebuffer = vkCreateFramebuffer
 		}
 
 vulkanCheckResult :: IO Word32 -> IO ()

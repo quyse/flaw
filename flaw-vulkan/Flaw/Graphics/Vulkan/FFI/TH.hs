@@ -9,6 +9,7 @@ License: MIT
 module Flaw.Graphics.Vulkan.FFI.TH
 	( vkDefineHandle
 	, vkGetInstanceProc
+	, vkGetDeviceProc
 	) where
 
 import Foreign.Ptr
@@ -48,3 +49,9 @@ vkGetProc getAddrExp n = do
 -- Variable name "inst" is hardcoded!
 vkGetInstanceProc :: String -> ExpQ
 vkGetInstanceProc = vkGetProc [| vkGetInstanceProcAddr $(varE $ mkName "inst") |]
+
+-- | Get device proc.
+-- Special function for device initialization.
+-- Variable names "vkGetDeviceProcAddr" and "device" are hardcoded!
+vkGetDeviceProc :: String -> ExpQ
+vkGetDeviceProc = vkGetProc [| $(varE $ mkName "vkGetDeviceProcAddr") $(varE $ mkName "device") |]
