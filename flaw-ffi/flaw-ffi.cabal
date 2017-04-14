@@ -20,9 +20,9 @@ source-repository head
 library
   exposed-modules:
     Flaw.FFI
-  -- other-extensions:    
-  build-depends:       base, template-haskell
-  -- hs-source-dirs:      
+  build-depends:
+    base
+    , template-haskell
   default-language:    Haskell2010
   if os(windows) && !impl(ghcjs)
     exposed-modules:
@@ -31,6 +31,10 @@ library
       Flaw.FFI.Win32
     other-modules:
       Flaw.FFI.COM.Internal
-    build-depends: bytestring, flaw-base, text, uuid
+    build-depends:
+      bytestring
+      , flaw-base
+      , text
+      , uuid
     extra-libraries:
       ole32

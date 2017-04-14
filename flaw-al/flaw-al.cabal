@@ -27,12 +27,17 @@ library
     Flaw.Audio.OpenAL
   other-modules:
     Flaw.Audio.OpenAL.FFI
-  build-depends:       base, bytestring, flaw-audio, flaw-base, flaw-math, stm
+  build-depends:
+    base
+    , bytestring
+    , flaw-audio
+    , flaw-base
+    , flaw-math
+    , stm
   if flag(aldebug)
     cpp-options:         -DAL_ERROR_LEVEL=0
   else
     cpp-options:         -DAL_ERROR_LEVEL=1
-  -- hs-source-dirs:      
   default-language:    Haskell2010
   if os(windows)
     extra-libraries:     OpenAL32

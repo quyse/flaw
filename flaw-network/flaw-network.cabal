@@ -23,5 +23,13 @@ library
     Flaw.Network.BiuoSocket
     Flaw.Network.MessageSocket
     Flaw.Network.Session
-  build-depends:       base, bytestring, cereal, cryptonite, flaw-base, hashable, stm, unordered-containers
+  build-depends:
+    base
+    , bytestring
+    , cereal
+    , cryptonite
+    , flaw-base
+    , hashable
+    , stm
+    , unordered-containers
   default-language:    Haskell2010

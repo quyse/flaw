@@ -25,7 +25,10 @@ library
     Flaw.Exception
     Flaw.Flow
     Flaw.Stack
-  -- other-extensions:    
-  build-depends:       base, bytestring, stm, transformers, unordered-containers
-  -- hs-source-dirs:      
+  build-depends:
+    base
+    , bytestring
+    , stm
+    , transformers
+    , unordered-containers
   default-language:    Haskell2010

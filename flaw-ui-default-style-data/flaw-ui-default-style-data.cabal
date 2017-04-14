@@ -21,5 +21,8 @@ library
   exposed-modules:
     Flaw.UI.DefaultStyle.Data
   other-modules:
-  build-depends:       base, bytestring, flaw-build
+  build-depends:
+    base
+    , bytestring
+    , flaw-build
   default-language:    Haskell2010

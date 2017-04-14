@@ -38,7 +38,17 @@ library
     Flaw.UI.VisualElement
     Flaw.UI.Window
   other-modules:
-  -- other-extensions:    
-  build-depends:       base, containers, flaw-canvas, flaw-graphics, flaw-font, flaw-input, flaw-math, flaw-window, mtl, stm, text, transformers
-  -- hs-source-dirs:      
+  build-depends:
+    base
+    , containers
+    , flaw-canvas
+    , flaw-graphics
+    , flaw-font
+    , flaw-input
+    , flaw-math
+    , flaw-window
+    , mtl
+    , stm
+    , text
+    , transformers
   default-language:    Haskell2010

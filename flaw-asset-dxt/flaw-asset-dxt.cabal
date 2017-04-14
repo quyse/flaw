@@ -20,9 +20,12 @@ source-repository head
 library
   exposed-modules:
     Flaw.Asset.Texture.Dxt
-  -- other-extensions:    
-  build-depends:       base, bytestring, flaw-base, flaw-graphics, memory
-  -- hs-source-dirs:      
+  build-depends:
+    base
+    , bytestring
+    , flaw-base
+    , flaw-graphics
+    , memory
   default-language:    Haskell2010
   c-sources:
     -- libsquish

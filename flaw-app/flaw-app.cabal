@@ -35,7 +35,21 @@ library
   exposed-modules:
     Flaw.App
   other-modules:
-  build-depends:       base, bytestring, data-default, flaw-asset, flaw-base, flaw-build, flaw-gl, flaw-graphics, flaw-input, flaw-window, template-haskell, text, time, transformers
+  build-depends:
+    base
+    , bytestring
+    , data-default
+    , flaw-asset
+    , flaw-base
+    , flaw-build
+    , flaw-gl
+    , flaw-graphics
+    , flaw-input
+    , flaw-window
+    , template-haskell
+    , text
+    , time
+    , transformers
   default-language:    Haskell2010
   if impl(ghcjs)
     build-depends:       flaw-js

@@ -33,14 +33,37 @@ library
     Flaw.Visual.Skydome
     Flaw.Visual.Texture
     Flaw.Visual.Texture.Mip
-  -- other-extensions:    
-  build-depends:       base, bytestring, cereal, data-default, flaw-asset-dxt, flaw-base, flaw-build, flaw-collada, flaw-ffi, flaw-graphics, flaw-math, JuicyPixels, memory, primitive, template-haskell, text, transformers, vector, vector-algorithms
-  -- hs-source-dirs:      
+  build-depends:
+    base
+    , bytestring
+    , cereal
+    , data-default
+    , flaw-asset-dxt
+    , flaw-base
+    , flaw-build
+    , flaw-collada
+    , flaw-ffi
+    , flaw-graphics
+    , flaw-math
+    , JuicyPixels
+    , memory
+    , primitive
+    , template-haskell
+    , text
+    , transformers
+    , vector
+    , vector-algorithms
   default-language:    Haskell2010
 
 test-suite collada-test
   type:                exitcode-stdio-1.0
   main-is:             collada-test.hs
   hs-source-dirs:      test
-  build-depends:       base, bytestring, flaw-collada, flaw-math, flaw-visual, vector
+  build-depends:
+    base
+    , bytestring
+    , flaw-collada
+    , flaw-math
+    , flaw-visual
+    , vector
   default-language:    Haskell2010

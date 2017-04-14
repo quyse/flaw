@@ -20,7 +20,14 @@ source-repository head
 library
   exposed-modules:
     Flaw.Asset.Collada
-  -- other-extensions:    
-  build-depends:       base, bytestring, containers, flaw-math, mtl, text, vector, vector-algorithms, xml-conduit
-  -- hs-source-dirs:      
+  build-depends:
+    base
+    , bytestring
+    , containers
+    , flaw-math
+    , mtl
+    , text
+    , vector
+    , vector-algorithms
+    , xml-conduit
   default-language:    Haskell2010

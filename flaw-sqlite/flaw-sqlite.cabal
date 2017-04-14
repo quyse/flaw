@@ -21,9 +21,11 @@ library
   exposed-modules:
     Flaw.Data.Sqlite
   other-modules:
-  -- other-extensions:    
-  build-depends:       base, bytestring, flaw-base, text
-  -- hs-source-dirs:      
+  build-depends:
+    base
+    , bytestring
+    , flaw-base
+    , text
   default-language:    Haskell2010
   c-sources:
     -- sqlite

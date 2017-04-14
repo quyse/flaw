@@ -20,5 +20,14 @@ source-repository head
 library
   exposed-modules:
     Flaw.Asset.Wai
-  build-depends:       base, bytestring, cryptonite, flaw-asset, memory, mime-types, template-haskell, text, wai-app-static
+  build-depends:
+    base
+    , bytestring
+    , cryptonite
+    , flaw-asset
+    , memory
+    , mime-types
+    , template-haskell
+    , text
+    , wai-app-static
   default-language:    Haskell2010

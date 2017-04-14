@@ -20,5 +20,13 @@ source-repository head
 library
   exposed-modules:
     Flaw.Steam.WebApi
-  build-depends:       aeson, base, bytestring, flaw-steam, http-client, memory, text, unordered-containers
+  build-depends:
+    aeson
+    , base
+    , bytestring
+    , flaw-steam
+    , http-client
+    , memory
+    , text
+    , unordered-containers
   default-language:    Haskell2010

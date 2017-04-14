@@ -21,7 +21,10 @@ library
   exposed-modules:
     Flaw.Audio
     Flaw.Audio.Util
-  -- other-extensions:    
-  build-depends:       base, bytestring, flaw-base, flaw-math, stm
-  -- hs-source-dirs:      
+  build-depends:
+    base
+    , bytestring
+    , flaw-base
+    , flaw-math
+    , stm
   default-language:    Haskell2010

@@ -21,7 +21,7 @@ library
   exposed-modules:
     Flaw.Game.Lockstep
   other-modules:
-  -- other-extensions:    
-  build-depends:       base, stm
-  -- hs-source-dirs:      
+  build-depends:
+    base
+    , stm
   default-language:    Haskell2010

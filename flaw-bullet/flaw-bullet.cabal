@@ -20,9 +20,11 @@ source-repository head
 library
   exposed-modules:
     Flaw.Physics.Bullet
-  -- other-extensions:    
-  build-depends:       base, flaw-math, flaw-physics, vector
-  -- hs-source-dirs:      
+  build-depends:
+    base
+    , flaw-math
+    , flaw-physics
+    , vector
   default-language:    Haskell2010
   c-sources:
     -- integration

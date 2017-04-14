@@ -20,5 +20,12 @@ source-repository head
 library
   exposed-modules:
     Flaw.Network.WebSocket
-  build-depends:       base, flaw-base, flaw-js, flaw-network, ghcjs-base, stm, text
+  build-depends:
+    base
+    , flaw-base
+    , flaw-js
+    , flaw-network
+    , ghcjs-base
+    , stm
+    , text
   default-language:    Haskell2010

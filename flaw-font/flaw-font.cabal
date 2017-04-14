@@ -24,7 +24,15 @@ library
     Flaw.Graphics.Font.Script
     Flaw.Graphics.Font.Util
   other-modules:
-  -- other-extensions:    
-  build-depends:       base, bytestring, data-default, flaw-base, flaw-graphics, flaw-math, JuicyPixels, mtl, text, vector
-  -- hs-source-dirs:      
+  build-depends:
+    base
+    , bytestring
+    , data-default
+    , flaw-base
+    , flaw-graphics
+    , flaw-math
+    , JuicyPixels
+    , mtl
+    , text
+    , vector
   default-language:    Haskell2010

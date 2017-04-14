@@ -21,5 +21,16 @@ library
   exposed-modules:
     Flaw.UI.DefaultStyle
   other-modules:
-  build-depends:       base, flaw-base, flaw-canvas, flaw-font, flaw-font-fthb, flaw-graphics, flaw-math, flaw-ui, flaw-ui-default-style-data, stm, template-haskell
+  build-depends:
+    base
+    , flaw-base
+    , flaw-canvas
+    , flaw-font
+    , flaw-font-fthb
+    , flaw-graphics
+    , flaw-math
+    , flaw-ui
+    , flaw-ui-default-style-data
+    , stm
+    , template-haskell
   default-language:    Haskell2010

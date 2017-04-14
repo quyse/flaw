@@ -24,14 +24,26 @@ library
     Flaw.Oil.Repo
     Flaw.Oil.ServerRepo
   other-modules:
-  -- other-extensions:    
-  build-depends:       base, bytestring, cereal, flaw-base, flaw-sqlite, http-client, http-types, text, time
-  -- hs-source-dirs:      
+  build-depends:
+    base
+    , bytestring
+    , cereal
+    , flaw-base
+    , flaw-sqlite
+    , http-client
+    , http-types
+    , text
+    , time
   default-language:    Haskell2010
 
 test-suite repo-test
   type:                exitcode-stdio-1.0
   main-is:             repo-test.hs
   hs-source-dirs:      test
-  build-depends:       base, flaw-base, flaw-oil, mtl, text
+  build-depends:
+    base
+    , flaw-base
+    , flaw-oil
+    , mtl
+    , text
   default-language:    Haskell2010

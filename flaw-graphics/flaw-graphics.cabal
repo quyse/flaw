@@ -25,7 +25,15 @@ library
     Flaw.Graphics.Program.Internal
     Flaw.Graphics.Sampler
     Flaw.Graphics.Texture
-  -- other-extensions:    
-  build-depends:       base, bytestring, cereal, data-default, flaw-base, flaw-math, mtl, text, template-haskell, transformers
-  -- hs-source-dirs:      
+  build-depends:
+    base
+    , bytestring
+    , cereal
+    , data-default
+    , flaw-base
+    , flaw-math
+    , mtl
+    , text
+    , template-haskell
+    , transformers
   default-language:    Haskell2010

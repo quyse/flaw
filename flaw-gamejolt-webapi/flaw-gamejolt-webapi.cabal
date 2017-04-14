@@ -20,5 +20,14 @@ source-repository head
 library
   exposed-modules:
     Flaw.GameJolt.WebApi
-  build-depends:       aeson, base, bytestring, cryptonite, http-client, memory, network-uri, text, unordered-containers
+  build-depends:
+    aeson
+    , base
+    , bytestring
+    , cryptonite
+    , http-client
+    , memory
+    , network-uri
+    , text
+    , unordered-containers
   default-language:    Haskell2010

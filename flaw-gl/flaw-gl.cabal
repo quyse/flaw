@@ -27,7 +27,18 @@ library
     Flaw.Graphics.GlContext
     Flaw.Graphics.GLSL
   other-modules:
-  build-depends:       base, bytestring, cereal, cereal-text, data-default, flaw-base, flaw-graphics, flaw-math, flaw-sl, text, vector
+  build-depends:
+    base
+    , bytestring
+    , cereal
+    , cereal-text
+    , data-default
+    , flaw-base
+    , flaw-graphics
+    , flaw-math
+    , flaw-sl
+    , text
+    , vector
   if flag(gldebug)
     cpp-options:         -DGL_ERROR_LEVEL=0
   else
@@ -37,13 +48,16 @@ library
       Flaw.Graphics.WebGL
     other-modules:
       Flaw.Graphics.WebGL.FFI
-    build-depends:       flaw-js, flaw-window, ghcjs-base
+    build-depends:
+      flaw-js
+      , flaw-window
+      , ghcjs-base
     js-sources:        js/flaw-webgl.js
   else
     exposed-modules:
       Flaw.Graphics.OpenGL
     other-modules:
       Flaw.Graphics.OpenGL.FFI
-    build-depends:       OpenGLRaw
-  -- hs-source-dirs:      
+    build-depends:
+      OpenGLRaw
   default-language:    Haskell2010

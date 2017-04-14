@@ -25,14 +25,19 @@ library
     Flaw.Input.Keyboard
   other-modules:
     Flaw.Input.Basic
-  -- other-extensions:    
-  build-depends:       array, base, flaw-base, flaw-ffi, flaw-window, stm
-  -- hs-source-dirs:      
+  build-depends:
+    array
+    , base
+    , flaw-base
+    , flaw-ffi
+    , flaw-window
+    , stm
   default-language:    Haskell2010
   if impl(ghcjs)
     exposed-modules:
       Flaw.Input.Web
-    build-depends:       ghcjs-base
+    build-depends:
+      ghcjs-base
     js-sources:          js/flaw-input.js
   else
     if os(windows)
@@ -41,4 +46,8 @@ library
     else
       exposed-modules:
         Flaw.Input.Sdl
-      build-depends:       bytestring, sdl2 >= 2, unordered-containers, text
+      build-depends:
+        bytestring
+        , sdl2
+        , unordered-containers
+        , text

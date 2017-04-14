@@ -20,5 +20,13 @@ source-repository head
 library
   exposed-modules:
     Flaw.Itch.WebApi
-  build-depends:       aeson, base, bytestring, hashable, http-client, memory, text, unordered-containers
+  build-depends:
+    aeson
+    , base
+    , bytestring
+    , hashable
+    , http-client
+    , memory
+    , text
+    , unordered-containers
   default-language:    Haskell2010

@@ -21,8 +21,13 @@ library
   exposed-modules:
     Flaw.Media.FFmpeg
   other-modules:
-  build-depends:       base, bytestring, flaw-audio, flaw-base, pipes, text
-  -- hs-source-dirs:      
+  build-depends:
+    base
+    , bytestring
+    , flaw-audio
+    , flaw-base
+    , pipes
+    , text
   default-language:    Haskell2010
   c-sources:           src/flaw-ffmpeg.c
   pkgconfig-depends:   libavcodec, libavformat, libavutil, libswscale

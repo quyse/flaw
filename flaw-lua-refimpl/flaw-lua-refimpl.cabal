@@ -20,9 +20,7 @@ source-repository head
 library
   exposed-modules:
   other-modules:
-  -- other-extensions:    
-  build-depends:       
-  -- hs-source-dirs:      
+  build-depends:
   default-language:    Haskell2010
   c-sources:
     src/lua-5.3.2/src/lapi.c

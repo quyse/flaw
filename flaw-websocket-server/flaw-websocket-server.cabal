@@ -20,7 +20,14 @@ source-repository head
 library
   exposed-modules:
     Flaw.Network.WebSocket.Wai
-  -- other-extensions:    
-  build-depends:       base, bytestring, flaw-network, http-types, stm, wai, wai-routes, wai-websockets, websockets
-  -- hs-source-dirs:      
+  build-depends:
+    base
+    , bytestring
+    , flaw-network
+    , http-types
+    , stm
+    , wai
+    , wai-routes
+    , wai-websockets
+    , websockets
   default-language:    Haskell2010

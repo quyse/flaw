@@ -20,5 +20,6 @@ source-repository head
 library
   exposed-modules:
     Flaw.Steam
-  build-depends:       base
+  build-depends:
+    base
   default-language:    Haskell2010

@@ -20,7 +20,8 @@ source-repository head
 library
   exposed-modules:
     Flaw.Graphics.Program.SL
-  -- other-extensions:    
-  build-depends:       base, flaw-graphics, vector
-  -- hs-source-dirs:      
+  build-depends:
+    base
+    , flaw-graphics
+    , vector
   default-language:    Haskell2010
