@@ -9,8 +9,9 @@ module Flaw.Graphics.Blend
 	, AlphaSource(..)
 	, BlendOperation(..)
 	, BlendStateInfo(..)
-	, defaultBlendStateInfo
 	) where
+
+import Data.Default
 
 -- | Color source for blending.
 data ColorSource
@@ -60,12 +61,12 @@ data BlendStateInfo = BlendStateInfo
 	, blendAlphaOperation :: BlendOperation
 	} deriving (Eq, Show)
 
-defaultBlendStateInfo :: BlendStateInfo
-defaultBlendStateInfo = BlendStateInfo
-	{ blendSourceColor = ColorSourceOne
-	, blendDestColor = ColorSourceZero
-	, blendColorOperation = BlendOperationAdd
-	, blendSourceAlpha = AlphaSourceOne
-	, blendDestAlpha = AlphaSourceZero
-	, blendAlphaOperation = BlendOperationAdd
-	}
+instance Default BlendStateInfo where
+	def = BlendStateInfo
+		{ blendSourceColor = ColorSourceOne
+		, blendDestColor = ColorSourceZero
+		, blendColorOperation = BlendOperationAdd
+		, blendSourceAlpha = AlphaSourceOne
+		, blendDestAlpha = AlphaSourceZero
+		, blendAlphaOperation = BlendOperationAdd
+		}

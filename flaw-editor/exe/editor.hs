@@ -13,6 +13,7 @@ module Main
 import Control.Concurrent.STM
 import Control.Exception
 import Control.Monad
+import Data.Default
 import Data.Monoid
 import qualified Data.Text as T
 import qualified Data.Yaml as Y
@@ -75,7 +76,7 @@ run Options
 	{ optionsProject = optionProject
 	, optionsUser = optionUser
 	, optionsDebug = optionDebug
-	} = withApp appConfig
+	} = withApp def
 	{ appConfigTitle = "FLAW Editor"
 	, appConfigDebug = optionDebug
 	} $ \window device context presenter inputManager -> withBook $ \bk -> do

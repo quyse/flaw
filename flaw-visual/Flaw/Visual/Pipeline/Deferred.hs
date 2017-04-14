@@ -35,6 +35,8 @@ Light pass renders light volumes (or fullscreen quads), calculate lighting and o
 	, deferredPipelineAmbientLightPassProgram
 	) where
 
+import Data.Default
+
 import Flaw.Book
 import Flaw.Graphics
 import Flaw.Graphics.Blend
@@ -59,7 +61,7 @@ data DeferredPipeline d = DeferredPipeline
 
 newDeferredPipeline :: Device d => d -> Int -> Int -> IO (DeferredPipeline d, IO ())
 newDeferredPipeline device width height = withSpecialBook $ \bk -> do
-	let samplerStateInfo = defaultSamplerStateInfo
+	let samplerStateInfo = def
 		{ samplerWrapU = SamplerWrapClamp
 		, samplerWrapV = SamplerWrapClamp
 		, samplerWrapW = SamplerWrapClamp

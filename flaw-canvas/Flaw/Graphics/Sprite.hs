@@ -16,6 +16,7 @@ module Flaw.Graphics.Sprite
 
 import Control.Monad.Reader
 import qualified Data.ByteString.Unsafe as B
+import Data.Default
 import Data.IORef
 import qualified Data.Vector.Storable.Mutable as VSM
 import Foreign.ForeignPtr
@@ -49,7 +50,7 @@ initQuadRenderer device = do
 	let vbStride = sizeOf (undefined :: Float4)
 	vb <- book bk $ createDynamicVertexBuffer device (capacity * 6 * vbStride) vbStride
 
-	ss <- book bk $ createSamplerState device defaultSamplerStateInfo
+	ss <- book bk $ createSamplerState device def
 		{ samplerMinFilter = SamplerPointFilter
 		, samplerMipFilter = SamplerPointFilter
 		, samplerMagFilter = SamplerPointFilter
@@ -58,7 +59,7 @@ initQuadRenderer device = do
 		, samplerWrapW = SamplerWrapClamp
 		}
 
-	bs <- book bk $ createBlendState device $ defaultBlendStateInfo
+	bs <- book bk $ createBlendState device $ def
 		{ blendSourceColor = ColorSourceSrcAlpha
 		, blendDestColor = ColorSourceInvSrcAlpha
 		, blendColorOperation = BlendOperationAdd

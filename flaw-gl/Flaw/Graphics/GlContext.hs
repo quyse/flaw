@@ -24,6 +24,7 @@ import Control.Monad
 import Data.Bits
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Unsafe as B
+import Data.Default
 import Data.Foldable
 import Data.List
 import Data.Maybe
@@ -453,7 +454,7 @@ instance Device GlContext where
 			}, GlTextureId textureName), invoke $ glDeleteTextureName textureName)
 
 	createDepthStencilTarget context width height = do
-		((depthStencilTarget, _depthStencilTexture), destroy) <- createReadableDepthStencilTarget context width height defaultSamplerStateInfo
+		((depthStencilTarget, _depthStencilTexture), destroy) <- createReadableDepthStencilTarget context width height def
 		return (depthStencilTarget, destroy)
 
 	createReadableDepthStencilTarget GlContext

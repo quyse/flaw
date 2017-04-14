@@ -23,6 +23,7 @@ module Flaw.Graphics.Font.Render
 
 import Control.Monad.Reader
 import qualified Data.ByteString.Unsafe as B
+import Data.Default
 import Data.IORef
 import qualified Data.Text as T
 import qualified Data.Vector as V
@@ -80,12 +81,12 @@ initGlyphRenderer device subpixelMode = do
 	let capacity = 256;
 	ub <- book bk $ createUniformBuffer device (capacity * 3 * sizeOf (undefined :: Float4))
 
-	let nonSubpixelBlendStateInfo = defaultBlendStateInfo
+	let nonSubpixelBlendStateInfo = def
 		{ blendSourceColor = ColorSourceSrcAlpha
 		, blendDestColor = ColorSourceInvSrcAlpha
 		, blendColorOperation = BlendOperationAdd
 		}
-	let subpixelBlendStateInfo = defaultBlendStateInfo
+	let subpixelBlendStateInfo = def
 		{ blendSourceColor = ColorSourceSecondSrc
 		, blendDestColor = ColorSourceInvSecondSrc
 		, blendColorOperation = BlendOperationAdd
@@ -170,7 +171,7 @@ createRenderableFont device Glyphs
 	, glyphsScaleY = scaleY
 	} = do
 	-- create texture
-	(textureId, destroy) <- createStaticTexture device textureInfo defaultSamplerStateInfo
+	(textureId, destroy) <- createStaticTexture device textureInfo def
 		{ samplerMinFilter = SamplerLinearFilter
 		, samplerMipFilter = SamplerPointFilter
 		, samplerMagFilter = SamplerLinearFilter

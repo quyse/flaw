@@ -22,6 +22,6 @@ library
     Flaw.Graphics.Canvas
     Flaw.Graphics.Sprite
   -- other-extensions:    
-  build-depends:       base, bytestring, flaw-base, flaw-graphics, flaw-math, mtl, vector
+  build-depends:       base, bytestring, data-default, flaw-base, flaw-graphics, flaw-math, mtl, vector
   -- hs-source-dirs:      
   default-language:    Haskell2010

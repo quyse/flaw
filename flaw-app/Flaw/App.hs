@@ -10,7 +10,6 @@ module Flaw.App
 	( withApp
 	, runApp
 	, exitApp
-	, appConfig
 	, AppGraphicsSystemId(..)
 	, AppConfig(..)
 	, AppWindow
@@ -20,6 +19,7 @@ module Flaw.App
 import Control.Concurrent
 import Control.Exception
 import Control.Monad
+import Data.Default
 import qualified Data.Text as T
 import Data.Time
 import Data.Typeable
@@ -102,30 +102,30 @@ data AppConfig where
 		, appConfigGraphicsSystems :: ![AppGraphicsSystemId]
 		} -> AppConfig
 
-appConfig :: AppConfig
-appConfig = AppConfig
-	{ appConfigTitle = T.pack "flaw app"
-	, appConfigWindowPosition = Nothing
-	, appConfigWindowSize = Nothing
-	, appConfigNeedDepthBuffer = False
-	, appConfigBinaryCache = NullBinaryCache
-	, appConfigDebug = False
-	, appConfigGraphicsSystems =
+instance Default AppConfig where
+	def = AppConfig
+		{ appConfigTitle = T.pack "flaw app"
+		, appConfigWindowPosition = Nothing
+		, appConfigWindowSize = Nothing
+		, appConfigNeedDepthBuffer = False
+		, appConfigBinaryCache = NullBinaryCache
+		, appConfigDebug = False
+		, appConfigGraphicsSystems =
 #if defined(ghcjs_HOST_OS)
-		AppGraphicsSystemWebGL :
+			AppGraphicsSystemWebGL :
 #else
 #if defined(FLAW_APP_SUPPORT_VULKAN)
-		AppGraphicsSystemVulkan :
+			AppGraphicsSystemVulkan :
 #endif
 #if defined(FLAW_APP_SUPPORT_DX11)
-		AppGraphicsSystemDirectX11 :
+			AppGraphicsSystemDirectX11 :
 #endif
 #if defined(FLAW_APP_SUPPORT_GL)
-		AppGraphicsSystemOpenGL :
+			AppGraphicsSystemOpenGL :
 #endif
 #endif
-		[]
-	}
+			[]
+		}
 
 -- | Initialized graphics system.
 data GraphicsSystem where

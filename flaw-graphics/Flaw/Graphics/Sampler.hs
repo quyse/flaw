@@ -8,8 +8,9 @@ module Flaw.Graphics.Sampler
 	( SamplerWrap(..)
 	, SamplerFilter(..)
 	, SamplerStateInfo(..)
-	, defaultSamplerStateInfo
 	) where
+
+import Data.Default
 
 import Flaw.Math
 
@@ -41,16 +42,16 @@ data SamplerStateInfo = SamplerStateInfo
 	, samplerMaxAnisotropy :: {-# UNPACK #-} !Int
 	} deriving Show
 
-defaultSamplerStateInfo :: SamplerStateInfo
-defaultSamplerStateInfo = SamplerStateInfo
-	{ samplerMinFilter = SamplerPointFilter
-	, samplerMipFilter = SamplerPointFilter
-	, samplerMagFilter = SamplerPointFilter
-	, samplerWrapU = SamplerWrapRepeat
-	, samplerWrapV = SamplerWrapRepeat
-	, samplerWrapW = SamplerWrapRepeat
-	, samplerMinLod = -1000
-	, samplerMaxLod = 1000
-	, samplerBorderColor = Vec4 0 0 0 0
-	, samplerMaxAnisotropy = 1
-	}
+instance Default SamplerStateInfo where
+	def = SamplerStateInfo
+		{ samplerMinFilter = SamplerPointFilter
+		, samplerMipFilter = SamplerPointFilter
+		, samplerMagFilter = SamplerPointFilter
+		, samplerWrapU = SamplerWrapRepeat
+		, samplerWrapV = SamplerWrapRepeat
+		, samplerWrapW = SamplerWrapRepeat
+		, samplerMinLod = -1000
+		, samplerMaxLod = 1000
+		, samplerBorderColor = Vec4 0 0 0 0
+		, samplerMaxAnisotropy = 1
+		}

@@ -27,7 +27,7 @@ library
     Flaw.Graphics.GlContext
     Flaw.Graphics.GLSL
   other-modules:
-  build-depends:       base, bytestring, cereal, cereal-text, flaw-base, flaw-graphics, flaw-math, flaw-sl, text, vector
+  build-depends:       base, bytestring, cereal, cereal-text, data-default, flaw-base, flaw-graphics, flaw-math, flaw-sl, text, vector
   if flag(gldebug)
     cpp-options:         -DGL_ERROR_LEVEL=0
   else

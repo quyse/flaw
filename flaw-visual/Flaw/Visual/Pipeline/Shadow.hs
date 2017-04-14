@@ -17,6 +17,8 @@ module Flaw.Visual.Pipeline.Shadow
 	, shadowBlurerESMInput
 	) where
 
+import Data.Default
+
 import Flaw.Book
 import Flaw.Graphics
 import Flaw.Graphics.Program
@@ -29,7 +31,7 @@ import Flaw.Visual.ScreenQuad
 -- | Sampler state used for sampling shadow values.
 -- Uses border for getting "shadowed" values outside of shadow map.
 shadowSamplerStateInfo :: Float -> SamplerStateInfo
-shadowSamplerStateInfo border = defaultSamplerStateInfo
+shadowSamplerStateInfo border = def
 	{ samplerWrapU = SamplerWrapBorder
 	, samplerWrapV = SamplerWrapBorder
 	, samplerWrapW = SamplerWrapBorder

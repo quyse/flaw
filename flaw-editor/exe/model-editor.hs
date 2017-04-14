@@ -17,6 +17,7 @@ import Control.Monad.State.Strict
 import Data.Bits
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
+import Data.Default
 import qualified Data.Serialize as S
 import qualified Data.Text as T
 import qualified Data.Vector as V
@@ -30,7 +31,6 @@ import Flaw.Asset.Texture.Dxt
 import Flaw.Book
 import Flaw.Editor.UI.Elements
 import Flaw.Editor.UI.FileDialog
-import Flaw.Exception
 import Flaw.Flow
 import Flaw.Graphics
 import Flaw.Graphics.Program
@@ -176,7 +176,7 @@ getEyeDirection EditorState
 	sb = sin eyeBeta
 
 main :: IO ()
-main = withApp appConfig
+main = withApp def
 	{ appConfigTitle = "FLAW Model Editor"
 	, appConfigNeedDepthBuffer = False
 	} $ \window device context presenter inputManager -> withBook $ \bk -> handle (errorHandler "main") $ do
@@ -257,7 +257,7 @@ main = withApp appConfig
 					, textureFormatColorSpace = StandardColorSpace
 					}
 				, textureCount = 0
-				} defaultSamplerStateInfo $ B.pack $ do
+				} def $ B.pack $ do
 				i <- [0..(height - 1)]
 				j <- [0..(width - 1)]
 				let c = if even (i `quot` step + j `quot` step) then 255 else 0
@@ -293,7 +293,7 @@ main = withApp appConfig
 							if step - ii < jj then Vec3 0 1 1
 							else Vec3 (-1) 0 1
 				[fromIntegral (floor (x * 127) + 127 :: Int), fromIntegral (floor (y * 127) + 127 :: Int)]
-			createStaticTexture device compressedTextureInfo defaultSamplerStateInfo compressedTextureBytes
+			createStaticTexture device compressedTextureInfo def compressedTextureBytes
 		let newGrayTextureCell = book bk $ newTextureCell $ do
 			let
 				width = 4
@@ -312,7 +312,7 @@ main = withApp appConfig
 					, textureCount = 0
 					}
 				textureBytes = B.pack $ concat $ replicate (width * height) [127, 127, 127, 255]
-			createStaticTexture device textureInfo defaultSamplerStateInfo textureBytes
+			createStaticTexture device textureInfo def textureBytes
 		initialDiffuseTextureCell <- newGrayTextureCell
 		initialSpecularTextureCell <- newGrayTextureCell
 		initialMetalnessTextureCell <- newGrayTextureCell
@@ -420,7 +420,7 @@ main = withApp appConfig
 		rgb <- xyz2rgb =<< xyY2xyz (cvec111 (x_ xyY) (y_ xyY) (z_ xyY / (1 + z_ xyY)))
 		colorTarget 0 $ cvec31 rgb 1
 
-	linearSamplerState <- book bk $ createSamplerState device defaultSamplerStateInfo
+	linearSamplerState <- book bk $ createSamplerState device def
 		{ samplerMinFilter = SamplerLinearFilter
 		, samplerMipFilter = SamplerLinearFilter
 		, samplerMagFilter = SamplerLinearFilter
@@ -460,7 +460,7 @@ main = withApp appConfig
 			, packedTextureInfo = textureInfo
 			} = if isNormalTexture then convertTextureToLinearRG loadedTexture else loadedTexture
 		let (compressedTextureInfo, compressedTextureBytes) = dxtCompressTexture textureInfo textureBytes
-		createStaticTexture device compressedTextureInfo defaultSamplerStateInfo compressedTextureBytes
+		createStaticTexture device compressedTextureInfo def compressedTextureBytes
 
 	-- input callback
 	let inputCallback inputEvent InputState

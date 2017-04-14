@@ -19,6 +19,7 @@ import Control.Exception
 import Control.Monad
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Unsafe as B
+import Data.Default
 import qualified Data.Serialize as S
 import qualified Data.Text as T
 import qualified Data.Vector as V
@@ -150,7 +151,7 @@ loadTextureAnimatedSkinnedGeometryAsset device bytes = case S.decode bytes of
 		, packedSkinnedGeometryAnimationInvLength = animationInvLength
 		} -> withSpecialBook $ \bk -> do
 		geometry <- book bk $ loadPackedGeometry device packedGeometry
-		animationTexture <- book bk $ createStaticTexture device textureInfo defaultSamplerStateInfo
+		animationTexture <- book bk $ createStaticTexture device textureInfo def
 			{ samplerMinFilter = SamplerLinearFilter
 			, samplerMipFilter = SamplerPointFilter
 			, samplerMagFilter = SamplerLinearFilter

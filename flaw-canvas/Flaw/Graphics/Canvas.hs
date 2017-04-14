@@ -13,16 +13,17 @@ module Flaw.Graphics.Canvas
 	, drawCubicBezierCurve
 	) where
 
+import qualified Data.ByteString.Unsafe as B
+import Data.Default
+import Foreign.Marshal.Array
+import Foreign.Ptr
+import Foreign.Storable
+
 import Flaw.Book
 import Flaw.Graphics
 import Flaw.Graphics.Blend
 import Flaw.Graphics.Program
 import Flaw.Math
-
-import qualified Data.ByteString.Unsafe as B
-import Foreign.Marshal.Array
-import Foreign.Ptr
-import Foreign.Storable
 
 -- | Canvas contains additional things for 2D rendering.
 data Canvas d = Canvas
@@ -45,7 +46,7 @@ initCanvas :: Device d => d -> IO (Canvas d, IO ())
 initCanvas device = withSpecialBook $ \bk -> do
 
 	-- create blend state for usual blending
-	blendState <- book bk $ createBlendState device defaultBlendStateInfo
+	blendState <- book bk $ createBlendState device def
 		{ blendSourceColor = ColorSourceSrcAlpha
 		, blendDestColor = ColorSourceInvSrcAlpha
 		}
