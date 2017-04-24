@@ -38,6 +38,7 @@ variables:
     flaw-oil-client
     flaw-oil-server
     flaw-physics
+    flaw-script
     flaw-sdl
     flaw-sl
     flaw-social
@@ -79,6 +80,7 @@ variables:
     flaw-oil
     flaw-oil-client
     flaw-physics
+    flaw-script
     flaw-sl
     flaw-sqlite
     flaw-steam
@@ -116,6 +118,7 @@ variables:
     flaw-oil
     flaw-oil-client
     flaw-physics
+    flaw-script
     flaw-sdl
     flaw-sl
     flaw-sqlite

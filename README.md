@@ -88,6 +88,7 @@ Here are all packages in A-Z order. Checkmark against a platform means that the 
 | `flaw-oil-client` | Simple command-line client for Oil protocol | ✔ | ✔ | ✔ |   |
 | `flaw-oil-server` | Server for Oil protocol | ✔ |   |   |   |
 | `flaw-physics` | General interface for physics simulation | ✔ | ✔ | ✔ | ✔ |
+| `flaw-script` | Scripting in Haskell | ✔ | ✔ | ✔ |   |
 | `flaw-sdl` | Integration with SDL 2 | ✔ |   | ✔ |   |
 | `flaw-sl` | Generic shader languages helping code | ✔ | ✔ | ✔ | ✔ |
 | `flaw-social` | Some social network integration | ✔ |   |   | ✔ |

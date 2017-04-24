@@ -39,6 +39,7 @@ packages:
 - flaw-oil-client
 - flaw-oil-server
 - flaw-physics
+- flaw-script
 - flaw-sdl
 - flaw-sl
 - flaw-social
