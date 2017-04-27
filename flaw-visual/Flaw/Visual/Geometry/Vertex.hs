@@ -164,7 +164,7 @@ instance HasTexcoordAttribute VertexPNTWB where
 
 instance HasWeightsBonesAttributes VertexPNTWB where
 	vertexWeightsAttribute _ = (32, AttributeVec4 AttributeFloat32)
-	vertexBonesAttribute _ = (48, AttributeVec4 (AttributeUint8 NonNormalized))
+	vertexBonesAttribute _ = (48, AttributeVec4 AttributeUint8)
 
 instance ColladaVertex VertexPNTWB where
 	createColladaVertices verticesData@ColladaVerticesData

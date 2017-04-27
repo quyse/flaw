@@ -204,29 +204,41 @@ instance OfAttributeType Float where
 	data AttributeFormat Float
 		= AttributeFloat32
 		| AttributeFloat16
+		| AttributeFloatInt32
+		| AttributeFloatInt16
+		| AttributeFloatInt8
+		| AttributeFloatUint32
+		| AttributeFloatUint16
+		| AttributeFloatUint8
 	attributeFormatToType f = case f of
 		AttributeFloat32 -> ATFloat32
 		AttributeFloat16 -> ATFloat16
+		AttributeFloatInt32 -> ATInt32 Normalized
+		AttributeFloatInt16 -> ATInt16 Normalized
+		AttributeFloatInt8 -> ATInt8 Normalized
+		AttributeFloatUint32 -> ATUint32 Normalized
+		AttributeFloatUint16 -> ATUint16 Normalized
+		AttributeFloatUint8 -> ATUint8 Normalized
 
 instance OfAttributeType Int32 where
 	data AttributeFormat Int32
-		= AttributeInt32 !Normalization
-		| AttributeInt16 !Normalization
-		| AttributeInt8 !Normalization
+		= AttributeInt32
+		| AttributeInt16
+		| AttributeInt8
 	attributeFormatToType f = case f of
-		AttributeInt32 n -> ATInt32 n
-		AttributeInt16 n -> ATInt16 n
-		AttributeInt8 n -> ATInt8 n
+		AttributeInt32 -> ATInt32 NonNormalized
+		AttributeInt16 -> ATInt16 NonNormalized
+		AttributeInt8 -> ATInt8 NonNormalized
 
 instance OfAttributeType Word32 where
 	data AttributeFormat Word32
-		= AttributeUint32 !Normalization
-		| AttributeUint16 !Normalization
-		| AttributeUint8 !Normalization
+		= AttributeUint32
+		| AttributeUint16
+		| AttributeUint8
 	attributeFormatToType f = case f of
-		AttributeUint32 n -> ATUint32 n
-		AttributeUint16 n -> ATUint16 n
-		AttributeUint8 n -> ATUint8 n
+		AttributeUint32 -> ATUint32 NonNormalized
+		AttributeUint16 -> ATUint16 NonNormalized
+		AttributeUint8 -> ATUint8 NonNormalized
 
 -- instance (OfScalarType a, Vectorized a, OfAttributeType a) => OfAttributeType (Vec{1..4} a)
 forM ['1'..'4'] $ \c -> do
