@@ -19,6 +19,7 @@ module Flaw.Visual.Geometry.Vertex
 	-- ** Predefined Collada vertices
 	, ColladaVertex(..)
 	, VertexP(..)
+	, VertexPN(..)
 	, VertexPT(..)
 	, VertexPNT(..)
 	, VertexPNTWB(..)
@@ -84,6 +85,31 @@ instance ColladaVertex VertexP where
 		positions <- cvdPositions verticesData
 		return $ VG.generate count $ \i -> VertexP
 			{ f_VertexP_position = positions VG.! i
+			}
+
+genStruct "VertexPN"
+	[ ([t| Float3 |], "position")
+	, ([t| Float3 |], "normal")
+	]
+
+deriving instance Eq VertexPN
+deriving instance Ord VertexPN
+
+instance HasPositionAttribute VertexPN where
+	vertexPositionAttribute _ = (0, AttributeVec3 AttributeFloat32)
+
+instance HasNormalAttribute VertexPN where
+	vertexNormalAttribute _ = (12, AttributeVec3 AttributeFloat32)
+
+instance ColladaVertex VertexPN where
+	createColladaVertices verticesData@ColladaVerticesData
+		{ cvdCount = count
+		} = do
+		positions <- cvdPositions verticesData
+		normals <- cvdNormals verticesData
+		return $ VG.generate count $ \i -> VertexPN
+			{ f_VertexPN_position = positions VG.! i
+			, f_VertexPN_normal = normals VG.! i
 			}
 
 genStruct "VertexPT"
