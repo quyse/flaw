@@ -47,7 +47,7 @@ registerLuaBasicLib env = do
 
 	-- basic functions
 
-	registerFunc env "assert" $ \as@(x:xs) -> if luaCoerceToBool x then return as
+	registerFunc env "assert" $ \as@(x:xs) -> if luaCoerceToBool x > 0 then return as
 		else throwLuaError $ LuaError $ case xs of
 			msg:_ -> msg
 			_ -> LuaString "assertion failed!"
@@ -60,10 +60,10 @@ registerLuaBasicLib env = do
 				"stop" -> return []
 				"restart" -> return []
 				"count" -> return [LuaReal 0]
-				"step" -> return [LuaBoolean False]
+				"step" -> return [LuaBoolean 0]
 				"setpause" -> return [LuaInteger 100]
 				"setstepmul" -> return [LuaInteger 200]
-				"isrunning" -> return [LuaBoolean True]
+				"isrunning" -> return [LuaBoolean 1]
 				_ -> throwLuaError $ LuaError $ LuaString "collectgarbage: wrong opt"
 			Nothing -> throwLuaError $ LuaError $ LuaString "collectgarbage: wrong opt"
 
@@ -116,8 +116,8 @@ registerLuaBasicLib env = do
 
 	registerNotImplementedFunc env "pairs"
 
-	registerFunc env "pcall" $ \(f:as) -> catchLuaError ((LuaBoolean True : ) <$> luaValueCall f as) $ \e ->
-		return [LuaBoolean False, LuaString $ T.pack $ show e]
+	registerFunc env "pcall" $ \(f:as) -> catchLuaError ((LuaBoolean 1 : ) <$> luaValueCall f as) $ \e ->
+		return [LuaBoolean 0, LuaString $ T.pack $ show e]
 
 	registerFunc env "print" $ \as -> do
 		forM_ as $ \a -> case luaCoerceToString a of
@@ -125,7 +125,7 @@ registerLuaBasicLib env = do
 			Nothing -> traceM "<<???>>"
 		return []
 
-	registerFunc env "rawequal" $ \(a:b:_) -> return [LuaBoolean $ a == b]
+	registerFunc env "rawequal" $ \(a:b:_) -> return [LuaBoolean $ if a == b then 1 else 0]
 
 	registerFunc env "rawget" $ \(t:i:_) -> case t of
 		LuaTable

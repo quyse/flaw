@@ -50,6 +50,7 @@ import Data.Primitive.MutVar
 import qualified Data.Text as T
 import qualified Data.Text.Lazy.Builder as TL
 import Data.Unique
+import Data.Word
 
 import Flaw.Script.Lua
 
@@ -74,11 +75,11 @@ luaCoerceToInt v = case v of
 	_ -> Nothing
 
 {-# INLINABLE luaCoerceToBool #-}
-luaCoerceToBool :: LuaValue m -> Bool
+luaCoerceToBool :: LuaValue m -> Word8
 luaCoerceToBool v = case v of
-	LuaNil -> False
+	LuaNil -> 0
 	LuaBoolean b -> b
-	_ -> True
+	_ -> 1
 
 {-# INLINABLE luaCoerceToString #-}
 luaCoerceToString :: LuaValue m -> Maybe T.Text
@@ -92,7 +93,7 @@ luaCoerceToString v = case v of
 luaValueShow :: LuaMonad m => LuaValue m -> m TL.Builder
 luaValueShow a = case a of
 	LuaNil -> return "nil"
-	LuaBoolean b -> return $ if b then "true" else "false"
+	LuaBoolean b -> return $ if b > 0 then "true" else "false"
 	LuaInteger i -> return $ TL.fromString $ show i
 	LuaReal r -> return $ TL.fromString $ show r
 	LuaString t -> return $ TL.fromString $ show $ T.unpack t
@@ -253,7 +254,7 @@ luaValueBNot a = case luaCoerceToInt a of
 
 {-# INLINABLE luaValueNot #-}
 luaValueNot :: LuaMonad m => LuaValue m -> m (LuaValue m)
-luaValueNot a = return $ LuaBoolean $ not $ luaCoerceToBool a
+luaValueNot a = return $ LuaBoolean $ luaCoerceToBool a `xor` 1
 
 {-# INLINABLE luaValueLen #-}
 luaValueLen :: LuaMonad m => LuaValue m -> m (LuaValue m)
@@ -273,27 +274,27 @@ luaValueConcat a b = case (luaCoerceToString a, luaCoerceToString b) of
 
 {-# INLINABLE luaValueEq #-}
 luaValueEq :: LuaMonad m => LuaValue m -> LuaValue m -> m (LuaValue m)
-luaValueEq a b = if a == b then return $ LuaBoolean True
-	else fmap (LuaBoolean . luaCoerceToBool) $ tryBinaryMetaMethodOr "__eq" a b $ return $ LuaBoolean False
+luaValueEq a b = if a == b then return $ LuaBoolean 1
+	else fmap (LuaBoolean . luaCoerceToBool) $ tryBinaryMetaMethodOr "__eq" a b $ return $ LuaBoolean 0
 
 {-# INLINABLE luaValueLt #-}
 luaValueLt :: LuaMonad m => LuaValue m -> LuaValue m -> m (LuaValue m)
 luaValueLt a b = case (a, b) of
-	(LuaInteger na, LuaInteger nb) -> return $ LuaBoolean $ na < nb
-	(LuaString na, LuaString nb) -> return $ LuaBoolean $ na < nb
+	(LuaInteger na, LuaInteger nb) -> return $ LuaBoolean $ if na < nb then 1 else 0
+	(LuaString na, LuaString nb) -> return $ LuaBoolean $ if na < nb then 1 else 0
 	_ -> case (luaCoerceToNumber a, luaCoerceToNumber b) of
-		(Just na, Just nb) -> return $ LuaBoolean $ na < nb
+		(Just na, Just nb) -> return $ LuaBoolean $ if na < nb then 1 else 0
 		_ -> (LuaBoolean . luaCoerceToBool) <$> tryBinaryMetaMethod "__lt" a b
 
 {-# INLINABLE luaValueLe #-}
 luaValueLe :: LuaMonad m => LuaValue m -> LuaValue m -> m (LuaValue m)
 luaValueLe a b = case (a, b) of
-	(LuaInteger na, LuaInteger nb) -> return $ LuaBoolean $ na <= nb
-	(LuaString na, LuaString nb) -> return $ LuaBoolean $ na <= nb
+	(LuaInteger na, LuaInteger nb) -> return $ LuaBoolean $ if na <= nb then 1 else 0
+	(LuaString na, LuaString nb) -> return $ LuaBoolean $ if na <= nb then 1 else 0
 	_ -> case (luaCoerceToNumber a, luaCoerceToNumber b) of
-		(Just na, Just nb) -> return $ LuaBoolean $ na <= nb
+		(Just na, Just nb) -> return $ LuaBoolean $ if na <= nb then 1 else 0
 		_ -> fmap (LuaBoolean . luaCoerceToBool) $ tryBinaryMetaMethodOr "__le" a b $
-			(LuaBoolean . not . luaCoerceToBool) <$> tryBinaryMetaMethod "__lt" b a
+			(LuaBoolean . (`xor` 1) . luaCoerceToBool) <$> tryBinaryMetaMethod "__lt" b a
 
 {-# INLINABLE luaValueGet #-}
 luaValueGet :: LuaMonad m => LuaValue m -> LuaValue m -> m (LuaValue m)

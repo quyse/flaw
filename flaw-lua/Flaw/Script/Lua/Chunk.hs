@@ -115,8 +115,8 @@ luaCompileChunk bytes = do
 				case t of
 					LUA_TNIL -> return [| LuaNil |]
 					LUA_TBOOLEAN -> do
-						b <- ( > 0) <$> S.getWord8
-						return [| LuaBoolean b |]
+						b <- S.getWord8
+						return [| LuaBoolean $(litE $ integerL $ if b > 0 then 1 else 0) |]
 					LUA_TNUMFLT -> do
 						n <- S.getFloat64le
 						return [| LuaReal n |]
@@ -304,9 +304,9 @@ compileLuaFunction LuaProto
 			return [noBindS [| do
 				z <- $(rk2 op b c)
 				$(if a > 0 then
-					[| if luaCoerceToBool z then $(doE nextInstStmts) else $(doE nextNextInstStmts) |]
+					[| if luaCoerceToBool z > 0 then $(doE nextInstStmts) else $(doE nextNextInstStmts) |]
 					else
-					[| if luaCoerceToBool z then $(doE nextNextInstStmts) else $(doE nextInstStmts) |])
+					[| if luaCoerceToBool z > 0 then $(doE nextNextInstStmts) else $(doE nextInstStmts) |])
 				|] ]
 		-- static arg for call-like operations
 		staticArgStmtAndExp j = do
@@ -370,7 +370,7 @@ compileLuaFunction LuaProto
 				return $ (noBindS [| writeMutVar $(r a) $(kst nax) |]) : nextNextInstStmts
 			OP_LOADBOOL -> LuaInst [if c > 0 then nextNextInstId else nextInstId] $ \[followingInstCode] codeState -> do
 				followingInstStmts <- followingInstCode codeState
-				return $ (noBindS [| writeMutVar $(r a) $ LuaBoolean $(conE $ if b > 0 then 'True else 'False) |]) : followingInstStmts
+				return $ (noBindS [| writeMutVar $(r a) $ LuaBoolean $(litE $ integerL $ if b > 0 then 1 else 0) |]) : followingInstStmts
 			OP_LOADNIL -> normalFlow $ doE $ flip map [a .. (a + b)] $ \j -> noBindS [| writeMutVar $(r j) LuaNil |]
 			OP_GETUPVAL -> normalFlow [| writeMutVar $(r a) =<< readMutVar $(u b) |]
 			OP_GETTABUP -> normalFlow [| do
@@ -441,9 +441,9 @@ compileLuaFunction LuaProto
 				return [noBindS [| do
 					p <- readMutVar $(r a)
 					$(if c > 0 then
-						[| if luaCoerceToBool p then $(doE nextInstStmts) else $(doE nextNextInstStmts) |]
+						[| if luaCoerceToBool p > 0 then $(doE nextInstStmts) else $(doE nextNextInstStmts) |]
 						else
-						[| if luaCoerceToBool p then $(doE nextNextInstStmts) else $(doE nextInstStmts) |])
+						[| if luaCoerceToBool p > 0 then $(doE nextNextInstStmts) else $(doE nextInstStmts) |])
 					|] ]
 			OP_TESTSET -> LuaInst [nextInstId, nextNextInstId] $ \[nextInstCode, nextNextInstCode] codeState -> do
 				nextInstStmts <- nextInstCode codeState
@@ -451,11 +451,11 @@ compileLuaFunction LuaProto
 				return [noBindS [| do
 					p <- readMutVar $(r b)
 					$(if c > 0 then
-						[| if luaCoerceToBool p then $(doE $ (noBindS [| writeMutVar $(r a) p |]) : nextInstStmts)
+						[| if luaCoerceToBool p > 0 then $(doE $ (noBindS [| writeMutVar $(r a) p |]) : nextInstStmts)
 							else $(doE nextNextInstStmts)
 						|]
 						else
-						[| if luaCoerceToBool p then $(doE nextNextInstStmts)
+						[| if luaCoerceToBool p > 0 then $(doE nextNextInstStmts)
 							else $(doE $ (noBindS [| writeMutVar $(r a) p |]) : nextInstStmts)
 						|])
 					|] ]
@@ -480,8 +480,8 @@ compileLuaFunction LuaProto
 					writeMutVar $(r a) newIdx
 					limit <- readMutVar $(r $ a + 1)
 					positiveStep <- luaValueLt (LuaInteger 0) step
-					loop <- if luaCoerceToBool positiveStep then luaValueLe newIdx limit else luaValueLe limit newIdx
-					if luaCoerceToBool loop then $(doE $ (noBindS [| writeMutVar $(r $ a + 3) newIdx |]) : jmpInstStmts)
+					loop <- if luaCoerceToBool positiveStep > 0 then luaValueLe newIdx limit else luaValueLe limit newIdx
+					if luaCoerceToBool loop > 0 then $(doE $ (noBindS [| writeMutVar $(r $ a + 3) newIdx |]) : jmpInstStmts)
 					else $(doE nextInstStmts)
 					|] ]
 			OP_FORPREP -> LuaInst [i + sbx + 1] $ \[followingInstCode] codeState -> do

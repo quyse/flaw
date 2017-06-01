@@ -21,6 +21,7 @@ import Data.Primitive.MutVar
 import qualified Data.Text as T
 import Data.Typeable
 import Data.Unique
+import Data.Word
 
 class PrimMonad m => LuaMonad m where
 	newLuaUnique :: m Unique
@@ -37,13 +38,13 @@ data LuaValue m where
 	-- Standard 'nil' value.
 	LuaNil :: LuaValue m
 	-- Standard boolean value.
-	LuaBoolean :: !Bool -> LuaValue m
+	LuaBoolean :: {-# UNPACK #-} !Word8 -> LuaValue m
 	-- Integer 'number' value.
 	LuaInteger :: {-# UNPACK #-} !Int -> LuaValue m
 	-- Real 'number' value.
 	LuaReal :: {-# UNPACK #-} !Double -> LuaValue m
 	-- String value.
-	LuaString :: !T.Text -> LuaValue m
+	LuaString :: {-# UNPACK #-} !T.Text -> LuaValue m
 	-- Lua function
 	LuaClosure ::
 		{ luaClosureUnique :: !Unique
@@ -56,9 +57,9 @@ data LuaValue m where
 		} -> LuaValue m
 	LuaTable ::
 		{ luaTableUnique :: !Unique
-		, luaTable :: !(HT.HashTable (PrimState m) (LuaValue m) (LuaValue m))
-		, luaTableLength :: !(MutVar (PrimState m) Int)
-		, luaTableMetaTable :: !(MutVar (PrimState m) (LuaValue m))
+		, luaTable :: {-# UNPACK #-} !(HT.HashTable (PrimState m) (LuaValue m) (LuaValue m))
+		, luaTableLength :: {-# UNPACK #-} !(MutVar (PrimState m) Int)
+		, luaTableMetaTable :: {-# UNPACK #-} !(MutVar (PrimState m) (LuaValue m))
 		} -> LuaValue m
 
 instance Eq (LuaValue m) where
