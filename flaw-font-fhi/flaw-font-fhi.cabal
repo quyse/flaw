@@ -293,8 +293,9 @@ library
     -- Helpers
     src/flaw-ft.c
   include-dirs:        src/freetype/include, src/harfbuzz-generated, src/harfbuzz/src, src/harfbuzz/src/hb-ucdn, src/ucdn, src/icu/source/common
-  cc-options:          -DFT2_BUILD_LIBRARY -DHAVE_OT -DHAVE_UCDN -DU_STATIC_IMPLEMENTATION -DU_ENABLE_DYLOAD=0 -DU_COMMON_IMPLEMENTATION -O3 -fno-exceptions
+  cc-options:          -std=c++14 -DFT2_BUILD_LIBRARY -DHAVE_OT -DHAVE_UCDN -DU_STATIC_IMPLEMENTATION -DU_ENABLE_DYLOAD=0 -DU_COMMON_IMPLEMENTATION -O3 -fno-exceptions
   if os(windows)
+    cc-options:          -DWINVER=0x0601
     if arch(x86_64)
       extra-ghci-libraries: gcc_s_seh-1
     else
