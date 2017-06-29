@@ -1,10 +1,10 @@
-resolver: lts-8.17
+resolver: lts-8.20
 
 packages:
 - text-1.2.2.1
-- hashable-1.2.6.0
+- hashable-1.2.6.1
 - cryptonite-0.21
-- scientific-0.3.4.12
+- scientific-0.3.4.15
 - integer-logarithms-1.0.1
 
 flags:
