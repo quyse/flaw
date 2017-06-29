@@ -26,7 +26,7 @@ library
     , flaw-base
     , flaw-canvas
     , flaw-font
-    , flaw-font-fthb
+    , flaw-font-fhi
     , flaw-graphics
     , flaw-math
     , flaw-ui

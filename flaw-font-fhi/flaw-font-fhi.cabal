@@ -1,4 +1,4 @@
-name:                flaw-font-fthb
+name:                flaw-font-fhi
 version:             0.1.0.0
 -- synopsis:            
 -- description:         
@@ -15,7 +15,7 @@ cabal-version:       >=1.10
 source-repository head
   type: git
   location: https://github.com/quyse/flaw.git
-  subdir: flaw-font-fthb
+  subdir: flaw-font-fhi
 
 library
   exposed-modules:

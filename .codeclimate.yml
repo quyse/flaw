@@ -12,8 +12,8 @@ ratings:
   - "**.js"
 exclude_paths:
   - "flaw-bullet/src/bullet"
-  - "flaw-font-fthb/src/freetype"
-  - "flaw-font-fthb/src/harfbuzz"
-  - "flaw-font-fthb/src/ucdn"
+  - "flaw-font-fhi/src/freetype"
+  - "flaw-font-fhi/src/harfbuzz"
+  - "flaw-font-fhi/src/ucdn"
   - "flaw-sqlite/src/sqlite"
   - "flaw-lua-refimpl/src"
