@@ -69,6 +69,7 @@ Here are all packages in A-Z order. Checkmark against a platform means that the 
 | `flaw-ffmpeg` | Experimental bindings to `ffmpeg` | ✔ |   | ✔ |   |
 | `flaw-font` | General interface for font rendering | ✔ | ✔ | ✔ |   |
 | `flaw-font-fhi` | Implementation of `flaw-font` interface using FreeType + Harfbuzz + ICU | ✔ | ✔ | ✔ |   |
+| `flaw-font-icu` | Separate ICU package | ✔ | ✔ | ✔ |   |
 | `flaw-game` | Non-finished experimental stuff about game synchronization | ✔ | ✔ | ✔ | ✔ |
 | `flaw-gamejolt-webapi` | GameJolt Web API | ✔ |   |   |   |
 | `flaw-gl` | OpenGL integration - implementation of `flaw-graphics` interface | ✔ | ✔ | ✔ | ✔ |

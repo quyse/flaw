@@ -21,6 +21,7 @@ variables:
     flaw-ffmpeg
     flaw-font
     flaw-font-fhi
+    flaw-font-icu
     flaw-game
     flaw-gamejolt-webapi
     flaw-gl
@@ -67,6 +68,7 @@ variables:
     flaw-ffi
     flaw-font
     flaw-font-fhi
+    flaw-font-icu
     flaw-game
     flaw-gl
     flaw-gl-win32
@@ -105,6 +107,7 @@ variables:
     flaw-ffmpeg
     flaw-font
     flaw-font-fhi
+    flaw-font-icu
     flaw-game
     flaw-gl
     flaw-gl-sdl

@@ -20,6 +20,7 @@ packages:
 - flaw-ffmpeg
 - flaw-font
 - flaw-font-fhi
+- flaw-font-icu
 - flaw-game
 - flaw-gamejolt-webapi
 - flaw-gl
