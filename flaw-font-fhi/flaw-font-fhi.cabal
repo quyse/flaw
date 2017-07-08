@@ -17,6 +17,11 @@ source-repository head
   location: https://github.com/quyse/flaw.git
   subdir: flaw-font-fhi
 
+flag icu
+  description:       build with icu
+  default:           False
+  manual:            True
+
 library
   exposed-modules:
     Flaw.Graphics.Font.FreeType
@@ -28,12 +33,13 @@ library
     , bytestring
     , flaw-ffi
     , flaw-font
-    , flaw-font-icu
     , flaw-math
     , JuicyPixels
     , mtl
     , text
     , vector
+  if flag(icu)
+    build-depends:       flaw-font-icu
   default-language:    Haskell2010
   c-sources:
     -- FreeType

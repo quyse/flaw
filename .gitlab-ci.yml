@@ -154,8 +154,8 @@ variables:
 linux:
   script:
   - "mkdir -p flaw-linux/bin"
-  - "stack --no-terminal build --test --copy-bins --local-bin-path flaw-linux/bin $PACKAGES_LINUX"
-  - "stack --no-terminal build --test --flag flaw-app:vulkan flaw-app"
+  - "stack --no-terminal build --test --copy-bins --local-bin-path flaw-linux/bin --flag flaw-font-fhi:icu $PACKAGES_LINUX"
+  - "stack --no-terminal build --test --flag flaw-app:vulkan --flag flaw-font-fhi:icu flaw-app"
   # artifacts:
   #   name: "flaw-linux_x64-$CI_BUILD_ID"
   #   paths:
@@ -192,7 +192,7 @@ windows:
 macos:
   script:
   - "mkdir -p flaw-macos/bin"
-  - "stack --no-terminal build --test --copy-bins --local-bin-path flaw-macos/bin $PACKAGES_MACOS"
+  - "stack --no-terminal build --test --copy-bins --local-bin-path flaw-macos/bin --flag flaw-font-fhi:icu $PACKAGES_MACOS"
   # artifacts:
   #   name: "flaw-macos_x64-$CI_BUILD_ID"
   #   paths:
