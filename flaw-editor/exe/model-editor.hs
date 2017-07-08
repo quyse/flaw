@@ -60,6 +60,7 @@ import Flaw.Visual.Pipeline.Deferred
 import Flaw.Visual.Pipeline.Shadow
 import Flaw.Visual.ScreenQuad
 import Flaw.Visual.Texture
+import Flaw.Visual.Texture.Mip
 import Flaw.Window
 
 data Pipeline d = Pipeline
@@ -458,7 +459,7 @@ main = withApp def
 		let PackedTexture
 			{ packedTextureBytes = textureBytes
 			, packedTextureInfo = textureInfo
-			} = if isNormalTexture then convertTextureToLinearRG loadedTexture else loadedTexture
+			} = generateMips 0 $ if isNormalTexture then convertTextureToLinearRG loadedTexture else loadedTexture
 		let (compressedTextureInfo, compressedTextureBytes) = dxtCompressTexture textureInfo textureBytes
 		createStaticTexture device compressedTextureInfo def compressedTextureBytes
 
