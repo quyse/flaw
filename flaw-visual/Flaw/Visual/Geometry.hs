@@ -19,7 +19,6 @@ module Flaw.Visual.Geometry
 
 import Control.Exception
 import qualified Data.ByteString as B
-import Data.Foldable
 import qualified Data.Serialize as S
 import qualified Data.Text as T
 import qualified Data.Vector.Algorithms.Intro as VAI
@@ -128,13 +127,16 @@ indexGeometryVertices vertices = unsafePerformIO $ do
 	return (resultVertices, VG.convert indices)
 	where
 	unique v = if VGM.null v then return v else do
-		let f p i = do
-			a <- VGM.unsafeRead v i
-			b <- VGM.unsafeRead v p
-			if a == b then return p
-			else do
-				let q = p + 1
-				VGM.write v q a
-				return q
-		end <- foldlM f 0 [0..(VGM.length v - 1)]
+		let n = VGM.length v
+		let f p i =
+			if i < n then do
+				a <- VGM.unsafeRead v i
+				b <- VGM.unsafeRead v p
+				if a == b then f p (i + 1)
+				else do
+					let q = p + 1
+					VGM.write v q a
+					f q (i + 1)
+			else return p
+		end <- f 0 0
 		return $ VGM.slice 0 (end + 1) v
