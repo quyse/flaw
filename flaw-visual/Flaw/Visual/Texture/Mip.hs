@@ -13,7 +13,6 @@ module Flaw.Visual.Texture.Mip
 import Control.Monad
 import Data.Bits
 import qualified Data.ByteArray as BA
-import qualified Data.ByteString as B
 import qualified Data.ByteString.Unsafe as B
 import Data.Word
 import Foreign.Ptr
@@ -21,21 +20,28 @@ import Foreign.Storable
 
 import Flaw.Graphics.Texture
 import Flaw.Math
+import Flaw.Visual.Texture.Internal
 
 -- | Generate specified amount (0 means full chain) of mipmap levels for a texture.
 -- All existing mipmap levels except top one are removed.
-generateMips :: Int -> TextureInfo -> B.ByteString -> (TextureInfo, B.ByteString)
-generateMips mipsRequested textureInfo@TextureInfo
-	{ textureWidth = width
-	, textureHeight = height
-	, textureDepth = depth
-	, textureFormat = UncompressedTextureFormat
-		{ textureFormatComponents = pixelComponents
-		, textureFormatValueType = pixelValueType
-		, textureFormatPixelSize = pixelSize
+generateMips :: Int -> PackedTexture -> PackedTexture
+generateMips mipsRequested PackedTexture
+	{ packedTextureBytes = bytes
+	, packedTextureInfo = textureInfo@TextureInfo
+		{ textureWidth = width
+		, textureHeight = height
+		, textureDepth = depth
+		, textureFormat = UncompressedTextureFormat
+			{ textureFormatComponents = pixelComponents
+			, textureFormatValueType = pixelValueType
+			, textureFormatPixelSize = pixelSize
+			}
+		, textureCount = count
 		}
-	, textureCount = count
-	} bytes = (newTextureInfo, newBytes) where
+	} = PackedTexture
+	{ packedTextureBytes = newBytes
+	, packedTextureInfo = newTextureInfo
+	} where
 	-- mips to generate
 	mips = if mipsRequested > 0 then mipsRequested else let
 		maxMip mip = if (width `shiftR` mip) > 1 || (height `shiftR` mip) > 1 || (depth `shiftR` mip) > 1 then maxMip (mip + 1) else mip + 1
@@ -121,4 +127,4 @@ generateMips mipsRequested textureInfo@TextureInfo
 				{ textureMipOffset = mipOffset
 				} -> genMip mipMetrics imageSourcePtr (imageDestPtr `plusPtr` mipOffset)
 
-generateMips _ _ _ = error "compressed textures are not supported for mipmap generation"
+generateMips _ _ = error "compressed textures are not supported for mipmap generation"

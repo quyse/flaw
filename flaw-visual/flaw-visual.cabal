@@ -33,6 +33,8 @@ library
     Flaw.Visual.Skydome
     Flaw.Visual.Texture
     Flaw.Visual.Texture.Mip
+  other-modules:
+    Flaw.Visual.Texture.Internal
   build-depends:
     base
     , bytestring

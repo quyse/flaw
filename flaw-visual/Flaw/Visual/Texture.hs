@@ -4,7 +4,7 @@ Description: Texture support.
 License: MIT
 -}
 
-{-# LANGUAGE DeriveGeneric, FlexibleContexts #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Flaw.Visual.Texture
 	( PackedTexture(..)
@@ -28,7 +28,6 @@ import Data.Word
 import Foreign.Marshal.Alloc
 import Foreign.Ptr
 import Foreign.Storable
-import GHC.Generics(Generic)
 import Language.Haskell.TH
 import System.IO.Unsafe
 
@@ -38,14 +37,8 @@ import Flaw.Exception
 import Flaw.Graphics
 import Flaw.Graphics.Sampler
 import Flaw.Graphics.Texture
+import Flaw.Visual.Texture.Internal
 import Flaw.Visual.Texture.Mip
-
-data PackedTexture = PackedTexture
-	{ packedTextureBytes :: !B.ByteString
-	, packedTextureInfo :: !TextureInfo
-	} deriving Generic
-
-instance S.Serialize PackedTexture
 
 loadDynamicImageWithFormat :: Storable (PixelBaseComponent a) => Image a -> TextureFormat -> PackedTexture
 loadDynamicImageWithFormat Image
@@ -244,8 +237,8 @@ emitDxtCompressedTextureAsset fileName = f <$> loadFile fileName where
 		PackedTexture
 			{ packedTextureBytes = textureBytes
 			, packedTextureInfo = textureInfo
-			} = loadTexture $ BL.toStrict bytes
-		(compressedTextureInfo, compressedTextureBytes) = uncurry dxtCompressTexture $ generateMips 0 textureInfo textureBytes
+			} = generateMips 0 $ loadTexture $ BL.toStrict bytes
+		(compressedTextureInfo, compressedTextureBytes) = dxtCompressTexture textureInfo textureBytes
 		in S.encode PackedTexture
 			{ packedTextureBytes = compressedTextureBytes
 			, packedTextureInfo = compressedTextureInfo
@@ -257,8 +250,8 @@ emitDxtCompressedLinearRGTextureAsset fileName = f <$> loadFile fileName where
 		PackedTexture
 			{ packedTextureBytes = textureBytes
 			, packedTextureInfo = textureInfo
-			} = convertTextureToLinearRG $ loadTexture $ BL.toStrict bytes
-		(compressedTextureInfo, compressedTextureBytes) = uncurry dxtCompressTexture $ generateMips 0 textureInfo textureBytes
+			} = generateMips 0 $ convertTextureToLinearRG $ loadTexture $ BL.toStrict bytes
+		(compressedTextureInfo, compressedTextureBytes) = dxtCompressTexture textureInfo textureBytes
 		in S.encode PackedTexture
 			{ packedTextureBytes = compressedTextureBytes
 			, packedTextureInfo = compressedTextureInfo
