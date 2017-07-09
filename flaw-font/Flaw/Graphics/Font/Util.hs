@@ -26,8 +26,9 @@ import Flaw.Graphics.Font
 import Flaw.Graphics.Texture
 
 data GlyphUnionConfig = GlyphUnionConfig
-	{ glyphUnionConfigWidth :: !Int
-	, glyphUnionConfigBorder :: !Int
+	{ glyphUnionConfigWidth :: {-# UNPACK #-} !Int
+	, glyphUnionConfigBorderX :: {-# UNPACK #-} !Int
+	, glyphUnionConfigBorderY :: {-# UNPACK #-} !Int
 	, glyphUnionConfigHeightIsPowerOfTwo :: !Bool
 	}
 
@@ -78,7 +79,8 @@ data UnionState = UnionState
 unite :: Pixel a => V.Vector (Image a) -> GlyphUnionConfig -> IO (Image a, V.Vector (Int, Int))
 unite images GlyphUnionConfig
 	{ glyphUnionConfigWidth = resultWidth
-	, glyphUnionConfigBorder = border
+	, glyphUnionConfigBorderX = borderX
+	, glyphUnionConfigBorderY = borderY
 	, glyphUnionConfigHeightIsPowerOfTwo = heightIsPowerOfTwo
 	} = result where
 	-- sort images by height
@@ -94,22 +96,22 @@ unite images GlyphUnionConfig
 			, stateCurrentY = currentY
 			, stateCurrentRowHeight = currentRowHeight
 			} = state
-		overflow = currentX + width + border > resultWidth
+		overflow = currentX + width + borderX > resultWidth
 		newState = UnionState
-			{ stateCurrentX = if overflow then border + width + border else currentX + width + border
-			, stateCurrentY = if overflow then currentY + currentRowHeight + border else currentY
+			{ stateCurrentX = if overflow then borderX + width + borderX else currentX + width + borderX
+			, stateCurrentY = if overflow then currentY + currentRowHeight + borderY else currentY
 			, stateCurrentRowHeight = if overflow then height else max currentRowHeight height
 			}
-		newPosition = if overflow then (border, currentY + currentRowHeight + border) else (currentX, currentY)
+		newPosition = if overflow then (borderX, currentY + currentRowHeight + borderY) else (currentX, currentY)
 	(positions, UnionState
 		{ stateCurrentY = lastCurrentY
 		, stateCurrentRowHeight = lastRowHeight
 		}) = foldr calcPosition ([], UnionState
-		{ stateCurrentX = border
-		, stateCurrentY = border
+		{ stateCurrentX = borderX
+		, stateCurrentY = borderY
 		, stateCurrentRowHeight = 0
 		}) sortedImages
-	rawResultHeight = if lastRowHeight > 0 then lastCurrentY + lastRowHeight + border else lastCurrentY
+	rawResultHeight = if lastRowHeight > 0 then lastCurrentY + lastRowHeight + borderY else lastCurrentY
 	resultHeight = if heightIsPowerOfTwo then powerOfTwo rawResultHeight 1 else ((rawResultHeight + 3) `quot` 4) * 4
 	powerOfTwo n p = if n <= p then p else powerOfTwo n $ p * 2
 	result = do

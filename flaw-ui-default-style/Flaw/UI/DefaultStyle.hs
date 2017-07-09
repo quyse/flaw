@@ -59,7 +59,8 @@ initDefaultStyleDrawer device = withSpecialBook $ \bk -> do
 		fontShaper <- book bk $ createHarfbuzzShaper font
 		renderableFont <- book bk $ createRenderableFont device =<< makeScaledGlyphs (createFreeTypeGlyphs font) xscale yscale GlyphUnionConfig
 			{ glyphUnionConfigWidth = 4096
-			, glyphUnionConfigBorder = 1 + max xscale yscale
+			, glyphUnionConfigBorderX = 2 + xscale
+			, glyphUnionConfigBorderY = 2 + yscale
 			, glyphUnionConfigHeightIsPowerOfTwo = False
 			}
 		return DrawerFont
