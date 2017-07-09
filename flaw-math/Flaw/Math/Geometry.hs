@@ -84,6 +84,7 @@ affineFromQuat (Quat (Vec4 x y z w)) = r where
 		0                   0                   0                   1
 
 -- | Orthographic projection matrix.
+{-# INLINE projectionOrtho #-}
 projectionOrtho :: (Vectorized a, Floating a)
 	=> a -- ^ Width of screen in view-space units.
 	-> a -- ^ Height of screen in view-space units.
