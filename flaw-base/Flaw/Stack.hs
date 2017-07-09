@@ -13,6 +13,7 @@ module Flaw.Stack
 	, scope
 	) where
 
+import Control.Monad.Catch
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Class
 
@@ -42,6 +43,20 @@ instance MonadTrans StackT where
 instance MonadIO m => MonadIO (StackT m) where
 	{-# INLINE liftIO #-}
 	liftIO = lift . liftIO
+
+instance MonadThrow m => MonadThrow (StackT m) where
+	{-# INLINE throwM #-}
+	throwM e = StackT (=<< throwM e)
+
+instance MonadCatch m => MonadCatch (StackT m) where
+	{-# INLINE catch #-}
+	catch (StackT h) f = StackT $ \q -> catch (h q) (\e -> let StackT z = f e in z q)
+
+instance MonadMask m => MonadMask (StackT m) where
+	{-# INLINE mask #-}
+	mask f = f $ \(StackT h) -> StackT $ \q -> mask $ \restore -> restore $ h q
+	{-# INLINE uninterruptibleMask #-}
+	uninterruptibleMask f = f $ \(StackT h) -> StackT $ \q -> uninterruptibleMask $ \restore -> restore $ h q
 
 {-# INLINE after #-}
 after :: Monad m => m () -> StackT m ()
