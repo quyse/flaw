@@ -113,8 +113,8 @@ instance Element EditBox where
 		, drawerFrameTimeVar = frameTimeVar
 		, drawerStyles = DrawerStyles
 			{ drawerEditFont = DrawerFont
-				{ drawerFontRenderableFont = renderableFont@RenderableFont
-					{ renderableFontMaxGlyphBox = Vec4 _boxLeft boxTop _boxRight boxBottom
+				{ drawerFontRenderableFontCache = renderableFontCache@RenderableFontCache
+					{ renderableFontCacheMaybeFontVar = maybeFontVar
 					}
 				, drawerFontShaper = SomeFontShaper fontShaper
 				}
@@ -176,6 +176,14 @@ instance Element EditBox where
 
 			-- offset from left side
 			let textOffsetX = 2
+
+			-- try to get font metrics
+			maybeFont <- liftIO $ atomically $ readTMVar maybeFontVar
+			let Vec4 _boxLeft boxTop _boxRight boxBottom = case maybeFont of
+				Just RenderableFont
+					{ renderableFontMaxGlyphBox = maxGlyphBox
+					} -> maxGlyphBox
+				Nothing -> Vec4 0 0 0 0
 
 			-- calculate scroll
 			scroll <- liftIO $ atomically $ do
@@ -263,7 +271,7 @@ instance Element EditBox where
 				Nothing -> return ()
 
 			-- render glyphs
-			renderGlyphs glyphRenderer renderableFont $
+			renderGlyphs glyphRenderer renderableFontCache $
 				forM_ (zip runs [styleTextColor style, styleTextColor selectedStyle, styleTextColor style]) $ \((shapedGlyphs, _advance), color) ->
 					renderTextRun shapedGlyphs textXY color
 

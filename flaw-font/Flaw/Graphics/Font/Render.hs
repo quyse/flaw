@@ -4,7 +4,7 @@ Description: Font rendering.
 License: MIT
 -}
 
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RankNTypes, ViewPatterns #-}
 
 module Flaw.Graphics.Font.Render
 	( GlyphRenderer
@@ -12,18 +12,23 @@ module Flaw.Graphics.Font.Render
 	, initGlyphRenderer
 	, RenderableFont(..)
 	, createRenderableFont
+	, RenderableFontCache(..)
+	, createRenderableFontCache
 	, RenderGlyphsM
 	, renderGlyphs
 	, RenderTextCursorX(..)
 	, RenderTextCursorY(..)
 	, renderTextRun
 	, renderTexts
-	, foldrTextBounds
 	) where
 
+import Control.Concurrent.STM
+import Control.Monad.Catch
 import Control.Monad.Reader
 import qualified Data.ByteString.Unsafe as B
 import Data.Default
+import qualified Data.HashMap.Strict as HM
+import qualified Data.HashSet as HS
 import Data.IORef
 import qualified Data.Text as T
 import qualified Data.Vector as V
@@ -35,6 +40,7 @@ import Foreign.Ptr
 import Foreign.Storable
 
 import Flaw.Book
+import Flaw.Flow
 import Flaw.Graphics
 import Flaw.Graphics.Blend
 import Flaw.Graphics.Font
@@ -154,7 +160,7 @@ data RenderableGlyph = RenderableGlyph
 -- | Runtime data about particular font.
 data RenderableFont d = RenderableFont
 	{ renderableFontTexture :: !(TextureId d)
-	, renderableFontGlyphs :: !(V.Vector RenderableGlyph)
+	, renderableFontGlyphs :: !(HM.HashMap Int RenderableGlyph)
 	-- | Maximum glyph box (left, top, right, bottom values relative to pen point, i.e. left-baseline).
 	, renderableFontMaxGlyphBox :: !Float4
 	}
@@ -169,9 +175,10 @@ createRenderableFont device Glyphs
 	, glyphsInfos = infos
 	, glyphsScaleX = scaleX
 	, glyphsScaleY = scaleY
-	} = do
+	} = withSpecialBook $ \bk -> do
+
 	-- create texture
-	(textureId, destroy) <- createStaticTexture device textureInfo def
+	textureId <- book bk $ createStaticTexture device textureInfo def
 		{ samplerMinFilter = SamplerLinearFilter
 		, samplerMipFilter = SamplerPointFilter
 		, samplerMagFilter = SamplerLinearFilter
@@ -201,7 +208,7 @@ createRenderableFont device Glyphs
 		lty = fromIntegral glty
 		ox = fromIntegral gox
 		oy = fromIntegral goy
-	let glyphs = V.map createRenderableGlyph infos
+	let glyphs = HM.map createRenderableGlyph infos
 
 	-- calculate max glyph box
 	let foldGlyphBox GlyphInfo
@@ -216,27 +223,76 @@ createRenderableFont device Glyphs
 		(max bottom $ fromIntegral (gh + goy))
 	let maxGlyphBox = foldr foldGlyphBox (Vec4 1e8 1e8 (-1e8) (-1e8)) infos
 
-	return (RenderableFont
+	return RenderableFont
 		{ renderableFontTexture = textureId
 		, renderableFontGlyphs = glyphs
 		, renderableFontMaxGlyphBox = maxGlyphBox * invScale
-		}, destroy)
+		}
+
+data RenderableFontCache d = RenderableFontCache
+	{ renderableFontCacheMaybeFontVar :: {-# UNPACK #-} !(TMVar (Maybe (RenderableFont d)))
+	, renderableFontCacheNeededGlyphsVar :: {-# UNPACK #-} !(TVar (HS.HashSet Int))
+	, renderableFontCacheNeedMoreGlyphsVar :: {-# UNPACK #-} !(TVar Bool)
+	}
+
+createRenderableFontCache :: Device d => d -> ([Int] -> IO (Maybe Glyphs)) -> IO (RenderableFontCache d, IO ())
+createRenderableFontCache device createGlyphs = withSpecialBook $ \bk -> do
+	maybeFontVar <- newTMVarIO Nothing
+	neededGlyphsVar <- newTVarIO HS.empty
+	needMoreGlyphsVar <- newTVarIO False
+
+	fontBook <- book bk newDynamicBook
+
+	-- start cache update thread
+	book bk $ forkFlow $ forever $ do
+		-- wait until we need more glyphs
+		atomically $ do
+			needMoreGlyphs <- readTVar needMoreGlyphsVar
+			unless needMoreGlyphs retry
+		-- get needed glyphs after a delay, so more glyphs may be accumulated
+		delayVar <- registerDelay 30000
+		neededGlyphs <- atomically $ do
+			timeout <- readTVar delayVar
+			unless timeout retry
+			-- reset flag
+			writeTVar needMoreGlyphsVar False
+			-- return frozen set of glyphs needed
+			readTVar neededGlyphsVar
+		-- clear font book
+		releaseFontBook <- releaseBook fontBook
+		-- try to create glyphs
+		maybeGlyphs <- createGlyphs (HS.toList neededGlyphs)
+		case maybeGlyphs of
+			Just glyphs -> atomically . void . swapTMVar maybeFontVar =<< Just <$> book fontBook (createRenderableFont device glyphs)
+			Nothing -> atomically $ do
+				-- reset needed glyphs and start from scratch
+				writeTVar neededGlyphsVar HS.empty
+				writeTVar needMoreGlyphsVar False
+				void $ swapTMVar maybeFontVar Nothing
+		-- free old font
+		releaseFontBook
+
+	return RenderableFontCache
+		{ renderableFontCacheMaybeFontVar = maybeFontVar
+		, renderableFontCacheNeededGlyphsVar = neededGlyphsVar
+		, renderableFontCacheNeedMoreGlyphsVar = needMoreGlyphsVar
+		}
 
 data GlyphToRender = GlyphToRender
-	{ glyphToRenderPosition :: !Float2
-	, glyphToRenderIndex :: !Int
-	, glyphToRenderColor :: !Float4
+	{ glyphToRenderPosition :: {-# UNPACK #-} !Float2
+	, glyphToRenderIndex :: {-# UNPACK #-} !Int
+	, glyphToRenderColor :: {-# UNPACK #-} !Float4
 	}
 
 data RenderGlyphsState c d = RenderGlyphsState
 	{ renderGlyphsStateAddGlyph :: !(GlyphToRender -> Render c ())
-	, renderGlyphsStateRenderableFont :: RenderableFont d
+	, renderGlyphsStateMaxGlyphBox :: {-# UNPACK #-} !Float4
 	}
 
 type RenderGlyphsM c d = ReaderT (RenderGlyphsState c d) (Render c)
 
--- | Draw glyphs.
-renderGlyphs :: Context c d => GlyphRenderer d -> RenderableFont d -> RenderGlyphsM c d a -> Render c a
+-- | Draw glyphs using font cache.
+renderGlyphs :: Context c d => GlyphRenderer d -> RenderableFontCache d -> RenderGlyphsM c d a -> Render c a
 renderGlyphs GlyphRenderer
 	{ glyphRendererVertexBuffer = vb
 	, glyphRendererIndexBuffer = ib
@@ -245,12 +301,21 @@ renderGlyphs GlyphRenderer
 	, glyphRendererProgram = program
 	, glyphRendererCapacity = capacity
 	, glyphRendererBuffer = buffer
-	} renderableFont@RenderableFont
-	{ renderableFontTexture = textureId
-	, renderableFontGlyphs = glyphs
-	} m = renderScope $ do
+	} RenderableFontCache
+	{ renderableFontCacheMaybeFontVar = maybeFontVar
+	, renderableFontCacheNeededGlyphsVar = neededGlyphsVar
+	, renderableFontCacheNeedMoreGlyphsVar = needMoreGlyphsVar
+	} m = bracket (liftIO $ atomically $ takeTMVar maybeFontVar) (liftIO . atomically . putTMVar maybeFontVar) $ \maybeRenderableFont -> renderScope $ do
 
 	bufferIndexRef <- liftIO $ newIORef 0
+
+	let (textureId, maybeGlyphs, maxGlyphBox) = case maybeRenderableFont of
+		Just RenderableFont
+			{ renderableFontTexture = tid
+			, renderableFontGlyphs = glyphs
+			, renderableFontMaxGlyphBox = mgb
+			} -> (tid, Just glyphs, mgb)
+		Nothing -> (nullTexture, Nothing, Vec4 0 0 0 0)
 
 	-- setup stuff
 	renderVertexBuffer 0 vb
@@ -284,42 +349,47 @@ renderGlyphs GlyphRenderer
 		do
 			bufferIndex <- liftIO $ readIORef bufferIndexRef
 			when (bufferIndex >= capacity) flush
-		let RenderableGlyph
-			{ renderableGlyphUV = Vec4 tleft tbottom tright ttop
-			, renderableGlyphOffset = Vec4 left bottom right top
-			} = glyphs V.! index
-		when (left < right && top < bottom) $ liftIO $ do
-			bufferIndex <- readIORef bufferIndexRef
-			-- round glyph bounds to pixel boundaries
-			let roundedLeft = fromIntegral (floor (left + x) :: Int)
-			let left' = roundedLeft - x
-			let roundedTop = fromIntegral (floor (top + y) :: Int)
-			let top' = roundedTop - y
-			let roundedRight = fromIntegral (ceiling (right + x) :: Int)
-			let right' = roundedRight - x
-			let roundedBottom = fromIntegral (ceiling (bottom + y) :: Int)
-			let bottom' = roundedBottom - y
-			-- recalculate texture coordinates for rounded positions
-			let invWidth = 1 / (right - left)
-			let invHeight = 1 / (bottom - top)
-			let kx = (tright - tleft) * invWidth
-			let bx = (tleft * right - tright * left) * invWidth
-			let ky = (tbottom - ttop) * invHeight
-			let by = (ttop * bottom - tbottom * top) * invHeight
-			let tleft' = kx * left' + bx
-			let ttop' = ky * top' + by
-			let tright' = kx * right' + bx
-			let tbottom' = ky * bottom' + by
-			-- write values into instanced buffer
-			VSM.write buffer bufferIndex $ Vec4 roundedLeft roundedBottom roundedRight roundedTop * viewportScale + viewportOffset
-			VSM.write buffer (bufferIndex + capacity) $ Vec4 tleft' tbottom' tright' ttop'
-			VSM.write buffer (bufferIndex + capacity * 2) color
-			-- advance index
-			writeIORef bufferIndexRef $ bufferIndex + 1
+		case maybeGlyphs of
+			Just (HM.lookup index -> Just RenderableGlyph
+				{ renderableGlyphUV = Vec4 tleft tbottom tright ttop
+				, renderableGlyphOffset = Vec4 left bottom right top
+				}) | left < right && top < bottom -> liftIO $ do
+				bufferIndex <- readIORef bufferIndexRef
+				-- round glyph bounds to pixel boundaries
+				let roundedLeft = fromIntegral (floor (left + x) :: Int)
+				let left' = roundedLeft - x
+				let roundedTop = fromIntegral (floor (top + y) :: Int)
+				let top' = roundedTop - y
+				let roundedRight = fromIntegral (ceiling (right + x) :: Int)
+				let right' = roundedRight - x
+				let roundedBottom = fromIntegral (ceiling (bottom + y) :: Int)
+				let bottom' = roundedBottom - y
+				-- recalculate texture coordinates for rounded positions
+				let invWidth = 1 / (right - left)
+				let invHeight = 1 / (bottom - top)
+				let kx = (tright - tleft) * invWidth
+				let bx = (tleft * right - tright * left) * invWidth
+				let ky = (tbottom - ttop) * invHeight
+				let by = (ttop * bottom - tbottom * top) * invHeight
+				let tleft' = kx * left' + bx
+				let ttop' = ky * top' + by
+				let tright' = kx * right' + bx
+				let tbottom' = ky * bottom' + by
+				-- write values into instanced buffer
+				VSM.write buffer bufferIndex $ Vec4 roundedLeft roundedBottom roundedRight roundedTop * viewportScale + viewportOffset
+				VSM.write buffer (bufferIndex + capacity) $ Vec4 tleft' tbottom' tright' ttop'
+				VSM.write buffer (bufferIndex + capacity * 2) color
+				-- advance index
+				writeIORef bufferIndexRef $ bufferIndex + 1
+			_ -> liftIO $ atomically $ do -- request missing glyphs
+				neededGlyphs <- readTVar neededGlyphsVar
+				unless (HS.member index neededGlyphs) $ do
+					writeTVar neededGlyphsVar $ HS.insert index neededGlyphs
+					writeTVar needMoreGlyphsVar True
 
 	result <- runReaderT m RenderGlyphsState
 		{ renderGlyphsStateAddGlyph = addGlyph
-		, renderGlyphsStateRenderableFont = renderableFont
+		, renderGlyphsStateMaxGlyphBox = maxGlyphBox
 		}
 
 	flush
@@ -350,9 +420,7 @@ renderTexts :: FontShaper s => s -> [(T.Text, Float4)] -> FontScript -> Float2 -
 renderTexts shaper textsWithColors script (Vec2 px py) cursorX cursorY = do
 	runsShapedGlyphsAndFinalPositions <- liftIO $ shapeText shaper (map fst textsWithColors) script
 	RenderGlyphsState
-		{ renderGlyphsStateRenderableFont = RenderableFont
-			{ renderableFontMaxGlyphBox = Vec4 _boxLeft boxTop _boxRight boxBottom
-			}
+		{ renderGlyphsStateMaxGlyphBox = Vec4 _boxLeft boxTop _boxRight boxBottom
 		} <- ask
 	let Vec2 ax _ay = case runsShapedGlyphsAndFinalPositions of
 		[] -> Vec2 0 0
@@ -368,16 +436,3 @@ renderTexts shaper textsWithColors script (Vec2 px py) cursorX cursorY = do
 		RenderTextCursorBottom -> py - boxBottom
 	forM_ (zip runsShapedGlyphsAndFinalPositions $ map snd textsWithColors) $
 		\((shapedGlyphs, _advance), color) -> renderTextRun shapedGlyphs (Vec2 x y) color
-
--- | Perform right fold on bounds of glyphs.
-{-# INLINE foldrTextBounds #-}
-foldrTextBounds :: RenderableFont d -> (Float4 -> a -> a) -> a -> (V.Vector ShapedGlyph, Float2) -> a
-foldrTextBounds RenderableFont
-	{ renderableFontGlyphs = renderableGlyphs
-	} f z (shapedGlyphs, _finalPosition) = foldr f z bs where
-	bs = fmap glyphBounds shapedGlyphs
-	glyphBounds :: ShapedGlyph -> Float4
-	glyphBounds ShapedGlyph
-		{ shapedGlyphPosition = glyphPosition
-		, shapedGlyphIndex = glyphIndex
-		} = xyxy__ glyphPosition + renderableGlyphOffset (renderableGlyphs V.! glyphIndex)

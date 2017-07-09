@@ -80,7 +80,7 @@ renderLabel text textScript style Drawer
 	{ styleTextColor = color
 	} = do
 	(DrawerFont
-		{ drawerFontRenderableFont = renderableFont
+		{ drawerFontRenderableFontCache = renderableFontCache
 		, drawerFontShaper = SomeFontShaper fontShaper
 		}, alignmentX, alignmentY) <- return $ case style of
 		LabelStyleText -> (drawerLabelFont styles, AlignLeft, AlignMiddle)
@@ -94,5 +94,5 @@ renderLabel text textScript style Drawer
 		AlignTop -> (fromIntegral py, RenderTextCursorTop)
 		AlignMiddle -> (fromIntegral py + fromIntegral sy * 0.5, RenderTextCursorMiddle)
 		AlignBottom -> (fromIntegral py + fromIntegral sy, RenderTextCursorBottom)
-	renderGlyphs glyphRenderer renderableFont $
+	renderGlyphs glyphRenderer renderableFontCache $
 		renderTexts fontShaper [(text, color)] textScript (Vec2 x y) cursorX cursorY

@@ -14,6 +14,7 @@ module Flaw.Graphics.Font
 	) where
 
 import qualified Data.ByteString as B
+import qualified Data.HashMap.Strict as HM
 import qualified Data.Text as T
 import qualified Data.Vector as V
 import Data.Word
@@ -24,9 +25,9 @@ import Flaw.Math
 data Glyphs = Glyphs
 	{ glyphsTextureInfo :: !TextureInfo
 	, glyphsTextureData :: !B.ByteString
-	, glyphsInfos :: !(V.Vector GlyphInfo)
-	, glyphsScaleX :: !Int
-	, glyphsScaleY :: !Int
+	, glyphsInfos :: !(HM.HashMap Int GlyphInfo)
+	, glyphsScaleX :: {-# UNPACK #-} !Int
+	, glyphsScaleY :: {-# UNPACK #-} !Int
 	}
 
 data GlyphInfo = GlyphInfo

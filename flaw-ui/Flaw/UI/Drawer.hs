@@ -100,7 +100,7 @@ data Style = Style
 	}
 
 data DrawerFont d = DrawerFont
-	{ drawerFontRenderableFont :: !(RenderableFont d)
+	{ drawerFontRenderableFontCache :: !(RenderableFontCache d)
 	, drawerFontShaper :: !SomeFontShaper
 	}
 

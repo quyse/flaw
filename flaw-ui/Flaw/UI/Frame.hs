@@ -241,7 +241,7 @@ instance Element Frame where
 				, metricsFrameTopBorder = topBorder
 				}
 			, drawerTitleFont = DrawerFont
-				{ drawerFontRenderableFont = renderableFont
+				{ drawerFontRenderableFontCache = renderableFontCache
 				, drawerFontShaper = SomeFontShaper fontShaper
 				}
 			, drawerFrameOuterNormalStyle = outerNormalStyle
@@ -263,7 +263,7 @@ instance Element Frame where
 				(styleFillColor outerStyle) (styleBorderColor outerStyle)
 
 			-- render text
-			renderGlyphs glyphRenderer renderableFont $
+			renderGlyphs glyphRenderer renderableFontCache $
 				renderTexts fontShaper [(text, styleTextColor outerStyle)] textScript
 					(Vec2 (fromIntegral $ px + (sx - clientLeft - clientRight) `quot` 2) (fromIntegral $ py + topBorder + (clientTop - topBorder) `quot` 2))
 					RenderTextCursorCenter RenderTextCursorMiddle

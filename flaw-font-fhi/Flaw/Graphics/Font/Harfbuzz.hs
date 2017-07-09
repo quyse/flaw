@@ -8,6 +8,8 @@ module Flaw.Graphics.Font.Harfbuzz
 	( createHarfbuzzShaper
 	) where
 
+import Control.Concurrent.STM
+import Control.Exception
 import Control.Monad.State.Strict
 import Data.Int
 import qualified Data.Text as T
@@ -25,21 +27,26 @@ import Flaw.Graphics.Font.FreeType
 import Flaw.Graphics.Font.FreeType.FFI
 import Flaw.Math
 
-data HarfbuzzShaper = HarfbuzzShaper (Ptr Hb_font_t) (Ptr Hb_buffer_t)
+data HarfbuzzShaper = HarfbuzzShaper
+	{-# UNPACK #-} !(Ptr Hb_font_t)
+	{-# UNPACK #-} !(Ptr Hb_buffer_t)
+	!FreeTypeFont
 
 createHarfbuzzShaper :: FreeTypeFont -> IO (HarfbuzzShaper, IO ())
-createHarfbuzzShaper FreeTypeFont
-	{ ftFontFace = ftFace
-	} = do
+createHarfbuzzShaper font@FreeTypeFont
+	{ ftFontFaceVar = ftFaceVar
+	} = bracket (atomically $ takeTMVar ftFaceVar) (atomically . putTMVar ftFaceVar) $ \ftFace -> do
 	hbFont <- hb_ft_font_create ftFace nullPtr
 	hbBuffer <- hb_buffer_create
 	let destroy = do
 		hb_font_destroy hbFont
 		hb_buffer_destroy hbBuffer
-	return (HarfbuzzShaper hbFont hbBuffer, destroy)
+	return (HarfbuzzShaper hbFont hbBuffer font, destroy)
 
 instance FontShaper HarfbuzzShaper where
-	shapeText (HarfbuzzShaper hbFont hbBuffer) texts (FontScript script) = do
+	shapeText (HarfbuzzShaper hbFont hbBuffer FreeTypeFont
+		{ ftFontFaceVar = ftFaceVar
+		}) texts (FontScript script) = bracket (atomically $ takeTMVar ftFaceVar) (atomically . putTMVar ftFaceVar) $ \_ftFace -> do
 		-- calculate offsets and lengths
 		let
 			calcOffsetsAndLengths (t : ts) ll = (ll, l) : calcOffsetsAndLengths ts (ll + l) where l = T.length t

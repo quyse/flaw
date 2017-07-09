@@ -15,12 +15,13 @@ module Flaw.Graphics.Font.FreeType
 	, createFreeTypeGlyphs
 	) where
 
-import Codec.Picture
+import Control.Concurrent.STM
 import Control.Exception
+import Codec.Picture
 import Control.Monad
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Unsafe as B
-import qualified Data.Vector as V
+import qualified Data.HashMap.Strict as HM
 import qualified Data.Vector.Storable as VS
 import qualified Data.Vector.Storable.Mutable as VSM
 import Data.Word
@@ -50,9 +51,9 @@ initFreeType = do
 	return (FreeTypeLibrary ftLibrary, destroy)
 
 data FreeTypeFont = FreeTypeFont
-	{ ftFontFace :: !FT_Face
-	, ftFontFaceMemory :: !(Ptr CUChar)
-	, ftFontFaceSize :: !Int
+	{ ftFontFaceVar :: {-# UNPACK #-} !(TMVar FT_Face)
+	, ftFontFaceMemory :: {-# UNPACK #-} !(Ptr CUChar)
+	, ftFontFaceSize :: {-# UNPACK #-} !Int
 	}
 
 loadFreeTypeFont :: FreeTypeLibrary -> Int -> B.ByteString -> IO (FreeTypeFont, IO ())
@@ -75,61 +76,39 @@ loadFreeTypeFont (FreeTypeLibrary ftLibrary) size bytes = do
 		_ <- ft_Done_Face ftFace
 		free memory
 
+	ftFaceVar <- newTMVarIO ftFace
+
 	return (FreeTypeFont
-		{ ftFontFace = ftFace
+		{ ftFontFaceVar = ftFaceVar
 		, ftFontFaceMemory = memory
 		, ftFontFaceSize = size
 		}, destroy)
 
-createFreeTypeGlyphs :: FreeTypeFont -> Int -> Int -> IO (V.Vector (Image Pixel8, GlyphInfo))
+createFreeTypeGlyphs :: FreeTypeFont -> Int -> Int -> [Int] -> IO (HM.HashMap Int (Image Pixel8, GlyphInfo))
 createFreeTypeGlyphs FreeTypeFont
-	{ ftFontFace = ftFace
+	{ ftFontFaceVar = ftFaceVar
 	, ftFontFaceSize = size
-	} halfScaleX halfScaleY = do
+	} halfScaleX halfScaleY glyphsIndices = bracket acquire release $ \ftFace -> foldM (foldImage ftFace) HM.empty glyphsIndices
 
-	-- helper functions
-	-- forM_ [0..(n - 1)] q
-	let forn_ n q = let
-		forin_ i = when (i < n) $ q i >> forin_ (i + 1)
-		in forin_ 0
-	-- foldl f z <$> forM [a..(b - 1)] q
-	let foldab f a b z q = let
-		foldiab i !s = if i < b then do
-			r <- f s <$> q i
-			foldiab (i + 1) r
-			else return s
-		in foldiab a z
+	where
 
-	-- set pixel size with scale
-	when (halfScaleX > 0 || halfScaleY > 0) $
-		ftErrorCheck "FT_Set_Pixel_Sizes" =<< ft_Set_Pixel_Sizes ftFace
-			(fromIntegral $ size * (halfScaleX * 2 + 1))
-			(fromIntegral $ size * (halfScaleY * 2 + 1))
+	acquire = do
+		ftFace <- atomically $ takeTMVar ftFaceVar
+		-- set pixel size with scale
+		when (halfScaleX > 0 || halfScaleY > 0) $
+			ftErrorCheck "FT_Set_Pixel_Sizes" =<< ft_Set_Pixel_Sizes ftFace
+				(fromIntegral $ size * (halfScaleX * 2 + 1))
+				(fromIntegral $ size * (halfScaleY * 2 + 1))
+		return ftFace
 
-	-- get number of glyphs
-	glyphsCount <- flaw_ft_get_num_glyphs ftFace
+	release ftFace = do
+		-- restore pixel size
+		when (halfScaleX > 0 || halfScaleY > 0) $
+			ftErrorCheck "FT_Set_Pixel_Sizes" =<< ft_Set_Pixel_Sizes ftFace (fromIntegral size) (fromIntegral size)
+		atomically $ putTMVar ftFaceVar ftFace
 
-	-- some glyphs fail to load; skip them for the moment
-	let
-		handleError :: SomeException -> IO (Image Pixel8, GlyphInfo)
-		handleError _ = return
-			( Image
-				{ imageWidth = 1
-				, imageHeight = 1
-				, imageData = VS.singleton 0
-				}
-			, GlyphInfo
-				{ glyphWidth = 1
-				, glyphHeight = 1
-				, glyphLeftTopX = 0
-				, glyphLeftTopY = 0
-				, glyphOffsetX = 0
-				, glyphOffsetY = 0
-				}
-			)
-
-	-- create glyph images and infos
-	imagesAndInfos <- V.generateM (fromIntegral glyphsCount) $ \glyphIndex -> handle handleError $ do
+	foldImage :: FT_Face -> HM.HashMap Int (Image Pixel8, GlyphInfo) -> Int -> IO (HM.HashMap Int (Image Pixel8, GlyphInfo))
+	foldImage ftFace restImages glyphIndex = do -- handle handleError $ do
 
 		-- load and render glyph
 		do
@@ -183,7 +162,7 @@ createFreeTypeGlyphs FreeTypeFont
 		-- return glyph
 		bitmapLeft <- flaw_ft_get_bitmap_left ftGlyphSlot
 		bitmapTop <- flaw_ft_get_bitmap_top ftGlyphSlot
-		return
+		return $ HM.insert glyphIndex
 			( Image
 				{ imageWidth = width
 				, imageHeight = height
@@ -197,10 +176,17 @@ createFreeTypeGlyphs FreeTypeFont
 				, glyphOffsetX = halfScaleX + fromIntegral bitmapLeft
 				, glyphOffsetY = halfScaleY - fromIntegral bitmapTop
 				}
-			)
+			) restImages
 
-	-- restore pixel size
-	when (halfScaleX > 0 || halfScaleY > 0) $
-		ftErrorCheck "FT_Set_Pixel_Sizes" =<< ft_Set_Pixel_Sizes ftFace (fromIntegral size) (fromIntegral size)
-
-	return imagesAndInfos
+	-- helper functions
+	-- forM_ [0..(n - 1)] q
+	forn_ n q = let
+		forin_ i = when (i < n) $ q i >> forin_ (i + 1)
+		in forin_ 0
+	-- foldl f z <$> forM [a..(b - 1)] q
+	foldab f a b z q = let
+		foldiab i !s = if i < b then do
+			r <- f s <$> q i
+			foldiab (i + 1) r
+			else return s
+		in foldiab a z

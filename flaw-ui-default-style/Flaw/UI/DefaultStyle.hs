@@ -15,10 +15,12 @@ import Data.Char
 import Flaw.Book
 import Flaw.Graphics
 import Flaw.Graphics.Canvas
+import Flaw.Graphics.Font
 import Flaw.Graphics.Font.FreeType
 import Flaw.Graphics.Font.Harfbuzz
 import Flaw.Graphics.Font.Render
 import Flaw.Graphics.Font.Util
+import Flaw.Graphics.Texture
 import Flaw.Math
 import Flaw.UI.DefaultStyle.Data
 import Flaw.UI.Drawer
@@ -57,14 +59,20 @@ initDefaultStyleDrawer device = withSpecialBook $ \bk -> do
 	let loadFont size xscale yscale = do
 		font <- book bk $ loadFreeTypeFont freeTypeLibrary size fontData
 		fontShaper <- book bk $ createHarfbuzzShaper font
-		renderableFont <- book bk $ createRenderableFont device =<< makeScaledGlyphs (createFreeTypeGlyphs font) xscale yscale GlyphUnionConfig
-			{ glyphUnionConfigWidth = 4096
-			, glyphUnionConfigBorderX = 2 + xscale
-			, glyphUnionConfigBorderY = 2 + yscale
-			, glyphUnionConfigHeightIsPowerOfTwo = False
-			}
+		renderableFontCache <- book bk $ createRenderableFontCache device $ \glyphsIndices -> do
+			glyphs@Glyphs
+				{ glyphsTextureInfo = TextureInfo
+					{ textureHeight = height
+					}
+				} <- makeScaledGlyphs (createFreeTypeGlyphs font) xscale yscale GlyphUnionConfig
+				{ glyphUnionConfigWidth = 2048
+				, glyphUnionConfigBorderX = 2 + xscale
+				, glyphUnionConfigBorderY = 2 + yscale
+				, glyphUnionConfigHeightIsPowerOfTwo = True
+				} glyphsIndices
+			return $ if height <= 2048 then Just glyphs else Nothing
 		return DrawerFont
-			{ drawerFontRenderableFont = renderableFont
+			{ drawerFontRenderableFontCache = renderableFontCache
 			, drawerFontShaper = SomeFontShaper fontShaper
 			}
 

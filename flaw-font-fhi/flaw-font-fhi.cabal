@@ -36,7 +36,9 @@ library
     , flaw-math
     , JuicyPixels
     , mtl
+    , stm
     , text
+    , unordered-containers
     , vector
   if flag(icu)
     build-depends:       flaw-font-icu
