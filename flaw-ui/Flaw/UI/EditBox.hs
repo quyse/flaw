@@ -175,7 +175,7 @@ instance Element EditBox where
 			let cursorX = if selectionStart < selectionEnd then selectionMaxX else selectionMinX
 
 			-- offset from left side
-			let textOffsetX = 2
+			let textOffsetX = 1
 
 			-- try to get font metrics
 			maybeFont <- liftIO $ atomically $ readTMVar maybeFontVar
@@ -205,8 +205,8 @@ instance Element EditBox where
 				else return scroll
 
 			let textXY@(Vec2 textX _textY) = Vec2 (fromIntegral px + 1 + textOffsetX - scroll) (fromIntegral py + 1 + (fromIntegral (sy - 2) - boxTop - boxBottom) * 0.5)
-			let selectionTop = fromIntegral (py + 1) + (fromIntegral (sy - 2) - (boxBottom - boxTop)) * 0.5
-			let selectionBottom = fromIntegral (py + 1) + (fromIntegral (sy - 2) + (boxBottom - boxTop)) * 0.5
+			let selectionTop = py + 2
+			let selectionBottom = py + sy - 2
 
 			-- function calculating best text split for a given cursor position
 			let splitTextByX x = do
@@ -253,20 +253,20 @@ instance Element EditBox where
 			-- draw selection
 			unless (T.null textSelected) $ drawBorderedRectangle canvas
 				(Vec4 (floor $ textX + selectionMinX - 1) (floor $ textX + selectionMinX) (floor $ textX + selectionMaxX + 1) (floor $ textX + selectionMaxX + 2))
-				(Vec4 (floor selectionTop) (floor $ selectionTop + 1) (floor $ selectionBottom - 1) (floor selectionBottom))
+				(Vec4 selectionTop (selectionTop + 1) (selectionBottom - 1) selectionBottom)
 				(styleFillColor selectedStyle) (styleBorderColor selectedStyle)
 
 			-- draw blinking cursor
 			when (blink * 2 < 1) $ drawBorderedRectangle canvas
 				(Vec4 (floor $ textX + cursorX) (floor $ textX + cursorX + 1) (floor $ textX + cursorX + 1) (floor $ textX + cursorX + 1))
-				(Vec4 (floor selectionTop) (floor $ selectionTop + 1) (floor $ selectionBottom - 1) (floor selectionBottom))
+				(Vec4 selectionTop (selectionTop + 1) (selectionBottom - 1) selectionBottom)
 				(styleFillColor selectedStyle) (styleBorderColor selectedStyle)
 
 			-- draw floating cursor
 			case maybeFloatingCursor of
 				Just (floatingCursorX, _) -> drawBorderedRectangle canvas
 					(Vec4 (floor $ textX + floatingCursorX) (floor $ textX + floatingCursorX + 1) (floor $ textX + floatingCursorX + 1) (floor $ textX + floatingCursorX + 1))
-					(Vec4 (floor selectionTop) (floor $ selectionTop + 1) (floor $ selectionBottom - 1) (floor selectionBottom))
+					(Vec4 selectionTop (selectionTop + 1) (selectionBottom - 1) selectionBottom)
 					(styleFillColor selectedStyle) (styleFillColor selectedStyle)
 				Nothing -> return ()
 
