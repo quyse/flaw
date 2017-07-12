@@ -1,10 +1,10 @@
-resolver: lts-8.20
+resolver: lts-8.22
 
 packages:
 - text-1.2.2.1
 - hashable-1.2.6.1
 - cryptonite-0.21
-- scientific-0.3.4.15
+- scientific-0.3.5.1
 - integer-logarithms-1.0.1
 - containers-0.5.10.2
 
