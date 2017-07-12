@@ -92,20 +92,33 @@ simplifyGeometry iterationsCount vertices indices = runST $ do
 			q_123_134 = q_12_13 * q34 - q_12_14 * q33 + q_12_34 * q31
 			q_123_234 = q_12_23 * q34 - q_12_24 * q33 + q_12_34 * q32
 			-- q_1234_1234 = q_123_123 * q44 - q_123_124 * q43 + q_123_134 * q42 - q_123_234 * q41
+			aff :: Float3 -> Float4
+			aff (Float3 x y z) = Float4 x y z 1
 			cost :: Float4x4 -> Float3 -> Float
-			cost q (Float3 x y z) = let p = Float4 x y z 1 in p `dot` (q `mul` p)
+			cost q (aff -> p) = p `dot` (q `mul` p)
 		pv0 <- VGM.unsafeRead vertexPositions $ fromIntegral v0
 		pv1 <- VGM.unsafeRead vertexPositions $ fromIntegral v1
-		(oc, ov) <-
+		let (oc, ov) =
+			-- try global minimum
 			if abs q_123_123 > 1e-4 then let
 				v = Float3
 					(negate $ q_123_234 / q_123_123)
 					(q_123_134 / q_123_123)
 					(negate $ q_123_124 / q_123_123)
-				in return (cost quadricSum v, v)
-			else do
-				let pm = (pv0 + pv1) * 0.5
-				return $ min (cost quadricSum pm, pm) $ min (cost quadricSum pv0, pv0) (cost quadricSum pv1, pv1)
+				in (cost quadricSum v, v)
+			-- try minimum along the edge
+			else let
+				v10 = aff pv1 - aff pv0
+				u = quadricSum `mul` v10
+				h = u `dot` v10
+				in if abs h > 1e-4 then let
+					hinv = 1 / h
+					v = pv0 * vecFromScalar ((u `dot` aff pv1) * hinv) - pv1 * vecFromScalar ((u `dot` aff pv0) * hinv)
+					in (cost quadricSum v, v)
+				-- try minimum from ends and the middle
+				else let
+					pm = (pv0 + pv1) * 0.5
+					in min (cost quadricSum pm, pm) $ min (cost quadricSum pv0, pv0) (cost quadricSum pv1, pv1)
 
 		return Pair
 			{ pair_vertex0 = v0
