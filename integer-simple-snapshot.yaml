@@ -6,6 +6,7 @@ packages:
 - cryptonite-0.21
 - scientific-0.3.4.15
 - integer-logarithms-1.0.1
+- containers-0.5.10.2
 
 flags:
   text:
