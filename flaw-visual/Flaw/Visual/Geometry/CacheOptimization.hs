@@ -6,6 +6,7 @@ License: MIT
 
 module Flaw.Visual.Geometry.CacheOptimization
 	( optimizeGeometryIndicesLocality
+	, optimizeGeometryVerticesLocality
 	) where
 
 import Control.Monad
@@ -19,7 +20,7 @@ cacheWeights :: VU.Vector Float
 cacheWeights = VU.fromList $ 0.75 : 0.75 : 0.75 : [pwr (1 - (i - 3) / 28) | i <- [3..31]] where
 	pwr i = i * sqrt(i)
 
--- | Optimize usage of vertex post-transform cache by manipulating of order of triangles.
+-- | Optimize usage of vertex post-transform cache by manipulating order of triangles.
 -- "Linear-Speed Vertex Cache Optimisation" by Tom Forsyth
 -- https://tomforsyth1000.github.io/papers/fast_vert_cache_opt.html
 optimizeGeometryIndicesLocality :: (VG.Vector v i, Integral i) => v i -> v i
@@ -199,3 +200,28 @@ optimizeGeometryIndicesLocality indices = runST $ do
 		in step 0
 
 	VG.unsafeFreeze newIndices
+
+-- | Optimize usage of vertex pre-transform cache by manipulating order of vertices.
+optimizeGeometryVerticesLocality :: (VG.Vector va a, VG.Vector vi i, Integral i) => va a -> vi i -> (va a, vi i)
+optimizeGeometryVerticesLocality vertices indices = runST $ do
+	let verticesCount = VG.length vertices
+	let indicesCount = VG.length indices
+	vertexMap <- VUM.replicate verticesCount verticesCount
+	newVertices <- VGM.new verticesCount
+	newIndices <- VGM.new indicesCount
+	let
+		f p i = when (i < indicesCount) $ do
+			let v = fromIntegral $ indices VG.! i
+			remappedVertex <- VGM.unsafeRead vertexMap v
+			if remappedVertex < verticesCount then do
+				VGM.unsafeWrite newIndices i $ fromIntegral remappedVertex
+				f p (i + 1)
+			else do
+				VGM.unsafeWrite vertexMap v p
+				VGM.unsafeWrite newVertices p $ vertices VG.! v
+				VGM.unsafeWrite newIndices i $ fromIntegral p
+				f (p + 1) (i + 1)
+		in f 0 0
+	freezedNewVertices <- VG.unsafeFreeze newVertices
+	freezedNewIndices <- VG.unsafeFreeze newIndices
+	return (freezedNewVertices, freezedNewIndices)
