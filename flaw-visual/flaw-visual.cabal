@@ -24,6 +24,7 @@ library
     Flaw.Visual.Frustum
     Flaw.Visual.Geometry
     Flaw.Visual.Geometry.Basic
+    Flaw.Visual.Geometry.CacheOptimization
     Flaw.Visual.Geometry.Simplification
     Flaw.Visual.Geometry.Skinned
     Flaw.Visual.Geometry.Vertex
