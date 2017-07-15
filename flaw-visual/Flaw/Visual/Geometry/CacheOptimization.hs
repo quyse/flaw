@@ -2,6 +2,14 @@
 Module: Flaw.Visual.Geometry.CacheOptimization
 Description: Geometry cache optimization algorithms.
 License: MIT
+
+Two cache optimization algorithms are implemented so far.
+In preferred order of application:
+
+* 'optimizeGeometryIndicesLocality' reorders triangles trying to use post-transform
+vertex cache as efficiently as possible.
+* 'optimizeGeometryVerticesLocality' reorders vertices (remapping indices accordingly, but not reordering triangles)
+trying to optimize pre-transform vertex cache usage.
 -}
 
 module Flaw.Visual.Geometry.CacheOptimization
