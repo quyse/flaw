@@ -38,6 +38,7 @@ import Flaw.Build
 import Flaw.Exception
 import Flaw.Graphics
 import Flaw.Visual.Geometry.Vertex
+import Flaw.Visual.Geometry.CacheOptimization
 
 data Geometry d = Geometry
 	{ geometryVertexBuffer :: !(VertexBufferId d)
@@ -58,7 +59,7 @@ instance S.Serialize PackedGeometry
 
 -- | Pack raw vertices.
 packGeometry :: (Ord a, Storable a, VG.Vector v a, VG.Vector v Word32) => v a -> PackedGeometry
-packGeometry rawVertices = uncurry packIndexedGeometry $ indexGeometryVertices rawVertices
+packGeometry = uncurry packIndexedGeometry . indexGeometryVertices
 
 -- | Pack geometry with indices.
 -- Chooses indices format.
@@ -71,12 +72,13 @@ packIndexedGeometry vertices indices = PackedGeometry
 	, packedGeometryIndexTopology = IndexTopologyTriangles
 	, packedGeometryIndexStride = indexStride
 	} where
-	verticesBytes = packVector vertices
+	(optimizedVertices, optimizedIndices) = optimizeGeometryLocality vertices indices
+	verticesBytes = packVector optimizedVertices
 	(indexStride, indicesBytes) =
-		if VG.length vertices > 0x10000 then
-			(IndexStride32Bit, packVector indices)
+		if VG.length optimizedVertices > 0x10000 then
+			(IndexStride32Bit, packVector optimizedIndices)
 		else
-			(IndexStride16Bit, packVector (VG.map fromIntegral indices :: VS.Vector Word16))
+			(IndexStride16Bit, packVector (VG.map fromIntegral optimizedIndices :: VS.Vector Word16))
 
 -- | Load geometry into device.
 loadPackedGeometry :: Device d => d -> PackedGeometry -> IO (Geometry d, IO ())

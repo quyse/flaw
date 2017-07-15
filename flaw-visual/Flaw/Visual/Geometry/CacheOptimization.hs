@@ -15,6 +15,7 @@ trying to optimize pre-transform vertex cache usage.
 module Flaw.Visual.Geometry.CacheOptimization
 	( optimizeGeometryIndicesLocality
 	, optimizeGeometryVerticesLocality
+	, optimizeGeometryLocality
 	) where
 
 import Control.Monad
@@ -233,3 +234,7 @@ optimizeGeometryVerticesLocality vertices indices = runST $ do
 	freezedNewVertices <- VG.unsafeFreeze newVertices
 	freezedNewIndices <- VG.unsafeFreeze newIndices
 	return (freezedNewVertices, freezedNewIndices)
+
+-- | Perform both optimization of vertices and indices.
+optimizeGeometryLocality :: (VG.Vector va a, VG.Vector vi i, Integral i) => va a -> vi i -> (va a, vi i)
+optimizeGeometryLocality vertices indices = optimizeGeometryVerticesLocality vertices (optimizeGeometryIndicesLocality indices)
