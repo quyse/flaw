@@ -156,35 +156,31 @@ linux:
   - "mkdir -p flaw-linux/bin"
   - "stack --no-terminal build --test --copy-bins --local-bin-path flaw-linux/bin --flag flaw-font-fhi:icu $PACKAGES_LINUX"
   - "stack --no-terminal build --test --flag flaw-app:vulkan --flag flaw-font-fhi:icu flaw-app"
-  # artifacts:
-  #   name: "flaw-linux_x64-$CI_BUILD_ID"
-  #   paths:
-  #   - flaw-linux
-  #   expire_in: 1 week
+  - "mkdir linux && cp flaw-linux/bin/model-editor linux/"
+  - "butler push linux quyse/flaw:model-editor-linux"
   tags:
   - haskellstack
   - linux
   - x64
+  - butler
   except:
   - arm
   - pages
 
 windows:
   script:
-  - "mkdir flaw-windows\\bin"
-  - "stack --no-terminal build --test --copy-bins --local-bin-path flaw-windows/bin %PACKAGES_WINDOWS%"
+  - "mkdir -p flaw-windows/bin"
+  - "stack --no-terminal build --test --copy-bins --local-bin-path flaw-windows/bin $PACKAGES_WINDOWS"
   - "stack --no-terminal build --test --flag flaw-app:vulkan flaw-app"
   - "stack --no-terminal build --test --flag flaw-app:-dx11 flaw-app"
   - "stack --no-terminal build --test --flag flaw-app:-gl flaw-app"
-  # artifacts:
-  #   name: "flaw-windows_x64-$CI_BUILD_ID"
-  #   paths:
-  #   - flaw-windows
-  #   expire_in: 1 week
+  - "mkdir windows && cp flaw-windows/bin/model-editor.exe windows/"
+  - "butler push windows quyse/flaw:model-editor-windows"
   tags:
   - haskellstack
   - windows
   - x64
+  - butler
   except:
   - arm
   - pages
@@ -193,15 +189,13 @@ macos:
   script:
   - "mkdir -p flaw-macos/bin"
   - "stack --no-terminal build --test --copy-bins --local-bin-path flaw-macos/bin --flag flaw-font-fhi:icu $PACKAGES_MACOS"
-  # artifacts:
-  #   name: "flaw-macos_x64-$CI_BUILD_ID"
-  #   paths:
-  #   - flaw-macos
-  #   expire_in: 1 week
+  - "mkdir macos && mv flaw-macos/bin/model-editor macos/"
+  - "butler push macos quyse/flaw:model-editor-macos"
   tags:
   - haskellstack
   - macos
   - x64
+  - butler
   except:
   - arm
   - pages
@@ -217,26 +211,6 @@ macos:
   except:
   - arm
   - pages
-
-.itch:
-  stage: deploy
-  environment: itch
-  dependencies:
-  - linux
-  - windows
-  - macos
-  script:
-  - "mkdir linux && mv flaw-linux/bin/model-editor linux/"
-  - "mkdir windows && mv flaw-windows/bin/model-editor.exe windows/"
-  - "mkdir macos && mv flaw-macos/bin/model-editor macos/"
-  - "butler push linux quyse/flaw:model-editor-linux"
-  - "butler push windows quyse/flaw:model-editor-windows"
-  - "butler push macos quyse/flaw:model-editor-macos"
-  tags:
-  - linux
-  - butler
-  only:
-  - master
 
 .pages:
   stage: deploy
