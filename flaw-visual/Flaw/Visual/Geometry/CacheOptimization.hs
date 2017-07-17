@@ -218,8 +218,8 @@ optimizeGeometryVerticesLocality vertices indices = runST $ do
 	vertexMap <- VUM.replicate verticesCount verticesCount
 	newVertices <- VGM.new verticesCount
 	newIndices <- VGM.new indicesCount
-	let
-		f p i = when (i < indicesCount) $ do
+	newVerticesCount <- let
+		f p i = if i >= indicesCount then return p else do
 			let v = fromIntegral $ indices VG.! i
 			remappedVertex <- VGM.unsafeRead vertexMap v
 			if remappedVertex < verticesCount then do
@@ -231,7 +231,7 @@ optimizeGeometryVerticesLocality vertices indices = runST $ do
 				VGM.unsafeWrite newIndices i $ fromIntegral p
 				f (p + 1) (i + 1)
 		in f 0 0
-	freezedNewVertices <- VG.unsafeFreeze newVertices
+	freezedNewVertices <- VG.unsafeFreeze $ VGM.slice 0 newVerticesCount newVertices
 	freezedNewIndices <- VG.unsafeFreeze newIndices
 	return (freezedNewVertices, freezedNewIndices)
 
