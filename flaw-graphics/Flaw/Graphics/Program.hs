@@ -47,6 +47,7 @@ module Flaw.Graphics.Program
 	, clamp, lerp
 	, equal_ , less_, lessEqual_, greater_, greaterEqual_, if_
 	, ddx, ddy
+	, floor_
 	, instanceId
 	, invSqrt
 	, screenToTexture
@@ -506,6 +507,9 @@ ddx a = DdxNode (nodeValueType a) a
 
 ddy :: OfValueType a => Node a -> Node a
 ddy a = DdyNode (nodeValueType a) a
+
+floor_ :: OfValueType a => Node a -> Node a
+floor_ a = FloorNode (nodeValueType a) a
 
 instanceId :: Node Word32
 instanceId = InstanceIdNode

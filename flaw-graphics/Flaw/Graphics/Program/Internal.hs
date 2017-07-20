@@ -373,6 +373,7 @@ data Node a where
 	NormalizeNode :: (OfVectorType v, Normalize v) => ValueType -> Node v -> Node v
 	DdxNode :: OfValueType a => ValueType -> Node a -> Node a
 	DdyNode :: OfValueType a => ValueType -> Node a -> Node a
+	FloorNode :: OfValueType a => ValueType -> Node a -> Node a
 	InstanceIdNode :: Node Word32
 	ComponentNode :: OfVectorType v => ValueType -> ValueType -> Char -> Node v -> Node (VecElement v)
 	SwizzleNode :: (OfVectorType a, OfVectorType b) => ValueType -> ValueType -> String -> Node a -> Node b

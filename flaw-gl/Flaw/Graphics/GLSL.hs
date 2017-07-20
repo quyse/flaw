@@ -518,6 +518,7 @@ glslGenerateProgram GlslConfig
 			NormalizeNode _ a -> func1Source "normalize" a
 			DdxNode _ a -> func1Source "dFdx" a
 			DdyNode _ a -> func1Source "dFdy" a
+			FloorNode _ a -> func1Source "floor" a
 			InstanceIdNode -> "uint(gl_InstanceID)"
 			ComponentNode _ _ c a -> "(" <> nodeSource a <> ")." <> singleton c
 			SwizzleNode _ _ s a ->  "(" <> nodeSource a <> ")." <> fromString s

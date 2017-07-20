@@ -363,6 +363,7 @@ hlslGenerateProgram state = program where
 			NormalizeNode _ a -> func1Source "normalize" a
 			DdxNode _ a -> func1Source "ddx" a
 			DdyNode _ a -> "-" <> func1Source "ddy" a -- normalize ddy, so it behaves as dFdy in OpenGL
+			FloorNode _ a -> func1Source "floor" a
 			InstanceIdNode -> "sI"
 			ComponentNode _ _ c a -> "(" <> nodeSource a <> ")." <> singleton c
 			SwizzleNode _ _ s a ->  "(" <> nodeSource a <> ")." <> fromString s
