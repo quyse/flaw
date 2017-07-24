@@ -393,7 +393,7 @@ colorTarget i colorNode = withState $ \state@State
 	{ stateStage = stage
 	, stateTargets = targets
 	} -> do
-	if stage /= PixelStage then fail $ "colorTarget can be used only in pixel program"
+	if stage /= PixelStage then fail "colorTarget can be used only in pixel program"
 	else return ()
 	let target = ColorTarget i colorNode
 	return (state
@@ -405,7 +405,7 @@ dualColorTarget colorNode1 colorNode2 = withState $ \state@State
 	{ stateStage = stage
 	, stateTargets = targets
 	} -> do
-	if stage /= PixelStage then fail $ "dualColorTarget can be used only in pixel program"
+	if stage /= PixelStage then fail "dualColorTarget can be used only in pixel program"
 	else return ()
 	let target = DualColorTarget colorNode1 colorNode2
 	return (state
@@ -417,7 +417,7 @@ depthTarget depthNode = withState $ \state@State
 	{ stateStage = stage
 	, stateTargets = targets
 	} -> do
-	if stage /= PixelStage then fail $ "depthTarget can be used only in pixel program"
+	if stage /= PixelStage then fail "depthTarget can be used only in pixel program"
 	else return ()
 	let target = DepthTarget depthNode
 	return (state

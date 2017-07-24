@@ -204,21 +204,21 @@ instance OfAttributeType Float where
 	data AttributeFormat Float
 		= AttributeFloat32
 		| AttributeFloat16
-		| AttributeFloatInt32
-		| AttributeFloatInt16
-		| AttributeFloatInt8
-		| AttributeFloatUint32
-		| AttributeFloatUint16
-		| AttributeFloatUint8
+		| AttributeFloatInt32 !Normalization
+		| AttributeFloatInt16 !Normalization
+		| AttributeFloatInt8 !Normalization
+		| AttributeFloatUint32 !Normalization
+		| AttributeFloatUint16 !Normalization
+		| AttributeFloatUint8 !Normalization
 	attributeFormatToType f = case f of
 		AttributeFloat32 -> ATFloat32
 		AttributeFloat16 -> ATFloat16
-		AttributeFloatInt32 -> ATInt32 Normalized
-		AttributeFloatInt16 -> ATInt16 Normalized
-		AttributeFloatInt8 -> ATInt8 Normalized
-		AttributeFloatUint32 -> ATUint32 Normalized
-		AttributeFloatUint16 -> ATUint16 Normalized
-		AttributeFloatUint8 -> ATUint8 Normalized
+		AttributeFloatInt32 n -> ATInt32 n
+		AttributeFloatInt16 n -> ATInt16 n
+		AttributeFloatInt8 n -> ATInt8 n
+		AttributeFloatUint32 n -> ATUint32 n
+		AttributeFloatUint16 n -> ATUint16 n
+		AttributeFloatUint8 n -> ATUint8 n
 
 instance OfAttributeType Int32 where
 	data AttributeFormat Int32
@@ -264,31 +264,31 @@ forM matDimensions $ \(ci, cj) -> do
 
 -- | State of the program while constructing.
 data State = State
-	{ stateStage :: Stage
+	{ stateStage :: !Stage
 	, stateTemps :: [Temp]
-	, stateTempsCount :: !Int
+	, stateTempsCount :: {-# UNPACK #-} !Int
 	, stateTargets :: [Target]
 	} deriving Show
 
 data Attribute = Attribute
-	{ attributeSlot :: !Int
-	, attributeOffset :: !Int
-	, attributeDivisor :: !Int
+	{ attributeSlot :: {-# UNPACK #-} !Int
+	, attributeOffset :: {-# UNPACK #-} !Int
+	, attributeDivisor :: {-# UNPACK #-} !Int
 	, attributeType :: !AttributeType
 	, attributeValueType :: !ValueType
 	} deriving (Eq, Ord, Show, Generic)
 instance S.Serialize Attribute
 
 data Uniform = Uniform
-	{ uniformSlot :: !Int
-	, uniformOffset :: !Int
-	, uniformSize :: !Int
+	{ uniformSlot :: {-# UNPACK #-} !Int
+	, uniformOffset :: {-# UNPACK #-} !Int
+	, uniformSize :: {-# UNPACK #-} !Int
 	, uniformType :: !ValueType
 	} deriving (Eq, Ord, Show, Generic)
 instance S.Serialize Uniform
 
 data Sampler = Sampler
-	{ samplerSlot :: !Int
+	{ samplerSlot :: {-# UNPACK #-} !Int
 	, samplerDimension :: !SamplerDimension
 	, samplerSampleType :: !ValueType
 	, samplerCoordsType :: !ValueType
@@ -317,8 +317,8 @@ data Stage
 	deriving (Eq, Ord, Show)
 
 data Temp = forall a. OfValueType a => Temp
-	{ tempIndex :: !Int
-	, tempNode :: Node a
+	{ tempIndex :: {-# UNPACK #-} !Int
+	, tempNode :: !(Node a)
 	, tempStage :: !Stage
 	, tempType :: !ValueType
 	}
