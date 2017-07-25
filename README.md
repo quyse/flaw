@@ -1,9 +1,8 @@
 # FLAW Engine
 
-[![Gitlab Build Status](https://gitlab.com/quyse/flaw/badges/master/build.svg)](https://gitlab.com/quyse/flaw/pipelines)
 [![Code Climate](https://codeclimate.com/github/quyse/flaw/badges/gpa.svg)](https://codeclimate.com/github/quyse/flaw)
 
-[github](https://github.com/quyse/flaw) | [documentation](https://flaw.quyse.net/docs/) | [gitlab ci](https://gitlab.com/quyse/flaw/pipelines) | [code climate](https://codeclimate.com/github/quyse/flaw) | [itch.io](https://quyse.itch.io/flaw) | [openhub](https://www.openhub.net/p/flaw-engine) | [hlint report](https://flaw.quyse.net/hlint.html) | [hpc report](https://flaw.quyse.net/hpc/combined/all/hpc_index.html)
+[github](https://github.com/quyse/flaw) | [documentation](https://flaw.quyse.org/docs/) | [code climate](https://codeclimate.com/github/quyse/flaw) | [itch.io](https://quyse.itch.io/flaw) | [openhub](https://www.openhub.net/p/flaw-engine) | [hlint report](https://flaw.quyse.org/hlint.html) | [hpc report](https://flaw.quyse.org/hpc/combined/all/hpc_index.html)
 
 **FLAW** is a highly experimental open source game engine written in Haskell.
 
@@ -12,6 +11,14 @@
 FLAW is heavily based on my experiences from developing [Inanity engine](https://github.com/quyse/inanity). In short, the experiences are: C++ sucks, game development can be done better. It's time to discover new horizons by using Haskell in the area where it hasn't been used a lot (yet).
 
 This project is mostly a playground for absolutely crazy ideas. Surely if someone managed to make a real game out of it, that game would be absolutely crazy too!
+
+## Building
+
+FLAW uses [stack](https://haskellstack.org/) for building. Note the assumption is that the project is to be built with `integer-simple` GHC, to be more commercial-friendly especially on Windows due to concerns about LGPL license of `GMP` library used by stock GHC. See `stack.yaml`, which refers to `integer-simple-snapshot.yaml` containing appropriate adjustments to some packages. If you don't have integer-simple GHC, or don't care about GMP, simply set `resolver` field in `stack.yaml` to whatever snapshot.
+
+## Binaries
+
+Some binaries (built from CI) are available on [FLAW itch.io page](https://quyse.itch.io/flaw).
 
 ## What works
 
