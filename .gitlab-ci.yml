@@ -212,7 +212,7 @@ macos:
   - arm
   - pages
 
-.pages:
+pages:
   stage: deploy
   environment: pages
   dependencies: []
