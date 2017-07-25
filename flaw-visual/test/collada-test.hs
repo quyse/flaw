@@ -14,11 +14,12 @@ import Control.Exception
 import Control.Monad
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.Vector as V
-import qualified Data.Vector.Storable as VS
+import qualified Data.Vector.Generic as VG
 import System.Exit
 
 import Flaw.Asset.Collada
 import Flaw.Visual.Geometry
+import Flaw.Visual.Geometry.Simplification
 import Flaw.Visual.Geometry.Vertex
 import Flaw.Math
 import Flaw.Math.Transform
@@ -42,8 +43,10 @@ main = do
 			print err
 			exitFailure
 
-	void $ evaluate $ packGeometry (geomVert :: VS.Vector VertexPNT)
-	void $ evaluate $ packGeometry (skinVert :: VS.Vector VertexPNTWB)
+	void $ evaluate $ packGeometry geomVert
+	void $ evaluate $ uncurry packIndexedGeometry $ uncurry (simplifyGeometry 10) $ indexGeometryVertices $ VG.map f_VertexPNT_position geomVert
+	void $ evaluate $ packGeometry skinVert
+	void $ evaluate $ uncurry packIndexedGeometry $ uncurry (simplifyGeometry 10) $ indexGeometryVertices $ VG.map f_VertexPNTWB_position skinVert
 	forM_ (animateSkel identityTransform 0 :: V.Vector Float4x4) evaluate
 	void $ evaluate skeleton
 	void $ evaluate skin
