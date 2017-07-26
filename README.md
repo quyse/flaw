@@ -2,7 +2,7 @@
 
 [![Code Climate](https://codeclimate.com/github/quyse/flaw/badges/gpa.svg)](https://codeclimate.com/github/quyse/flaw)
 
-[github](https://github.com/quyse/flaw) | [documentation](https://flaw.quyse.org/docs/) | [code climate](https://codeclimate.com/github/quyse/flaw) | [itch.io](https://quyse.itch.io/flaw) | [openhub](https://www.openhub.net/p/flaw-engine) | [hlint report](https://flaw.quyse.org/hlint.html) | [hpc report](https://flaw.quyse.org/hpc/combined/all/hpc_index.html)
+[github](https://github.com/quyse/flaw) | [documentation](https://flaw.quyse.io/docs/) | [code climate](https://codeclimate.com/github/quyse/flaw) | [itch.io](https://quyse.itch.io/flaw) | [openhub](https://www.openhub.net/p/flaw-engine) | [hlint report](https://flaw.quyse.io/hlint.html) | [hpc report](https://flaw.quyse.io/hpc/combined/all/hpc_index.html)
 
 **FLAW** is a highly experimental open source game engine written in Haskell.
 
