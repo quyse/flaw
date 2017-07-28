@@ -434,6 +434,8 @@ main = withApp def
 	stateFlow <- book bk newFlow
 	-- flow for background operations
 	backgroundFlow <- book bk newFlow
+	-- flow for heavy processing operations
+	processingFlow <- book bk newFlow
 
 	let loadColladaFile fileName elementId = handle (errorHandler "loadColladaFile") $ do
 		bytes <- BL.readFile $ T.unpack fileName
@@ -515,7 +517,7 @@ main = withApp def
 			let actionHandler = do
 				fileName <- getText colladaFileElement
 				nodeName <- getText colladaNodeEditBox
-				asyncRunInFlow backgroundFlow $ loadColladaFile fileName nodeName
+				asyncRunInFlow processingFlow $ loadColladaFile fileName nodeName
 			setActionHandler colladaFileElement actionHandler
 			-- load initial geometry
 			let GeometryCell
@@ -530,7 +532,7 @@ main = withApp def
 			fileElement <- newFileElement fileDialogService
 			let actionHandler = do
 				fileName <- getText fileElement
-				asyncRunInFlow backgroundFlow $ handle (errorHandler "genericTextureFileElement") $ do
+				asyncRunInFlow processingFlow $ handle (errorHandler "genericTextureFileElement") $ do
 					cell@TextureCell
 						{ textureCellBook = cellBook
 						} <- getTextureCell <$> readTVarIO editorStateVar
