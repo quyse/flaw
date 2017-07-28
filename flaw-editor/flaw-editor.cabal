@@ -86,6 +86,7 @@ executable flaw-editor
     , flaw-visual
     , flaw-window
     , http-client
+    , mtl
     , optparse-applicative
     , stm
     , text

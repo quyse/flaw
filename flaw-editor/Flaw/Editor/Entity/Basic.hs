@@ -8,7 +8,7 @@ License: MIT
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Flaw.Editor.Entity.Basic
-	(
+	( Folder
 	) where
 
 import Control.Concurrent.STM
@@ -533,3 +533,8 @@ addRemoveButtonsLayout listBox onAdd onRemove = StateT $ \s@FlowLayoutState
 			return $ Vec4 px qy qx qy
 		, flsPreSize = Vec2 (max psx metricMainWidth) (psy + metricListBoxItemHeight * 7 + metricGap)
 		})
+
+
+-- some synonyms
+
+type Folder = M.Map T.Text EntityId
