@@ -4,7 +4,7 @@ Description: Dialog allowing user to select a file.
 License: MIT
 -}
 
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, ViewPatterns #-}
 
 module Flaw.Editor.UI.FileDialog
 	( FileDialogService(..)
@@ -39,17 +39,17 @@ data FileDialogService = FileDialogService
 	{ fileDialogServiceMetrics :: !Metrics
 	, fileDialogServiceParentPanel :: !Panel
 	, fileDialogServiceFlow :: !Flow
-	, fileDialogServicePathVar :: {-# UNPACK #-} !(TVar T.Text)
+	, fileDialogServiceDirVar :: {-# UNPACK #-} !(TVar T.Text)
 	}
 
 newFileDialogService :: Metrics -> Panel -> Flow -> STM FileDialogService
 newFileDialogService metrics parentPanel flow = do
-	pathVar <- newTVar ""
+	dirVar <- newTVar ""
 	return FileDialogService
 		{ fileDialogServiceMetrics = metrics
 		, fileDialogServiceParentPanel = parentPanel
 		, fileDialogServiceFlow = flow
-		, fileDialogServicePathVar = pathVar
+		, fileDialogServiceDirVar = dirVar
 		}
 
 data Entry = FileEntry
@@ -64,6 +64,7 @@ data Entry = FileEntry
 
 data FileDialogConfig = FileDialogConfig
 	{ fileDialogConfigTitle :: !T.Text
+	, fileDialogConfigInitialPath :: !(Maybe T.Text)
 	}
 
 runFileDialog :: FileDialogService -> FileDialogConfig -> (Maybe T.Text -> STM ()) -> STM ()
@@ -80,9 +81,10 @@ runFileDialog FileDialogService
 		}
 	, fileDialogServiceParentPanel = parentPanel
 	, fileDialogServiceFlow = flow
-	, fileDialogServicePathVar = pathVar
+	, fileDialogServiceDirVar = dirVar
 	} FileDialogConfig
 	{ fileDialogConfigTitle = title
+	, fileDialogConfigInitialPath = maybeInitialPath
 	} handler = do
 	panel <- newPanel True
 	frame <- newFrame panel metrics
@@ -160,7 +162,7 @@ runFileDialog FileDialogService
 					else atomically $ do
 						removeFreeChild parentPanel frameChild
 						-- save path to file for later use
-						writeTVar pathVar $ T.pack $ takeDirectory $ T.unpack path
+						writeTVar dirVar $ T.pack $ takeDirectory $ T.unpack path
 						handler $ Just path
 			_ -> return ()
 	setActionHandler cancelButton $ do
@@ -172,7 +174,11 @@ runFileDialog FileDialogService
 	setCancelElement panel cancelButton
 	setButtonCancel cancelButton
 
-	asyncRunInFlow flow . openDirectory =<< readTVar pathVar
+	asyncRunInFlow flow . openDirectory =<< case maybeInitialPath of
+		Just (T.pack . takeDirectory . T.unpack -> initialDir) -> do
+			writeTVar dirVar initialDir
+			return initialDir
+		Nothing -> readTVar dirVar
 
 	focusFreeChild parentPanel frameChild
 

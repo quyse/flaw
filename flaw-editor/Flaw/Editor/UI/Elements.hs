@@ -13,6 +13,7 @@ module Flaw.Editor.UI.Elements
 
 import Control.Concurrent.STM
 import Control.Monad
+import qualified Data.Text as T
 
 import Flaw.Editor.UI.FileDialog
 import Flaw.Math
@@ -54,13 +55,16 @@ newFileElement service@FileDialogService
 		placeFreeChild panel loadButtonChild $ Vec2 (sx - buttonWidth + sy) 0
 		layoutElement loadButton $ Vec2 (buttonWidth - sy) sy
 
-	setActionHandler browseButton $ runFileDialog service FileDialogConfig
-		{ fileDialogConfigTitle = "choose file"
-		} $ \maybeFileName -> case maybeFileName of
-		Just fileName -> do
-			setText editBox fileName
-			join $ readTVar actionHandlerVar
-		Nothing -> return ()
+	setActionHandler browseButton $ do
+		initialPath <- getText editBox
+		runFileDialog service FileDialogConfig
+			{ fileDialogConfigTitle = "choose file"
+			, fileDialogConfigInitialPath = if T.null initialPath then Nothing else Just initialPath
+			} $ \maybeFileName -> case maybeFileName of
+			Just fileName -> do
+				setText editBox fileName
+				join $ readTVar actionHandlerVar
+			Nothing -> return ()
 	setActionHandler loadButton $ join $ readTVar actionHandlerVar
 
 	return FileElement
