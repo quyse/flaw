@@ -10,9 +10,10 @@ module Flaw.Flow
 	, Flow()
 	, newFlow
 	, newFlowOS
+	, newMultiFlow
+	, newMultiFlowOS
 	, asyncRunInFlow
 	, runInFlow
-	, exitFlow
 	) where
 
 import Control.Concurrent
@@ -20,13 +21,13 @@ import Control.Concurrent.STM
 import Control.Exception
 import Control.Monad
 
+import Flaw.Book
+
 -- | Fork a thread.
-{-# INLINE forkFlow #-}
 forkFlow :: IO () -> IO ((), IO ())
 forkFlow = forkFlowInternal forkFinally
 
 -- | Fork an OS thread.
-{-# INLINE forkFlowOS #-}
 forkFlowOS :: IO () -> IO ((), IO ())
 forkFlowOS = forkFlowInternal $ \action andThen -> mask $ \restore -> forkOS $ try (restore action) >>= andThen
 
@@ -44,28 +45,32 @@ newtype Flow = Flow (TQueue (IO ()))
 
 -- | Create operation flow, i.e. single stream of operations running in a separate
 -- thread, and booked into Flaw.Book.
-{-# INLINE newFlow #-}
 newFlow :: IO (Flow, IO ())
-newFlow = newFlowInternal forkFlow
+newFlow = newMultiFlow 1
 
 -- | Create operation flow in a bound thread.
-{-# INLINE newFlowOS #-}
 newFlowOS :: IO (Flow, IO ())
-newFlowOS = newFlowInternal forkFlowOS
+newFlowOS = newMultiFlowOS 1
 
-newFlowInternal :: (IO () -> IO ((), IO ())) -> IO (Flow, IO ())
-newFlowInternal f = do
+-- | Create operation multiflow, i.e. multiple threads, booked into Flaw.Book, and using a single queue of operations.
+newMultiFlow :: Int -> IO (Flow, IO ())
+newMultiFlow threadsCount = newFlowInternal threadsCount forkFlow
+
+-- | Create operation multiflow using bounded threads.
+newMultiFlowOS :: Int -> IO (Flow, IO ())
+newMultiFlowOS threadsCount = newFlowInternal threadsCount forkFlowOS
+
+newFlowInternal :: Int -> (IO () -> IO ((), IO ())) -> IO (Flow, IO ())
+newFlowInternal threadsCount f = withSpecialBook $ \bk -> do
 	queue <- newTQueueIO
-	((), stop) <- f $ runOperations queue
-	return (Flow queue, stop)
+	forM_ [1..threadsCount] $ \_i -> book bk $ f $ runOperations queue
+	return $ Flow queue
 
-{-# INLINE asyncRunInFlow #-}
 asyncRunInFlow :: Flow -> IO () -> STM ()
 asyncRunInFlow (Flow queue) operation = writeTQueue queue $ do
 	operation
 	runOperations queue
 
-{-# INLINE runInFlow #-}
 runInFlow :: Flow -> IO a -> IO a
 runInFlow flow operation = do
 	resultVar <- newEmptyMVar
@@ -74,14 +79,6 @@ runInFlow flow operation = do
 	case r of
 		Right a -> return a
 		Left e -> throwIO (e :: SomeException)
-
--- | Graceful shutdown of flow.
-{-# INLINE exitFlow #-}
-exitFlow :: Flow -> IO ()
-exitFlow (Flow queue) = do
-	dummyVar <- newEmptyMVar
-	atomically $ writeTQueue queue $ putMVar dummyVar ()
-	takeMVar dummyVar
 
 runOperations :: TQueue (IO ()) -> IO ()
 runOperations queue = join $ atomically $ readTQueue queue
