@@ -2,7 +2,7 @@
 
 [![Code Climate](https://codeclimate.com/github/quyse/flaw/badges/gpa.svg)](https://codeclimate.com/github/quyse/flaw)
 
-[github](https://github.com/quyse/flaw) | [documentation](https://flaw.quyse.io/docs/) | [code climate](https://codeclimate.com/github/quyse/flaw) | [itch.io](https://quyse.itch.io/flaw) | [openhub](https://www.openhub.net/p/flaw-engine) | [hlint report](https://flaw.quyse.io/hlint.html) | [hpc report](https://flaw.quyse.io/hpc/combined/all/hpc_index.html)
+[github](https://github.com/quyse/flaw) | [haddock](https://flaw.quyse.io/docs/) | [code climate](https://codeclimate.com/github/quyse/flaw) | [itch.io](https://quyse.itch.io/flaw) | [openhub](https://www.openhub.net/p/flaw-engine) | [hlint report](https://flaw.quyse.io/hlint.html) | [hpc report](https://flaw.quyse.io/hpc/combined/all/hpc_index.html)
 
 **FLAW** is a highly experimental open source game engine written in Haskell.
 
@@ -14,7 +14,7 @@ This project is mostly a playground for absolutely crazy ideas. Surely if someon
 
 ## Building
 
-FLAW uses [stack](https://haskellstack.org/) for building. Note the assumption is that the project is to be built with `integer-simple` GHC, to be more commercial-friendly especially on Windows due to concerns about LGPL license of `GMP` library used by stock GHC. See `stack.yaml`, which refers to `integer-simple-snapshot.yaml` containing appropriate adjustments to some packages. If you don't have integer-simple GHC, or don't care about GMP, simply set `resolver` field in `stack.yaml` to whatever snapshot.
+FLAW uses [stack](https://haskellstack.org/) for building. Note the assumption is that the project is to be built with `integer-simple` GHC, to be more commercial-friendly especially on Windows due to concerns about LGPL license of `GMP` library used by stock GHC. See `stack.yaml`, which refers to `integer-simple-snapshot.yaml` containing appropriate adjustments to some packages. If you don't have integer-simple GHC, or don't care about GMP, simply set `resolver` field in `stack.yaml` to desired snapshot directly.
 
 ## Binaries
 
