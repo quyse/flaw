@@ -24,6 +24,7 @@ import Data.Int
 import Data.Word
 import GHC.Generics(Generic)
 import Language.Haskell.TH
+import Language.Haskell.TH.Lib
 
 maxVecDimension :: Int
 maxVecDimension = 4
@@ -76,8 +77,11 @@ mathTypeVectorizedDecls mathTypeName mathTypePrefix = do
 			components <- forM (take dim vecComponents) $ newName . return
 			return
 				[ dataInstD (sequence []) dataName [elemType] Nothing [normalC conName (replicate dim $ return (Bang SourceUnpack SourceStrict, ConT mathTypeName))] (sequence [ [t| Generic |] ])
-				, funD (mkName $ "vec" ++ dimStr) [clause (map varP components) (normalB $ foldl appE (conE conName) $ map varE components) []]
-				, funD (mkName $ "unvec" ++ dimStr) [clause [conP conName $ map varP components] (normalB $ tupE $ map varE components) []]
+				, funD (mkName $ "vec" ++ dimStr) [clause (map (bangP . varP) components) (normalB $ foldl appE (conE conName) $ map varE components) []]
+				, funD (mkName $ "unvec" ++ dimStr) [clause [conP conName $ map varP components] (normalB $ case components of
+					[singleComponent] -> varE singleComponent
+					_ -> unboxedTupE $ map varE components
+					) []]
 				]
 
 		-- matrix things
@@ -88,8 +92,8 @@ mathTypeVectorizedDecls mathTypeName mathTypePrefix = do
 			components <- forM [(i, j) | i <- [1..dimN], j <- [1..dimM]] $ \(i, j) -> newName ['m', intToDigit i, intToDigit j]
 			return
 				[ dataInstD (sequence []) dataName [elemType] Nothing [normalC conName (replicate (dimN * dimM) $ return (Bang SourceUnpack SourceStrict, ConT mathTypeName))] (sequence [ [t| Generic |] ])
-				, funD (mkName $ "mat" ++ dimStr) [clause (map varP components) (normalB $ foldl appE (conE conName) $ map varE components) []]
-				, funD (mkName $ "unmat" ++ dimStr) [clause [conP conName $ map varP components] (normalB $ tupE $ map varE components) []]
+				, funD (mkName $ "mat" ++ dimStr) [clause (map (bangP . varP) components) (normalB $ foldl appE (conE conName) $ map varE components) []]
+				, funD (mkName $ "unmat" ++ dimStr) [clause [conP conName $ map varP components] (normalB $ unboxedTupE $ map varE components) []]
 				]
 
 		instanceD (sequence []) (appT (conT $ mkName "Vectorized") elemType) =<< addInlines (vecDecs ++ matDecs)

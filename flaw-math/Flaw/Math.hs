@@ -30,7 +30,7 @@ Vector swizzling is available with 'xyz__', etc group of functions.
 There's no SIMD support yet.
 -}
 
-{-# LANGUAGE DeriveGeneric, MultiParamTypeClasses, PatternSynonyms, ScopedTypeVariables, TemplateHaskell, Trustworthy, TypeFamilies, ViewPatterns #-}
+{-# LANGUAGE DeriveGeneric, MultiParamTypeClasses, PatternSynonyms, ScopedTypeVariables, TemplateHaskell, Trustworthy, TypeFamilies, ViewPatterns, UnboxedTuples #-}
 
 module Flaw.Math
 	(
@@ -95,6 +95,7 @@ import Foreign.Ptr
 import Foreign.Storable
 import GHC.Generics(Generic)
 import Language.Haskell.TH
+import Language.Haskell.TH.Lib
 
 import Flaw.Math.Internal
 
@@ -126,10 +127,10 @@ forM vecComponents $ \c -> do
 class Vectorized (a :: *) where
 	data Vec{1234} a :: *
 	vec{n=1234} :: a...{n} -> Vec{n} a
-	unvec{n=1234} :: Vec{n} a -> (a...{n})
+	unvec{n=1234} :: Vec{n} a -> (# a...{n} #)
 	data Mat{1234}x{1234} a :: *
 	mat{n=1234}x{m=1234} :: a...{n*m} -> Mat{n}x{m} a
-	unmat{n=1234}x{m=1234} :: Mat{n}x{m} a -> (a...{n*m})
+	unmat{n=1234}x{m=1234} :: Mat{n}x{m} a -> (# a...{n*m} #)
 -}
 fmap return $ do
 	tvA <- newName "a"
@@ -138,14 +139,14 @@ fmap return $ do
 		let dataName = mkName $ "Vec" ++ dimStr
 		let dataDec = dataFamilyD dataName [PlainTV tvA] (Just StarT)
 		let packFuncDec = sigD (mkName $ "vec" ++ dimStr) $ foldr (\a b -> [t| $a -> $b |]) [t| $(conT dataName) $(varT tvA) |] $ replicate dim $ varT tvA
-		let unpackFuncDec = sigD (mkName $ "unvec" ++ dimStr) [t| $(conT dataName) $(varT tvA) -> $(foldl appT (tupleT dim) $ replicate dim $ varT tvA) |]
+		let unpackFuncDec = sigD (mkName $ "unvec" ++ dimStr) [t| $(conT dataName) $(varT tvA) -> $(foldl appT (unboxedTupleT dim) $ replicate dim $ varT tvA) |]
 		return [dataDec, packFuncDec, unpackFuncDec]
 	matDecs <- fmap concat $ forM matDimensions $ \(dimN, dimM) -> do
 		let dimStr = [intToDigit dimN, 'x', intToDigit dimM]
 		let dataName = mkName $ "Mat" ++ dimStr
 		let dataDec = dataFamilyD dataName [PlainTV tvA] (Just StarT)
 		let packFuncDec = sigD (mkName $ "mat" ++ dimStr) $ foldr (\a b -> [t| $a -> $b |]) (appT (conT dataName) (varT tvA)) $ replicate (dimN * dimM) $ varT tvA
-		let unpackFuncDec = sigD (mkName $ "unmat" ++ dimStr) [t| $(conT dataName) $(varT tvA) -> $(foldl appT (tupleT (dimN * dimM)) $ replicate (dimN * dimM) $ varT tvA) |]
+		let unpackFuncDec = sigD (mkName $ "unmat" ++ dimStr) [t| $(conT dataName) $(varT tvA) -> $(foldl appT (unboxedTupleT (dimN * dimM)) $ replicate (dimN * dimM) $ varT tvA) |]
 		return [dataDec, packFuncDec, unpackFuncDec]
 	classD (sequence [ [t| Ord $(varT tvA) |], [t| Show $(varT tvA) |] ]) (mkName "Vectorized") [KindedTV tvA StarT] [] $ vecDecs ++ matDecs
 
@@ -159,22 +160,22 @@ class VectorizedFunctor (f :: * -> *) where
 pattern Vec1 :: Vectorized a => a -> Vec1 a
 pattern Vec1 x <- (unvec1 -> x) where Vec1 x = vec1 x
 pattern Vec2 :: Vectorized a => a -> a -> Vec2 a
-pattern Vec2 x y <- (unvec2 -> (x, y)) where Vec2 x y = vec2 x y
+pattern Vec2 x y <- (unvec2 -> (# x, y #) ) where Vec2 x y = vec2 x y
 pattern Vec3 :: Vectorized a => a -> a -> a -> Vec3 a
-pattern Vec3 x y z <- (unvec3 -> (x, y, z)) where Vec3 x y z = vec3 x y z
+pattern Vec3 x y z <- (unvec3 -> (# x, y, z #) ) where Vec3 x y z = vec3 x y z
 pattern Vec4 :: Vectorized a => a -> a -> a -> a -> Vec4 a
-pattern Vec4 x y z w <- (unvec4 -> (x, y, z, w)) where Vec4 x y z w = vec4 x y z w
+pattern Vec4 x y z w <- (unvec4 -> (# x, y, z, w #) ) where Vec4 x y z w = vec4 x y z w
 pattern Mat3x3 :: Vectorized a => a -> a -> a -> a -> a -> a -> a -> a -> a -> Mat3x3 a
 pattern Mat3x3 m11 m12 m13 m21 m22 m23 m31 m32 m33
-	<- (unmat3x3 -> (m11, m12, m13, m21, m22, m23, m31, m32, m33)) where
+	<- (unmat3x3 -> (# m11, m12, m13, m21, m22, m23, m31, m32, m33 #) ) where
 	Mat3x3 m11 m12 m13 m21 m22 m23 m31 m32 m33 = mat3x3 m11 m12 m13 m21 m22 m23 m31 m32 m33
 pattern Mat3x4 :: Vectorized a => a -> a -> a -> a -> a -> a -> a -> a -> a -> a -> a -> a -> Mat3x4 a
 pattern Mat3x4 m11 m12 m13 m14 m21 m22 m23 m24 m31 m32 m33 m34
-	<- (unmat3x4 -> (m11, m12, m13, m14, m21, m22, m23, m24, m31, m32, m33, m34)) where
+	<- (unmat3x4 -> (# m11, m12, m13, m14, m21, m22, m23, m24, m31, m32, m33, m34 #) ) where
 	Mat3x4 m11 m12 m13 m14 m21 m22 m23 m24 m31 m32 m33 m34 = mat3x4 m11 m12 m13 m14 m21 m22 m23 m24 m31 m32 m33 m34
 pattern Mat4x4 :: Vectorized a => a -> a -> a -> a -> a -> a -> a -> a -> a -> a -> a -> a -> a -> a -> a -> a -> Mat4x4 a
 pattern Mat4x4 m11 m12 m13 m14 m21 m22 m23 m24 m31 m32 m33 m34 m41 m42 m43 m44
-	<- (unmat4x4 -> (m11, m12, m13, m14, m21, m22, m23, m24, m31, m32, m33, m34, m41, m42, m43, m44)) where
+	<- (unmat4x4 -> (# m11, m12, m13, m14, m21, m22, m23, m24, m31, m32, m33, m34, m41, m42, m43, m44 #) ) where
 	Mat4x4 m11 m12 m13 m14 m21 m22 m23 m24 m31 m32 m33 m34 m41 m42 m43 m44 = mat4x4 m11 m12 m13 m14 m21 m22 m23 m24 m31 m32 m33 m34 m41 m42 m43 m44
 
 -- | Class for dot operation.
