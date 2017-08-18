@@ -35,6 +35,7 @@ packages:
 - flaw-lua
 - flaw-lua-refimpl
 - flaw-math
+- flaw-math-determ
 - flaw-network
 - flaw-oil
 - flaw-oil-client

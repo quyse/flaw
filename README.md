@@ -89,6 +89,7 @@ Here are all packages in A-Z order. Checkmark against a platform means that the 
 | `flaw-lua` | Experimental Lua-to-Haskell translator | ✔ | ✔ | ✔ |   |
 | `flaw-lua-refimpl` | Lua reference implementation from lua.org | ✔ | ✔ | ✔ |   |
 | `flaw-math` | Math library | ✔ | ✔ | ✔ | ✔ |
+| `flaw-math-determ` | Deterministic math library | ✔ | ✔ | ✔ |   |
 | `flaw-network` | Some network socket implementations (WIP) | ✔ | ✔ | ✔ | ✔ |
 | `flaw-oil` | Reimplementation of [Oil protocol](https://github.com/quyse/oil) | ✔ | ✔ | ✔ |   |
 | `flaw-oil-client` | Simple command-line client for Oil protocol | ✔ | ✔ | ✔ |   |
