@@ -58,3 +58,6 @@ packages:
 # recommended ghc-options for all packages (to put in global config.yaml):
 # ghc-options:
 #   "*": -O3 -threaded -with-rtsopts=-N -Wall -fno-warn-unsupported-calling-conventions -fno-warn-tabs
+
+ghc-options:
+  "$locals": -threaded -with-rtsopts=-N -Wall -fno-warn-unsupported-calling-conventions -Wno-tabs
