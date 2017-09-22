@@ -1,5 +1,4 @@
 resolver: lts-9.5
-name: integer-simple-snapshot
 
 packages:
 - text-1.2.2.2

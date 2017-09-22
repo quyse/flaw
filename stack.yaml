@@ -1,4 +1,6 @@
-resolver: integer-simple-snapshot.yaml
+resolver:
+  name: integer-simple-snapshot
+  location: integer-simple-snapshot.yaml
 
 packages:
 - flaw-al
@@ -60,4 +62,4 @@ packages:
 #   "*": -O3 -threaded -with-rtsopts=-N -Wall -fno-warn-unsupported-calling-conventions -fno-warn-tabs
 
 ghc-options:
-  "$locals": -threaded -with-rtsopts=-N -Wall -fno-warn-unsupported-calling-conventions -Wno-tabs
+  "*": -threaded -with-rtsopts=-N -Wall -fno-warn-unsupported-calling-conventions -Wno-tabs
