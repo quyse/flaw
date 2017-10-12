@@ -9,7 +9,7 @@ License: MIT
 module Flaw.Itch.WebApi
 	( ItchWebApi()
 	, newItchWebApi
-	, itchWebApiJwtMe
+	, itchWebApiMe
 	, itchWebApiDownloadKeys
 	, ItchUserId(..)
 	, ItchUser(..)
@@ -59,15 +59,15 @@ itchWebApiRequest ItchWebApi
 		}) httpManager
 	return value
 
-itchWebApiJwtMe :: ItchWebApi -> T.Text -> IO ItchUser
-itchWebApiJwtMe ItchWebApi
+itchWebApiMe :: ItchWebApi -> T.Text -> Bool -> IO ItchUser
+itchWebApiMe ItchWebApi
 	{ itchWebApiHttpManager = httpManager
 	, itchWebApiHttpRequest = httpRequest
-	} token = do
-	Just ItchJwtResponse
-		{ itchJwtResponse_user = user
+	} token isKey = do
+	Just ItchMeResponse
+		{ itchMeResponse_user = user
 		} <- A.decode . H.responseBody <$> H.httpLbs httpRequest
-		{ H.path = "/api/1/jwt/me"
+		{ H.path = "/api/1/" <> (if isKey then "key" else "jwt") <> "/me"
 		, H.requestHeaders = ("Authorization", T.encodeUtf8 token) : H.requestHeaders httpRequest
 		} httpManager
 	return user
@@ -93,12 +93,12 @@ instance A.FromJSON ItchUser where
 		{ A.fieldLabelModifier = drop 9
 		}
 
-data ItchJwtResponse = ItchJwtResponse
-	{ itchJwtResponse_user :: !ItchUser
+data ItchMeResponse = ItchMeResponse
+	{ itchMeResponse_user :: !ItchUser
 	} deriving (Generic, Show)
-instance A.FromJSON ItchJwtResponse where
+instance A.FromJSON ItchMeResponse where
 	parseJSON = A.genericParseJSON A.defaultOptions
-		{ A.fieldLabelModifier = drop 16
+		{ A.fieldLabelModifier = drop 15
 		}
 
 newtype ItchGameId = ItchGameId Word64 deriving (Eq, Ord, Hashable, Generic, Show, A.FromJSON)
