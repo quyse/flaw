@@ -21,7 +21,7 @@ library
   exposed-modules:
     Flaw.Social
     Flaw.Social.Fakebook
-    Flaw.Social.VK
+    Flaw.Social.Vkontakte
   build-depends:
     base
     , bytestring
