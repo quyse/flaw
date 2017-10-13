@@ -15,15 +15,14 @@ module Flaw.Social
 #endif
 	) where
 
-import qualified Data.ByteString as B
 import qualified Data.Serialize as S
+import qualified Data.Text as T
 
 #if defined(ghcjs_HOST_OS)
 
 #else
 
 import Control.Monad.IO.Class
-import qualified Data.Text as T
 
 #endif
 
@@ -34,7 +33,7 @@ class (S.Serialize (SocialUserId s), S.Serialize (SocialUserToken s)) => Social 
 	-- | Token to prove client authentication to server.
 	data SocialUserToken s :: *
 	-- | Get universal user id.
-	socialUniversalUserId :: SocialUserId s -> B.ByteString
+	socialUniversalUserId :: SocialUserId s -> T.Text
 
 #if defined(ghcjs_HOST_OS)
 

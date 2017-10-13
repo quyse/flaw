@@ -13,10 +13,10 @@ module Flaw.Social.Fakebook
 	, initFakebook
 	) where
 
-import qualified Data.ByteString as B
 import Data.Monoid
 import qualified Data.Serialize as S
-import qualified Data.Text.Encoding as T
+import Data.Serialize.Text()
+import qualified Data.Text as T
 
 import Flaw.Social
 
@@ -32,8 +32,8 @@ import GHCJS.Types
 data Fakebook = Fakebook
 
 instance Social Fakebook where
-	newtype SocialUserId Fakebook = FakebookUserId B.ByteString deriving S.Serialize
-	newtype SocialUserToken Fakebook = FakebookUserToken B.ByteString deriving S.Serialize
+	newtype SocialUserId Fakebook = FakebookUserId T.Text deriving S.Serialize
+	newtype SocialUserToken Fakebook = FakebookUserToken T.Text deriving S.Serialize
 	socialUniversalUserId (FakebookUserId userId) = "fakebook_" <> userId
 
 #if defined(ghcjs_HOST_OS)
@@ -45,7 +45,7 @@ initFakebook = do
 
 instance SocialClient Fakebook where
 	authSocialClient Fakebook = do
-		userId <- T.encodeUtf8 . textFromJSString <$> js_userId
+		userId <- textFromJSString <$> js_userId
 		if B.null userId then return Nothing
 		else return $ Just (FakebookUserId userId, FakebookUserToken userId)
 
@@ -58,7 +58,7 @@ initFakebook :: IO Fakebook
 initFakebook = return Fakebook
 
 instance SocialServer Fakebook where
-	authSocialClientByRequest Fakebook getParam = (FakebookUserId . T.encodeUtf8 <$>) <$> getParam "fakebook_user_id"
+	authSocialClientByRequest Fakebook getParam = (FakebookUserId <$>) <$> getParam "fakebook_user_id"
 	verifySocialUserToken Fakebook (FakebookUserId userId) (FakebookUserToken userToken) = return $ userId == userToken
 
 #endif

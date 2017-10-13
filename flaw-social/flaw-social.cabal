@@ -26,6 +26,7 @@ library
     base
     , bytestring
     , cereal
+    , cereal-text
     , text
   default-language:    Haskell2010
   if impl(ghcjs)
