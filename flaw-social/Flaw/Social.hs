@@ -22,7 +22,8 @@ import qualified Data.Serialize as S
 
 #else
 
-import qualified Wai.Routes as W
+import Control.Monad.IO.Class
+import qualified Data.Text as T
 
 #endif
 
@@ -47,7 +48,7 @@ class Social s => SocialClient s where
 -- | Social network, server-side.
 class Social s => SocialServer s where
 	-- | Authenticate client using data from main GET request to app's page.
-	authSocialClientByRequest :: s -> W.HandlerM sub master (Maybe (SocialUserId s))
+	authSocialClientByRequest :: MonadIO m => s -> (T.Text -> m (Maybe T.Text)) -> m (Maybe (SocialUserId s))
 	-- | Check validity of a client.
 	verifySocialUserToken :: s -> SocialUserId s -> SocialUserToken s -> IO Bool
 

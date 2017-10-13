@@ -27,8 +27,6 @@ import GHCJS.Types
 
 #else
 
-import qualified Wai.Routes as W
-
 #endif
 
 data Fakebook = Fakebook
@@ -60,7 +58,7 @@ initFakebook :: IO Fakebook
 initFakebook = return Fakebook
 
 instance SocialServer Fakebook where
-	authSocialClientByRequest Fakebook = (FakebookUserId . T.encodeUtf8 <$>) <$> W.getParam "fakebook_user_id"
+	authSocialClientByRequest Fakebook getParam = (FakebookUserId . T.encodeUtf8 <$>) <$> getParam "fakebook_user_id"
 	verifySocialUserToken Fakebook (FakebookUserId userId) (FakebookUserToken userToken) = return $ userId == userToken
 
 #endif

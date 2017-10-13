@@ -42,4 +42,3 @@ library
       , cryptonite
       , memory
       , transformers
-      , wai-routes
