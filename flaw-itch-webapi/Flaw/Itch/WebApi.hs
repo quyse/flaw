@@ -59,18 +59,15 @@ itchWebApiRequest ItchWebApi
 		}) httpManager
 	return value
 
-itchWebApiMe :: ItchWebApi -> T.Text -> Bool -> IO ItchUser
+itchWebApiMe :: ItchWebApi -> T.Text -> Bool -> IO (Maybe ItchUser)
 itchWebApiMe ItchWebApi
 	{ itchWebApiHttpManager = httpManager
 	, itchWebApiHttpRequest = httpRequest
-	} token isKey = do
-	Just ItchMeResponse
-		{ itchMeResponse_user = user
-		} <- A.decode . H.responseBody <$> H.httpLbs httpRequest
+	} token isKey =
+	(itchMeResponse_user <$>) . A.decode' . H.responseBody <$> H.httpLbs httpRequest
 		{ H.path = "/api/1/" <> (if isKey then "key" else "jwt") <> "/me"
 		, H.requestHeaders = ("Authorization", T.encodeUtf8 token) : H.requestHeaders httpRequest
 		} httpManager
-	return user
 
 itchWebApiDownloadKeys :: ItchWebApi -> ItchGameId -> ItchUserId -> IO (Maybe ItchDownloadKey)
 itchWebApiDownloadKeys api (ItchGameId gameId) (ItchUserId userId) = do
@@ -81,7 +78,7 @@ itchWebApiDownloadKeys api (ItchGameId gameId) (ItchUserId userId) = do
 		A.Object (HM.lookup "download_key" -> Just (A.fromJSON -> A.Success downloadKey)) -> Just downloadKey
 		_ -> Nothing
 
-newtype ItchUserId = ItchUserId Word64 deriving (Eq, Ord, Hashable, Generic, Show, A.FromJSON)
+newtype ItchUserId = ItchUserId Word64 deriving (Eq, Ord, Hashable, Generic, Show, A.FromJSON, A.ToJSON)
 data ItchUser = ItchUser
 	{ itchUser_id :: !ItchUserId
 	, itchUser_username :: !T.Text
@@ -101,9 +98,9 @@ instance A.FromJSON ItchMeResponse where
 		{ A.fieldLabelModifier = drop 15
 		}
 
-newtype ItchGameId = ItchGameId Word64 deriving (Eq, Ord, Hashable, Generic, Show, A.FromJSON)
+newtype ItchGameId = ItchGameId Word64 deriving (Eq, Ord, Hashable, Generic, Show, A.FromJSON, A.ToJSON)
 
-newtype ItchDownloadKeyId = ItchDownloadKeyId Word64 deriving (Eq, Ord, Hashable, Generic, Show, A.FromJSON)
+newtype ItchDownloadKeyId = ItchDownloadKeyId Word64 deriving (Eq, Ord, Hashable, Generic, Show, A.FromJSON, A.ToJSON)
 data ItchDownloadKey = ItchDownloadKey
 	{ itchDownloadKey_id :: !ItchDownloadKeyId
 	, itchDownloadKey_game_id :: !ItchGameId
