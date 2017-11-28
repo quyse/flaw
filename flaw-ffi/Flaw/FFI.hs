@@ -35,7 +35,7 @@ unwrapEnum (EnumWrapper a) = toEnum a
 -- | Generate enum data type based on names and numbers.
 genEnum :: TypeQ -> String -> [(String, Int)] -> Q [Dec]
 genEnum underlyingType typeName es = do
-	dataDec <- dataD (sequence []) (mkName typeName) [] Nothing [normalC (mkName eName) [] |  (eName, _) <- es] (sequence [ [t| Show |], [t| Eq |], [t| Ord |] ])
+	dataDec <- dataD (sequence []) (mkName typeName) [] Nothing [normalC (mkName eName) [] |  (eName, _) <- es] [derivClause Nothing [ [t| Show |], [t| Eq |], [t| Ord |] ] ]
 	p <- newName "p"
 	enumDec <- instanceD (sequence []) [t| Enum $(conT $ mkName typeName) |]
 		[ funD 'toEnum [clause [varP p] (normalB $ caseE (varE p) $ [match (litP $ integerL $ fromIntegral eNum) (normalB $ conE (mkName eName)) [] | (eName, eNum) <- es] ++ [match wildP (normalB $ conE $ mkName $ fst $ head es) []]) []]
@@ -156,7 +156,7 @@ genStruct typeName fs = genStructWithArrays typeName [(t, n, 0) | (t, n) <- fs]
 genStructWithArrays :: String -> [(TypeQ, String, Int)] -> Q [Dec]
 genStructWithArrays typeName fs = do
 	(fields, endExp) <- processFields typeName fs
-	dataDec <- dataD (return []) (mkName typeName) [] Nothing [recC (mkName typeName) $ map dataFieldDec fields] (sequence [ [t| Show |] ])
+	dataDec <- dataD (return []) (mkName typeName) [] Nothing [recC (mkName typeName) $ map dataFieldDec fields] [derivClause Nothing [ [t| Show |] ] ]
 	fieldsDecs <- concat <$> mapM (sequence . fieldDecs) fields
 	let sizeOfName = mkName $ "struct_sizeOf_" ++ typeName
 	let alignmentName = mkName $ "struct_alignment_" ++ typeName
@@ -188,7 +188,7 @@ genStructWithEndUnion :: String -> [(TypeQ, String, Int)] -> Int -> [(String, Ty
 genStructWithEndUnion typeName hfs selectorIndex ufs = do
 	(headerFields, headerEndExp) <- processFields typeName hfs
 	unionFields <- mapM (\(_ufe, uft, ufn) -> processField typeName uft ufn 0 headerEndExp) ufs
-	dataDec <- dataD (return []) (mkName typeName) [] Nothing [recC (mkName $ typeName ++ "_" ++ fieldNameStr unionField) $ map dataFieldDec $ headerFields ++ [unionField] | unionField <- unionFields] (sequence [ [t| Show |] ])
+	dataDec <- dataD (return []) (mkName typeName) [] Nothing [recC (mkName $ typeName ++ "_" ++ fieldNameStr unionField) $ map dataFieldDec $ headerFields ++ [unionField] | unionField <- unionFields] [derivClause Nothing [ [t| Show |] ] ]
 	headerFieldsDecs <- concat <$> mapM (sequence . fieldDecs) headerFields
 	unionFieldsDecs <- concat <$> mapM (sequence . fieldDecs) unionFields
 	let sizeOfName = mkName $ "struct_sizeOf_" ++ typeName

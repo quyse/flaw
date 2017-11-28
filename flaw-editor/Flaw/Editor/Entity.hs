@@ -295,7 +295,7 @@ class Typeable a => Entity (a :: *) where
 		-> B.ByteString -- ^ Key suffix of changed record.
 		-> B.ByteString -- ^ New value of changed record.
 		-> Maybe (a, EntityChange a)
-	default processEntityChange :: (G.Generic a, GenericEntityDatatype (G.Rep a)) => a -> B.ByteString -> B.ByteString -> Maybe (a, GenericEntityChange a)
+	default processEntityChange :: (G.Generic a, GenericEntityDatatype (G.Rep a), EntityChange a ~ GenericEntityChange a) => a -> B.ByteString -> B.ByteString -> Maybe (a, EntityChange a)
 	processEntityChange oldEntity keySuffix newValue = do -- Maybe monad
 		(newEntity, change) <- processGenericEntityDatatypeChange (G.from oldEntity) keySuffix newValue
 		return (G.to newEntity, change)

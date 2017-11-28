@@ -53,7 +53,7 @@ class (Entity a, S.Serialize (ProcessableEntityResult a)) => ProcessableEntity a
 	type ProcessableEntityResult a :: *
 	type ProcessableEntityResult a = a
 	processEntity :: a -> ProcessingM (ProcessableEntityResult a)
-	default processEntity :: a -> ProcessingM a
+	default processEntity :: ProcessableEntityResult a ~ a => a -> ProcessingM (ProcessableEntityResult a)
 	processEntity = return
 
 instance EntityInterface ProcessableEntity where

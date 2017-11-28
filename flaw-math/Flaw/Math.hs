@@ -95,7 +95,6 @@ import Foreign.Ptr
 import Foreign.Storable
 import GHC.Generics(Generic)
 import Language.Haskell.TH
-import Language.Haskell.TH.Lib
 
 import Flaw.Math.Internal
 
@@ -139,7 +138,7 @@ fmap return $ do
 		let dataName = mkName $ "Vec" ++ dimStr
 		let dataDec = dataFamilyD dataName [PlainTV tvA] (Just StarT)
 		let packFuncDec = sigD (mkName $ "vec" ++ dimStr) $ foldr (\a b -> [t| $a -> $b |]) [t| $(conT dataName) $(varT tvA) |] $ replicate dim $ varT tvA
-		let unpackFuncDec = sigD (mkName $ "unvec" ++ dimStr) [t| $(conT dataName) $(varT tvA) -> $(foldl appT (unboxedTupleT dim) $ replicate dim $ varT tvA) |]
+		let unpackFuncDec = sigD (mkName $ "unvec" ++ dimStr) [t| $(conT dataName) $(varT tvA) -> $(if dim == 1 then varT tvA else foldl appT (unboxedTupleT dim) $ replicate dim $ varT tvA) |]
 		return [dataDec, packFuncDec, unpackFuncDec]
 	matDecs <- fmap concat $ forM matDimensions $ \(dimN, dimM) -> do
 		let dimStr = [intToDigit dimN, 'x', intToDigit dimM]
@@ -714,7 +713,7 @@ fmap concat $ forM mathQuaternionTypeNamesWithPrefix $ \(mathTypeName, mathTypeP
 
 	-- Quaternionized instance
 	quaternionizedInstance <- instanceD (sequence []) [t| Quaternionized $elemType |] =<< addInlines
-		[ newtypeInstD (sequence []) ''Quat [elemType] Nothing (normalC conName [fmap (\t -> (Bang NoSourceUnpackedness NoSourceStrictness, t)) [t| Vec4 $elemType |]]) (sequence [ [t| Generic |] ])
+		[ newtypeInstD (sequence []) ''Quat [elemType] Nothing (normalC conName [fmap (\t -> (Bang NoSourceUnpackedness NoSourceStrictness, t)) [t| Vec4 $elemType |]]) [derivClause Nothing [ [t| Generic |] ] ]
 		, funD 'quat [clause [varP v] (normalB [| $(conE conName) $(varE v) |]) []]
 		, funD 'unquat [clause [conP conName [varP v]] (normalB $ varE v) []]
 		]

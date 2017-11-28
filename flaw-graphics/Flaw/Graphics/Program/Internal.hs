@@ -247,7 +247,7 @@ forM ['1'..'4'] $ \c -> do
 	let conName = mkName $ "AttributeVec" ++ [c]
 	b <- newName "b"
 	instanceD (sequence [ [t| OfScalarType $(varT a) |], [t| Vectorized $(varT a) |], [t| OfAttributeType $(varT a) |] ]) (appT (conT ''OfAttributeType) $ appT (conT v) $ varT a)
-		[ newtypeInstD (return []) ''AttributeFormat [appT (conT v) $ varT a] Nothing (normalC conName [return (Bang NoSourceUnpackedness NoSourceStrictness, AppT (ConT ''AttributeFormat) $ VarT a)]) (sequence [])
+		[ newtypeInstD (return []) ''AttributeFormat [appT (conT v) $ varT a] Nothing (normalC conName [return (Bang NoSourceUnpackedness NoSourceStrictness, AppT (ConT ''AttributeFormat) $ VarT a)]) []
 		, funD 'attributeFormatToType [clause [conP conName [varP b]] (normalB [| $(conE $ mkName $ "ATVec" ++ [c]) (attributeFormatToType $(varE b)) |]) []]
 		]
 
@@ -258,7 +258,7 @@ forM matDimensions $ \(ci, cj) -> do
 	let conName = mkName $ "AttributeMat" ++ [intToDigit ci, 'x', intToDigit cj]
 	b <- newName "b"
 	instanceD (sequence [ [t| OfScalarType $(varT a) |], [t| Vectorized $(varT a) |], [t| OfAttributeType $(varT a) |] ]) (appT (conT ''OfAttributeType) $ appT (conT v) $ varT a)
-		[ newtypeInstD (return []) ''AttributeFormat [appT (conT v) $ varT a] Nothing (normalC conName [return (Bang NoSourceUnpackedness NoSourceStrictness, AppT (ConT ''AttributeFormat) $ VarT a)]) (sequence [])
+		[ newtypeInstD (return []) ''AttributeFormat [appT (conT v) $ varT a] Nothing (normalC conName [return (Bang NoSourceUnpackedness NoSourceStrictness, AppT (ConT ''AttributeFormat) $ VarT a)]) []
 		, funD 'attributeFormatToType [clause [conP conName [varP b]] (normalB [| $(conE $ mkName $ "ATMat" ++ [intToDigit ci, 'x', intToDigit cj]) (attributeFormatToType $(varE b)) |]) []]
 		]
 
