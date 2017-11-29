@@ -131,7 +131,7 @@ genCOMInterface interfaceNameStr iid parentInterfaceNames ms = do
 				)
 		[] -> return ([| 0 |], [], [], [], [])
 	methods <- processMethods interfaceNameStr beginExp ms
-	dataDec <- dataD (return []) interfaceName [] Nothing [recC interfaceName $ return (thisName, Bang NoSourceUnpackedness NoSourceStrictness, AppT (ConT ''Ptr) $ ConT interfaceName) : parentFields ++ map methodField methods] (sequence [])
+	dataDec <- dataD (return []) interfaceName [] Nothing [recC interfaceName $ return (thisName, Bang NoSourceUnpackedness NoSourceStrictness, AppT (ConT ''Ptr) $ ConT interfaceName) : parentFields ++ map methodField methods] []
 
 	-- instance COMInterface IInterface
 	let mp1 method = do
