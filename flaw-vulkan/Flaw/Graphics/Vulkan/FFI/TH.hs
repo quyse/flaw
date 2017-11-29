@@ -22,7 +22,7 @@ import Flaw.Exception
 -- | Define type synonym for a pointer to anonymous type.
 vkDefineHandle :: String -> Q [Dec]
 vkDefineHandle n = sequence
-	[ dataD (sequence []) (mkName (n ++ "_T")) [] Nothing [] (sequence [])
+	[ dataD (sequence []) (mkName (n ++ "_T")) [] Nothing [] []
 	, tySynD (mkName n) [] [t| Ptr $(conT (mkName (n ++ "_T"))) |]
 	]
 
