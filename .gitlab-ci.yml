@@ -51,8 +51,9 @@ variables:
     flaw-ui-default-style
     flaw-visual
     flaw-vulkan
-    flaw-websocket-server
     flaw-window
+  # temporarily excluded:
+  # flaw-websocket-server - because wai-routes dep is missing in stackage nightly
   PACKAGES_WINDOWS: >-
     flaw-al
     flaw-app
