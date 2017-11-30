@@ -9,6 +9,7 @@ License: MIT
 module Main(main) where
 
 import Control.Monad
+import Data.Maybe
 import qualified Data.Serialize as S
 
 import Flaw.Book
