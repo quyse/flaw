@@ -175,7 +175,7 @@ instance EditableEntity (Vec4 Float) where
 		maybeVecFromList _ = Nothing
 
 editBoxVecEditableLayout :: (BasicEntity v, Eq v, Read a) => ([a] -> Maybe v) -> v -> (EntityChange v -> STM ()) -> EditableLayoutM (v -> EntityChange v -> STM ())
-editBoxVecEditableLayout maybeVecFromList = editBoxEditableLayout entityToText ((maybeVecFromList =<<) . sequence . map readMaybe . words . T.unpack)
+editBoxVecEditableLayout maybeVecFromList = editBoxEditableLayout entityToText ((maybeVecFromList =<<) . mapM readMaybe . words . T.unpack)
 
 instance Entity Bool where
 	type EntityChange Bool = Bool
@@ -343,7 +343,7 @@ instance (Ord a, BasicEntity a) => Entity (S.Set a) where
 		key = deserializeBasicEntity $ B.drop 1 keyBytes
 	applyEntityChange var (value, f) = writeEntityVarRecord var (B.singleton 0 <> serializeBasicEntity value) (if f then B.singleton 1 else B.empty)
 	interfaceEntity = $(interfaceEntityExp [''EditableEntity])
-	entityToText s = editableEntityTypeName s <> T.pack (" {" ++ showsPrec 0 (S.size s) "}")
+	entityToText s = editableEntityTypeName s <> T.pack (" {" ++ shows (S.size s) "}")
 
 instance EntityRegistration S.Set where
 	performEntityRegistration entityManager _ = registerEntityType entityManager setFirstEntityTypeId $ do
@@ -424,7 +424,7 @@ instance (Ord k, BasicEntity k, BasicEntity v) => Entity (M.Map k v) where
 		Just value -> B.singleton 0 <> serializeBasicEntity value
 		Nothing -> B.empty
 	interfaceEntity = $(interfaceEntityExp [''EditableEntity])
-	entityToText m = T.pack ("map{" ++ showsPrec 0 (M.size m) "}")
+	entityToText m = T.pack ("map{" ++ shows (M.size m) "}")
 
 instance EntityRegistration M.Map where
 	performEntityRegistration entityManager _ = registerEntityType entityManager mapFirstEntityTypeId $ do

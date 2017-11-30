@@ -98,7 +98,7 @@ openRepoDb fileName (RepoVersion version) = withSpecialBook $ \bk -> do
 			unless r $ throwIO $ DescribeFirstException "failed to get application_id"
 			currentAppVersion <- sqliteColumn query 0
 			-- if version is not set yet
-			if currentAppVersion == 0 then do
+			if currentAppVersion == 0 then
 				-- set it
 				sqliteExec db $ T.pack $ "PRAGMA application_id = " ++ show version
 			-- else check that version is correct

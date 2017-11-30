@@ -143,7 +143,7 @@ newVulkanDevice VulkanSystem
 			peekArray queueFamiliesCount queueFamiliesPtr
 
 	-- find queue family supporting graphics
-	graphicsQueueIndex <- case filter ((> 0) . (.&. (fromEnum VK_QUEUE_GRAPHICS_BIT)) . fromEnum . f_VkQueueFamilyProperties_queueFlags . fst) $ zip queueFamilies [0..] of
+	graphicsQueueIndex <- case filter ((> 0) . (.&. fromEnum VK_QUEUE_GRAPHICS_BIT) . fromEnum . f_VkQueueFamilyProperties_queueFlags . fst) $ zip queueFamilies [0..] of
 		(VkQueueFamilyProperties {}, i) : _ -> return i
 		[] -> throwIO $ DescribeFirstException "no queue families supporting graphics"
 

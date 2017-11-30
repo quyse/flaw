@@ -38,7 +38,7 @@ data Session = Session
 type SessionM = ReaderT Session IO
 
 session :: T.Text -> SessionM () -> IO ()
-session name m = sessionWithManifest name defaultManifest m
+session name = sessionWithManifest name defaultManifest
 
 sessionWithManifest :: T.Text -> Manifest -> SessionM () -> IO ()
 sessionWithManifest name manifest m = withBook $ \bk -> do

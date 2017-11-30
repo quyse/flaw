@@ -337,7 +337,7 @@ simplifyGeometry iterationsCount vertices indices = runST $ do
 			{ pair_vertex0 = v0
 			, pair_vertex1 = v1
 			} <- VGM.unsafeRead pairHeap i
-		if (i < m) then do
+		if i < m then do
 			mp@Pair
 				{ pair_vertex0 = mv0
 				, pair_vertex1 = mv1
@@ -428,7 +428,7 @@ simplifyGeometry iterationsCount vertices indices = runST $ do
 				i1 <- vertexParent $ fromIntegral $ indices VG.! (i * 3)
 				i2 <- vertexParent $ fromIntegral $ indices VG.! (i * 3 + 1)
 				i3 <- vertexParent $ fromIntegral $ indices VG.! (i * 3 + 2)
-				if (i1 == i2 || i1 == i3 || i2 == i3) then f p (i + 1) else do
+				if i1 == i2 || i1 == i3 || i2 == i3 then f p (i + 1) else do
 					VSM.unsafeWrite newIndices p $ fromIntegral i1
 					VSM.unsafeWrite newIndices (p + 1) $ fromIntegral i2
 					VSM.unsafeWrite newIndices (p + 2) $ fromIntegral i3

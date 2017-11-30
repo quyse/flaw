@@ -4,7 +4,7 @@ Description: General helpers for HLSL/GLSL compilers.
 License: MIT
 -}
 
-{-# LANGUAGE GADTs, OverloadedStrings #-}
+{-# LANGUAGE GADTs #-}
 
 module Flaw.Graphics.Program.SL
 	( ProgramInfo(..)

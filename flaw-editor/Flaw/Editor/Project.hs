@@ -11,7 +11,7 @@ module Flaw.Editor.Project
 	, projectRootEntityPtr
 	) where
 
-import qualified Data.Aeson.Types as Y
+import qualified Data.Aeson as Y
 import qualified Data.Text as T
 import GHC.Generics(Generic)
 

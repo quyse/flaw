@@ -152,8 +152,8 @@ ffmpegRefPacket (FFmpegAVPacket packetFPtr) = FFmpegAVPacket <$>
 
 -- | Get stream index of a packet.
 ffmpegGetPacketStreamIndex :: FFmpegAVPacket -> IO Int
-ffmpegGetPacketStreamIndex (FFmpegAVPacket packetFPtr) = withForeignPtr packetFPtr $ \packetPtr ->
-	fromIntegral <$> flaw_ffmpeg_getPacketStreamIndex packetPtr
+ffmpegGetPacketStreamIndex (FFmpegAVPacket packetFPtr) = withForeignPtr packetFPtr $
+	fmap fromIntegral . flaw_ffmpeg_getPacketStreamIndex
 
 -- | Set stream index of a packet.
 ffmpegSetPacketStreamIndex :: FFmpegAVPacket -> Int -> IO ()

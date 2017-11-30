@@ -204,4 +204,4 @@ shadowBlurerESMInput shadowTransform viewPosition samplerIndex projCoordToLinear
 	shadowCoord <- temp $ xyz__ shadowCoordH / www__ shadowCoordH
 	shadowDepth <- temp $ sample (sampler2Df samplerIndex) (screenToTexture $ xy__ shadowCoord)
 	shadowCoordLinearDepth <- temp $ projCoordToLinearDepth shadowCoordH
-	temp $ max_ 0 $ exp (min_ 0 $ (shadowCoordLinearDepth - shadowDepth) * constf 4) * (cast $ shadowCoordLinearDepth `less_` 0)
+	temp $ max_ 0 $ exp (min_ 0 $ (shadowCoordLinearDepth - shadowDepth) * constf 4) * cast (shadowCoordLinearDepth `less_` 0)

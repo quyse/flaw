@@ -158,8 +158,7 @@ packVector :: (Storable a, VG.Vector v a) => v a -> B.ByteString
 packVector v = unsafePerformIO $ do
 	let len = VG.length v
 	bytesPtr <- mallocArray len
-	VS.unsafeWith (VG.convert v) $ \vecPtr -> do
-		copyArray bytesPtr vecPtr len
+	VS.unsafeWith (VG.convert v) $ \vecPtr -> copyArray bytesPtr vecPtr len
 	B.unsafePackMallocCStringLen (castPtr bytesPtr, len * sizeOf (VG.head v))
 
 -- | Unpack storable vector from bytestring.

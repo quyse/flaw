@@ -102,7 +102,7 @@ tryFewTimes io = do
 
 	let trying i = do
 		timeBefore <- getCurrentTime
-		catch io $ \(SomeException e) -> do
+		catch io $ \(SomeException e) ->
 			if i < triesCount then do
 				throttle timeBefore
 				trying $ i + 1

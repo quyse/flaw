@@ -16,7 +16,6 @@ module Flaw.GameJolt.WebApi
 
 import qualified Crypto.Hash as C
 import qualified Data.Aeson as A
-import qualified Data.Aeson.Types as A
 import qualified Data.ByteArray.Encoding as BA
 import qualified Data.ByteString as B
 import qualified Data.HashMap.Strict as HM

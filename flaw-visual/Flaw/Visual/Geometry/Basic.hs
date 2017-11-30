@@ -104,7 +104,7 @@ openCylinderVertices
 openCylinderVertices f meridiansCount parallelsCount = patchTopology vertices parallelsCount (meridiansCount + 1) where
 	meridianCoef = pi * 2 / fromIntegral meridiansCount
 	parallelCoef = 1 / fromIntegral (parallelsCount - 1)
-	vertices = VG.fromList $ map (uncurry f) $
+	vertices = VG.fromList $ map (uncurry f)
 		[ ( fromIntegral i * meridianCoef
 			, fromIntegral j * parallelCoef
 			)

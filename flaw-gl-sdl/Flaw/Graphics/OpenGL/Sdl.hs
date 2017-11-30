@@ -85,8 +85,8 @@ type OpenGLSdlDevice = GlDevice
 type OpenGLSdlContext = GlContext
 
 -- | OpenGL presenter.
-data OpenGLSdlPresenter = OpenGLSdlPresenter
-	{ openglPresenterWindow :: !SdlWindow
+newtype OpenGLSdlPresenter = OpenGLSdlPresenter
+	{ openglPresenterWindow :: SdlWindow
 	}
 
 instance Presenter OpenGLSdlPresenter OpenGLSdlSystem GlContext GlContext where

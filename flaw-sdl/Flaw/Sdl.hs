@@ -39,7 +39,7 @@ deinitSdl = do
 		SDL.quitSubSystem flags
 		SDL.quit
 		putMVar flagsVar (0, 0)
-	else do
+	else
 		putMVar flagsVar (flags, initCount - 1)
 
 initSdlSubsystem :: SDL.InitFlag -> IO ((), IO ())

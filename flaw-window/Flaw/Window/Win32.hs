@@ -41,17 +41,17 @@ import Flaw.Exception
 import Flaw.Window
 import Flaw.FFI.Win32
 
-data Win32WindowSystem = Win32WindowSystem
+newtype Win32WindowSystem = Win32WindowSystem
 	{ wsHandle :: Ptr () -- ^ Opaque handle for C side.
 	}
 
 data Win32Window = Win32Window
-	{ wWindowSystem :: Win32WindowSystem
-	, wHandle :: HWND
-	, wCallback :: FunPtr WindowCallback
-	, wUserCallbacksRef :: IORef [WindowCallback]
-	, wMessagesChan :: TChan (Word, WPARAM, LPARAM)
-	, wEventsChan :: TChan WindowEvent
+	{ wWindowSystem :: !Win32WindowSystem
+	, wHandle :: {-# UNPACK #-} !HWND
+	, wCallback :: !(FunPtr WindowCallback)
+	, wUserCallbacksRef :: {-# UNPACK #-} !(IORef [WindowCallback])
+	, wMessagesChan :: {-# UNPACK #-} !(TChan (Word, WPARAM, LPARAM))
+	, wEventsChan :: {-# UNPACK #-} !(TChan WindowEvent)
 	}
 
 instance Window Win32Window where

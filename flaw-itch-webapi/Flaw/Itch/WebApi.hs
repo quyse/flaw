@@ -19,7 +19,6 @@ module Flaw.Itch.WebApi
 	) where
 
 import qualified Data.Aeson as A
-import qualified Data.Aeson.Types as A
 import qualified Data.ByteString as B
 import Data.Hashable
 import qualified Data.HashMap.Strict as HM

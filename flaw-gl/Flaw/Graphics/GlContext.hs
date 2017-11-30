@@ -4,7 +4,7 @@ Description: OpenGL/WebGL context.
 License: MIT
 -}
 
-{-# LANGUAGE CPP, FlexibleInstances, MultiParamTypeClasses, PatternSynonyms, RankNTypes, TypeFamilies #-}
+{-# LANGUAGE CPP, FlexibleInstances, LambdaCase, MultiParamTypeClasses, PatternSynonyms, RankNTypes, TypeFamilies #-}
 
 module Flaw.Graphics.GlContext
 	( GlDevice
@@ -698,7 +698,7 @@ instance Device GlContext where
 				glCheckErrors0 "bind attribute location"
 
 			-- bind fragment targets
-			forM_ fragmentTargets $ \fragmentTarget -> case fragmentTarget of
+			forM_ fragmentTargets $ \case
 				GlslFragmentTarget
 					{ glslFragmentTargetName = targetName
 					, glslFragmentTargetIndex = targetIndex
@@ -1551,7 +1551,7 @@ glUpdateContext context@GlContext
 			writeIORef actualDepthWriteRef desiredDepthWrite
 
 	-- blend state
-	refSetup_ actualBlendStateRef desiredBlendStateRef $ \blendStateId -> case blendStateId of
+	refSetup_ actualBlendStateRef desiredBlendStateRef $ \case
 		GlBlendStateId BlendStateInfo
 			{ blendSourceColor = sourceColor
 			, blendDestColor = destColor

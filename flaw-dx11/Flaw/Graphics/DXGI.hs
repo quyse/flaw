@@ -35,7 +35,7 @@ import Flaw.Graphics.DXGI.FFI
 import Flaw.Graphics.Texture
 
 -- | DXGI graphics system.
-data DXGISystem = DXGISystem
+newtype DXGISystem = DXGISystem
 	{ dxgiSystemFactory :: IDXGIFactory
 	}
 

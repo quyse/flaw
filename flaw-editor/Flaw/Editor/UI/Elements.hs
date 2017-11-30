@@ -4,7 +4,7 @@ Description: UI elements specific to editor
 License: MIT
 -}
 
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase, OverloadedStrings #-}
 
 module Flaw.Editor.UI.Elements
 	( FileElement(..)
@@ -60,7 +60,7 @@ newFileElement service@FileDialogService
 		runFileDialog service FileDialogConfig
 			{ fileDialogConfigTitle = "choose file"
 			, fileDialogConfigInitialPath = if T.null initialPath then Nothing else Just initialPath
-			} $ \maybeFileName -> case maybeFileName of
+			} $ \case
 			Just fileName -> do
 				setText editBox fileName
 				join $ readTVar actionHandlerVar

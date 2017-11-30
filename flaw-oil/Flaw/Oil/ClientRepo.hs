@@ -160,7 +160,7 @@ type ItemId = Int64
 getManifestValue :: ClientRepo -> CInt -> Int64 -> IO Int64
 getManifestValue ClientRepo
 	{ clientRepoStmtManifestGet = stmtManifestGet
-	} key defaultValue = do
+	} key defaultValue =
 	sqliteQuery stmtManifestGet $ \query -> do
 		sqliteBind query 1 key
 		r <- sqliteStep query
@@ -170,7 +170,7 @@ getManifestValue ClientRepo
 setManifestValue :: ClientRepo -> CInt -> Int64 -> IO ()
 setManifestValue ClientRepo
 	{ clientRepoStmtManifestSet = stmtManifestSet
-	} key value = do
+	} key value =
 	sqliteQuery stmtManifestSet $ \query -> do
 		sqliteBind query 1 key
 		sqliteBind query 2 value
@@ -471,7 +471,7 @@ pullClientRepo repo@ClientRepo
 		when (postponedItemId > 0) $ changeKeyItemRevision repo postponedItemId ItemRevClient
 
 	-- add chunk if something has been committed
-	when (prePushRevision < postPushRevision) $ do
+	when (prePushRevision < postPushRevision) $
 		sqliteQuery stmtAddChunk $ \query -> do
 			sqliteBind query 1 prePushRevision
 			sqliteBind query 2 postPushRevision

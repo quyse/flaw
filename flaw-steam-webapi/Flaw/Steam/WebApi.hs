@@ -15,7 +15,6 @@ module Flaw.Steam.WebApi
 	) where
 
 import qualified Data.Aeson as A
-import qualified Data.Aeson.Types as A
 import qualified Data.ByteArray.Encoding as BA
 import qualified Data.ByteString as B
 import qualified Data.HashMap.Strict as HM

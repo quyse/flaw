@@ -4,6 +4,8 @@ Description: Flaw Oil client.
 License: MIT
 -}
 
+{-# LANGUAGE LambdaCase #-}
+
 module Main
 	( main
 	) where
@@ -177,7 +179,7 @@ run Options
 	, optionsCommands = commands
 	} = withBook $ \bk -> do
 	clientRepo <- book bk $ openClientRepo $ T.pack localRepoFileName
-	forM_ commands $ \command -> case command of
+	forM_ commands $ \case
 
 		OptionSyncCommand
 			{ optionSyncCommandRemoteRepo = remoteRepoUrl

@@ -21,8 +21,8 @@ import Flaw.Graphics.Program
 import Flaw.Math
 import Flaw.Visual.Geometry.Vertex
 
-data ScreenQuadRenderer d = ScreenQuadRenderer
-	{ screenQuadRendererVertexBuffer :: !(VertexBufferId d)
+newtype ScreenQuadRenderer d = ScreenQuadRenderer
+	{ screenQuadRendererVertexBuffer :: VertexBufferId d
 	}
 
 newScreenQuadRenderer :: Device d => d -> IO (ScreenQuadRenderer d, IO ())

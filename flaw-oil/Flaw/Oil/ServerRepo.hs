@@ -77,7 +77,7 @@ openServerRepo fileName = describeException "failed to open oil server repo" $ w
 serverRepoMaxRevision :: ServerRepo -> IO Int64
 serverRepoMaxRevision ServerRepo
 	{ serverRepoStmtGetMaxRevision = stmtGetMaxRevision
-	} = do
+	} =
 	sqliteQuery stmtGetMaxRevision $ \query -> do
 		r <- sqliteStep query
 		unless r $ throwIO $ DescribeFirstException "failed to get server repo max revision"

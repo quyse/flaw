@@ -117,7 +117,7 @@ generateMips mipsRequested PackedTexture
 		_ -> error $ "unsupported texture format for mipmap generation: " ++ show (pixelComponents, pixelValueType, pixelSize)
 
 	-- bytes
-	newBytes = BA.allocAndFreeze (newImageSize * ncount) $ \newBytesPtr -> B.unsafeUseAsCString bytes $ \bytesPtr -> do
+	newBytes = BA.allocAndFreeze (newImageSize * ncount) $ \newBytesPtr -> B.unsafeUseAsCString bytes $ \bytesPtr ->
 		-- loop for textures in the array
 		forM_ [0..(ncount - 1)] $ \c -> do
 			let imageSourcePtr = bytesPtr `plusPtr` (c * imageSize)

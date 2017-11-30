@@ -4,7 +4,7 @@ Description: Internals of graphics implementation for DirectX 11.
 License: MIT
 -}
 
-{-# LANGUAGE MultiParamTypeClasses, TypeFamilies #-}
+{-# LANGUAGE LambdaCase, MultiParamTypeClasses, TypeFamilies #-}
 
 module Flaw.Graphics.DirectX11
 	( Dx11Device(..)
@@ -128,8 +128,7 @@ instance Device Dx11Device where
 		{ dx11DeviceInterface = deviceInterface
 		} = describeException "failed to create DirectX11 deferred context" $ withSpecialBook $ \bk -> do
 		contextInterface <- book bk $ allocateCOMObject $ createCOMObjectViaPtr $ m_ID3D11Device_CreateDeferredContext deviceInterface 0
-		context <- book bk $ dx11CreateContextFromInterface device contextInterface
-		return context
+		book bk $ dx11CreateContextFromInterface device contextInterface
 
 	createStaticTexture device@Dx11Device
 		{ dx11DeviceInterface = deviceInterface
@@ -1587,7 +1586,7 @@ dx11UpdateContext context@Dx11Context
 			m_ID3D11DeviceContext_RSSetViewports contextInterface 1 viewportPtr
 
 	-- scissor
-	refSetup actualScissorRef desiredScissorRef $ \maybeScissor -> case maybeScissor of
+	refSetup actualScissorRef desiredScissorRef $ \case
 		Just (Vec4 left top right bottom) -> do
 			m_ID3D11DeviceContext_RSSetState contextInterface (pokeCOMObject scissorRasterizerStateInterface)
 			with RECT

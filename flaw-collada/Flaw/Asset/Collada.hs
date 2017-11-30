@@ -283,7 +283,7 @@ parseSource element@XML.Element
 	{ XML.elementName = XML.Name
 		{ XML.nameLocalName = name
 		}
-	} = do
+	} =
 	if name == "vertices" then do
 		inputElement <- getSingleChildWithTag "input" element
 		sourceElement <- resolveElement =<< getElementAttr "source" inputElement
@@ -368,7 +368,7 @@ parseTrianglesOrPolyList element = do
 			, citSourceElement = sourceElement
 			}] -> do
 			values <- parseStridables =<< parseSource sourceElement
-			return $ VG.generate count $ \i -> values VG.! (fromIntegral $ flippedIndices VG.! (i * stride + offset))
+			return $ VG.generate count $ \i -> values VG.! fromIntegral (flippedIndices VG.! (i * stride + offset))
 		[] -> return VG.empty
 		_ -> throwError $ "parseTrianglesOrPolyList: wrong semantic: " <> semantic
 
@@ -386,7 +386,7 @@ parseTrianglesOrPolyList element = do
 	return ColladaVerticesData
 		{ cvdCount = count
 		, cvdPositionIndices = positionIndices
-		, cvdPositions = (VG.map (* vecFromScalar unit)) <$> stream "VERTEX"
+		, cvdPositions = VG.map (* vecFromScalar unit) <$> stream "VERTEX"
 		, cvdNormals = stream "NORMAL"
 		, cvdTexcoords = texcoords
 		, cvdWeights = return VG.empty
@@ -629,7 +629,7 @@ instance Vectorized a => Stridable Mat4x4 a where
 
 -- | Convert vector of primitive values to vector of Stridables.
 stridableStream :: (Storable a, Storable (s a), Stridable s a) => VS.Vector a -> VS.Vector (s a)
-stridableStream q = f undefined q where
+stridableStream = f undefined where
 	f :: (Storable a, Storable (s a), Stridable s a) => s a -> VS.Vector a -> VS.Vector (s a)
 	f u v = VS.generate (VG.length v `quot` stride) $ \i -> constructStridable v $ i * stride where
 		stride = stridableStride u
@@ -663,7 +663,7 @@ instance Animatable Float4 where
 
 instance Animatable Float4x4 where
 	animatableStride = stridableStride
-	animatableConstructor v i = constructStridable v i
+	animatableConstructor = constructStridable
 	interpolateAnimatable t a b = a * matFromScalar (1 - t) + b * matFromScalar t
 
 animateSampler :: Animatable a => XML.Element -> ColladaM (Float -> a)
@@ -728,10 +728,10 @@ animateSkeleton (ColladaSkeleton nodes) animation = do
 			VM.write transforms i $ combineTransform parentTransform $ (nodeAnimators V.! i) time
 		return transforms
 
-data ColladaSkin t = ColladaSkin
+newtype ColladaSkin t = ColladaSkin
 	{
 	-- | Bones used in skinning, in order corresponding to bone indices in mesh.
-	  cskinBones :: !(V.Vector (ColladaBone t))
+	  cskinBones :: V.Vector (ColladaBone t)
 	} deriving Show
 
 data ColladaBone t = ColladaBone
@@ -810,7 +810,7 @@ parseSkin (ColladaSkeleton nodes) skinElement = do
 				let o = (j + k) * vertexWeightsStride
 				let jointIndex = v VG.! (o + vertexWeightsJointOffset) :: Word32
 				let weightIndex = v VG.! (o + vertexWeightsWeightOffset)
-				VGM.write weightJointPairs k (vertexWeightsWeights VG.! (fromIntegral weightIndex), vertexWeightsJointBones VG.! (fromIntegral jointIndex))
+				VGM.write weightJointPairs k (vertexWeightsWeights VG.! fromIntegral weightIndex, vertexWeightsJointBones VG.! fromIntegral jointIndex)
 
 			-- sort weight-joint pairs
 			VAI.sort weightJointPairs
@@ -843,8 +843,8 @@ parseSkin (ColladaSkeleton nodes) skinElement = do
 	positionIndices <- cvdPositionIndices verticesData
 
 	return (verticesData
-		{ cvdWeights = return $ VS.generate (VG.length positionIndices) $ \i -> rawWeights VG.! (fromIntegral $ positionIndices VG.! i)
-		, cvdBones = return $ VS.generate (VG.length positionIndices) $ \i -> rawBones VG.! (fromIntegral $ positionIndices VG.! i)
+		{ cvdWeights = return $ VS.generate (VG.length positionIndices) $ \i -> rawWeights VG.! fromIntegral (positionIndices VG.! i)
+		, cvdBones = return $ VS.generate (VG.length positionIndices) $ \i -> rawBones VG.! fromIntegral (positionIndices VG.! i)
 		}, ColladaSkin
 		{ cskinBones = skinBones
 		})

@@ -122,7 +122,7 @@ run Options
 			syncInfoLabelVE <- newVisualElement syncInfoLabel
 			syncInfoLabelVEChild <- addFreeChild mainPanel syncInfoLabelVE
 			placeFreeChild mainPanel syncInfoLabelVEChild $ Vec2 bigGap bigGap
-			setLayoutHandler mainPanel $ \_ -> do
+			setLayoutHandler mainPanel $ \_ ->
 				layoutElement syncInfoLabelVE $ Vec2 labelWidth labelHeight
 			mainFrame <- newFrame mainPanel metrics
 			mainFrameChild <- addFreeChild windowPanel mainFrame

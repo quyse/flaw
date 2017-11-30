@@ -27,7 +27,7 @@ import qualified Data.Vector.Unboxed.Mutable as VUM
 
 cacheWeights :: VU.Vector Float
 cacheWeights = VU.fromList $ 0.75 : 0.75 : 0.75 : [pwr (1 - (i - 3) / 28) | i <- [3..31]] where
-	pwr i = i * sqrt(i)
+	pwr i = i * sqrt i
 
 -- | Optimize usage of vertex post-transform cache by manipulating order of triangles.
 -- "Linear-Speed Vertex Cache Optimisation" by Tom Forsyth
@@ -72,7 +72,7 @@ optimizeGeometryIndicesLocality indices = runST $ do
 
 	let vertexValenceBoost i = do
 		vertexTrianglesCount <- VGM.unsafeRead verticesTrianglesCounts i
-		return $ if vertexTrianglesCount > 0 then 2 / (sqrt $ fromIntegral vertexTrianglesCount) else 0
+		return $ if vertexTrianglesCount > 0 then 2 / sqrt (fromIntegral vertexTrianglesCount) else 0
 
 	-- initial vertex scores
 	verticesScores <- VUM.new verticesCount
