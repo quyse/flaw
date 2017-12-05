@@ -9,6 +9,7 @@ License: MIT
 
 module Flaw.Data.Lmdb
 	( Lmdb()
+	, LmdbTransaction()
 	, lmdbOpen
 	, lmdbRead
 	, lmdbWrite
