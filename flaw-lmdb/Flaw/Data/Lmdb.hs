@@ -63,7 +63,7 @@ lmdbOpen fileName mapSize = withSpecialBook $ \bk -> do
 
 	-- open env
 	lmdbCheckError $ B.useAsCString (T.encodeUtf8 fileName) $ \fileNamePtr ->
-		mdb_env_open envPtr fileNamePtr (MDB_NOSUBDIR .|. MDB_NOTLS) 0o644
+		mdb_env_open envPtr fileNamePtr (MDB_NOSUBDIR .|. MDB_WRITEMAP .|. MDB_NOSYNC .|. MDB_NOTLS) 0o644
 
 	-- open database
 	dbi <- let
@@ -223,6 +223,8 @@ pattern MDB_SUCCESS = 0
 pattern MDB_NOTFOUND = (-30798)
 
 pattern MDB_NOSUBDIR = 0x4000
+pattern MDB_NOSYNC = 0x10000
+pattern MDB_WRITEMAP = 0x80000
 pattern MDB_NOTLS = 0x200000
 
 pattern MDB_RDONLY = 0x20000
