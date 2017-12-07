@@ -6345,19 +6345,10 @@ mdb_cursor_get(MDB_cursor *mc, MDB_val *key, MDB_val *data,
 			rc = MDB_INCOMPATIBLE;
 			break;
 		}
-		if (!(mc->mc_xcursor->mx_cursor.mc_flags & C_INITIALIZED)) {
-			rc = EINVAL;
-			break;
-		}
-		if (mc->mc_xcursor->mx_cursor.mc_flags & C_EOF) {
-			MDB_cursor *mx = &mc->mc_xcursor->mx_cursor;
-			if (mx->mc_ki[mx->mc_top] >= NUMKEYS(mx->mc_pg[mx->mc_top])-1) {
-				rc = MDB_NOTFOUND;
-				break;
-			}
-			mx->mc_flags ^= C_EOF;
-		}
 		rc = MDB_SUCCESS;
+		if (!(mc->mc_xcursor->mx_cursor.mc_flags & C_INITIALIZED) ||
+			(mc->mc_xcursor->mx_cursor.mc_flags & C_EOF))
+			break;
 		goto fetchm;
 	case MDB_NEXT_MULTIPLE:
 		if (data == NULL) {
@@ -8460,14 +8451,17 @@ mdb_cursor_del0(MDB_cursor *mc)
 					}
 					if (mc->mc_db->md_flags & MDB_DUPSORT) {
 						MDB_node *node = NODEPTR(m3->mc_pg[m3->mc_top], m3->mc_ki[m3->mc_top]);
-						/* If this node is a fake page, it needs to be reinited
-						 * because its data has moved. But just reset mc_pg[0]
-						 * if the xcursor is already live.
+						/* If this node has dupdata, it may need to be reinited
+						 * because its data has moved.
+						 * If the xcursor was not initd it must be reinited.
+						 * Else if node points to a subDB, nothing is needed.
+						 * Else (xcursor was initd, not a subDB) needs mc_pg[0] reset.
 						 */
-						if ((node->mn_flags & (F_DUPDATA|F_SUBDATA)) == F_DUPDATA) {
-							if (m3->mc_xcursor->mx_cursor.mc_flags & C_INITIALIZED)
-								m3->mc_xcursor->mx_cursor.mc_pg[0] = NODEDATA(node);
-							else
+						if (node->mn_flags & F_DUPDATA) {
+							if (m3->mc_xcursor->mx_cursor.mc_flags & C_INITIALIZED) {
+								if (!(node->mn_flags & F_SUBDATA))
+									m3->mc_xcursor->mx_cursor.mc_pg[0] = NODEDATA(node);
+							} else
 								mdb_xcursor_init1(m3, node);
 						}
 					}
