@@ -17,6 +17,7 @@ module Flaw.Data.Lmdb
 	, lmdbGet
 	, lmdbPut
 	, lmdbDelete
+	, lmdbFoldPrefixRange
 	) where
 
 import Control.Exception
@@ -175,6 +176,50 @@ lmdbDelete LmdbTransaction
 		pokeElemOff keyBufPtr 1 keyPtr
 		mdb_del txnPtr dbi keyBufPtr nullPtr
 
+-- | Fold key-values pairs prefixed with specified prefix.
+lmdbFoldPrefixRange :: LmdbTransaction -> B.ByteString -> a -> (B.ByteString -> B.ByteString -> a -> IO (Bool, a)) -> IO a
+lmdbFoldPrefixRange LmdbTransaction
+	{ lmdbTransactionTxnPtr = txnPtr
+	, lmdbTransactionDbi = dbi
+	} keyPrefix z0 step = bracket acquireCursor releaseCursor $ \cursorPtr ->
+	allocaArray 2 $ \keyBufPtr -> allocaArray 2 $ \valueBufPtr ->
+	B.unsafeUseAsCStringLen keyPrefix $ \(keyPrefixPtr, keyPrefixLength) -> do
+		-- iteration function
+		let iteration z r = do
+			-- if we got key-value pair
+			if r == MDB_SUCCESS then do
+				-- get key
+				keyLength <- fromIntegral . ptrToIntPtr <$> peek keyBufPtr
+				keyPtr <- peekElemOff keyBufPtr 1
+				key <- B.packCStringLen (keyPtr, keyLength)
+				-- check that key prefix is an actual prefix
+				if B.isPrefixOf keyPrefix key then do
+					-- get value
+					valueLength <- fromIntegral . ptrToIntPtr <$> peek valueBufPtr
+					valuePtr <- peekElemOff valueBufPtr 1
+					value <- B.packCStringLen (valuePtr, valueLength)
+					-- call step function
+					(continue, nz) <- step key value z
+					if continue
+						-- go to next key-value pair and repeat
+						then iteration nz =<< mdb_cursor_get cursorPtr keyBufPtr valueBufPtr MDB_NEXT
+						else return nz
+				else return z
+			-- else we got to an end
+			else if r == MDB_NOTFOUND then return z
+			-- else it's error
+			else lmdbThrowError r
+
+		-- place cursor on first item, and start iterations
+		poke keyBufPtr $ intPtrToPtr $ fromIntegral keyPrefixLength
+		pokeElemOff keyBufPtr 1 keyPrefixPtr
+		iteration z0 =<< mdb_cursor_get cursorPtr keyBufPtr valueBufPtr MDB_SET_RANGE
+	where
+		acquireCursor = alloca $ \cursorPtrPtr -> do
+			lmdbCheckError $ mdb_cursor_open txnPtr dbi cursorPtrPtr
+			peek cursorPtrPtr
+		releaseCursor = mdb_cursor_close
+
 lmdbCheckError :: IO CInt -> IO ()
 lmdbCheckError io = do
 	r <- io
@@ -193,6 +238,7 @@ instance Exception LmdbError
 
 data MDB_env
 data MDB_txn
+data MDB_cursor
 type MDB_dbi = CUInt
 -- MDB_val is actually struct { size_t, void* } but we use pair of pointers.
 type MDB_val = Ptr CChar
@@ -217,6 +263,10 @@ foreign import ccall safe mdb_get :: Ptr MDB_txn -> MDB_dbi -> Ptr MDB_val -> Pt
 foreign import ccall safe mdb_put :: Ptr MDB_txn -> MDB_dbi -> Ptr MDB_val -> Ptr MDB_val -> CUInt -> IO CInt
 foreign import ccall safe mdb_del :: Ptr MDB_txn -> MDB_dbi -> Ptr MDB_val -> Ptr MDB_val -> IO CInt
 
+foreign import ccall safe mdb_cursor_open :: Ptr MDB_txn -> MDB_dbi -> Ptr (Ptr MDB_cursor) -> IO CInt
+foreign import ccall safe mdb_cursor_close :: Ptr MDB_cursor -> IO ()
+foreign import ccall safe mdb_cursor_get :: Ptr MDB_cursor -> Ptr MDB_val -> Ptr MDB_val -> CInt -> IO CInt
+
 -- FFI: values
 
 pattern MDB_SUCCESS = 0
@@ -230,3 +280,6 @@ pattern MDB_NOTLS = 0x200000
 pattern MDB_RDONLY = 0x20000
 
 pattern MDB_CREATE = 0x40000
+
+pattern MDB_NEXT = 8
+pattern MDB_SET_RANGE = 17
