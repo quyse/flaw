@@ -66,7 +66,6 @@ variables:
     flaw-canvas
     flaw-collada
     flaw-dx11
-    flaw-editor
     flaw-ffi
     flaw-font
     flaw-font-fhi
@@ -94,6 +93,8 @@ variables:
     flaw-visual
     flaw-vulkan
     flaw-window
+  # temporarily excluded:
+  # flaw-editor - crashes while building
   PACKAGES_MACOS: >-
     flaw-al
     flaw-app
