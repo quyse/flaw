@@ -1,4 +1,5 @@
 resolver: nightly-2017-11-28
+name: integer-simple-snapshot
 
 packages:
 - text-1.2.2.2

@@ -1,6 +1,4 @@
-resolver:
-  name: integer-simple-snapshot
-  location: integer-simple-snapshot.yaml
+resolver: integer-simple-snapshot.yaml
 
 packages:
 - flaw-al
@@ -57,9 +55,6 @@ packages:
 - flaw-websocket-server
 - flaw-window
 
-# recommended ghc-options for all packages (to put in global config.yaml):
-# ghc-options:
-#   "*": -O3 -threaded -with-rtsopts=-N -Wall -fno-warn-unsupported-calling-conventions -fno-warn-tabs
 
 ghc-options:
-  "*": -threaded -with-rtsopts=-N -Wall -fno-warn-unsupported-calling-conventions -Wno-tabs
+  "$locals": -threaded -with-rtsopts=-N -Wall -fno-warn-unsupported-calling-conventions -Wno-tabs
