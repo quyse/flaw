@@ -45,6 +45,7 @@ packages:
 - flaw-social
 - flaw-sqlite
 - flaw-steam
+- flaw-steam-encryptedticket
 - flaw-steam-webapi
 - flaw-ui
 - flaw-ui-default-style
