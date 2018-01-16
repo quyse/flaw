@@ -31,7 +31,7 @@ import GHC.Generics(Generic)
 import qualified Network.HTTP.Client as H
 
 -- | Itch API key (normal API key or JWT token).
-data ItchWebApiKey = ItchWebApiKey !T.Text {- | Is API key -} !Bool
+data ItchWebApiKey = ItchWebApiKey !T.Text !Bool
 
 itchWebApiRequest :: H.Manager -> ItchWebApiKey -> B.ByteString -> [(B.ByteString, Maybe B.ByteString)] -> IO A.Value
 itchWebApiRequest httpManager (ItchWebApiKey apiKey isKey) path params =
