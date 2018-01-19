@@ -44,13 +44,13 @@ itchWebApiRequest httpManager (ItchWebApiKey apiKey isKey) path params =
 		, H.requestHeaders = [("Authorization", "Bearer " <> T.encodeUtf8 apiKey)]
 		}) httpManager
 
-itchWebApiMe :: H.Manager -> ItchWebApiKey -> IO (Maybe (ItchUser, ItchGameId))
+itchWebApiMe :: H.Manager -> ItchWebApiKey -> IO (Maybe (ItchUser, Maybe ItchGameId))
 itchWebApiMe httpManager apiKey =
 	A.parseMaybe parseResponse <$> itchWebApiRequest httpManager apiKey "/me" []
 	where parseResponse = A.withObject "response" $ \response -> do
 		user <- response A..: "user"
-		gameId <- (A..: "game_id") =<< A.withObject "issuer" return =<< (A..: "issuer") =<< A.withObject "api_key" return =<< response A..: "api_key"
-		return (user, gameId)
+		maybeGameId <- maybe (return Nothing) (A.withObject "issuer" (A..: "game_id") <=< A.withObject "api_key" (A..: "issuer")) =<< response A..:? "api_key"
+		return (user, maybeGameId)
 
 itchWebApiDownloadKeys :: H.Manager -> ItchWebApiKey -> ItchGameId -> ItchUserId -> IO (Maybe ItchDownloadKey)
 itchWebApiDownloadKeys httpManager apiKey (ItchGameId gameId) (ItchUserId userId) = do
@@ -69,32 +69,6 @@ data ItchUser = ItchUser
 instance A.FromJSON ItchUser where
 	parseJSON = A.genericParseJSON A.defaultOptions
 		{ A.fieldLabelModifier = drop 9
-		}
-
-data ItchMeResponse = ItchMeResponse
-	{ itchMeResponse_user :: !ItchUser
-	, itchMeResponse_api_key :: !ItchMeApiKey
-	} deriving (Generic, Show)
-instance A.FromJSON ItchMeResponse where
-	parseJSON = A.genericParseJSON A.defaultOptions
-		{ A.fieldLabelModifier = drop 15
-		}
-
-data ItchMeApiKey = ItchMeApiKey
-	{ itchMeApiKey_type :: !T.Text
-	, itchMeApiKey_issuer :: !ItchMeApiKeyIssuer
-	} deriving (Generic, Show)
-instance A.FromJSON ItchMeApiKey where
-	parseJSON = A.genericParseJSON A.defaultOptions
-		{ A.fieldLabelModifier = drop 13
-		}
-
-data ItchMeApiKeyIssuer = ItchMeApiKeyIssuer
-	{ itchMeApiKeyIssuer_game_id :: {-# UNPACK #-} !ItchGameId
-	} deriving (Generic, Show)
-instance A.FromJSON ItchMeApiKeyIssuer where
-	parseJSON = A.genericParseJSON A.defaultOptions
-		{ A.fieldLabelModifier = drop 19
 		}
 
 newtype ItchGameId = ItchGameId Word64 deriving (Eq, Ord, Hashable, Generic, Show, A.FromJSON, A.ToJSON)
