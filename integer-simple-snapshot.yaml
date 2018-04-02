@@ -1,12 +1,12 @@
-resolver: lts-10.0
+resolver: lts-11.3
 name: integer-simple-snapshot
 
 packages:
-- text-1.2.2.2
-- hashable-1.2.6.1
-- cryptonite-0.24
-- scientific-0.3.5.2
-- integer-logarithms-1.0.2
+- text-1.2.3.0
+- hashable-1.2.7.0
+- cryptonite-0.25
+- scientific-0.3.5.3
+- integer-logarithms-1.0.2.1
 - containers-0.5.10.2
 
 flags:
