@@ -29,5 +29,6 @@ library
     , flaw-gl
     , flaw-math
     , OpenGLRaw
+    , stm
   default-language:    Haskell2010
   extra-libraries:     OSMesa

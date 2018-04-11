@@ -78,6 +78,8 @@ data GlContext = GlContext
 	  glContextInvoke :: !(forall a. IO a -> IO a)
 	-- | Run action in background thread.
 	, glContextBackgroundInvoke :: !(forall a. IO a -> IO a)
+	-- | Run async action in background thread.
+	, glContextAsyncBackgroundInvoke :: !(IO () -> IO ())
 	, glContextCaps :: {-# UNPACK #-} !GlCaps
 	, glContextGlslConfig :: {-# UNPACK #-} !GlslConfig
 	, glContextActualState :: {-# UNPACK #-} !GlContextState
@@ -201,8 +203,8 @@ instance Device GlContext where
 	nullUniformBuffer = GlNullUniformBufferId
 
 	createStaticTexture GlContext
-		{ glContextInvoke = invoke
-		, glContextBackgroundInvoke = backgroundInvoke
+		{ glContextBackgroundInvoke = backgroundInvoke
+		, glContextAsyncBackgroundInvoke = asyncBackgroundInvoke
 		, glContextCaps = GlCaps
 			{ glCapsTextureStorage = useTextureStorage
 			}
@@ -346,11 +348,12 @@ instance Device GlContext where
 
 		glCheckErrors1 "create static texture"
 
-		return (GlTextureId textureName, invoke $ glDeleteTextureName textureName)
+		return (GlTextureId textureName, asyncBackgroundInvoke $ glDeleteTextureName textureName)
 
 #if defined(ghcjs_HOST_OS)
 	createNativeTexture GlContext
 		{ glContextInvoke = invoke
+		, glContextAsyncBackgroundInvoke = asyncBackgroundInvoke
 		} samplerStateInfo bytes = invoke $ describeException "failed to create OpenGL native texture" $ do
 		(glTarget, jsTexture) <- glNativeTexture bytes
 		glSetupTextureSampling glTarget samplerStateInfo
@@ -359,11 +362,12 @@ instance Device GlContext where
 			}
 		-- unbind texture, so we don't hold a reference
 		glBindTexture glTarget glNullTextureName
-		return (GlTextureId jsTexture, invoke $ glDeleteTextureName jsTexture)
+		return (GlTextureId jsTexture, asyncBackgroundInvoke $ glDeleteTextureName jsTexture)
 #endif
 
 	createSamplerState GlContext
 		{ glContextInvoke = invoke
+		, glContextAsyncBackgroundInvoke = asyncBackgroundInvoke
 		} samplerStateInfo@SamplerStateInfo
 		{ samplerWrapU = wrapU
 		, samplerWrapV = wrapV
@@ -413,12 +417,13 @@ instance Device GlContext where
 
 		glCheckErrors1 "create sampler"
 
-		return (GlSamplerStateId samplerName, invoke $ glDeleteSamplerName samplerName)
+		return (GlSamplerStateId samplerName, asyncBackgroundInvoke $ glDeleteSamplerName samplerName)
 
 	createBlendState _context blendStateInfo = return (GlBlendStateId blendStateInfo, return ())
 
 	createReadableRenderTarget GlContext
 		{ glContextInvoke = invoke
+		, glContextAsyncBackgroundInvoke = asyncBackgroundInvoke
 		, glContextCaps = GlCaps
 			{ glCapsTextureStorage = useTextureStorage
 			}
@@ -451,7 +456,7 @@ instance Device GlContext where
 			{ glRenderTargetName = textureName
 			, glRenderTargetWidth = width
 			, glRenderTargetHeight = height
-			}, GlTextureId textureName), invoke $ glDeleteTextureName textureName)
+			}, GlTextureId textureName), asyncBackgroundInvoke $ glDeleteTextureName textureName)
 
 	createDepthStencilTarget context width height = do
 		((depthStencilTarget, _depthStencilTexture), destroy) <- createReadableDepthStencilTarget context width height def
@@ -459,6 +464,7 @@ instance Device GlContext where
 
 	createReadableDepthStencilTarget GlContext
 		{ glContextInvoke = invoke
+		, glContextAsyncBackgroundInvoke = asyncBackgroundInvoke
 		} width height samplerStateInfo = invoke $ describeException "failed to create OpenGL readable depth stencil target" $ do
 
 		textureName <- glAllocTextureName
@@ -483,10 +489,11 @@ instance Device GlContext where
 			, glDepthStencilWidth = width
 			, glDepthStencilHeight = height
 			}, GlTextureId textureName
-			), invoke $ glDeleteTextureName textureName)
+			), asyncBackgroundInvoke $ glDeleteTextureName textureName)
 
 	createFrameBuffer GlContext
 		{ glContextInvoke = invoke
+		, glContextAsyncBackgroundInvoke = asyncBackgroundInvoke
 		, glContextActualState = GlContextState
 			{ glContextStateFrameBuffer = actualFrameBufferRef
 			}
@@ -543,11 +550,11 @@ instance Device GlContext where
 
 		glCheckErrors1 "create framebuffer"
 
-		return (frameBufferId, invoke $ glDeleteFramebufferName framebufferName)
+		return (frameBufferId, asyncBackgroundInvoke $ glDeleteFramebufferName framebufferName)
 
 	createStaticVertexBuffer GlContext
-		{ glContextInvoke = invoke
-		, glContextBackgroundInvoke = backgroundInvoke
+		{ glContextBackgroundInvoke = backgroundInvoke
+		, glContextAsyncBackgroundInvoke = asyncBackgroundInvoke
 		} bytes stride = backgroundInvoke $ describeException "failed to create OpenGL static vertex buffer" $ do
 		bufferName <- glAllocBufferName
 		glBindBuffer GL_ARRAY_BUFFER bufferName
@@ -562,10 +569,11 @@ instance Device GlContext where
 
 		glCheckErrors1 "create static vertex buffer"
 
-		return (GlVertexBufferId bufferName (fromIntegral stride), invoke $ glDeleteBufferName bufferName)
+		return (GlVertexBufferId bufferName (fromIntegral stride), asyncBackgroundInvoke $ glDeleteBufferName bufferName)
 
 	createDynamicVertexBuffer GlContext
 		{ glContextInvoke = invoke
+		, glContextAsyncBackgroundInvoke = asyncBackgroundInvoke
 		} size stride = invoke $ describeException "failed to create OpenGL dynamic vertex buffer" $ do
 		bufferName <- glAllocBufferName
 		glBindBuffer GL_ARRAY_BUFFER bufferName
@@ -578,10 +586,11 @@ instance Device GlContext where
 
 		glCheckErrors1 "create dynamic vertex buffer"
 
-		return (GlVertexBufferId bufferName (fromIntegral stride), invoke $ glDeleteBufferName bufferName)
+		return (GlVertexBufferId bufferName (fromIntegral stride), asyncBackgroundInvoke $ glDeleteBufferName bufferName)
 
 	createStaticIndexBuffer GlContext
 		{ glContextInvoke = invoke
+		, glContextAsyncBackgroundInvoke = asyncBackgroundInvoke
 		, glContextActualState = GlContextState
 			{ glContextStateIndexBuffer = actualIndexBufferRef
 			}
@@ -604,10 +613,11 @@ instance Device GlContext where
 
 		glCheckErrors1 "create static index buffer"
 
-		return (indexBufferId, invoke $ glDeleteBufferName bufferName)
+		return (indexBufferId, asyncBackgroundInvoke $ glDeleteBufferName bufferName)
 
 	createProgram GlContext
 		{ glContextInvoke = invoke
+		, glContextAsyncBackgroundInvoke = asyncBackgroundInvoke
 		, glContextCaps = GlCaps
 			{ glCapsVertexArrayObject = capVertexArrayObject
 			, glCapsVertexAttribBinding = capVertexAttribBinding
@@ -636,7 +646,7 @@ instance Device GlContext where
 		-- create program
 		programName <- book bk $ do
 			p <- glCreateProgram
-			return (p, invoke $ glDeleteProgram p)
+			return (p, asyncBackgroundInvoke $ glDeleteProgram p)
 
 		-- if binary programs are supported, try to use binary cache
 		let cacheKey = S.encode glslProgram
@@ -667,7 +677,7 @@ instance Device GlContext where
 					GlslVertexStage -> GL_VERTEX_SHADER
 					GlslFragmentStage -> GL_FRAGMENT_SHADER
 				glCheckErrors0 "create shader"
-				_ <- book bk $ return (shaderName, invoke $ glDeleteShader shaderName)
+				_ <- book bk $ return (shaderName, asyncBackgroundInvoke $ glDeleteShader shaderName)
 
 				-- set shader source
 				glShaderSource_s shaderName shaderSource
@@ -813,7 +823,7 @@ instance Device GlContext where
 			-- create vertex array
 			vaName <- book bk $ do
 				vaName <- glAllocVertexArrayName
-				return (vaName, invoke $ glDeleteVertexArrayName vaName)
+				return (vaName, asyncBackgroundInvoke $ glDeleteVertexArrayName vaName)
 			-- bind vertex array
 			glBindVertexArray vaName
 			glCheckErrors0 "bind vertex array"
@@ -916,6 +926,7 @@ instance Device GlContext where
 
 	createUniformBuffer GlContext
 		{ glContextInvoke = invoke
+		, glContextAsyncBackgroundInvoke = asyncBackgroundInvoke
 		, glContextCaps = GlCaps
 			{ glCapsUniformBufferObject = useUniformBufferObject
 			}
@@ -929,7 +940,7 @@ instance Device GlContext where
 			glCheckErrors0 "buffer data"
 			glBindBuffer GL_UNIFORM_BUFFER glNullBufferName
 			
-			return (GlUniformBufferId bufferName size, invoke $ glDeleteBufferName bufferName)
+			return (GlUniformBufferId bufferName size, asyncBackgroundInvoke $ glDeleteBufferName bufferName)
 		else do
 			bufferRef <- newIORef B.empty
 			return (GlUniformMemoryBufferId bufferRef, return ())
@@ -1186,17 +1197,19 @@ glNullProgram = GlProgramId
 newGlContext
 	:: (forall a. IO a -> IO a) -- ^ Invoke function, may be used to perform operations in a window thread. Does not need to be re-entrant.
 	-> (forall a. IO a -> IO a) -- ^ Background invoke function, used by heavy functions. Can be the same as invoke function.
+	-> (IO () -> IO ()) -- ^ Async background invoke function, used by destructors.
 	-> GlCaps -- ^ Context capabilities.
 	-> GlslConfig -- ^ GLSL config.
 	-> SomeBinaryCache -- ^ Cache for binary shaders and other stuff.
 	-> IO GlContext
-newGlContext invoke backgroundInvoke caps glslConfig programCache = do
+newGlContext invoke backgroundInvoke asyncBackgroundInvoke caps glslConfig programCache = do
 	actualState <- glCreateContextState
 	desiredState <- glCreateContextState
 	boundAttributesCount <- newIORef 0
 	return GlContext
 		{ glContextInvoke = invoke
 		, glContextBackgroundInvoke = backgroundInvoke
+		, glContextAsyncBackgroundInvoke = asyncBackgroundInvoke
 		, glContextCaps = caps
 		, glContextGlslConfig = glslConfig
 		, glContextActualState = actualState

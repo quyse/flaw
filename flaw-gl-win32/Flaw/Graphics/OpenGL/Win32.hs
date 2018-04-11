@@ -15,6 +15,7 @@ module Flaw.Graphics.OpenGL.Win32
 	, createOpenGLWin32Presenter
 	) where
 
+import Control.Concurrent.STM
 import Control.Exception
 import Control.Monad
 import Data.IORef
@@ -131,7 +132,7 @@ createOpenGLWin32Presenter _deviceId window@Win32Window
 		{ openglPresenterWindow = window
 		, openglPresenterHDC = hdc
 		}
-	context <- createOpenGLContext programCache (invokeWin32WindowSystem ws) (runInFlow backgroundFlow) debug
+	context <- createOpenGLContext programCache (invokeWin32WindowSystem ws) (runInFlow backgroundFlow) (atomically . asyncRunInFlow backgroundFlow) debug
 
 	-- TODO: set swap interval
 

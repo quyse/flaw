@@ -17,6 +17,7 @@ module Flaw.Graphics.OpenGL.Mesa
 	, openGLOsMesaPresenterBuffer
 	) where
 
+import Control.Concurrent.STM
 import Control.Exception
 import Control.Monad
 import qualified Data.ByteString as B
@@ -110,7 +111,7 @@ createOpenGLOsMesaPresenter width height needDepth debug = describeException "fa
 		r <- c_OSMesaMakeCurrent contextPtr bufferPtr GL_UNSIGNED_BYTE (fromIntegral width) (fromIntegral height)
 		when (r == GL_FALSE) $ throwIO $ DescribeFirstException "failed to make context current"
 
-		context <- createOpenGLContext NullBinaryCache (runInFlow flow) (runInFlow flow) debug
+		context <- createOpenGLContext NullBinaryCache (runInFlow flow) (runInFlow flow) (atomically . asyncRunInFlow flow) debug
 
 		return (context, OpenGLOsMesaPresenter
 			{ openglPresenterFlow = flow

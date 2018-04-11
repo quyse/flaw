@@ -15,6 +15,7 @@ module Flaw.Graphics.OpenGL.Sdl
 	, createOpenGLSdlPresenter
 	) where
 
+import Control.Concurrent.STM
 import Control.Monad
 import qualified Data.ByteString.Unsafe as B
 import Data.IORef
@@ -161,7 +162,7 @@ createOpenGLSdlPresenter _deviceId window@SdlWindow
 	let presenter = OpenGLSdlPresenter
 		{ openglPresenterWindow = window
 		}
-	context <- createOpenGLContext programCache (invokeSdlWindowSystem ws) (runInFlow backgroundFlow) debug
+	context <- createOpenGLContext programCache (invokeSdlWindowSystem ws) (runInFlow backgroundFlow) (atomically . asyncRunInFlow backgroundFlow) debug
 
 	-- set swap interval
 	do
