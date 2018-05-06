@@ -1,4 +1,4 @@
-resolver: lts-11.3
+resolver: nightly-2018-05-06
 name: integer-simple-snapshot
 
 packages:
@@ -7,7 +7,6 @@ packages:
 - cryptonite-0.25
 - scientific-0.3.5.3
 - integer-logarithms-1.0.2.1
-- containers-0.5.10.2
 
 flags:
   text:
