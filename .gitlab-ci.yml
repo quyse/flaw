@@ -94,8 +94,7 @@ variables:
     flaw-visual
     flaw-vulkan
     flaw-window
-  # temporarily excluded:
-  # flaw-editor - crashes while building
+    flaw-editor
   PACKAGES_MACOS: >-
     flaw-al
     flaw-app
@@ -180,9 +179,8 @@ windows:
   - "stack --no-terminal build --test --flag flaw-app:vulkan flaw-app"
   - "stack --no-terminal build --test --flag flaw-app:-dx11 flaw-app"
   - "stack --no-terminal build --test --flag flaw-app:-gl flaw-app"
-  # disable butler push because flaw-editor is excluded from build
-  # - "mkdir windows && cp flaw-windows/bin/model-editor.exe windows/"
-  # - "butler push windows quyse/flaw:model-editor-windows"
+  - "mkdir windows && cp flaw-windows/bin/model-editor.exe windows/"
+  - "butler push windows quyse/flaw:model-editor-windows"
   tags:
   - haskellstack
   - windows

@@ -56,6 +56,10 @@ packages:
 - flaw-websocket-server
 - flaw-window
 
+extra-deps:
+- uuid-1.3.13
+
+allow-newer: true
 
 ghc-options:
   "$locals": -threaded -with-rtsopts=-N -Wall -fno-warn-unsupported-calling-conventions -Wno-tabs
