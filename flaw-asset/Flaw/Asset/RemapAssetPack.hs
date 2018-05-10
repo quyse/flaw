@@ -25,7 +25,6 @@ import qualified Data.ByteString as B
 import Data.Hashable
 import qualified Data.HashMap.Strict as HM
 import Data.Maybe
-import Data.Monoid
 import qualified Data.Serialize as S
 import Data.Typeable
 

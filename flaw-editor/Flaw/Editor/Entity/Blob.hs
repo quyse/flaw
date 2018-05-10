@@ -16,7 +16,6 @@ module Flaw.Editor.Entity.Blob
 import Control.Monad.Reader
 import qualified Data.ByteString as B
 import Data.Default
-import Data.Monoid
 import qualified Data.Serialize as S
 import qualified Data.Text as T
 import Data.Serialize.Text()

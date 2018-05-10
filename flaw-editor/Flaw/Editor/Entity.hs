@@ -134,7 +134,6 @@ import qualified Data.ByteString.Short as BS
 import Data.Default
 import Data.IORef
 import qualified Data.Map.Strict as M
-import Data.Monoid
 import qualified Data.Serialize as S
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
@@ -172,7 +171,7 @@ instance S.Serialize EntityId where
 	get = EntityId <$> S.getShortByteString ENTITY_ID_SIZE
 
 -- | Entity type id.
-newtype EntityTypeId = EntityTypeId BS.ShortByteString deriving (Eq, Ord, Monoid, Show)
+newtype EntityTypeId = EntityTypeId BS.ShortByteString deriving (Eq, Ord, Semigroup, Monoid, Show)
 
 -- | Entity type id length in bytes.
 pattern ENTITY_TYPE_ID_SIZE = 20

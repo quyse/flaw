@@ -12,7 +12,6 @@ module Flaw.Asset.FolderAssetPack
 	) where
 
 import qualified Data.ByteString as B
-import Data.Monoid
 import qualified Data.Text as T
 import System.Directory
 

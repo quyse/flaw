@@ -20,7 +20,6 @@ import qualified Data.ByteString.Short as BS
 import Data.Default
 import Data.Int
 import qualified Data.Map.Strict as M
-import Data.Monoid
 import Data.Serialize.Text()
 import qualified Data.Set as S
 import qualified Data.Text as T

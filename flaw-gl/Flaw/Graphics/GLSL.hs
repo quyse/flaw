@@ -20,7 +20,6 @@ module Flaw.Graphics.GLSL
 
 import Data.Bits
 import Data.List
-import Data.Monoid
 import qualified Data.Serialize as S
 import Data.Serialize.Text()
 import qualified Data.Text as T

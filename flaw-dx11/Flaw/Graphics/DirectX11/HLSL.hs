@@ -16,7 +16,6 @@ module Flaw.Graphics.DirectX11.HLSL
 
 import Data.Char
 import Data.List
-import Data.Monoid
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import Data.Text.Lazy.Builder

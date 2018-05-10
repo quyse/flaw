@@ -16,7 +16,6 @@ import qualified Data.ByteArray.Encoding as BA
 import qualified Data.ByteString.Lazy as BL
 import qualified Crypto.Hash as C
 import Data.IORef
-import Data.Monoid
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import Language.Haskell.TH

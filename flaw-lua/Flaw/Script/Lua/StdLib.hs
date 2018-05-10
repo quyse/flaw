@@ -13,7 +13,6 @@ module Flaw.Script.Lua.StdLib
 import Control.Monad
 import Control.Monad.Primitive
 import Data.Maybe
-import Data.Monoid
 import qualified Data.HashTable.ST.Cuckoo as HT
 import Data.Primitive.MutVar
 import qualified Data.Text as T

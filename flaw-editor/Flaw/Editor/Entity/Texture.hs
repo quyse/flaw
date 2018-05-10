@@ -13,7 +13,6 @@ module Flaw.Editor.Entity.Texture
 
 import qualified Data.ByteString as B
 import Data.Default
-import Data.Monoid
 import qualified Data.Serialize as S
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Builder as TLB

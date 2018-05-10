@@ -12,7 +12,6 @@ module Main
 
 import Control.Monad.Reader
 import Data.IORef
-import Data.Monoid
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import System.Exit

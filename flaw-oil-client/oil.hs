@@ -14,7 +14,6 @@ import Control.Exception
 import Control.Monad
 import qualified Data.ByteString as B
 import Data.List
-import Data.Monoid
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Network.HTTP.Client as H

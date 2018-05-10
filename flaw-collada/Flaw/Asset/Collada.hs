@@ -48,7 +48,6 @@ import Data.List
 import Data.Maybe
 import qualified Data.Map.Lazy as ML
 import qualified Data.Map.Strict as MS
-import Data.Monoid
 import qualified Data.Text as T
 import qualified Data.Vector as V
 import qualified Data.Vector.Algorithms.Intro as VAI

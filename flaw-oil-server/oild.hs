@@ -12,7 +12,6 @@ module Main
 
 import Control.Concurrent.STM
 import qualified Data.ByteString.Lazy as BL
-import Data.Monoid
 import qualified Data.Serialize as S
 import qualified Data.Text as T
 import qualified Network.HTTP.Types as H

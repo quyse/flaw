@@ -22,7 +22,6 @@ import qualified Data.Aeson as A
 import qualified Data.Aeson.Types as A
 import qualified Data.ByteString as B
 import Data.Hashable
-import Data.Monoid
 import Data.String
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T

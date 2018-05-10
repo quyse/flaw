@@ -16,7 +16,6 @@ import Control.Exception
 import Control.Monad
 import Control.Monad.State.Strict
 import Data.Default
-import Data.Monoid
 import qualified Data.Text as T
 import qualified Data.Yaml as Y
 import qualified Network.HTTP.Client as H

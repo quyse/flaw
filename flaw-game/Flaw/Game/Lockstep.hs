@@ -17,7 +17,6 @@ module Flaw.Game.Lockstep
 	) where
 
 import Control.Concurrent.STM
-import Data.Monoid
 import Data.Word
 
 -- | Lockstep synchronization.

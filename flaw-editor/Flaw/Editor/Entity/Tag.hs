@@ -20,7 +20,6 @@ module Flaw.Editor.Entity.Tag
 	) where
 
 import qualified Data.ByteString.Short as BS
-import Data.Monoid
 import qualified Data.Text as T
 import Language.Haskell.TH
 

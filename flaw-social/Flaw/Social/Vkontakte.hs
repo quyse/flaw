@@ -19,7 +19,6 @@ module Flaw.Social.Vkontakte
 	) where
 
 import qualified Data.ByteString as B
-import Data.Monoid
 import qualified Data.Serialize as S
 import Data.Serialize.Text()
 import qualified Data.Text as T

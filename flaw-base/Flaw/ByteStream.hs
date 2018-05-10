@@ -17,7 +17,6 @@ module Flaw.ByteStream
 import Control.Concurrent.STM
 import qualified Data.ByteString.Lazy as BL
 import Data.Int
-import Data.Monoid
 
 data ByteStream = ByteStream
 	{ byteStreamBytesVar :: {-# UNPACK #-} !(TVar BL.ByteString)

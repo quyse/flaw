@@ -45,7 +45,6 @@ import Control.Monad.Primitive
 import Data.Bits
 import qualified Data.HashTable.Class as HT(toList)
 import qualified Data.HashTable.ST.Cuckoo as HT
-import Data.Monoid
 import Data.Primitive.MutVar
 import qualified Data.Text as T
 import qualified Data.Text.Lazy.Builder as TL

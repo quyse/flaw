@@ -13,7 +13,6 @@ module Flaw.Social.Fakebook
 	, initFakebook
 	) where
 
-import Data.Monoid
 import qualified Data.Serialize as S
 import Data.Serialize.Text()
 import qualified Data.Text as T

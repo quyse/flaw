@@ -51,7 +51,6 @@ import Control.Monad
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Unsafe as B
 import Data.Int
-import Data.Monoid
 import Data.Ratio
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T

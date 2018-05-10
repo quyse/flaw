@@ -27,7 +27,6 @@ import Control.Exception
 import Control.Monad
 import qualified Data.ByteString as B
 import Data.Int
-import Data.Monoid
 import qualified Data.Text as T
 import Foreign.C.Types
 

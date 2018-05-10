@@ -19,7 +19,6 @@ import qualified Data.Aeson as A
 import qualified Data.ByteArray.Encoding as BA
 import qualified Data.ByteString as B
 import qualified Data.HashMap.Strict as HM
-import Data.Monoid
 import Data.String
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
