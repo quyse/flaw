@@ -57,6 +57,12 @@ instance MonadMask m => MonadMask (StackT m) where
 	mask f = f $ \(StackT h) -> StackT $ \q -> mask $ \restore -> restore $ h q
 	{-# INLINE uninterruptibleMask #-}
 	uninterruptibleMask f = f $ \(StackT h) -> StackT $ \q -> uninterruptibleMask $ \restore -> restore $ h q
+	{-# INLINE generalBracket #-}
+	generalBracket (StackT acquire) release f = StackT $ \q ->
+		q =<< generalBracket
+			(acquire return)
+			(\e exitCase -> let StackT h = release e exitCase in h return)
+			(\e -> let StackT h = f e in h return)
 
 {-# INLINE after #-}
 after :: Monad m => m () -> StackT m ()
