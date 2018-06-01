@@ -1,11 +1,11 @@
-resolver: nightly-2018-05-06
+resolver: nightly-2018-06-01
 name: integer-simple-snapshot
 
 packages:
 - text-1.2.3.0
 - hashable-1.2.7.0
 - cryptonite-0.25
-- scientific-0.3.5.3
+- scientific-0.3.6.2
 - integer-logarithms-1.0.2.1
 
 flags:
