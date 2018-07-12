@@ -47,5 +47,5 @@ test-suite repo-test
     , flaw-oil
     , mtl
     , text
-  ghc-options:         -Wall -Wno-tabs
+  ghc-options:         -Wall -Wno-tabs -threaded
   default-language:    Haskell2010

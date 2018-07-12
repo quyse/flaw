@@ -40,5 +40,5 @@ test-suite lmdb-test
     , cereal
     , flaw-base
     , flaw-lmdb
-  ghc-options:         -Wall -Wno-tabs
+  ghc-options:         -Wall -Wno-tabs -threaded
   default-language:    Haskell2010

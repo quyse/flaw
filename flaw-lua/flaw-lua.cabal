@@ -52,4 +52,4 @@ test-suite flaw-lua-test
     , primitive
     , time
   default-language:    Haskell2010
-  ghc-options:         -Wall -Wno-tabs
+  ghc-options:         -Wall -Wno-tabs -threaded
