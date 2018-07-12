@@ -154,28 +154,30 @@ class VectorizedFunctor (f :: * -> *) where
 	-- | Apply function to elements of functor.
 	vecfmap :: (Vectorized a, Vectorized b) => (a -> b) -> f a -> f b
 
--- Pattern synonyms for vectors and matrices.
--- Support for pattern synonyms in TH is landed in GHC, but not in 8.0 (https://ghc.haskell.org/trac/ghc/ticket/8761), so doing it manually :(
-pattern Vec1 :: Vectorized a => a -> Vec1 a
-pattern Vec1 x <- (unvec1 -> x) where Vec1 x = vec1 x
-pattern Vec2 :: Vectorized a => a -> a -> Vec2 a
-pattern Vec2 x y <- (unvec2 -> (# x, y #) ) where Vec2 x y = vec2 x y
-pattern Vec3 :: Vectorized a => a -> a -> a -> Vec3 a
-pattern Vec3 x y z <- (unvec3 -> (# x, y, z #) ) where Vec3 x y z = vec3 x y z
-pattern Vec4 :: Vectorized a => a -> a -> a -> a -> Vec4 a
-pattern Vec4 x y z w <- (unvec4 -> (# x, y, z, w #) ) where Vec4 x y z w = vec4 x y z w
-pattern Mat3x3 :: Vectorized a => a -> a -> a -> a -> a -> a -> a -> a -> a -> Mat3x3 a
-pattern Mat3x3 m11 m12 m13 m21 m22 m23 m31 m32 m33
-	<- (unmat3x3 -> (# m11, m12, m13, m21, m22, m23, m31, m32, m33 #) ) where
-	Mat3x3 m11 m12 m13 m21 m22 m23 m31 m32 m33 = mat3x3 m11 m12 m13 m21 m22 m23 m31 m32 m33
-pattern Mat3x4 :: Vectorized a => a -> a -> a -> a -> a -> a -> a -> a -> a -> a -> a -> a -> Mat3x4 a
-pattern Mat3x4 m11 m12 m13 m14 m21 m22 m23 m24 m31 m32 m33 m34
-	<- (unmat3x4 -> (# m11, m12, m13, m14, m21, m22, m23, m24, m31, m32, m33, m34 #) ) where
-	Mat3x4 m11 m12 m13 m14 m21 m22 m23 m24 m31 m32 m33 m34 = mat3x4 m11 m12 m13 m14 m21 m22 m23 m24 m31 m32 m33 m34
-pattern Mat4x4 :: Vectorized a => a -> a -> a -> a -> a -> a -> a -> a -> a -> a -> a -> a -> a -> a -> a -> a -> Mat4x4 a
-pattern Mat4x4 m11 m12 m13 m14 m21 m22 m23 m24 m31 m32 m33 m34 m41 m42 m43 m44
-	<- (unmat4x4 -> (# m11, m12, m13, m14, m21, m22, m23, m24, m31, m32, m33, m34, m41, m42, m43, m44 #) ) where
-	Mat4x4 m11 m12 m13 m14 m21 m22 m23 m24 m31 m32 m33 m34 m41 m42 m43 m44 = mat4x4 m11 m12 m13 m14 m21 m22 m23 m24 m31 m32 m33 m34 m41 m42 m43 m44
+-- Pattern synonyms for vectors and matrices, allowing to construct/deconstruct values using generalized names.
+-- vectors
+fmap concat . forM [1..maxVecDimension] $ \dim -> do
+	let v = mkName $ "Vec" <> show dim
+	a <- newName "a"
+	comps <- mapM (newName . pure) $ take dim vecComponents
+	sequence
+		[ patSynSigD v (forallT [PlainTV a] (sequence [(conT ''Vectorized) `appT` (varT a)]) $ foldr (appT . (appT arrowT) . varT) ((conT v) `appT` (varT a)) (replicate dim a))
+		, patSynD v (prefixPatSyn comps)
+			(explBidir [clause (map varP comps) (normalB $ foldl appE (varE (mkName $ "vec" <> show dim)) $ map varE comps) []])
+			(viewP (varE (mkName $ "unvec" <> show dim)) (if dim == 1 then varP (head comps) else unboxedTupP (map varP comps)))
+		]
+-- matrices
+fmap concat . forM matDimensions $ \(dimN, dimM) -> do
+	let dimStr = [intToDigit dimN, 'x', intToDigit dimM]
+	let v = mkName $ "Mat" <> dimStr
+	a <- newName "a"
+	comps <- mapM newName [['m', intToDigit n, intToDigit m] | n <- [1..dimN], m <- [1..dimM]]
+	sequence
+		[ patSynSigD v (forallT [PlainTV a] (sequence [(conT ''Vectorized) `appT` (varT a)]) $ foldr (appT . (appT arrowT) . varT) ((conT v) `appT` (varT a)) (replicate (dimN * dimM) a))
+		, patSynD v (prefixPatSyn comps)
+			(explBidir [clause (map varP comps) (normalB $ foldl appE (varE (mkName $ "mat" <> dimStr)) $ map varE comps) []])
+			(viewP (varE (mkName $ "unmat" <> dimStr)) (unboxedTupP (map varP comps)))
+		]
 
 -- | Class for dot operation.
 class Vec v => Dot v where
