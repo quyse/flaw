@@ -27,6 +27,7 @@ library
     , hint
     , stm
     , text
+  ghc-options:         -Wall -Wno-tabs
   default-language:    Haskell2010
 
 test-suite script-test
@@ -39,4 +40,5 @@ test-suite script-test
     , flaw-math
     , flaw-script
     , text
+  ghc-options:         -Wall -Wno-tabs
   default-language:    Haskell2010

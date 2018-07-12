@@ -24,6 +24,7 @@ library
     , bytestring
     , flaw-base
     , text
+  ghc-options:         -Wall -Wno-tabs
   default-language:    Haskell2010
   c-sources:
     src/lmdb/mdb.c
@@ -39,4 +40,5 @@ test-suite lmdb-test
     , cereal
     , flaw-base
     , flaw-lmdb
+  ghc-options:         -Wall -Wno-tabs
   default-language:    Haskell2010

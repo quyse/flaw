@@ -23,6 +23,7 @@ library
   build-depends:
     base
     , template-haskell
+  ghc-options:         -Wall -Wno-tabs
   default-language:    Haskell2010
   if os(windows) && !impl(ghcjs)
     exposed-modules:
@@ -38,3 +39,4 @@ library
       , uuid
     extra-libraries:
       ole32
+    ghc-options:         -Wno-unsupported-calling-conventions

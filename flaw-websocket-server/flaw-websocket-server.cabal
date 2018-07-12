@@ -30,4 +30,5 @@ library
     , wai-routes
     , wai-websockets
     , websockets
+  ghc-options:         -Wall -Wno-tabs
   default-language:    Haskell2010

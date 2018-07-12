@@ -30,4 +30,5 @@ library
     , template-haskell
     , text
     , wai-app-static
+  ghc-options:         -Wall -Wno-tabs
   default-language:    Haskell2010

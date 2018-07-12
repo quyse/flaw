@@ -32,4 +32,5 @@ executable oild
     , wai
     , wai-extra
     , warp
+  ghc-options:         -Wall -Wno-tabs -threaded
   default-language:    Haskell2010

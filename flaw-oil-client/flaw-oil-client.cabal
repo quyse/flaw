@@ -28,4 +28,5 @@ executable oil
     , http-client
     , optparse-applicative
     , text
+  ghc-options:         -Wall -Wno-tabs -threaded
   default-language:    Haskell2010

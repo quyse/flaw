@@ -25,6 +25,7 @@ library
     , flaw-math
     , flaw-physics
     , vector
+  ghc-options:         -Wall -Wno-tabs
   default-language:    Haskell2010
   c-sources:
     -- integration

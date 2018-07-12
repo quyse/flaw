@@ -28,4 +28,5 @@ library
     , ghcjs-base
     , stm
     , text
+  ghc-options:         -Wall -Wno-tabs
   default-language:    Haskell2010

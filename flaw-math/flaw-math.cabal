@@ -29,4 +29,5 @@ library
     , cereal
     , data-default
     , template-haskell
+  ghc-options:         -Wall -Wno-tabs
   default-language:    Haskell2010

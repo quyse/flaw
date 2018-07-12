@@ -25,6 +25,7 @@ library
     base
     , bytestring
     , ghcjs-base
+  ghc-options:         -Wall -Wno-tabs
   default-language:    Haskell2010
   if impl(ghcjs)
     js-sources:          flaw.js

@@ -30,4 +30,5 @@ library
     , flaw-math
     , mtl
     , vector
+  ghc-options:         -Wall -Wno-tabs
   default-language:    Haskell2010

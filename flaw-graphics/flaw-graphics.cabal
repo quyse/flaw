@@ -36,4 +36,5 @@ library
     , text
     , template-haskell
     , transformers
+  ghc-options:         -Wall -Wno-tabs
   default-language:    Haskell2010

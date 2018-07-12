@@ -25,6 +25,7 @@ library
     base
     , stm
     , text
+  ghc-options:         -Wall -Wno-tabs
   default-language:    Haskell2010
   include-dirs:        include
   if impl(ghcjs)

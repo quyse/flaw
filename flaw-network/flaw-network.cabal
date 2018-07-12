@@ -32,4 +32,5 @@ library
     , hashable
     , stm
     , unordered-containers
+  ghc-options:         -Wall -Wno-tabs
   default-language:    Haskell2010

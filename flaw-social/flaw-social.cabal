@@ -28,6 +28,7 @@ library
     , cereal
     , cereal-text
     , text
+  ghc-options:         -Wall -Wno-tabs
   default-language:    Haskell2010
   if impl(ghcjs)
     build-depends:

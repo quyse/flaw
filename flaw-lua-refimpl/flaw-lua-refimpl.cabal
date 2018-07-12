@@ -21,6 +21,7 @@ library
   exposed-modules:
   other-modules:
   build-depends:
+  ghc-options:         -Wall -Wno-tabs
   default-language:    Haskell2010
   c-sources:
     src/lua-5.3.4/src/lapi.c
