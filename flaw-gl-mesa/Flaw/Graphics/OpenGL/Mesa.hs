@@ -48,7 +48,7 @@ instance System OpenGLOsMesaSystem where
 	data DisplayId OpenGLOsMesaSystem
 	data DisplayModeId OpenGLOsMesaSystem
 	getInstalledDevices _ = return ([], return ())
-	createDisplayMode _ _ _ _ = throwIO $ DescribeFirstException "display modes for OpenGL Mesa OS not implemented"
+	createDisplayMode _ _ _ _ = throwIO $ DescribeFirstException "display modes for OpenGL Mesa OS are not implemented"
 
 type OpenGLOsMesaDevice = GlContext
 type OpenGLOsMesaContext = GlContext
@@ -86,7 +86,12 @@ instance Presenter OpenGLOsMesaPresenter OpenGLOsMesaSystem GlContext GlContext 
 		writeIORef viewportRef $ Vec4 0 0 width height
 
 		-- perform render
-		f
+		r <- f
+
+		-- flush
+		glFinish
+
+		return r
 
 createOpenGLOsMesaPresenter :: Int -> Int -> Bool -> Bool -> IO ((GlContext, OpenGLOsMesaPresenter), IO ())
 createOpenGLOsMesaPresenter width height needDepth debug = describeException "failed to create OpenGL OS MESA presenter" $ withSpecialBook $ \bk -> do
@@ -106,7 +111,7 @@ createOpenGLOsMesaPresenter width height needDepth debug = describeException "fa
 			, 0, 0
 			] $ \attribsPtr -> c_OSMesaCreateContextAttribs attribsPtr nullPtr
 		when (contextPtr == nullPtr) $ throwIO $ DescribeFirstException "failed to create context"
-		book bk $ return ((), c_OSMesaDestroyContext contextPtr)
+		book bk $ return ((), atomically $ asyncRunInFlow flow $ c_OSMesaDestroyContext contextPtr)
 
 		r <- c_OSMesaMakeCurrent contextPtr bufferPtr GL_UNSIGNED_BYTE (fromIntegral width) (fromIntegral height)
 		when (r == GL_FALSE) $ throwIO $ DescribeFirstException "failed to make context current"
@@ -134,7 +139,7 @@ openGLOsMesaPresenterFormat OpenGLOsMesaPresenter
 		{ textureFormatComponents = PixelRGBA
 		, textureFormatValueType = PixelUint
 		, textureFormatPixelSize = Pixel32bit
-		, textureFormatColorSpace = LinearColorSpace
+		, textureFormatColorSpace = StandardColorSpace
 		}
 	, textureCount = 0
 	}
