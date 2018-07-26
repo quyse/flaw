@@ -88,13 +88,17 @@ initGlyphRenderer device subpixelMode = do
 	ub <- book bk $ createUniformBuffer device (capacity * 3 * sizeOf (undefined :: Float4))
 
 	let nonSubpixelBlendStateInfo = def
-		{ blendSourceColor = ColorSourceSrcAlpha
+		{ blendSourceColor = ColorSourceOne
 		, blendDestColor = ColorSourceInvSrcAlpha
+		, blendSourceAlpha = AlphaSourceOne
+		, blendDestAlpha = AlphaSourceInvSrc
 		, blendColorOperation = BlendOperationAdd
 		}
 	let subpixelBlendStateInfo = def
-		{ blendSourceColor = ColorSourceSecondSrc
+		{ blendSourceColor = ColorSourceOne
 		, blendDestColor = ColorSourceInvSecondSrc
+		, blendSourceAlpha = AlphaSourceOne
+		, blendDestAlpha = AlphaSourceInvSrc
 		, blendColorOperation = BlendOperationAdd
 		}
 	bs <- book bk $ createBlendState device $ case subpixelMode of
@@ -120,7 +124,9 @@ initGlyphRenderer device subpixelMode = do
 			(constf 0)
 			(constf 1)
 			) $ case subpixelMode of
-			GlyphSubpixelModeNone -> colorTarget 0 $ cvec31 (xyz__ color) (w_ color * sampleLod (sampler2Df 0) texcoord (constf 0))
+			GlyphSubpixelModeNone -> do
+				alpha <- temp $ w_ color * sampleLod (sampler2Df 0) texcoord (constf 0)
+				colorTarget 0 $ cvec31 (xyz__ color * vecFromScalar alpha) alpha
 			_ -> do
 				let (dxr, dxg, dxb, dyr, dyg, dyb) = case subpixelMode of
 					GlyphSubpixelModeNone -> undefined -- GHC warning defence, meh :(
@@ -137,7 +143,7 @@ initGlyphRenderer device subpixelMode = do
 				let b = w_ color * sampleLod (sampler2Df 0) (texcoord
 					+ ddx texcoord * vecFromScalar (constf $ dxb / 3)
 					+ ddy texcoord * vecFromScalar (constf $ dyb / 3)) (constf 0)
-				dualColorTarget (cvec31 (xyz__ color) (constf 1)) (cvec1111 r g b (constf 1))
+				dualColorTarget (cvec31 (xyz__ color * cvec111 r g b) ((r + g + b) / 3)) (cvec1111 r g b (constf 1))
 
 	buffer <- VSM.new $ capacity * 3
 
