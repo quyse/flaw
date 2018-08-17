@@ -1,4 +1,5 @@
 resolver: integer-simple-snapshot.yaml
+ghc-variant: integersimple
 
 packages:
 - flaw-al

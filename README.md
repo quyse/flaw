@@ -14,7 +14,7 @@ This project is mostly a playground for absolutely crazy ideas. Surely if someon
 
 ## Building
 
-FLAW uses [stack](https://haskellstack.org/) for building. Note the assumption is that the project is to be built with `integer-simple` GHC, to be more commercial-friendly especially on Windows due to concerns about LGPL license of `GMP` library used by stock GHC. See `stack.yaml`, which refers to `integer-simple-snapshot.yaml` containing appropriate adjustments to some packages. If you don't have integer-simple GHC, or don't care about GMP, simply set `resolver` field in `stack.yaml` to desired snapshot directly.
+FLAW uses [stack](https://haskellstack.org/) for building. Note the assumption is that the project is to be built with `integer-simple` GHC, to be more commercial-friendly due to concerns about LGPL license of `GMP` library used by stock GHC (especially on Windows where GHC does not support dynamic linking of GMP). See `stack.yaml`, which refers to `integer-simple-snapshot.yaml` containing appropriate adjustments to some packages. If you don't have integer-simple GHC, or don't care about GMP, simply set `resolver` field in `stack.yaml` to desired snapshot directly and remove `ghc-variant: integersimple`.
 
 ## Binaries
 
