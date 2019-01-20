@@ -165,6 +165,7 @@ fmap concat . forM [1..maxVecDimension] $ \dim -> do
 		, patSynD v (prefixPatSyn comps)
 			(explBidir [clause (map varP comps) (normalB $ foldl appE (varE (mkName $ "vec" <> show dim)) $ map varE comps) []])
 			(viewP (varE (mkName $ "unvec" <> show dim)) (if dim == 1 then varP (head comps) else unboxedTupP (map varP comps)))
+		, pragCompleteD [v] Nothing
 		]
 -- matrices
 fmap concat . forM matDimensions $ \(dimN, dimM) -> do
@@ -177,6 +178,7 @@ fmap concat . forM matDimensions $ \(dimN, dimM) -> do
 		, patSynD v (prefixPatSyn comps)
 			(explBidir [clause (map varP comps) (normalB $ foldl appE (varE (mkName $ "mat" <> dimStr)) $ map varE comps) []])
 			(viewP (varE (mkName $ "unmat" <> dimStr)) (unboxedTupP (map varP comps)))
+		, pragCompleteD [v] Nothing
 		]
 
 -- | Class for dot operation.
@@ -699,6 +701,7 @@ class (Vectorized a, Floating a) => Quaternionized a where
 	quat :: Vec4 a -> Quat a
 	unquat :: Quat a -> Vec4 a
 
+{-# COMPLETE Quat #-}
 pattern Quat :: Quaternionized a => Vec4 a -> Quat a
 pattern Quat v <- (unquat -> v) where Quat v = quat v
 
