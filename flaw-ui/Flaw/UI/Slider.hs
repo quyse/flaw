@@ -64,7 +64,8 @@ instance Element Slider where
 		} (Vec2 x y) =
 		if x < 0 || y < 0 then return False
 		else do
-			Vec2 sx sy <- readTVar sizeVar
+			size <- readTVar sizeVar
+			let Vec2 sx sy = size
 			return $ x < sx && y < sy
 
 	renderElement Slider
@@ -83,7 +84,8 @@ instance Element Slider where
 		} (Vec2 px py) = do
 		-- get state
 		value <- readTVar valueVar
-		Vec2 sx sy <- readTVar sizeVar
+		size <- readTVar sizeVar
+		let Vec2 sx sy = size
 		focused <- readTVar focusedVar
 		moused <- isJust <$> readTVar lastMousePositionVar
 		pressed <- isJust <$> readTVar firstPressedPositionValueVar
@@ -133,7 +135,8 @@ instance Element Slider where
 					Just lastMousePosition@(Vec2 x _y) -> do
 						firstValue <- readTVar valueVar
 						-- check if click hit slider
-						Vec2 sx _sy <- readTVar sizeVar
+						size <- readTVar sizeVar
+						let Vec2 sx _sy = size
 						let l = floor $ firstValue * fromIntegral (sx - pieceWidth)
 						if x >= l && x < l + pieceWidth then return $ Just (lastMousePosition, firstValue)
 						else do
@@ -149,7 +152,8 @@ instance Element Slider where
 				maybeFirstPressedPositionValue <- readTVar firstPressedPositionValueVar
 				case maybeFirstPressedPositionValue of
 					Just (Vec2 fx _fy, firstValue) -> do
-						Vec2 sx _sy <- readTVar sizeVar
+						size <- readTVar sizeVar
+						let Vec2 sx _sy = size
 						changeValue $ max 0 $ min 1 $ firstValue + fromIntegral (x - fx) / fromIntegral (sx - pieceWidth)
 					Nothing -> return ()
 				writeTVar lastMousePositionVar $ Just $ Vec2 x y

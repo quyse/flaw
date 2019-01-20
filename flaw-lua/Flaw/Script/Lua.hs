@@ -14,6 +14,7 @@ module Flaw.Script.Lua
 	) where
 
 import Control.Exception
+import Control.Monad.Fail
 import Control.Monad.Primitive
 import Data.Hashable
 import qualified Data.HashTable.ST.Cuckoo as HT
@@ -23,7 +24,7 @@ import Data.Typeable
 import Data.Unique
 import Data.Word
 
-class PrimMonad m => LuaMonad m where
+class (PrimMonad m, MonadFail m) => LuaMonad m where
 	newLuaUnique :: m Unique
 	throwLuaError :: LuaError m -> m a
 	catchLuaError :: m a -> (LuaError m -> m a) -> m a

@@ -80,7 +80,7 @@ checkPrefixed Client
 	{ clientName = name
 	, clientRepo = repo
 	} keyPrefix keys = lift $ do
-	((map T.decodeUtf8) -> repoKeys) <- clientRepoGetKeysPrefixed repo $ T.encodeUtf8 keyPrefix
+	(map T.decodeUtf8 -> repoKeys) <- clientRepoGetKeysPrefixed repo $ T.encodeUtf8 keyPrefix
 	let ok = keys == repoKeys
 	unless ok failTest
 	putStrLn $ T.unpack $ (if ok then "OK    " else "WRONG ")

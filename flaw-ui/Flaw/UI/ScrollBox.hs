@@ -58,9 +58,11 @@ instance Element ScrollBox where
 		, scrollBoxScrollVar = scrollVar
 		, scrollBoxSizeVar = sizeVar
 		} (Vec2 x y) = if x < 0 || y < 0 then return False else do
-		Vec2 sx sy <- readTVar sizeVar
+		size <- readTVar sizeVar
+		let Vec2 sx sy = size
 		if x < sx && y < sy then do
-			Vec2 ox oy <- readTVar scrollVar
+			scroll <- readTVar scrollVar
+			let Vec2 ox oy = scroll
 			dabElement element $ Vec2 (x - ox) (y - oy)
 		else return False
 
@@ -73,9 +75,12 @@ instance Element ScrollBox where
 		, scrollBoxScrollVar = scrollVar
 		, scrollBoxSizeVar = sizeVar
 		} drawer position@(Vec2 px py) = do
-		scroll@(Vec2 ox oy) <- readTVar scrollVar
-		Vec2 sx sy <- readTVar sizeVar
-		Vec2 ssx ssy <- scrollableElementSize element
+		scroll <- readTVar scrollVar
+		let Vec2 ox oy = scroll
+		size <- readTVar sizeVar
+		let Vec2 sx sy = size
+		ssize <- scrollableElementSize element
+		let Vec2 ssx ssy = ssize
 		-- correct scroll if needed
 		let newScroll@(Vec2 nox noy) = Vec2
 			(min 0 $ max ox $ sx - ssx)
@@ -93,7 +98,8 @@ instance Element ScrollBox where
 		} inputEvent inputState = case inputEvent of
 		MouseInputEvent mouseEvent -> case mouseEvent of
 			CursorMoveEvent x y -> do
-				Vec2 ox oy <- readTVar scrollVar
+				scroll <- readTVar scrollVar
+				let Vec2 ox oy = scroll
 				processInputEvent element (MouseInputEvent (CursorMoveEvent (x - ox) (y - oy))) inputState
 			_ -> processInputEvent element inputEvent inputState
 		_ -> processInputEvent element inputEvent inputState
@@ -142,7 +148,8 @@ instance Element ScrollBar where
 	dabElement ScrollBar
 		{ scrollBarSizeVar = sizeVar
 		} (Vec2 x y) = if x < 0 || y < 0 then return False else do
-		Vec2 sx sy <- readTVar sizeVar
+		size <- readTVar sizeVar
+		let Vec2 sx sy = size
 		return $ x < sx && y < sy
 
 	renderElement scrollBar@ScrollBar
@@ -162,7 +169,8 @@ instance Element ScrollBar where
 				}
 			}
 		} (Vec2 px py) = do
-		Vec2 sx sy <- readTVar barSizeVar
+		barSize <- readTVar barSizeVar
+		let Vec2 sx sy = barSize
 		piece <- scrollBarPiece scrollBar
 		moused <- isJust <$> readTVar lastMousePositionVar
 		pressed <- readTVar pressedVar
@@ -249,7 +257,8 @@ scrollBarPiece ScrollBar
 	, scrollBarDirection = direction
 	, scrollBarSizeVar = barSizeVar
 	} = do
-	barSize@(Vec2 sx sy) <- readTVar barSizeVar
+	barSize <- readTVar barSizeVar
+	let Vec2 sx sy = barSize
 	boxSize <- readTVar boxSizeVar
 	scrollableSize <- scrollableElementSize element
 	scroll <- readTVar scrollVar
@@ -285,8 +294,10 @@ ensureVisibleScrollBoxArea ScrollBox
 	{ scrollBoxScrollVar = scrollVar
 	, scrollBoxSizeVar = sizeVar
 	} (Vec4 left top right bottom) = do
-	scroll@(Vec2 ox oy) <- readTVar scrollVar
-	Vec2 sx sy <- readTVar sizeVar
+	scroll <- readTVar scrollVar
+	let Vec2 ox oy = scroll
+	size <- readTVar sizeVar
+	let Vec2 sx sy = size
 	-- dimensions are to be adjusted independently
 	-- function to adjust one dimension
 	let

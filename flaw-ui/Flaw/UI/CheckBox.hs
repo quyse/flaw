@@ -66,7 +66,8 @@ instance Element CheckBox where
 		} (Vec2 x y) =
 		if x < 0 || y < 0 then return False
 		else do
-			Vec2 sx sy <- readTVar sizeVar
+			size <- readTVar sizeVar
+			let Vec2 sx sy = size
 			return $ x < sx && y < sy
 
 	renderElement CheckBox
@@ -82,7 +83,8 @@ instance Element CheckBox where
 			, drawerRaisedStyleVariant = raisedStyleVariant
 			}
 		} (Vec2 px py) = do
-		Vec2 sx sy <- readTVar sizeVar
+		size <- readTVar sizeVar
+		let Vec2 sx sy = size
 		checked <- readTVar checkedVar
 		moused <- readTVar mousedVar
 		focused <- readTVar focusedVar

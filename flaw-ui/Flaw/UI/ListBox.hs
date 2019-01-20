@@ -307,7 +307,8 @@ instance Element (ListBox v) where
 				}
 			}
 		} position@(Vec2 px py) = do
-		Vec2 sx sy <- readTVar sizeVar
+		size <- readTVar sizeVar
+		let Vec2 sx sy = size
 		r <- renderElement panel drawer position
 		return $ do
 			drawBorderedRectangle canvas
@@ -410,12 +411,14 @@ instance Element (ListBoxContent v) where
 						moveSelection IS.findMin (+ (-1))
 						return True
 					KeyDownEvent KeyPageDown -> do
-						Vec2 _sx sy <- readTVar boxSizeVar
+						boxSize <- readTVar boxSizeVar
+						let Vec2 _sx sy = boxSize
 						ListBoxItems _keyFunc items <- readTVar itemsVar
 						moveSelection IS.findMax $ \i -> min (S.size items - 1) $ i + sy `quot` itemHeight
 						return True
 					KeyDownEvent KeyPageUp -> do
-						Vec2 _sx sy <- readTVar boxSizeVar
+						boxSize <- readTVar boxSizeVar
+						let Vec2 _sx sy = boxSize
 						moveSelection IS.findMin $ \i -> max 0 $ i - sy `quot` itemHeight
 						return True
 					KeyDownEvent KeyHome -> do
@@ -611,7 +614,8 @@ instance Scrollable (ListBoxContent v) where
 			}
 		, listBoxContentSizeVar = sizeVar
 		} = do
-		Vec2 sx _sy <- readTVar sizeVar
+		size <- readTVar sizeVar
+		let Vec2 sx _sy = size
 		height <- (itemHeight *) . IM.size <$> readTVar valuesVar
 		return $ Vec2 sx height
 

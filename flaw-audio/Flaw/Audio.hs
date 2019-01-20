@@ -4,7 +4,7 @@ Description: Audio abstraction.
 License: MIT
 -}
 
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE LambdaCase, TypeFamilies #-}
 
 module Flaw.Audio
 	( Device(..)
@@ -66,7 +66,7 @@ data SoundSampleType
 
 -- | Size of a single sample.
 soundSampleSize :: SoundSampleType -> Int
-soundSampleSize sampleType = case sampleType of
+soundSampleSize = \case
 	SoundSampleByte -> 1
 	SoundSampleShort -> 2
 	SoundSampleInt -> 4

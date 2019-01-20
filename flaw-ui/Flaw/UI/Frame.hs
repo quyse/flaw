@@ -101,7 +101,8 @@ newFrame element Metrics
 											placeFreeChildRelatively freeContainer freeChild $ Vec2 (dx * kx) (dy * ky)
 										-- change size if needed
 										when needSizeChange $ do
-											Vec2 sx sy <- readTVar pnlSizeVar
+											size <- readTVar pnlSizeVar
+											let Vec2 sx sy = size
 											layoutElement frame $ Vec2 (sx + dx * kw) (sy + dy * kh)
 										-- remember new coordinates
 										writeTVar lastMousePositionVar $ Just $ Vec2 x y
@@ -189,7 +190,8 @@ instance Element FrameResizeElement where
 		} (Vec2 x y) =
 		if x < 0 || y < 0 then return False
 		else do
-			Vec2 sx sy <- readTVar sizeVar
+			size <- readTVar sizeVar
+			let Vec2 sx sy = size
 			return $ x < sx && y < sy
 
 	elementMouseCursor FrameResizeElement
@@ -218,7 +220,8 @@ instance Element Frame where
 		} (Vec2 x y) =
 		if x < 0 || y < 0 then return False
 		else do
-			Vec2 sx sy <- readTVar sizeVar
+			size <- readTVar sizeVar
+			let Vec2 sx sy = size
 			return $ x < sx && y < sy
 
 	elementMouseCursor Frame
@@ -252,7 +255,8 @@ instance Element Frame where
 		text <- readTVar textVar
 		textScript <- readTVar textScriptVar
 		focused <- readTVar focusedVar
-		Vec2 sx sy <- readTVar sizeVar
+		size <- readTVar sizeVar
+		let Vec2 sx sy = size
 		let outerStyle = if focused then outerFocusedStyle else outerNormalStyle
 		panelRender <- renderElement panel drawer $ Vec2 px py
 		return $ do

@@ -14,6 +14,7 @@ module Flaw.Stack
 	) where
 
 import Control.Monad.Catch
+import Control.Monad.Fail as F
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Class
 
@@ -35,6 +36,10 @@ instance Monad (StackT m) where
 	return a = StackT $ \q -> q a
 	{-# INLINE (>>=) #-}
 	(StackT h) >>= f = StackT $ \q -> h $ \r -> let StackT z = f r in z q
+
+instance MonadFail m => MonadFail (StackT m) where
+	{-# INLINE fail #-}
+	fail s = StackT (F.fail s >>=)
 
 instance MonadTrans StackT where
 	{-# INLINE lift #-}

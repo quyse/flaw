@@ -4,7 +4,7 @@ Description: Asset pack transformer remapping asset ids.
 License: MIT
 -}
 
-{-# LANGUAGE CPP, FlexibleContexts, TypeFamilies, OverloadedStrings, TemplateHaskell #-}
+{-# LANGUAGE CPP, FlexibleContexts, OverloadedStrings, TemplateHaskell, TypeFamilies, UndecidableInstances #-}
 
 module Flaw.Asset.RemapAssetPack
 	( RemapAssetPack(..)

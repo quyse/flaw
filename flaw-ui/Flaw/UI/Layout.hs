@@ -87,10 +87,11 @@ titleInFlowLayout text = do
 		newVisualElement label
 	FlowLayoutState
 		{ flsMetrics = Metrics
-			{ metricsLabelSize = Vec2 labelWidth _labelHeight
+			{ metricsLabelSize = labelSize
 			, metricsTitleHeight = titleHeight
 			}
 		} <- get
+	let Vec2 labelWidth _labelHeight = labelSize
 	elementWithSizeInFlowLayout labelVE $ Vec2 labelWidth titleHeight
 
 -- | Label a sublayout.
@@ -102,12 +103,15 @@ labeledFlowLayout text subLayout = do
 	s@FlowLayoutState
 		{ flsMetrics = Metrics
 			{ metricsGap = gap
-			, metricsLabelSize = labelSize@(Vec2 labelWidth labelHeight)
+			, metricsLabelSize = labelSize
 			}
 		, flsParentElement = parentElement
 		, flsLayoutHandler = lh
-		, flsPreSize = Vec2 psx psy
+		, flsPreSize = ps
 		} <- get
+	let
+		Vec2 labelWidth labelHeight = labelSize
+		Vec2 psx psy = ps
 	-- create label
 	label <- lift newTextLabel
 	lift $ setText label text
@@ -116,16 +120,18 @@ labeledFlowLayout text subLayout = do
 	-- run sub layout
 	(r, FlowLayoutState
 		{ flsLayoutHandler = subLayoutHandler
-		, flsPreSize = Vec2 spsx spsy
+		, flsPreSize = sps
 		}) <- lift $ runStateT subLayout s
 		{ flsLayoutHandler = return
 		, flsPreSize = Vec2 0 0
 		}
+	let Vec2 spsx spsy = sps
 	put s
 		{ flsLayoutHandler = lh >=> \(Vec4 px py qx qy) -> do
 			placeFreeChild parentElement labelVEChild (Vec2 px py)
 			layoutElement labelVE labelSize
-			Vec4 _subpx subpy _subqx subqy <- subLayoutHandler $ Vec4 (px + labelWidth + gap) py qx qy
+			sub <- subLayoutHandler $ Vec4 (px + labelWidth + gap) py qx qy
+			let Vec4 _subpx subpy _subqx subqy = sub
 			return $ Vec4 px (max (py + labelHeight + gap) subpy) qx (min qy subqy)
 		, flsPreSize = Vec2 (max psx (labelWidth + gap + spsx)) (psy + max (labelHeight + gap) spsy)
 		}
@@ -140,28 +146,33 @@ checkBoxedFlowLayout text subLayout = do
 	s@FlowLayoutState
 		{ flsMetrics = Metrics
 			{ metricsGap = gap
-			, metricsLabelSize = labelSize@(Vec2 labelWidth labelHeight)
+			, metricsLabelSize = labelSize
 			}
 		, flsParentElement = parentElement
 		, flsLayoutHandler = lh
-		, flsPreSize = Vec2 psx psy
+		, flsPreSize = ps
 		} <- get
+	let
+		Vec2 labelWidth labelHeight = labelSize
+		Vec2 psx psy = ps
 	-- create label
 	checkBox <- lift $ newLabeledCheckBox text
 	checkBoxChild <- lift $ addFreeChild parentElement checkBox
 	-- run sub layout
 	(r, FlowLayoutState
 		{ flsLayoutHandler = subLayoutHandler
-		, flsPreSize = Vec2 spsx spsy
+		, flsPreSize = sps
 		}) <- lift $ runStateT (subLayout checkBox) s
 		{ flsLayoutHandler = return
 		, flsPreSize = Vec2 0 0
 		}
+	let Vec2 spsx spsy = sps
 	put s
 		{ flsLayoutHandler = lh >=> \(Vec4 px py qx qy) -> do
 			placeFreeChild parentElement checkBoxChild (Vec2 px py)
 			layoutElement checkBox labelSize
-			Vec4 _subpx subpy _subqx subqy <- subLayoutHandler $ Vec4 (px + labelWidth + gap) py qx qy
+			sub <- subLayoutHandler $ Vec4 (px + labelWidth + gap) py qx qy
+			let Vec4 _subpx subpy _subqx subqy = sub
 			return $ Vec4 px (max (py + labelHeight + gap) subpy) qx (min qy subqy)
 		, flsPreSize = Vec2 (max psx (labelWidth + gap + spsx)) (psy + max (labelHeight + gap) spsy)
 		}
@@ -189,8 +200,9 @@ elementWithSizeInFlowLayout element (Vec2 epsx epsy) = do
 			}
 		, flsParentElement = parentElement
 		, flsLayoutHandler = lh
-		, flsPreSize = Vec2 psx psy
+		, flsPreSize = ps
 		} <- get
+	let Vec2 psx psy = ps
 	-- add to container
 	elementChild <- lift $ addFreeChild parentElement element
 	put s
@@ -208,12 +220,15 @@ okCancelButtonsInFlowLayout okButton cancelButton = do
 		{ flsMetrics = Metrics
 			{ metricsGap = gap
 			, metricsBigGap = bigGap
-			, metricsButtonSize = buttonSize@(Vec2 buttonWidth buttonHeight)
+			, metricsButtonSize = buttonSize
 			}
 		, flsParentElement = parentElement
 		, flsLayoutHandler = layoutHandler
-		, flsPreSize = Vec2 psx psy
+		, flsPreSize = preSize
 		} <- get
+	let
+		Vec2 buttonWidth buttonHeight = buttonSize
+		Vec2 psx psy = preSize
 	okButtonChild <- lift $ addFreeChild parentElement okButton
 	cancelButtonChild <- lift $ addFreeChild parentElement cancelButton
 	lift $ do

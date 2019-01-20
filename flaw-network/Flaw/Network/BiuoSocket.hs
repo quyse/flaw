@@ -12,6 +12,7 @@ module Flaw.Network.BiuoSocket
 import Control.Concurrent.STM
 import Control.Monad
 import qualified Data.ByteString as B
+import Numeric.Natural
 
 import Flaw.Network
 
@@ -21,7 +22,7 @@ data BiuoSocket = BiuoSocket
 	, biuoSocketOutQueue :: {-# UNPACK #-} !(TQueue B.ByteString)
 	}
 
-newBiuoSocket :: Int -> STM BiuoSocket
+newBiuoSocket :: Natural -> STM BiuoSocket
 newBiuoSocket inBound = do
 	aliveVar <- newTVar True
 	inQueue <- newTBQueue inBound

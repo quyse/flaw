@@ -95,7 +95,8 @@ instance Element Panel where
 		} point@(Vec2 px py) =
 		if px < 0 || py < 0 then return False
 		else do
-			Vec2 sx sy <- readTVar sizeVar
+			size <- readTVar sizeVar
+			let Vec2 sx sy = size
 			if px >= sx || py >= sy then return False
 			else let
 				dabChildren (PanelChild
@@ -122,7 +123,8 @@ instance Element Panel where
 		{ panelChildrenRenderOrderVar = childrenRenderOrderVar
 		, panelSizeVar = sizeVar
 		} drawer position@(Vec2 px py) = do
-		Vec2 sx sy <- readTVar sizeVar
+		size <- readTVar sizeVar
+		let Vec2 sx sy = size
 		-- compose rendering of children
 		childrenRenderOrder <- readTVar childrenRenderOrderVar
 		let drawChild PanelChild
@@ -284,7 +286,8 @@ instance Element Panel where
 							, panelChildPositionVar = childPositionVar
 							} -> do
 							-- correct coordinates and send event
-							Vec2 px py <- readTVar childPositionVar
+							size <- readTVar childPositionVar
+							let Vec2 px py = size
 							processInputEvent childElement (MouseInputEvent (CursorMoveEvent (x - px) (y - py))) inputState
 						Nothing -> return False
 		MouseLeaveEvent -> do

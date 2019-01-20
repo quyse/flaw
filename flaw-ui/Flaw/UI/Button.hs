@@ -82,7 +82,8 @@ instance Element Button where
 		{ buttonSizeVar = sizeVar
 		} (Vec2 x y) =
 		if x < 0 || y < 0 then return False else do
-			Vec2 sx sy <- readTVar sizeVar
+			size <- readTVar sizeVar
+			let Vec2 sx sy = size
 			return $ x < sx && y < sy
 
 	renderElement Button
@@ -102,7 +103,8 @@ instance Element Button where
 			}
 		} (Vec2 px py) = do
 		-- get state
-		size@(Vec2 sx sy) <- readTVar sizeVar
+		size <- readTVar sizeVar
+		let Vec2 sx sy = size
 		focused <- readTVar focusedVar
 		moused <- readTVar mousedVar
 		pressed <- readTVar pressedVar

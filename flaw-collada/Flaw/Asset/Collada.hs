@@ -42,6 +42,7 @@ module Flaw.Asset.Collada
 
 import Control.Monad
 import Control.Monad.Except
+import Control.Monad.Fail
 import Control.Monad.State
 import qualified Data.ByteString.Lazy as BL
 import Data.List
@@ -82,6 +83,9 @@ data ColladaSettings = ColladaSettings
 	}
 
 type ColladaM a = StateT ColladaCache (Either T.Text) a
+
+instance MonadFail (Either T.Text) where
+	fail = Left . T.pack
 
 -------- XML helpers.
 
