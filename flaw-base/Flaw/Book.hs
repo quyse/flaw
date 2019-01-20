@@ -7,6 +7,7 @@ License: MIT
 module Flaw.Book
 	( Book
 	, newBook
+	, newBookSTM
 	, freeBook
 	, releaseBook
 	, newDynamicBook
@@ -24,6 +25,10 @@ newtype Book = Book (TVar [IO ()])
 {-# INLINE newBook #-}
 newBook :: IO Book
 newBook = Book <$> newTVarIO []
+
+{-# INLINE newBookSTM #-}
+newBookSTM :: STM Book
+newBookSTM = Book <$> newTVar []
 
 -- | Free the book.
 {-# INLINE freeBook #-}
