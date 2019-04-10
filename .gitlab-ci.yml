@@ -3,6 +3,10 @@ before_script:
 - git submodule init
 - git submodule update
 
+stages:
+- build
+- deploy
+
 variables:
   PACKAGES_LINUX: >-
     flaw-al
@@ -158,22 +162,27 @@ variables:
     flaw-window
 
 linux:
+  stage: build
   script:
   - "mkdir -p flaw-linux/bin"
   - "stack --no-terminal build --test --copy-bins --local-bin-path flaw-linux/bin --flag flaw-font-fhi:icu $PACKAGES_LINUX"
   - "stack --no-terminal build --test --flag flaw-app:vulkan --flag flaw-font-fhi:icu flaw-app"
   - "mkdir linux && cp flaw-linux/bin/model-editor linux/"
-  - "butler push linux quyse/flaw:model-editor-linux"
+  artifacts:
+    name: "flaw-linux-$CI_BUILD_ID"
+    paths:
+    - linux
+    expire_in: 1 week
   tags:
   - haskellstack
   - linux
   - x64
-  - butler
   except:
   - arm
   - pages
 
 windows:
+  stage: build
   script:
   - "mkdir -p flaw-windows/bin"
   - "stack --no-terminal build --test --copy-bins --local-bin-path flaw-windows/bin $PACKAGES_WINDOWS"
@@ -181,32 +190,40 @@ windows:
   - "stack --no-terminal build --test --flag flaw-app:-dx11 flaw-app"
   - "stack --no-terminal build --test --flag flaw-app:-gl flaw-app"
   - "mkdir windows && cp flaw-windows/bin/model-editor.exe windows/"
-  - "butler push windows quyse/flaw:model-editor-windows"
+  artifacts:
+    name: "flaw-windows-$CI_BUILD_ID"
+    paths:
+    - windows
+    expire_in: 1 week
   tags:
   - haskellstack
   - windows
   - x64
-  - butler
   except:
   - arm
   - pages
 
 macos:
+  stage: build
   script:
   - "mkdir -p flaw-macos/bin"
   - "stack --no-terminal build --test --copy-bins --local-bin-path flaw-macos/bin --flag flaw-font-fhi:icu $PACKAGES_MACOS"
-  - "mkdir macos && mv flaw-macos/bin/model-editor macos/"
-  - "butler push macos quyse/flaw:model-editor-macos"
+  - "mkdir macos && cp flaw-macos/bin/model-editor macos/"
+  artifacts:
+    name: "flaw-macos-$CI_BUILD_ID"
+    paths:
+    - macos
+    expire_in: 1 week
   tags:
   - haskellstack
   - macos
   - x64
-  - butler
   except:
   - arm
   - pages
 
 .web:
+  stage: build
   script:
   - "stack --no-terminal --compiler ghcjs-0.2.0_ghc-8.0.1 build --test $PACKAGES_WEB"
   tags:
@@ -217,6 +234,24 @@ macos:
   except:
   - arm
   - pages
+
+itch:
+  stage: deploy
+  environment: itch
+  dependencies:
+  - linux
+  - windows
+  - macos
+  script:
+  - "butler push linux quyse/flaw:model-editor-linux"
+  - "butler push windows quyse/flaw:model-editor-windows"
+  - "butler push macos quyse/flaw:model-editor-macos"
+  tags:
+  - linux
+  - x64
+  - butler
+  only:
+  - master
 
 pages:
   stage: deploy
