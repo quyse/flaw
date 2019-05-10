@@ -1,4 +1,4 @@
-resolver: lts-13.16
+resolver: lts-13.20
 name: integer-simple-snapshot
 
 packages:
