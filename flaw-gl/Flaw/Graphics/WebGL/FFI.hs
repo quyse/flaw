@@ -8,569 +8,569 @@ License: MIT
 {-# OPTIONS_GHC -fno-warn-missing-pattern-synonym-signatures #-}
 
 module Flaw.Graphics.WebGL.FFI
-	(
-	-- * Introduction
-	-- | This module is written manually using definitions from WebGL specs:
-	-- <https://www.khronos.org/registry/webgl/specs/latest/1.0/webgl.idl WebGL 1.0 WebIDL>
-	-- <https://www.khronos.org/registry/webgl/specs/latest/2.0/webgl2.idl WebGL 2.0 WebIDL>
-	  JS_WebGLContext(..)
-	, JS_WebGLTexture(..)
-	, JS_WebGLRenderbuffer(..)
-	, JS_WebGLFramebuffer(..)
-	, JS_WebGLBuffer(..)
-	, JS_WebGLProgram(..)
-	, JS_WebGLShader(..)
-	, JS_WebGLUniformLocation(..)
-	, UniformLocation
-	, GLenum
-	, GLint
-	, GLuint
-	, GLsizei
-	, GLsizeiptr
-	, GLintptr
-	, GLclampf
-	, GLboolean
-	, GLbitfield
-	-- * Initialization
-	, js_getCanvasContext
-	, js_setContext
-	, js_requestAnimationFrame
-	-- * WebGL functions
-	, glGetExtension
-	, glFrontFace
-	, glCullFace
-	, glEnable
-	, glDisable
-	, glGetError
-	-- ** Textures
-	, glCreateTexture
-	, glDeleteTexture
-	, glActiveTexture
-	, glBindTexture
-	, glTexImage2D_image
-	, glTexParameterf
-	, glTexParameteri
-	, glTexParameterfv
-	, glPixelStorei
-	, glTexStorage1D
-	, glTexStorage2D
-	, glTexStorage3D
-	-- ** Samplers
-	, glCreateSampler
-	, glDeleteSampler
-	, glBindSampler
-	, glSamplerParameteri
-	, glSamplerParameterf
-	, glSamplerParameterfv_4
-	-- ** Buffers
-	, glCreateBuffer
-	, glDeleteBuffer
-	, glBindBuffer
-	, glBindBufferBase
-	, glEnableVertexAttribArray
-	, glDisableVertexAttribArray
-	, glVertexAttribPointer
-	, glVertexAttribIPointer
-	, glVertexAttribDivisor
-	-- ** Framebuffers
-	, glCreateFramebuffer
-	, glDeleteFramebuffer
-	, glBindFramebuffer
-	, glFramebufferTexture2D
-	, glDrawBuffers_n
-	-- ** Shaders and programs
-	, glCreateShader
-	, glDeleteShader
-	, glCompileShader
-	, glCreateProgram
-	, glDeleteProgram
-	, glAttachShader
-	, glLinkProgram
-	, glUseProgram
-	, glUniformBlockBinding
-	, glShaderSource_s
-	, glGetShaderiv
-	, glGetShaderInfoLog_s
-	, glGetProgramiv
-	, glGetProgramInfoLog_s
-	, glBindAttribLocation_s
-	, glGetUniformLocation_s
-	, glGetUniformBlockIndex_s
-	-- ** Uniforms
-	, glUniform1i
-	, glUniform1fv
-	, glUniform2fv
-	, glUniform3fv
-	, glUniform4fv
-	, glUniform1iv
-	, glUniform2iv
-	, glUniform3iv
-	, glUniform4iv
-	, glUniform1uiv
-	, glUniform2uiv
-	, glUniform3uiv
-	, glUniform4uiv
-	, glUniformMatrix3fv
-	, glUniformMatrix4fv
-	-- ** Vertex Arrays
-	, glCreateVertexArray
-	, glDeleteVertexArray
-	, glBindVertexArray
-	-- ** Depth output
-	, glDepthFunc
-	, glDepthMask
-	-- ** Blending
-	, glBlendEquationSeparate
-	, glBlendFuncSeparate
-	-- ** Scissor
-	, glScissor
-	-- ** Clearing.
-	, glClearColor
-	, glClearDepth
-	, glClearStencil
-	, glClear
-	, glClearBufferiv_1
-	, glClearBufferfv_1
-	, glClearBufferfv_4
-	, glClearBufferfi
-	-- ** Viewport.
-	, glViewport
-	-- ** Drawing.
-	, glDrawArrays
-	, glDrawElements
-	, glDrawArraysInstanced
-	, glDrawElementsInstanced
-	-- ** Misc.
-	, glNativeTexture
-	-- * Name manipulation.
-	, BufferName
-	, TextureName
-	, SamplerName
-	, FramebufferName
-	, VertexArrayName
-	, ProgramName
-	, ShaderName
-	, glAllocBufferName
-	, glDeleteBufferName
-	, glNullBufferName
-	, glUndefinedBufferName
-	, glAllocTextureName
-	, glDeleteTextureName
-	, glNullTextureName
-	, glAllocSamplerName
-	, glDeleteSamplerName
-	, glNullSamplerName
-	, glAllocFramebufferName
-	, glDeleteFramebufferName
-	, glNullFramebufferName
-	, glAllocVertexArrayName
-	, glDeleteVertexArrayName
-	, glNullVertexArrayName
-	, glNullProgramName
-	-- * Offsets
-	, GlOffset
-	, glIntToOffset
-	-- * Stubs
-	, glProgramBinary
-	, glGetProgramBinary
-	, pattern GL_PROGRAM_BINARY_LENGTH
-	, glBindFragDataLocation
-	, glBindFragDataLocationIndexed
-	, glVertexAttribFormat
-	, glVertexAttribIFormat
-	, glVertexAttribBinding
-	, glVertexBindingDivisor
-	, glBindVertexBuffer
-	, glFinish
-	-- * Shims
-	-- ** Buffer uploading
-	, glBufferData_bs
-	, glBufferData_null
-	-- ** Texture uploading
-	-- | 1D versions don't exist in WebGL 1.0/2.0, but here for completeness.
-	-- 3D versions exist only in WebGL 2.0.
-	, glTexImage1D_bs
-	, glTexImage2D_bs
-	, glTexImage3D_bs
-	, glCompressedTexImage1D_bs
-	, glCompressedTexImage2D_bs
-	, glCompressedTexImage3D_bs
-	, glTexSubImage1D_bs
-	, glTexSubImage2D_bs
-	, glTexSubImage3D_bs
-	, glCompressedTexSubImage1D_bs
-	, glCompressedTexSubImage2D_bs
-	, glCompressedTexSubImage3D_bs
-	, glTexImage2D_null
-	-- * Constants.
-	, pattern GL_COLOR
-	, pattern GL_DEPTH
-	, pattern GL_STENCIL
-	, pattern GL_UNIFORM_BUFFER
-	, pattern GL_DEPTH_BUFFER_BIT
-	, pattern GL_STENCIL_BUFFER_BIT
-	, pattern GL_COLOR_BUFFER_BIT
-	, pattern GL_POINTS
-	, pattern GL_LINES
-	, pattern GL_LINE_LOOP
-	, pattern GL_LINE_STRIP
-	, pattern GL_TRIANGLES
-	, pattern GL_TRIANGLE_STRIP
-	, pattern GL_TRIANGLE_FAN
-	, pattern GL_PATCHES
-	, pattern GL_ZERO
-	, pattern GL_ONE
-	, pattern GL_SRC_COLOR
-	, pattern GL_ONE_MINUS_SRC_COLOR
-	, pattern GL_SRC_ALPHA
-	, pattern GL_ONE_MINUS_SRC_ALPHA
-	, pattern GL_DST_ALPHA
-	, pattern GL_ONE_MINUS_DST_ALPHA
-	, pattern GL_SRC1_ALPHA
-	, pattern GL_SRC1_COLOR
-	, pattern GL_ONE_MINUS_SRC1_COLOR
-	, pattern GL_ONE_MINUS_SRC1_ALPHA
-	, pattern GL_DST_COLOR
-	, pattern GL_ONE_MINUS_DST_COLOR
-	, pattern GL_SRC_ALPHA_SATURATE
-	, pattern GL_FUNC_ADD
-	, pattern GL_MIN
-	, pattern GL_MAX
-	, pattern GL_BLEND_EQUATION
-	, pattern GL_BLEND_EQUATION_RGB
-	, pattern GL_BLEND_EQUATION_ALPHA
-	, pattern GL_FUNC_SUBTRACT
-	, pattern GL_FUNC_REVERSE_SUBTRACT
-	, pattern GL_BLEND_DST_RGB
-	, pattern GL_BLEND_SRC_RGB
-	, pattern GL_BLEND_DST_ALPHA
-	, pattern GL_BLEND_SRC_ALPHA
-	, pattern GL_CONSTANT_COLOR
-	, pattern GL_ONE_MINUS_CONSTANT_COLOR
-	, pattern GL_CONSTANT_ALPHA
-	, pattern GL_ONE_MINUS_CONSTANT_ALPHA
-	, pattern GL_BLEND_COLOR
-	, pattern GL_ARRAY_BUFFER
-	, pattern GL_ELEMENT_ARRAY_BUFFER
-	, pattern GL_ARRAY_BUFFER_BINDING
-	, pattern GL_ELEMENT_ARRAY_BUFFER_BINDING
-	, pattern GL_STREAM_DRAW
-	, pattern GL_STATIC_DRAW
-	, pattern GL_DYNAMIC_DRAW
-	, pattern GL_BUFFER_SIZE
-	, pattern GL_BUFFER_USAGE
-	, pattern GL_CURRENT_VERTEX_ATTRIB
-	, pattern GL_FRONT
-	, pattern GL_BACK
-	, pattern GL_FRONT_AND_BACK
-	-- ** Comparison functions
-	, pattern GL_NEVER
-	, pattern GL_LESS
-	, pattern GL_EQUAL
-	, pattern GL_LEQUAL
-	, pattern GL_GREATER
-	, pattern GL_NOTEQUAL
-	, pattern GL_GEQUAL
-	, pattern GL_ALWAYS
-	-- ** Features
-	, pattern GL_CULL_FACE
-	, pattern GL_BLEND
-	, pattern GL_DITHER
-	, pattern GL_STENCIL_TEST
-	, pattern GL_DEPTH_TEST
-	, pattern GL_SCISSOR_TEST
-	, pattern GL_POLYGON_OFFSET_FILL
-	, pattern GL_SAMPLE_ALPHA_TO_COVERAGE
-	, pattern GL_SAMPLE_COVERAGE
-	-- ** Errors
-	, pattern GL_NO_ERROR
-	, pattern GL_INVALID_ENUM
-	, pattern GL_INVALID_VALUE
-	, pattern GL_INVALID_OPERATION
-	, pattern GL_OUT_OF_MEMORY
-	, pattern GL_CW
-	, pattern GL_CCW
-	, pattern GL_LINE_WIDTH
-	, pattern GL_ALIASED_POINT_SIZE_RANGE
-	, pattern GL_ALIASED_LINE_WIDTH_RANGE
-	, pattern GL_CULL_FACE_MODE
-	, pattern GL_FRONT_FACE
-	, pattern GL_DEPTH_RANGE
-	, pattern GL_DEPTH_WRITEMASK
-	, pattern GL_DEPTH_CLEAR_VALUE
-	, pattern GL_DEPTH_FUNC
-	, pattern GL_STENCIL_CLEAR_VALUE
-	, pattern GL_STENCIL_FUNC
-	, pattern GL_STENCIL_FAIL
-	, pattern GL_STENCIL_PASS_DEPTH_FAIL
-	, pattern GL_STENCIL_PASS_DEPTH_PASS
-	, pattern GL_STENCIL_REF
-	, pattern GL_STENCIL_VALUE_MASK
-	, pattern GL_STENCIL_WRITEMASK
-	, pattern GL_STENCIL_BACK_FUNC
-	, pattern GL_STENCIL_BACK_FAIL
-	, pattern GL_STENCIL_BACK_PASS_DEPTH_FAIL
-	, pattern GL_STENCIL_BACK_PASS_DEPTH_PASS
-	, pattern GL_STENCIL_BACK_REF
-	, pattern GL_STENCIL_BACK_VALUE_MASK
-	, pattern GL_STENCIL_BACK_WRITEMASK
-	, pattern GL_VIEWPORT
-	, pattern GL_SCISSOR_BOX
-	, pattern GL_COLOR_CLEAR_VALUE
-	, pattern GL_COLOR_WRITEMASK
-	, pattern GL_UNPACK_ROW_LENGTH
-	, pattern GL_UNPACK_SKIP_ROWS
-	, pattern GL_UNPACK_SKIP_PIXELS
-	, pattern GL_UNPACK_ALIGNMENT
-	, pattern GL_UNPACK_IMAGE_HEIGHT
-	, pattern GL_PACK_ROW_LENGTH
-	, pattern GL_PACK_SKIP_ROWS
-	, pattern GL_PACK_SKIP_PIXELS
-	, pattern GL_PACK_ALIGNMENT
-	, pattern GL_MAX_TEXTURE_SIZE
-	, pattern GL_MAX_VIEWPORT_DIMS
-	, pattern GL_SUBPIXEL_BITS
-	, pattern GL_RED_BITS
-	, pattern GL_GREEN_BITS
-	, pattern GL_BLUE_BITS
-	, pattern GL_ALPHA_BITS
-	, pattern GL_DEPTH_BITS
-	, pattern GL_STENCIL_BITS
-	, pattern GL_POLYGON_OFFSET_UNITS
-	, pattern GL_POLYGON_OFFSET_FACTOR
-	, pattern GL_TEXTURE_BINDING_2D
-	, pattern GL_SAMPLE_BUFFERS
-	, pattern GL_SAMPLES
-	, pattern GL_SAMPLE_COVERAGE_VALUE
-	, pattern GL_SAMPLE_COVERAGE_INVERT
-	, pattern GL_COMPRESSED_TEXTURE_FORMATS
-	, pattern GL_DONT_CARE
-	, pattern GL_FASTEST
-	, pattern GL_NICEST
-	, pattern GL_GENERATE_MIPMAP_HINT
-	, pattern GL_BYTE
-	, pattern GL_UNSIGNED_BYTE
-	, pattern GL_SHORT
-	, pattern GL_UNSIGNED_SHORT
-	, pattern GL_INT
-	, pattern GL_UNSIGNED_INT
-	, pattern GL_FLOAT
-	, pattern GL_HALF_FLOAT
-	, pattern GL_DEPTH_COMPONENT
-	, pattern GL_RED
-	, pattern GL_ALPHA
-	, pattern GL_RGB
-	, pattern GL_RGBA
-	, pattern GL_LUMINANCE
-	, pattern GL_LUMINANCE_ALPHA
-	, pattern GL_RGB8
-	, pattern GL_RGBA8
-	, pattern GL_RGBA16
-	, pattern GL_RG
-	, pattern GL_R8
-	, pattern GL_R16
-	, pattern GL_RG8
-	, pattern GL_RG16
-	, pattern GL_R16F
-	, pattern GL_R32F
-	, pattern GL_RG16F
-	, pattern GL_RG32F
-	, pattern GL_RGBA32F
-	, pattern GL_RGB32F
-	, pattern GL_RGBA16F
-	, pattern GL_R11F_G11F_B10F
-	, pattern GL_SRGB8_ALPHA8
-	, pattern GL_COMPRESSED_RGB_S3TC_DXT1_EXT
-	, pattern GL_COMPRESSED_RGBA_S3TC_DXT1_EXT
-	, pattern GL_COMPRESSED_RGBA_S3TC_DXT3_EXT
-	, pattern GL_COMPRESSED_RGBA_S3TC_DXT5_EXT
-	, pattern GL_COMPRESSED_RED
-	, pattern GL_COMPRESSED_RG
-	, pattern GL_COMPRESSED_RGB
-	, pattern GL_COMPRESSED_RGBA
-	, pattern GL_COMPRESSED_SRGB_S3TC_DXT1_EXT
-	, pattern GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT
-	, pattern GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT
-	, pattern GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT
-	, pattern GL_COMPRESSED_RED_RGTC1
-	, pattern GL_COMPRESSED_SIGNED_RED_RGTC1
-	, pattern GL_COMPRESSED_RG_RGTC2
-	, pattern GL_COMPRESSED_SIGNED_RG_RGTC2
-	, pattern GL_UNSIGNED_SHORT_4_4_4_4
-	, pattern GL_UNSIGNED_SHORT_5_5_5_1
-	, pattern GL_UNSIGNED_SHORT_5_6_5
-	, pattern GL_UNSIGNED_INT_24_8
-	, pattern GL_FRAGMENT_SHADER
-	, pattern GL_VERTEX_SHADER
-	, pattern GL_MAX_VERTEX_ATTRIBS
-	, pattern GL_MAX_VERTEX_UNIFORM_VECTORS
-	, pattern GL_MAX_VARYING_VECTORS
-	, pattern GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS
-	, pattern GL_MAX_VERTEX_TEXTURE_IMAGE_UNITS
-	, pattern GL_MAX_TEXTURE_IMAGE_UNITS
-	, pattern GL_MAX_FRAGMENT_UNIFORM_VECTORS
-	, pattern GL_SHADER_TYPE
-	, pattern GL_DELETE_STATUS
-	, pattern GL_LINK_STATUS
-	, pattern GL_VALIDATE_STATUS
-	, pattern GL_ATTACHED_SHADERS
-	, pattern GL_ACTIVE_UNIFORMS
-	, pattern GL_ACTIVE_ATTRIBUTES
-	, pattern GL_SHADING_LANGUAGE_VERSION
-	, pattern GL_CURRENT_PROGRAM
-	, pattern GL_KEEP
-	, pattern GL_REPLACE
-	, pattern GL_INCR
-	, pattern GL_DECR
-	, pattern GL_INVERT
-	, pattern GL_INCR_WRAP
-	, pattern GL_DECR_WRAP
-	, pattern GL_VENDOR
-	, pattern GL_RENDERER
-	, pattern GL_VERSION
-	, pattern GL_NEAREST
-	, pattern GL_LINEAR
-	, pattern GL_NEAREST_MIPMAP_NEAREST
-	, pattern GL_LINEAR_MIPMAP_NEAREST
-	, pattern GL_NEAREST_MIPMAP_LINEAR
-	, pattern GL_LINEAR_MIPMAP_LINEAR
-	, pattern GL_TEXTURE_BORDER_COLOR
-	, pattern GL_TEXTURE_MAG_FILTER
-	, pattern GL_TEXTURE_MIN_FILTER
-	, pattern GL_TEXTURE_WRAP_S
-	, pattern GL_TEXTURE_WRAP_T
-	, pattern GL_TEXTURE_WRAP_R
-	, pattern GL_TEXTURE_MAX_ANISOTROPY_EXT
-	, pattern GL_TEXTURE
-	, pattern GL_TEXTURE_1D
-	, pattern GL_TEXTURE_1D_ARRAY
-	, pattern GL_TEXTURE_2D
-	, pattern GL_TEXTURE_2D_ARRAY
-	, pattern GL_TEXTURE_3D
-	, pattern GL_TEXTURE_CUBE_MAP
-	, pattern GL_TEXTURE_BINDING_CUBE_MAP
-	, pattern GL_TEXTURE_CUBE_MAP_POSITIVE_X
-	, pattern GL_TEXTURE_CUBE_MAP_NEGATIVE_X
-	, pattern GL_TEXTURE_CUBE_MAP_POSITIVE_Y
-	, pattern GL_TEXTURE_CUBE_MAP_NEGATIVE_Y
-	, pattern GL_TEXTURE_CUBE_MAP_POSITIVE_Z
-	, pattern GL_TEXTURE_CUBE_MAP_NEGATIVE_Z
-	, pattern GL_MAX_CUBE_MAP_TEXTURE_SIZE
-	, pattern GL_TEXTURE0
-	, pattern GL_TEXTURE1
-	, pattern GL_TEXTURE2
-	, pattern GL_TEXTURE3
-	, pattern GL_TEXTURE4
-	, pattern GL_TEXTURE5
-	, pattern GL_TEXTURE6
-	, pattern GL_TEXTURE7
-	, pattern GL_TEXTURE8
-	, pattern GL_TEXTURE9
-	, pattern GL_TEXTURE10
-	, pattern GL_TEXTURE11
-	, pattern GL_TEXTURE12
-	, pattern GL_TEXTURE13
-	, pattern GL_TEXTURE14
-	, pattern GL_TEXTURE15
-	, pattern GL_TEXTURE16
-	, pattern GL_TEXTURE17
-	, pattern GL_TEXTURE18
-	, pattern GL_TEXTURE19
-	, pattern GL_TEXTURE20
-	, pattern GL_TEXTURE21
-	, pattern GL_TEXTURE22
-	, pattern GL_TEXTURE23
-	, pattern GL_TEXTURE24
-	, pattern GL_TEXTURE25
-	, pattern GL_TEXTURE26
-	, pattern GL_TEXTURE27
-	, pattern GL_TEXTURE28
-	, pattern GL_TEXTURE29
-	, pattern GL_TEXTURE30
-	, pattern GL_TEXTURE31
-	, pattern GL_ACTIVE_TEXTURE
-	, pattern GL_REPEAT
-	, pattern GL_CLAMP_TO_BORDER
-	, pattern GL_CLAMP_TO_EDGE
-	, pattern GL_MIRRORED_REPEAT
-	, pattern GL_TEXTURE_MIN_LOD
-	, pattern GL_TEXTURE_MAX_LOD
-	, pattern GL_TEXTURE_BASE_LEVEL
-	, pattern GL_TEXTURE_MAX_LEVEL
-	, pattern GL_FLOAT_VEC2
-	, pattern GL_FLOAT_VEC3
-	, pattern GL_FLOAT_VEC4
-	, pattern GL_INT_VEC2
-	, pattern GL_INT_VEC3
-	, pattern GL_INT_VEC4
-	, pattern GL_BOOL
-	, pattern GL_BOOL_VEC2
-	, pattern GL_BOOL_VEC3
-	, pattern GL_BOOL_VEC4
-	, pattern GL_FLOAT_MAT2
-	, pattern GL_FLOAT_MAT3
-	, pattern GL_FLOAT_MAT4
-	, pattern GL_SAMPLER_2D
-	, pattern GL_SAMPLER_CUBE
-	, pattern GL_VERTEX_ATTRIB_ARRAY_ENABLED
-	, pattern GL_VERTEX_ATTRIB_ARRAY_SIZE
-	, pattern GL_VERTEX_ATTRIB_ARRAY_STRIDE
-	, pattern GL_VERTEX_ATTRIB_ARRAY_TYPE
-	, pattern GL_VERTEX_ATTRIB_ARRAY_NORMALIZED
-	, pattern GL_VERTEX_ATTRIB_ARRAY_POINTER
-	, pattern GL_VERTEX_ATTRIB_ARRAY_BUFFER_BINDING
-	, pattern GL_IMPLEMENTATION_COLOR_READ_TYPE
-	, pattern GL_IMPLEMENTATION_COLOR_READ_FORMAT
-	, pattern GL_COMPILE_STATUS
-	, pattern GL_LOW_FLOAT
-	, pattern GL_MEDIUM_FLOAT
-	, pattern GL_HIGH_FLOAT
-	, pattern GL_LOW_INT
-	, pattern GL_MEDIUM_INT
-	, pattern GL_HIGH_INT
-	, pattern GL_FRAMEBUFFER
-	, pattern GL_RENDERBUFFER
-	, pattern GL_RGBA4
-	, pattern GL_RGB5_A1
-	, pattern GL_RGB565
-	, pattern GL_DEPTH_COMPONENT16
-	, pattern GL_STENCIL_INDEX
-	, pattern GL_STENCIL_INDEX8
-	, pattern GL_DEPTH_STENCIL
-	, pattern GL_DEPTH24_STENCIL8
-	, pattern GL_RENDERBUFFER_WIDTH
-	, pattern GL_RENDERBUFFER_HEIGHT
-	, pattern GL_RENDERBUFFER_INTERNAL_FORMAT
-	, pattern GL_RENDERBUFFER_RED_SIZE
-	, pattern GL_RENDERBUFFER_GREEN_SIZE
-	, pattern GL_RENDERBUFFER_BLUE_SIZE
-	, pattern GL_RENDERBUFFER_ALPHA_SIZE
-	, pattern GL_RENDERBUFFER_DEPTH_SIZE
-	, pattern GL_RENDERBUFFER_STENCIL_SIZE
-	, pattern GL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE
-	, pattern GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME
-	, pattern GL_FRAMEBUFFER_ATTACHMENT_TEXTURE_LEVEL
-	, pattern GL_FRAMEBUFFER_ATTACHMENT_TEXTURE_CUBE_MAP_FACE
-	, pattern GL_COLOR_ATTACHMENT0
-	, pattern GL_DEPTH_ATTACHMENT
-	, pattern GL_STENCIL_ATTACHMENT
-	, pattern GL_DEPTH_STENCIL_ATTACHMENT
-	, pattern GL_NONE
-	, pattern GL_FRAMEBUFFER_COMPLETE
-	, pattern GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT
-	, pattern GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT
-	, pattern GL_FRAMEBUFFER_INCOMPLETE_DIMENSIONS
-	, pattern GL_FRAMEBUFFER_UNSUPPORTED
-	, pattern GL_FRAMEBUFFER_BINDING
-	, pattern GL_RENDERBUFFER_BINDING
-	, pattern GL_MAX_RENDERBUFFER_SIZE
-	, pattern GL_INVALID_FRAMEBUFFER_OPERATION
-	, pattern GL_UNPACK_FLIP_Y_WEBGL
-	, pattern GL_UNPACK_PREMULTIPLY_ALPHA_WEBGL
-	, pattern GL_CONTEXT_LOST_WEBGL
-	, pattern GL_UNPACK_COLORSPACE_CONVERSION_WEBGL
-	, pattern GL_BROWSER_DEFAULT_WEBGL
-	) where
+  (
+  -- * Introduction
+  -- | This module is written manually using definitions from WebGL specs:
+  -- <https://www.khronos.org/registry/webgl/specs/latest/1.0/webgl.idl WebGL 1.0 WebIDL>
+  -- <https://www.khronos.org/registry/webgl/specs/latest/2.0/webgl2.idl WebGL 2.0 WebIDL>
+    JS_WebGLContext(..)
+  , JS_WebGLTexture(..)
+  , JS_WebGLRenderbuffer(..)
+  , JS_WebGLFramebuffer(..)
+  , JS_WebGLBuffer(..)
+  , JS_WebGLProgram(..)
+  , JS_WebGLShader(..)
+  , JS_WebGLUniformLocation(..)
+  , UniformLocation
+  , GLenum
+  , GLint
+  , GLuint
+  , GLsizei
+  , GLsizeiptr
+  , GLintptr
+  , GLclampf
+  , GLboolean
+  , GLbitfield
+  -- * Initialization
+  , js_getCanvasContext
+  , js_setContext
+  , js_requestAnimationFrame
+  -- * WebGL functions
+  , glGetExtension
+  , glFrontFace
+  , glCullFace
+  , glEnable
+  , glDisable
+  , glGetError
+  -- ** Textures
+  , glCreateTexture
+  , glDeleteTexture
+  , glActiveTexture
+  , glBindTexture
+  , glTexImage2D_image
+  , glTexParameterf
+  , glTexParameteri
+  , glTexParameterfv
+  , glPixelStorei
+  , glTexStorage1D
+  , glTexStorage2D
+  , glTexStorage3D
+  -- ** Samplers
+  , glCreateSampler
+  , glDeleteSampler
+  , glBindSampler
+  , glSamplerParameteri
+  , glSamplerParameterf
+  , glSamplerParameterfv_4
+  -- ** Buffers
+  , glCreateBuffer
+  , glDeleteBuffer
+  , glBindBuffer
+  , glBindBufferBase
+  , glEnableVertexAttribArray
+  , glDisableVertexAttribArray
+  , glVertexAttribPointer
+  , glVertexAttribIPointer
+  , glVertexAttribDivisor
+  -- ** Framebuffers
+  , glCreateFramebuffer
+  , glDeleteFramebuffer
+  , glBindFramebuffer
+  , glFramebufferTexture2D
+  , glDrawBuffers_n
+  -- ** Shaders and programs
+  , glCreateShader
+  , glDeleteShader
+  , glCompileShader
+  , glCreateProgram
+  , glDeleteProgram
+  , glAttachShader
+  , glLinkProgram
+  , glUseProgram
+  , glUniformBlockBinding
+  , glShaderSource_s
+  , glGetShaderiv
+  , glGetShaderInfoLog_s
+  , glGetProgramiv
+  , glGetProgramInfoLog_s
+  , glBindAttribLocation_s
+  , glGetUniformLocation_s
+  , glGetUniformBlockIndex_s
+  -- ** Uniforms
+  , glUniform1i
+  , glUniform1fv
+  , glUniform2fv
+  , glUniform3fv
+  , glUniform4fv
+  , glUniform1iv
+  , glUniform2iv
+  , glUniform3iv
+  , glUniform4iv
+  , glUniform1uiv
+  , glUniform2uiv
+  , glUniform3uiv
+  , glUniform4uiv
+  , glUniformMatrix3fv
+  , glUniformMatrix4fv
+  -- ** Vertex Arrays
+  , glCreateVertexArray
+  , glDeleteVertexArray
+  , glBindVertexArray
+  -- ** Depth output
+  , glDepthFunc
+  , glDepthMask
+  -- ** Blending
+  , glBlendEquationSeparate
+  , glBlendFuncSeparate
+  -- ** Scissor
+  , glScissor
+  -- ** Clearing.
+  , glClearColor
+  , glClearDepth
+  , glClearStencil
+  , glClear
+  , glClearBufferiv_1
+  , glClearBufferfv_1
+  , glClearBufferfv_4
+  , glClearBufferfi
+  -- ** Viewport.
+  , glViewport
+  -- ** Drawing.
+  , glDrawArrays
+  , glDrawElements
+  , glDrawArraysInstanced
+  , glDrawElementsInstanced
+  -- ** Misc.
+  , glNativeTexture
+  -- * Name manipulation.
+  , BufferName
+  , TextureName
+  , SamplerName
+  , FramebufferName
+  , VertexArrayName
+  , ProgramName
+  , ShaderName
+  , glAllocBufferName
+  , glDeleteBufferName
+  , glNullBufferName
+  , glUndefinedBufferName
+  , glAllocTextureName
+  , glDeleteTextureName
+  , glNullTextureName
+  , glAllocSamplerName
+  , glDeleteSamplerName
+  , glNullSamplerName
+  , glAllocFramebufferName
+  , glDeleteFramebufferName
+  , glNullFramebufferName
+  , glAllocVertexArrayName
+  , glDeleteVertexArrayName
+  , glNullVertexArrayName
+  , glNullProgramName
+  -- * Offsets
+  , GlOffset
+  , glIntToOffset
+  -- * Stubs
+  , glProgramBinary
+  , glGetProgramBinary
+  , pattern GL_PROGRAM_BINARY_LENGTH
+  , glBindFragDataLocation
+  , glBindFragDataLocationIndexed
+  , glVertexAttribFormat
+  , glVertexAttribIFormat
+  , glVertexAttribBinding
+  , glVertexBindingDivisor
+  , glBindVertexBuffer
+  , glFinish
+  -- * Shims
+  -- ** Buffer uploading
+  , glBufferData_bs
+  , glBufferData_null
+  -- ** Texture uploading
+  -- | 1D versions don't exist in WebGL 1.0/2.0, but here for completeness.
+  -- 3D versions exist only in WebGL 2.0.
+  , glTexImage1D_bs
+  , glTexImage2D_bs
+  , glTexImage3D_bs
+  , glCompressedTexImage1D_bs
+  , glCompressedTexImage2D_bs
+  , glCompressedTexImage3D_bs
+  , glTexSubImage1D_bs
+  , glTexSubImage2D_bs
+  , glTexSubImage3D_bs
+  , glCompressedTexSubImage1D_bs
+  , glCompressedTexSubImage2D_bs
+  , glCompressedTexSubImage3D_bs
+  , glTexImage2D_null
+  -- * Constants.
+  , pattern GL_COLOR
+  , pattern GL_DEPTH
+  , pattern GL_STENCIL
+  , pattern GL_UNIFORM_BUFFER
+  , pattern GL_DEPTH_BUFFER_BIT
+  , pattern GL_STENCIL_BUFFER_BIT
+  , pattern GL_COLOR_BUFFER_BIT
+  , pattern GL_POINTS
+  , pattern GL_LINES
+  , pattern GL_LINE_LOOP
+  , pattern GL_LINE_STRIP
+  , pattern GL_TRIANGLES
+  , pattern GL_TRIANGLE_STRIP
+  , pattern GL_TRIANGLE_FAN
+  , pattern GL_PATCHES
+  , pattern GL_ZERO
+  , pattern GL_ONE
+  , pattern GL_SRC_COLOR
+  , pattern GL_ONE_MINUS_SRC_COLOR
+  , pattern GL_SRC_ALPHA
+  , pattern GL_ONE_MINUS_SRC_ALPHA
+  , pattern GL_DST_ALPHA
+  , pattern GL_ONE_MINUS_DST_ALPHA
+  , pattern GL_SRC1_ALPHA
+  , pattern GL_SRC1_COLOR
+  , pattern GL_ONE_MINUS_SRC1_COLOR
+  , pattern GL_ONE_MINUS_SRC1_ALPHA
+  , pattern GL_DST_COLOR
+  , pattern GL_ONE_MINUS_DST_COLOR
+  , pattern GL_SRC_ALPHA_SATURATE
+  , pattern GL_FUNC_ADD
+  , pattern GL_MIN
+  , pattern GL_MAX
+  , pattern GL_BLEND_EQUATION
+  , pattern GL_BLEND_EQUATION_RGB
+  , pattern GL_BLEND_EQUATION_ALPHA
+  , pattern GL_FUNC_SUBTRACT
+  , pattern GL_FUNC_REVERSE_SUBTRACT
+  , pattern GL_BLEND_DST_RGB
+  , pattern GL_BLEND_SRC_RGB
+  , pattern GL_BLEND_DST_ALPHA
+  , pattern GL_BLEND_SRC_ALPHA
+  , pattern GL_CONSTANT_COLOR
+  , pattern GL_ONE_MINUS_CONSTANT_COLOR
+  , pattern GL_CONSTANT_ALPHA
+  , pattern GL_ONE_MINUS_CONSTANT_ALPHA
+  , pattern GL_BLEND_COLOR
+  , pattern GL_ARRAY_BUFFER
+  , pattern GL_ELEMENT_ARRAY_BUFFER
+  , pattern GL_ARRAY_BUFFER_BINDING
+  , pattern GL_ELEMENT_ARRAY_BUFFER_BINDING
+  , pattern GL_STREAM_DRAW
+  , pattern GL_STATIC_DRAW
+  , pattern GL_DYNAMIC_DRAW
+  , pattern GL_BUFFER_SIZE
+  , pattern GL_BUFFER_USAGE
+  , pattern GL_CURRENT_VERTEX_ATTRIB
+  , pattern GL_FRONT
+  , pattern GL_BACK
+  , pattern GL_FRONT_AND_BACK
+  -- ** Comparison functions
+  , pattern GL_NEVER
+  , pattern GL_LESS
+  , pattern GL_EQUAL
+  , pattern GL_LEQUAL
+  , pattern GL_GREATER
+  , pattern GL_NOTEQUAL
+  , pattern GL_GEQUAL
+  , pattern GL_ALWAYS
+  -- ** Features
+  , pattern GL_CULL_FACE
+  , pattern GL_BLEND
+  , pattern GL_DITHER
+  , pattern GL_STENCIL_TEST
+  , pattern GL_DEPTH_TEST
+  , pattern GL_SCISSOR_TEST
+  , pattern GL_POLYGON_OFFSET_FILL
+  , pattern GL_SAMPLE_ALPHA_TO_COVERAGE
+  , pattern GL_SAMPLE_COVERAGE
+  -- ** Errors
+  , pattern GL_NO_ERROR
+  , pattern GL_INVALID_ENUM
+  , pattern GL_INVALID_VALUE
+  , pattern GL_INVALID_OPERATION
+  , pattern GL_OUT_OF_MEMORY
+  , pattern GL_CW
+  , pattern GL_CCW
+  , pattern GL_LINE_WIDTH
+  , pattern GL_ALIASED_POINT_SIZE_RANGE
+  , pattern GL_ALIASED_LINE_WIDTH_RANGE
+  , pattern GL_CULL_FACE_MODE
+  , pattern GL_FRONT_FACE
+  , pattern GL_DEPTH_RANGE
+  , pattern GL_DEPTH_WRITEMASK
+  , pattern GL_DEPTH_CLEAR_VALUE
+  , pattern GL_DEPTH_FUNC
+  , pattern GL_STENCIL_CLEAR_VALUE
+  , pattern GL_STENCIL_FUNC
+  , pattern GL_STENCIL_FAIL
+  , pattern GL_STENCIL_PASS_DEPTH_FAIL
+  , pattern GL_STENCIL_PASS_DEPTH_PASS
+  , pattern GL_STENCIL_REF
+  , pattern GL_STENCIL_VALUE_MASK
+  , pattern GL_STENCIL_WRITEMASK
+  , pattern GL_STENCIL_BACK_FUNC
+  , pattern GL_STENCIL_BACK_FAIL
+  , pattern GL_STENCIL_BACK_PASS_DEPTH_FAIL
+  , pattern GL_STENCIL_BACK_PASS_DEPTH_PASS
+  , pattern GL_STENCIL_BACK_REF
+  , pattern GL_STENCIL_BACK_VALUE_MASK
+  , pattern GL_STENCIL_BACK_WRITEMASK
+  , pattern GL_VIEWPORT
+  , pattern GL_SCISSOR_BOX
+  , pattern GL_COLOR_CLEAR_VALUE
+  , pattern GL_COLOR_WRITEMASK
+  , pattern GL_UNPACK_ROW_LENGTH
+  , pattern GL_UNPACK_SKIP_ROWS
+  , pattern GL_UNPACK_SKIP_PIXELS
+  , pattern GL_UNPACK_ALIGNMENT
+  , pattern GL_UNPACK_IMAGE_HEIGHT
+  , pattern GL_PACK_ROW_LENGTH
+  , pattern GL_PACK_SKIP_ROWS
+  , pattern GL_PACK_SKIP_PIXELS
+  , pattern GL_PACK_ALIGNMENT
+  , pattern GL_MAX_TEXTURE_SIZE
+  , pattern GL_MAX_VIEWPORT_DIMS
+  , pattern GL_SUBPIXEL_BITS
+  , pattern GL_RED_BITS
+  , pattern GL_GREEN_BITS
+  , pattern GL_BLUE_BITS
+  , pattern GL_ALPHA_BITS
+  , pattern GL_DEPTH_BITS
+  , pattern GL_STENCIL_BITS
+  , pattern GL_POLYGON_OFFSET_UNITS
+  , pattern GL_POLYGON_OFFSET_FACTOR
+  , pattern GL_TEXTURE_BINDING_2D
+  , pattern GL_SAMPLE_BUFFERS
+  , pattern GL_SAMPLES
+  , pattern GL_SAMPLE_COVERAGE_VALUE
+  , pattern GL_SAMPLE_COVERAGE_INVERT
+  , pattern GL_COMPRESSED_TEXTURE_FORMATS
+  , pattern GL_DONT_CARE
+  , pattern GL_FASTEST
+  , pattern GL_NICEST
+  , pattern GL_GENERATE_MIPMAP_HINT
+  , pattern GL_BYTE
+  , pattern GL_UNSIGNED_BYTE
+  , pattern GL_SHORT
+  , pattern GL_UNSIGNED_SHORT
+  , pattern GL_INT
+  , pattern GL_UNSIGNED_INT
+  , pattern GL_FLOAT
+  , pattern GL_HALF_FLOAT
+  , pattern GL_DEPTH_COMPONENT
+  , pattern GL_RED
+  , pattern GL_ALPHA
+  , pattern GL_RGB
+  , pattern GL_RGBA
+  , pattern GL_LUMINANCE
+  , pattern GL_LUMINANCE_ALPHA
+  , pattern GL_RGB8
+  , pattern GL_RGBA8
+  , pattern GL_RGBA16
+  , pattern GL_RG
+  , pattern GL_R8
+  , pattern GL_R16
+  , pattern GL_RG8
+  , pattern GL_RG16
+  , pattern GL_R16F
+  , pattern GL_R32F
+  , pattern GL_RG16F
+  , pattern GL_RG32F
+  , pattern GL_RGBA32F
+  , pattern GL_RGB32F
+  , pattern GL_RGBA16F
+  , pattern GL_R11F_G11F_B10F
+  , pattern GL_SRGB8_ALPHA8
+  , pattern GL_COMPRESSED_RGB_S3TC_DXT1_EXT
+  , pattern GL_COMPRESSED_RGBA_S3TC_DXT1_EXT
+  , pattern GL_COMPRESSED_RGBA_S3TC_DXT3_EXT
+  , pattern GL_COMPRESSED_RGBA_S3TC_DXT5_EXT
+  , pattern GL_COMPRESSED_RED
+  , pattern GL_COMPRESSED_RG
+  , pattern GL_COMPRESSED_RGB
+  , pattern GL_COMPRESSED_RGBA
+  , pattern GL_COMPRESSED_SRGB_S3TC_DXT1_EXT
+  , pattern GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT
+  , pattern GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT
+  , pattern GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT
+  , pattern GL_COMPRESSED_RED_RGTC1
+  , pattern GL_COMPRESSED_SIGNED_RED_RGTC1
+  , pattern GL_COMPRESSED_RG_RGTC2
+  , pattern GL_COMPRESSED_SIGNED_RG_RGTC2
+  , pattern GL_UNSIGNED_SHORT_4_4_4_4
+  , pattern GL_UNSIGNED_SHORT_5_5_5_1
+  , pattern GL_UNSIGNED_SHORT_5_6_5
+  , pattern GL_UNSIGNED_INT_24_8
+  , pattern GL_FRAGMENT_SHADER
+  , pattern GL_VERTEX_SHADER
+  , pattern GL_MAX_VERTEX_ATTRIBS
+  , pattern GL_MAX_VERTEX_UNIFORM_VECTORS
+  , pattern GL_MAX_VARYING_VECTORS
+  , pattern GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS
+  , pattern GL_MAX_VERTEX_TEXTURE_IMAGE_UNITS
+  , pattern GL_MAX_TEXTURE_IMAGE_UNITS
+  , pattern GL_MAX_FRAGMENT_UNIFORM_VECTORS
+  , pattern GL_SHADER_TYPE
+  , pattern GL_DELETE_STATUS
+  , pattern GL_LINK_STATUS
+  , pattern GL_VALIDATE_STATUS
+  , pattern GL_ATTACHED_SHADERS
+  , pattern GL_ACTIVE_UNIFORMS
+  , pattern GL_ACTIVE_ATTRIBUTES
+  , pattern GL_SHADING_LANGUAGE_VERSION
+  , pattern GL_CURRENT_PROGRAM
+  , pattern GL_KEEP
+  , pattern GL_REPLACE
+  , pattern GL_INCR
+  , pattern GL_DECR
+  , pattern GL_INVERT
+  , pattern GL_INCR_WRAP
+  , pattern GL_DECR_WRAP
+  , pattern GL_VENDOR
+  , pattern GL_RENDERER
+  , pattern GL_VERSION
+  , pattern GL_NEAREST
+  , pattern GL_LINEAR
+  , pattern GL_NEAREST_MIPMAP_NEAREST
+  , pattern GL_LINEAR_MIPMAP_NEAREST
+  , pattern GL_NEAREST_MIPMAP_LINEAR
+  , pattern GL_LINEAR_MIPMAP_LINEAR
+  , pattern GL_TEXTURE_BORDER_COLOR
+  , pattern GL_TEXTURE_MAG_FILTER
+  , pattern GL_TEXTURE_MIN_FILTER
+  , pattern GL_TEXTURE_WRAP_S
+  , pattern GL_TEXTURE_WRAP_T
+  , pattern GL_TEXTURE_WRAP_R
+  , pattern GL_TEXTURE_MAX_ANISOTROPY_EXT
+  , pattern GL_TEXTURE
+  , pattern GL_TEXTURE_1D
+  , pattern GL_TEXTURE_1D_ARRAY
+  , pattern GL_TEXTURE_2D
+  , pattern GL_TEXTURE_2D_ARRAY
+  , pattern GL_TEXTURE_3D
+  , pattern GL_TEXTURE_CUBE_MAP
+  , pattern GL_TEXTURE_BINDING_CUBE_MAP
+  , pattern GL_TEXTURE_CUBE_MAP_POSITIVE_X
+  , pattern GL_TEXTURE_CUBE_MAP_NEGATIVE_X
+  , pattern GL_TEXTURE_CUBE_MAP_POSITIVE_Y
+  , pattern GL_TEXTURE_CUBE_MAP_NEGATIVE_Y
+  , pattern GL_TEXTURE_CUBE_MAP_POSITIVE_Z
+  , pattern GL_TEXTURE_CUBE_MAP_NEGATIVE_Z
+  , pattern GL_MAX_CUBE_MAP_TEXTURE_SIZE
+  , pattern GL_TEXTURE0
+  , pattern GL_TEXTURE1
+  , pattern GL_TEXTURE2
+  , pattern GL_TEXTURE3
+  , pattern GL_TEXTURE4
+  , pattern GL_TEXTURE5
+  , pattern GL_TEXTURE6
+  , pattern GL_TEXTURE7
+  , pattern GL_TEXTURE8
+  , pattern GL_TEXTURE9
+  , pattern GL_TEXTURE10
+  , pattern GL_TEXTURE11
+  , pattern GL_TEXTURE12
+  , pattern GL_TEXTURE13
+  , pattern GL_TEXTURE14
+  , pattern GL_TEXTURE15
+  , pattern GL_TEXTURE16
+  , pattern GL_TEXTURE17
+  , pattern GL_TEXTURE18
+  , pattern GL_TEXTURE19
+  , pattern GL_TEXTURE20
+  , pattern GL_TEXTURE21
+  , pattern GL_TEXTURE22
+  , pattern GL_TEXTURE23
+  , pattern GL_TEXTURE24
+  , pattern GL_TEXTURE25
+  , pattern GL_TEXTURE26
+  , pattern GL_TEXTURE27
+  , pattern GL_TEXTURE28
+  , pattern GL_TEXTURE29
+  , pattern GL_TEXTURE30
+  , pattern GL_TEXTURE31
+  , pattern GL_ACTIVE_TEXTURE
+  , pattern GL_REPEAT
+  , pattern GL_CLAMP_TO_BORDER
+  , pattern GL_CLAMP_TO_EDGE
+  , pattern GL_MIRRORED_REPEAT
+  , pattern GL_TEXTURE_MIN_LOD
+  , pattern GL_TEXTURE_MAX_LOD
+  , pattern GL_TEXTURE_BASE_LEVEL
+  , pattern GL_TEXTURE_MAX_LEVEL
+  , pattern GL_FLOAT_VEC2
+  , pattern GL_FLOAT_VEC3
+  , pattern GL_FLOAT_VEC4
+  , pattern GL_INT_VEC2
+  , pattern GL_INT_VEC3
+  , pattern GL_INT_VEC4
+  , pattern GL_BOOL
+  , pattern GL_BOOL_VEC2
+  , pattern GL_BOOL_VEC3
+  , pattern GL_BOOL_VEC4
+  , pattern GL_FLOAT_MAT2
+  , pattern GL_FLOAT_MAT3
+  , pattern GL_FLOAT_MAT4
+  , pattern GL_SAMPLER_2D
+  , pattern GL_SAMPLER_CUBE
+  , pattern GL_VERTEX_ATTRIB_ARRAY_ENABLED
+  , pattern GL_VERTEX_ATTRIB_ARRAY_SIZE
+  , pattern GL_VERTEX_ATTRIB_ARRAY_STRIDE
+  , pattern GL_VERTEX_ATTRIB_ARRAY_TYPE
+  , pattern GL_VERTEX_ATTRIB_ARRAY_NORMALIZED
+  , pattern GL_VERTEX_ATTRIB_ARRAY_POINTER
+  , pattern GL_VERTEX_ATTRIB_ARRAY_BUFFER_BINDING
+  , pattern GL_IMPLEMENTATION_COLOR_READ_TYPE
+  , pattern GL_IMPLEMENTATION_COLOR_READ_FORMAT
+  , pattern GL_COMPILE_STATUS
+  , pattern GL_LOW_FLOAT
+  , pattern GL_MEDIUM_FLOAT
+  , pattern GL_HIGH_FLOAT
+  , pattern GL_LOW_INT
+  , pattern GL_MEDIUM_INT
+  , pattern GL_HIGH_INT
+  , pattern GL_FRAMEBUFFER
+  , pattern GL_RENDERBUFFER
+  , pattern GL_RGBA4
+  , pattern GL_RGB5_A1
+  , pattern GL_RGB565
+  , pattern GL_DEPTH_COMPONENT16
+  , pattern GL_STENCIL_INDEX
+  , pattern GL_STENCIL_INDEX8
+  , pattern GL_DEPTH_STENCIL
+  , pattern GL_DEPTH24_STENCIL8
+  , pattern GL_RENDERBUFFER_WIDTH
+  , pattern GL_RENDERBUFFER_HEIGHT
+  , pattern GL_RENDERBUFFER_INTERNAL_FORMAT
+  , pattern GL_RENDERBUFFER_RED_SIZE
+  , pattern GL_RENDERBUFFER_GREEN_SIZE
+  , pattern GL_RENDERBUFFER_BLUE_SIZE
+  , pattern GL_RENDERBUFFER_ALPHA_SIZE
+  , pattern GL_RENDERBUFFER_DEPTH_SIZE
+  , pattern GL_RENDERBUFFER_STENCIL_SIZE
+  , pattern GL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE
+  , pattern GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME
+  , pattern GL_FRAMEBUFFER_ATTACHMENT_TEXTURE_LEVEL
+  , pattern GL_FRAMEBUFFER_ATTACHMENT_TEXTURE_CUBE_MAP_FACE
+  , pattern GL_COLOR_ATTACHMENT0
+  , pattern GL_DEPTH_ATTACHMENT
+  , pattern GL_STENCIL_ATTACHMENT
+  , pattern GL_DEPTH_STENCIL_ATTACHMENT
+  , pattern GL_NONE
+  , pattern GL_FRAMEBUFFER_COMPLETE
+  , pattern GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT
+  , pattern GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT
+  , pattern GL_FRAMEBUFFER_INCOMPLETE_DIMENSIONS
+  , pattern GL_FRAMEBUFFER_UNSUPPORTED
+  , pattern GL_FRAMEBUFFER_BINDING
+  , pattern GL_RENDERBUFFER_BINDING
+  , pattern GL_MAX_RENDERBUFFER_SIZE
+  , pattern GL_INVALID_FRAMEBUFFER_OPERATION
+  , pattern GL_UNPACK_FLIP_Y_WEBGL
+  , pattern GL_UNPACK_PREMULTIPLY_ALPHA_WEBGL
+  , pattern GL_CONTEXT_LOST_WEBGL
+  , pattern GL_UNPACK_COLORSPACE_CONVERSION_WEBGL
+  , pattern GL_BROWSER_DEFAULT_WEBGL
+  ) where
 
 import Control.Exception
 import qualified Data.ByteString as B
@@ -604,28 +604,28 @@ type UniformLocation = JS_WebGLUniformLocation
 -- 'Eq' instances
 
 instance Eq JS_WebGLTexture where
-	{-# INLINE (==) #-}
-	(JS_WebGLTexture a) == (JS_WebGLTexture b) = a `jseq` b
+  {-# INLINE (==) #-}
+  (JS_WebGLTexture a) == (JS_WebGLTexture b) = a `jseq` b
 
 instance Eq JS_WebGLSampler where
-	{-# INLINE (==) #-}
-	(JS_WebGLSampler a) == (JS_WebGLSampler b) = a `jseq` b
+  {-# INLINE (==) #-}
+  (JS_WebGLSampler a) == (JS_WebGLSampler b) = a `jseq` b
 
 instance Eq JS_WebGLFramebuffer where
-	{-# INLINE (==) #-}
-	(JS_WebGLFramebuffer a) == (JS_WebGLFramebuffer b) = a `jseq` b
+  {-# INLINE (==) #-}
+  (JS_WebGLFramebuffer a) == (JS_WebGLFramebuffer b) = a `jseq` b
 
 instance Eq JS_WebGLBuffer where
-	{-# INLINE (==) #-}
-	(JS_WebGLBuffer a) == (JS_WebGLBuffer b) = a `jseq` b
+  {-# INLINE (==) #-}
+  (JS_WebGLBuffer a) == (JS_WebGLBuffer b) = a `jseq` b
 
 instance Eq JS_WebGLProgram where
-	{-# INLINE (==) #-}
-	(JS_WebGLProgram a) == (JS_WebGLProgram b) = a `jseq` b
+  {-# INLINE (==) #-}
+  (JS_WebGLProgram a) == (JS_WebGLProgram b) = a `jseq` b
 
 instance Eq JS_WebGLVertexArray where
-	{-# INLINE (==) #-}
-	(JS_WebGLVertexArray a) == (JS_WebGLVertexArray b) = a `jseq` b
+  {-# INLINE (==) #-}
+  (JS_WebGLVertexArray a) == (JS_WebGLVertexArray b) = a `jseq` b
 
 foreign import javascript unsafe "$1 === $2" js_eq :: JSVal -> JSVal -> JSVal
 jseq :: JSVal -> JSVal -> Bool
@@ -665,36 +665,36 @@ foreign import javascript unsafe "h$flaw_webgl_context.activeTexture($1)" glActi
 foreign import javascript unsafe "h$flaw_webgl_context.bindTexture($1, $2)" glBindTexture :: GLenum -> JS_WebGLTexture -> IO ()
 
 foreign import javascript unsafe "h$flaw_webgl_context.texImage2D($1, $2, $3, $4, $5, $6, $7, $8)"
-	glTexImage1D_val :: GLenum -> GLint -> GLint -> GLsizei -> GLint -> GLenum -> GLenum -> JSVal -> IO ()
+  glTexImage1D_val :: GLenum -> GLint -> GLint -> GLsizei -> GLint -> GLenum -> GLenum -> JSVal -> IO ()
 foreign import javascript unsafe "h$flaw_webgl_context.texImage2D($1, $2, $3, $4, $5, $6, $7, $8, $9)"
-	glTexImage2D_val :: GLenum -> GLint -> GLint -> GLsizei -> GLsizei -> GLint -> GLenum -> GLenum -> JSVal -> IO ()
+  glTexImage2D_val :: GLenum -> GLint -> GLint -> GLsizei -> GLsizei -> GLint -> GLenum -> GLenum -> JSVal -> IO ()
 foreign import javascript unsafe "h$flaw_webgl_context.texImage2D($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)"
-	glTexImage3D_val :: GLenum -> GLint -> GLint -> GLsizei -> GLsizei -> GLsizei -> GLint -> GLenum -> GLenum -> JSVal -> IO ()
+  glTexImage3D_val :: GLenum -> GLint -> GLint -> GLsizei -> GLsizei -> GLsizei -> GLint -> GLenum -> GLenum -> JSVal -> IO ()
 
 foreign import javascript unsafe "h$flaw_webgl_context.compressedTexImage1D($1, $2, $3, $4, $5, $6)"
-	glCompressedTexImage1D_val :: GLenum -> GLint -> GLenum -> GLsizei -> GLint -> JSVal -> IO ()
+  glCompressedTexImage1D_val :: GLenum -> GLint -> GLenum -> GLsizei -> GLint -> JSVal -> IO ()
 foreign import javascript unsafe "h$flaw_webgl_context.compressedTexImage2D($1, $2, $3, $4, $5, $6, $7)"
-	glCompressedTexImage2D_val :: GLenum -> GLint -> GLenum -> GLsizei -> GLsizei -> GLint -> JSVal -> IO ()
+  glCompressedTexImage2D_val :: GLenum -> GLint -> GLenum -> GLsizei -> GLsizei -> GLint -> JSVal -> IO ()
 foreign import javascript unsafe "h$flaw_webgl_context.compressedTexImage3D($1, $2, $3, $4, $5, $6, $7, $8)"
-	glCompressedTexImage3D_val :: GLenum -> GLint -> GLenum -> GLsizei -> GLsizei -> GLsizei -> GLint -> JSVal -> IO ()
+  glCompressedTexImage3D_val :: GLenum -> GLint -> GLenum -> GLsizei -> GLsizei -> GLsizei -> GLint -> JSVal -> IO ()
 
 foreign import javascript unsafe "h$flaw_webgl_context.texSubImage1D($1, $2, $3, $4, $5, $6, $7)"
-	glTexSubImage1D_val :: GLenum -> GLint -> GLint -> GLsizei -> GLenum -> GLenum -> JSVal -> IO ()
+  glTexSubImage1D_val :: GLenum -> GLint -> GLint -> GLsizei -> GLenum -> GLenum -> JSVal -> IO ()
 foreign import javascript unsafe "h$flaw_webgl_context.texSubImage2D($1, $2, $3, $4, $5, $6, $7, $8, $9)"
-	glTexSubImage2D_val :: GLenum -> GLint -> GLint -> GLint -> GLsizei -> GLsizei -> GLenum -> GLenum -> JSVal -> IO ()
+  glTexSubImage2D_val :: GLenum -> GLint -> GLint -> GLint -> GLsizei -> GLsizei -> GLenum -> GLenum -> JSVal -> IO ()
 foreign import javascript unsafe "h$flaw_webgl_context.texSubImage3D($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)"
-	glTexSubImage3D_val :: GLenum -> GLint -> GLint -> GLint -> GLint -> GLsizei -> GLsizei -> GLsizei -> GLenum -> GLenum -> JSVal -> IO ()
+  glTexSubImage3D_val :: GLenum -> GLint -> GLint -> GLint -> GLint -> GLsizei -> GLsizei -> GLsizei -> GLenum -> GLenum -> JSVal -> IO ()
 
 foreign import javascript unsafe "h$flaw_webgl_context.compressedTexSubImage1D($1, $2, $3, $4, $5, $6)"
-	glCompressedTexSubImage1D_val :: GLenum -> GLint -> GLint -> GLsizei -> GLenum -> JSVal -> IO ()
+  glCompressedTexSubImage1D_val :: GLenum -> GLint -> GLint -> GLsizei -> GLenum -> JSVal -> IO ()
 foreign import javascript unsafe "h$flaw_webgl_context.compressedTexSubImage2D($1, $2, $3, $4, $5, $6, $7, $8)"
-	glCompressedTexSubImage2D_val :: GLenum -> GLint -> GLint -> GLint -> GLsizei -> GLsizei -> GLenum -> JSVal -> IO ()
+  glCompressedTexSubImage2D_val :: GLenum -> GLint -> GLint -> GLint -> GLsizei -> GLsizei -> GLenum -> JSVal -> IO ()
 foreign import javascript unsafe "h$flaw_webgl_context.compressedTexSubImage3D($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)"
-	glCompressedTexSubImage3D_val :: GLenum -> GLint -> GLint -> GLint -> GLint -> GLsizei -> GLsizei -> GLsizei -> GLenum -> JSVal -> IO ()
+  glCompressedTexSubImage3D_val :: GLenum -> GLint -> GLint -> GLint -> GLint -> GLsizei -> GLsizei -> GLsizei -> GLenum -> JSVal -> IO ()
 
 
 foreign import javascript unsafe "h$flaw_webgl_context.texImage2D($1, $2, $3, $4, $5, $6)"
-	glTexImage2D_image :: GLenum -> GLint -> GLint -> GLenum -> GLenum -> JSVal -> IO ()
+  glTexImage2D_image :: GLenum -> GLint -> GLint -> GLenum -> GLenum -> JSVal -> IO ()
 
 foreign import javascript unsafe "h$flaw_webgl_context.texParameterf($1, $2, $3)" glTexParameterf :: GLenum -> GLenum -> GLfloat -> IO ()
 foreign import javascript unsafe "h$flaw_webgl_context.texParameteri($1, $2, $3)" glTexParameteri :: GLenum -> GLenum -> GLint -> IO ()
@@ -851,13 +851,13 @@ foreign import javascript unsafe "h$flaw_webgl_context.scissor($1, $2, $3, $4)" 
 
 -- Clearing functions.
 foreign import javascript unsafe "h$flaw_webgl_context.clearColor($1, $2, $3, $4)"
-	glClearColor :: GLfloat -> GLfloat -> GLfloat -> GLfloat -> IO ()
+  glClearColor :: GLfloat -> GLfloat -> GLfloat -> GLfloat -> IO ()
 foreign import javascript unsafe "h$flaw_webgl_context.clearDepth($1)"
-	glClearDepth :: GLclampf -> IO ()
+  glClearDepth :: GLclampf -> IO ()
 foreign import javascript unsafe "h$flaw_webgl_context.clearStencil($1)"
-	glClearStencil :: GLint -> IO ()
+  glClearStencil :: GLint -> IO ()
 foreign import javascript unsafe "h$flaw_webgl_context.clear($1)"
-	glClear :: GLbitfield -> IO ()
+  glClear :: GLbitfield -> IO ()
 
 {-# INLINE glClearBufferfv_4 #-}
 glClearBufferfv_4 :: GLenum -> GLint -> Float4 -> IO ()
@@ -865,24 +865,24 @@ glClearBufferfv_4 buffer drawBuffer (Float4 r g b a) = glClearBufferfv_4_helper 
 
 -- MRT clearing functions (WebGL 2.0).
 foreign import javascript unsafe "h$flaw_webgl_context.clearBufferiv($1, $2, [$3])"
-	glClearBufferiv_1 :: GLenum -> GLint -> GLint -> IO ()
+  glClearBufferiv_1 :: GLenum -> GLint -> GLint -> IO ()
 foreign import javascript unsafe "h$flaw_webgl_context.clearBufferfv($1, $2, [$3])"
-	glClearBufferfv_1 :: GLenum -> GLint -> GLfloat -> IO ()
+  glClearBufferfv_1 :: GLenum -> GLint -> GLfloat -> IO ()
 foreign import javascript unsafe "h$flaw_webgl_context.clearBufferfv($1, $2, [$3, $4, $5, $6])"
-	glClearBufferfv_4_helper :: GLenum -> GLint -> GLfloat -> GLfloat -> GLfloat -> GLfloat -> IO ()
+  glClearBufferfv_4_helper :: GLenum -> GLint -> GLfloat -> GLfloat -> GLfloat -> GLfloat -> IO ()
 foreign import javascript unsafe "h$flaw_webgl_context.clearBufferfi($1, $2, $3, $4)"
-	glClearBufferfi :: GLenum -> GLint -> GLfloat -> GLint -> IO ()
+  glClearBufferfi :: GLenum -> GLint -> GLfloat -> GLint -> IO ()
 
 foreign import javascript unsafe "h$flaw_webgl_context.viewport($1, $2, $3, $4)"
-	glViewport :: GLint -> GLint -> GLsizei -> GLsizei -> IO ()
+  glViewport :: GLint -> GLint -> GLsizei -> GLsizei -> IO ()
 foreign import javascript unsafe "h$flaw_webgl_context.drawArrays($1, $2, $3)"
-	glDrawArrays :: GLenum -> GLint -> GLsizei -> IO ()
+  glDrawArrays :: GLenum -> GLint -> GLsizei -> IO ()
 foreign import javascript unsafe "h$flaw_webgl_context.drawElements($1, $2, $3, $4)"
-	glDrawElements :: GLenum -> GLsizei -> GLenum -> GLintptr -> IO ()
+  glDrawElements :: GLenum -> GLsizei -> GLenum -> GLintptr -> IO ()
 foreign import javascript unsafe "h$flaw_webgl_context.drawArraysInstanced($1, $2, $3, $4)"
-	glDrawArraysInstanced :: GLenum -> GLint -> GLsizei -> GLsizei -> IO ()
+  glDrawArraysInstanced :: GLenum -> GLint -> GLsizei -> GLsizei -> IO ()
 foreign import javascript unsafe "h$flaw_webgl_context.drawElementsInstanced($1, $2, $3, $4, $5)"
-	glDrawElementsInstanced :: GLenum -> GLsizei -> GLenum -> GLintptr -> GLsizei -> IO ()
+  glDrawElementsInstanced :: GLenum -> GLsizei -> GLenum -> GLintptr -> GLsizei -> IO ()
 
 
 -- Buffer uploading.
@@ -902,77 +902,77 @@ glBufferData_null target size usage = glBufferData_val target (pToJSVal size) us
 {-# INLINE texImageBytes #-}
 texImageBytes :: GLenum -> B.ByteString -> JSVal
 texImageBytes type_ bytes = case type_ of
-	GL_UNSIGNED_BYTE -> byteStringToJsUint8Array bytes
-	GL_UNSIGNED_SHORT -> byteStringToJsUint16Array bytes
-	GL_UNSIGNED_INT -> byteStringToJsUint32Array bytes
-	GL_FLOAT -> byteStringToJsFloatArray bytes
-	_ -> byteStringToJsDataView bytes
+  GL_UNSIGNED_BYTE -> byteStringToJsUint8Array bytes
+  GL_UNSIGNED_SHORT -> byteStringToJsUint16Array bytes
+  GL_UNSIGNED_INT -> byteStringToJsUint32Array bytes
+  GL_FLOAT -> byteStringToJsFloatArray bytes
+  _ -> byteStringToJsDataView bytes
 
 
 {-# INLINABLE glTexImage1D_bs #-}
 glTexImage1D_bs :: GLenum -> GLint -> GLint -> GLsizei -> GLint -> GLenum -> GLenum -> B.ByteString -> IO ()
 glTexImage1D_bs target level internalFormat width border format type_ bytes =
-	glTexImage1D_val target level internalFormat width border format type_ $ texImageBytes type_ bytes
+  glTexImage1D_val target level internalFormat width border format type_ $ texImageBytes type_ bytes
 
 {-# INLINABLE glTexImage2D_bs #-}
 glTexImage2D_bs :: GLenum -> GLint -> GLint -> GLsizei -> GLsizei -> GLint -> GLenum -> GLenum -> B.ByteString -> IO ()
 glTexImage2D_bs target level internalFormat width height border format type_ bytes =
-	glTexImage2D_val target level internalFormat width height border format type_ $ texImageBytes type_ bytes
+  glTexImage2D_val target level internalFormat width height border format type_ $ texImageBytes type_ bytes
 
 {-# INLINABLE glTexImage3D_bs #-}
 glTexImage3D_bs :: GLenum -> GLint -> GLint -> GLsizei -> GLsizei -> GLsizei -> GLint -> GLenum -> GLenum -> B.ByteString -> IO ()
 glTexImage3D_bs target level internalFormat width height depth border format type_ bytes =
-	glTexImage3D_val target level internalFormat width height depth border format type_ $ texImageBytes type_ bytes
+  glTexImage3D_val target level internalFormat width height depth border format type_ $ texImageBytes type_ bytes
 
 {-# INLINABLE glCompressedTexImage1D_bs #-}
 glCompressedTexImage1D_bs :: GLenum -> GLint -> GLenum -> GLsizei -> GLint -> B.ByteString -> IO ()
 glCompressedTexImage1D_bs target level internalFormat width border bytes =
-	glCompressedTexImage1D_val target level internalFormat width border $ byteStringToJsDataView bytes
+  glCompressedTexImage1D_val target level internalFormat width border $ byteStringToJsDataView bytes
 
 {-# INLINABLE glCompressedTexImage2D_bs #-}
 glCompressedTexImage2D_bs :: GLenum -> GLint -> GLenum -> GLsizei -> GLsizei -> GLint -> B.ByteString -> IO ()
 glCompressedTexImage2D_bs target level internalFormat width height border bytes =
-	glCompressedTexImage2D_val target level internalFormat width height border $ byteStringToJsDataView bytes
+  glCompressedTexImage2D_val target level internalFormat width height border $ byteStringToJsDataView bytes
 
 {-# INLINABLE glCompressedTexImage3D_bs #-}
 glCompressedTexImage3D_bs :: GLenum -> GLint -> GLenum -> GLsizei -> GLsizei -> GLsizei -> GLint -> B.ByteString -> IO ()
 glCompressedTexImage3D_bs target level internalFormat width height depth border bytes =
-	glCompressedTexImage3D_val target level internalFormat width height depth border $ byteStringToJsDataView bytes
+  glCompressedTexImage3D_val target level internalFormat width height depth border $ byteStringToJsDataView bytes
 
 {-# INLINABLE glTexSubImage1D_bs #-}
 glTexSubImage1D_bs :: GLenum -> GLint -> GLint -> GLsizei -> GLenum -> GLenum -> B.ByteString -> IO ()
 glTexSubImage1D_bs target level xoffset width format type_ bytes =
-	glTexSubImage1D_val target level xoffset width format type_ $ byteStringToJsDataView bytes
+  glTexSubImage1D_val target level xoffset width format type_ $ byteStringToJsDataView bytes
 
 {-# INLINABLE glTexSubImage2D_bs #-}
 glTexSubImage2D_bs :: GLenum -> GLint -> GLint -> GLint -> GLsizei -> GLsizei -> GLenum -> GLenum -> B.ByteString -> IO ()
 glTexSubImage2D_bs target level xoffset yoffset width height format type_ bytes =
-	glTexSubImage2D_val target level xoffset yoffset width height format type_ $ byteStringToJsDataView bytes
+  glTexSubImage2D_val target level xoffset yoffset width height format type_ $ byteStringToJsDataView bytes
 
 {-# INLINABLE glTexSubImage3D_bs #-}
 glTexSubImage3D_bs :: GLenum -> GLint -> GLint -> GLint -> GLint -> GLsizei -> GLsizei -> GLsizei -> GLenum -> GLenum -> B.ByteString -> IO ()
 glTexSubImage3D_bs target level xoffset yoffset zoffset width height depth format type_ bytes =
-	glTexSubImage3D_val target level xoffset yoffset zoffset width height depth format type_ $ byteStringToJsDataView bytes
+  glTexSubImage3D_val target level xoffset yoffset zoffset width height depth format type_ $ byteStringToJsDataView bytes
 
 {-# INLINABLE glCompressedTexSubImage1D_bs #-}
 glCompressedTexSubImage1D_bs :: GLenum -> GLint -> GLint -> GLsizei -> GLenum -> B.ByteString -> IO ()
 glCompressedTexSubImage1D_bs target level xoffset width format bytes =
-	glCompressedTexSubImage1D_val target level xoffset width format $ byteStringToJsDataView bytes
+  glCompressedTexSubImage1D_val target level xoffset width format $ byteStringToJsDataView bytes
 
 {-# INLINABLE glCompressedTexSubImage2D_bs #-}
 glCompressedTexSubImage2D_bs :: GLenum -> GLint -> GLint -> GLint -> GLsizei -> GLsizei -> GLenum -> B.ByteString -> IO ()
 glCompressedTexSubImage2D_bs target level xoffset yoffset width height format bytes =
-	glCompressedTexSubImage2D_val target level xoffset yoffset width height format $ byteStringToJsDataView bytes
+  glCompressedTexSubImage2D_val target level xoffset yoffset width height format $ byteStringToJsDataView bytes
 
 {-# INLINABLE glCompressedTexSubImage3D_bs #-}
 glCompressedTexSubImage3D_bs :: GLenum -> GLint -> GLint -> GLint -> GLint -> GLsizei -> GLsizei -> GLsizei -> GLenum -> B.ByteString -> IO ()
 glCompressedTexSubImage3D_bs target level xoffset yoffset zoffset width height depth format bytes =
-	glCompressedTexSubImage3D_val target level xoffset yoffset zoffset width height depth format $ byteStringToJsDataView bytes
+  glCompressedTexSubImage3D_val target level xoffset yoffset zoffset width height depth format $ byteStringToJsDataView bytes
 
 {-# INLINABLE glTexImage2D_null #-}
 glTexImage2D_null :: GLenum -> GLint -> GLint -> GLsizei -> GLsizei -> GLint -> GLenum -> GLenum -> IO ()
 glTexImage2D_null target level internalFormat width height border format type_ =
-	glTexImage2D_val target level internalFormat width height border format type_ nullRef
+  glTexImage2D_val target level internalFormat width height border format type_ nullRef
 
 
 -- Sampler parameter
@@ -1055,13 +1055,13 @@ foreign import javascript unsafe "$r = null" glNullProgramName :: JS_WebGLProgra
 -- | Load texture natively.
 glNativeTexture :: B.ByteString -> IO (GLenum, JS_WebGLTexture)
 glNativeTexture bytes = do
-	objectUrl <- createObjectUrl mempty $ byteStringToJsDataView bytes
-	image <- js_loadImage objectUrl
-	revokeObjectUrl objectUrl
-	jsTexture <- glCreateTexture
-	glBindTexture GL_TEXTURE_2D jsTexture
-	glTexImage2D_image GL_TEXTURE_2D 0 GL_RGBA GL_RGBA GL_UNSIGNED_BYTE image
-	return (GL_TEXTURE_2D, jsTexture)
+  objectUrl <- createObjectUrl mempty $ byteStringToJsDataView bytes
+  image <- js_loadImage objectUrl
+  revokeObjectUrl objectUrl
+  jsTexture <- glCreateTexture
+  glBindTexture GL_TEXTURE_2D jsTexture
+  glTexImage2D_image GL_TEXTURE_2D 0 GL_RGBA GL_RGBA GL_UNSIGNED_BYTE image
+  return (GL_TEXTURE_2D, jsTexture)
 
 foreign import javascript interruptible "var image=new Image();image.onload=function(){$c(image);};image.src=$1;" js_loadImage :: JSString -> IO JSVal
 

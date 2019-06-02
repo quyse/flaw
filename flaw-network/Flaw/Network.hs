@@ -5,22 +5,22 @@ License: MIT
 -}
 
 module Flaw.Network
-	( Socket(..)
-	, SocketException(..)
-	) where
+  ( Socket(..)
+  , SocketException(..)
+  ) where
 
 import Control.Concurrent.STM
 import Control.Exception
 import qualified Data.ByteString as B
 
 class Socket s where
-	readSocket :: s -> STM B.ByteString
-	writeSocket :: s -> B.ByteString -> STM ()
-	closeSocket :: s -> STM ()
+  readSocket :: s -> STM B.ByteString
+  writeSocket :: s -> B.ByteString -> STM ()
+  closeSocket :: s -> STM ()
 
 data SocketException
-	= SocketEndException
-	| SocketErrorException
-	deriving Show
+  = SocketEndException
+  | SocketErrorException
+  deriving Show
 
 instance Exception SocketException

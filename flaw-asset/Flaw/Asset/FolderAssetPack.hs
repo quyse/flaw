@@ -7,9 +7,9 @@ License: MIT
 {-# LANGUAGE CPP, JavaScriptFFI, OverloadedStrings, TemplateHaskell, TypeFamilies #-}
 
 module Flaw.Asset.FolderAssetPack
-	( FolderAssetPack(..)
-	, AssetPackBuilder(..)
-	) where
+  ( FolderAssetPack(..)
+  , AssetPackBuilder(..)
+  ) where
 
 import qualified Data.ByteString as B
 import qualified Data.Text as T
@@ -31,23 +31,23 @@ newtype FolderAssetPack = FolderAssetPack T.Text
 genEmbed ''FolderAssetPack
 
 instance AssetPack FolderAssetPack where
-	type AssetId FolderAssetPack = T.Text
+  type AssetId FolderAssetPack = T.Text
 
-	loadAsset (FolderAssetPack prefix) fileName = do
-		let fullFileName = prefix <> fileName
+  loadAsset (FolderAssetPack prefix) fileName = do
+    let fullFileName = prefix <> fileName
 #ifdef ghcjs_HOST_OS
-		-- get asset by url, convert to bytestring
-		arrayBufferToByteString <$> arrayBufferFromUrl (textToJSString fullFileName)
+    -- get asset by url, convert to bytestring
+    arrayBufferToByteString <$> arrayBufferFromUrl (textToJSString fullFileName)
 #else
-		-- just load file
-		B.readFile $ T.unpack fullFileName
+    -- just load file
+    B.readFile $ T.unpack fullFileName
 #endif
 
-	newtype AssetPackBuilder FolderAssetPack = FolderAssetPackBuilder T.Text
-	putAsset (FolderAssetPackBuilder prefix) fileName asset = do
-		let path = prefix <> fileName
-		createDirectoryIfMissing True $ T.unpack $ fst $ T.breakOnEnd "/" path
-		B.writeFile (T.unpack path) asset
+  newtype AssetPackBuilder FolderAssetPack = FolderAssetPackBuilder T.Text
+  putAsset (FolderAssetPackBuilder prefix) fileName asset = do
+    let path = prefix <> fileName
+    createDirectoryIfMissing True $ T.unpack $ fst $ T.breakOnEnd "/" path
+    B.writeFile (T.unpack path) asset
 
 instance WebAssetPack FolderAssetPack where
-	getWebAssetUrl (FolderAssetPack prefix) fileName = return $ prefix <> fileName
+  getWebAssetUrl (FolderAssetPack prefix) fileName = return $ prefix <> fileName

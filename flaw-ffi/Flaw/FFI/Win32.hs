@@ -7,40 +7,40 @@ License: MIT
 {-# LANGUAGE TemplateHaskell #-}
 
 module Flaw.FFI.Win32
-	( BOOL
-	, BYTE
-	, UINT8
-	, CHAR
-	, WCHAR
-	, SHORT
-	, USHORT
-	, INT
-	, UINT
-	, LONG
-	, ULONG
-	, WORD
-	, DWORD
-	, SIZE_T
-	, LARGE_INTEGER
-	, FLOAT
-	, DOUBLE
-	, LPSTR
-	, LPWSTR
-	, RECT(..)
-	, GUID
-	, HANDLE
-	, HINSTANCE
-	, HMODULE
-	, HWND
-	, WPARAM
-	, LPARAM
-	, loWord
-	, hiWord
-	, loadLibrary
-	, getProcAddress
-	, loadLibraryAndGetProcAddress
-	, winUTF16ToText
-	) where
+  ( BOOL
+  , BYTE
+  , UINT8
+  , CHAR
+  , WCHAR
+  , SHORT
+  , USHORT
+  , INT
+  , UINT
+  , LONG
+  , ULONG
+  , WORD
+  , DWORD
+  , SIZE_T
+  , LARGE_INTEGER
+  , FLOAT
+  , DOUBLE
+  , LPSTR
+  , LPWSTR
+  , RECT(..)
+  , GUID
+  , HANDLE
+  , HINSTANCE
+  , HMODULE
+  , HWND
+  , WPARAM
+  , LPARAM
+  , loWord
+  , hiWord
+  , loadLibrary
+  , getProcAddress
+  , loadLibraryAndGetProcAddress
+  , winUTF16ToText
+  ) where
 
 import qualified Data.ByteString.Builder as BSB
 import qualified Data.ByteString.Lazy as BL
@@ -78,11 +78,11 @@ type LPSTR = CString
 type LPWSTR = CWString
 
 genStruct "RECT"
-	[ ([t|LONG|], "left")
-	, ([t|LONG|], "top")
-	, ([t|LONG|], "right")
-	, ([t|LONG|], "bottom")
-	]
+  [ ([t|LONG|], "left")
+  , ([t|LONG|], "top")
+  , ([t|LONG|], "right")
+  , ([t|LONG|], "bottom")
+  ]
 
 type GUID = UUID
 
@@ -113,15 +113,15 @@ foreign import stdcall safe "GetProcAddress" winapi_getProcAddress :: HMODULE ->
 
 loadLibraryAndGetProcAddress :: String -> String -> IO (FunPtr a)
 loadLibraryAndGetProcAddress libraryName procName = do
-	dll <- loadLibrary libraryName
-	if dll == nullPtr then fail $ "no " ++ libraryName
-	else do
-		proc <- getProcAddress dll procName
-		if proc == nullFunPtr then fail $ "no " ++ procName ++ " in " ++ libraryName
-		else return proc
+  dll <- loadLibrary libraryName
+  if dll == nullPtr then fail $ "no " ++ libraryName
+  else do
+    proc <- getProcAddress dll procName
+    if proc == nullFunPtr then fail $ "no " ++ procName ++ " in " ++ libraryName
+    else return proc
 
 -- | Convert LPWSTR to Text.
 winUTF16ToText :: [WCHAR] -> T.Text
 winUTF16ToText s = T.decodeUtf16LE $ BL.toStrict $ BSB.toLazyByteString $ upToZero s where
-	upToZero (x:xs) = if x == 0 then mempty else mappend (BSB.word16LE x) $ upToZero xs
-	upToZero [] = mempty
+  upToZero (x:xs) = if x == 0 then mempty else mappend (BSB.word16LE x) $ upToZero xs
+  upToZero [] = mempty

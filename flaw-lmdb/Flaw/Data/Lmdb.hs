@@ -8,17 +8,17 @@ License: MIT
 {-# OPTIONS_GHC -fno-warn-missing-pattern-synonym-signatures #-}
 
 module Flaw.Data.Lmdb
-	( Lmdb()
-	, LmdbTransaction()
-	, lmdbOpen
-	, lmdbRead
-	, lmdbWrite
-	, lmdbCommit
-	, lmdbGet
-	, lmdbPut
-	, lmdbDelete
-	, lmdbFoldPrefixRange
-	) where
+  ( Lmdb()
+  , LmdbTransaction()
+  , lmdbOpen
+  , lmdbRead
+  , lmdbWrite
+  , lmdbCommit
+  , lmdbGet
+  , lmdbPut
+  , lmdbDelete
+  , lmdbFoldPrefixRange
+  ) where
 
 import Control.Exception
 import Control.Monad
@@ -39,198 +39,199 @@ import Flaw.Book
 import Flaw.Flow
 
 data Lmdb = Lmdb
-	{ lmdbEnvPtr :: {-# UNPACK #-} !(Ptr MDB_env)
-	, lmdbDbi :: {-# UNPACK #-} !MDB_dbi
-	, lmdbFlow :: !Flow
-	}
+  { lmdbEnvPtr :: {-# UNPACK #-} !(Ptr MDB_env)
+  , lmdbDbi :: {-# UNPACK #-} !MDB_dbi
+  , lmdbFlow :: !Flow
+  }
 
 data LmdbTransaction = LmdbTransaction
-	{ lmdbTransactionTxnPtr :: {-# UNPACK #-} !(Ptr MDB_txn)
-	, lmdbTransactionDbi :: {-# UNPACK #-} !MDB_dbi
-	, lmdbTransactionFinishedRef :: {-# UNPACK #-} !(IORef Bool)
-	}
+  { lmdbTransactionTxnPtr :: {-# UNPACK #-} !(Ptr MDB_txn)
+  , lmdbTransactionDbi :: {-# UNPACK #-} !MDB_dbi
+  , lmdbTransactionFinishedRef :: {-# UNPACK #-} !(IORef Bool)
+  }
 
 -- | Open LMDB environment.
 lmdbOpen :: T.Text -> Word64 -> IO (Lmdb, IO ())
 lmdbOpen fileName mapSize = withSpecialBook $ \bk -> do
-	-- create env
-	envPtr <- alloca $ \envPtrPtr -> do
-		lmdbCheckError $ mdb_env_create envPtrPtr
-		peek envPtrPtr
-	book bk $ return ((), mdb_env_close envPtr)
+  -- create env
+  envPtr <- alloca $ \envPtrPtr -> do
+    lmdbCheckError $ mdb_env_create envPtrPtr
+    peek envPtrPtr
+  book bk $ return ((), mdb_env_close envPtr)
 
-	-- set memory map size
-	lmdbCheckError $ mdb_env_set_mapsize envPtr (fromIntegral mapSize)
+  -- set memory map size
+  lmdbCheckError $ mdb_env_set_mapsize envPtr (fromIntegral mapSize)
 
-	-- open env
-	lmdbCheckError $ B.useAsCString (T.encodeUtf8 fileName) $ \fileNamePtr ->
-		mdb_env_open envPtr fileNamePtr (MDB_NOSUBDIR .|. MDB_WRITEMAP .|. MDB_NOSYNC .|. MDB_NOTLS) 0o644
+  -- open env
+  lmdbCheckError $ B.useAsCString (T.encodeUtf8 fileName) $ \fileNamePtr ->
+    mdb_env_open envPtr fileNamePtr (MDB_NOSUBDIR .|. MDB_WRITEMAP .|. MDB_NOSYNC .|. MDB_NOTLS) 0o644
 
-	-- open database
-	dbi <- let
-		acquire = alloca $ \txnPtrPtr -> do
-			lmdbCheckError $ mdb_txn_begin envPtr nullPtr MDB_RDONLY txnPtrPtr
-			peek txnPtrPtr
-		in bracketOnError acquire mdb_txn_abort $ \txnPtr -> do
-			dbi <- alloca $ \dbiPtr -> do
-				lmdbCheckError $ mdb_dbi_open txnPtr nullPtr MDB_CREATE dbiPtr
-				peek dbiPtr
-			lmdbCheckError $ mdb_txn_commit txnPtr
-			return dbi
-	book bk $ return ((), mdb_dbi_close envPtr dbi)
+  -- open database
+  dbi <- let
+    acquire = alloca $ \txnPtrPtr -> do
+      lmdbCheckError $ mdb_txn_begin envPtr nullPtr MDB_RDONLY txnPtrPtr
+      peek txnPtrPtr
+    in bracketOnError acquire mdb_txn_abort $ \txnPtr -> do
+      dbi <- alloca $ \dbiPtr -> do
+        lmdbCheckError $ mdb_dbi_open txnPtr nullPtr MDB_CREATE dbiPtr
+        peek dbiPtr
+      lmdbCheckError $ mdb_txn_commit txnPtr
+      return dbi
+  book bk $ return ((), mdb_dbi_close envPtr dbi)
 
-	-- create flow
-	flow <- book bk newFlowOS
+  -- create flow
+  flow <- book bk newFlowOS
 
-	return Lmdb
-		{ lmdbEnvPtr = envPtr
-		, lmdbDbi = dbi
-		, lmdbFlow = flow
-		}
+  return Lmdb
+    { lmdbEnvPtr = envPtr
+    , lmdbDbi = dbi
+    , lmdbFlow = flow
+    }
 
 -- | Run read transaction.
 lmdbRead :: Lmdb -> (LmdbTransaction -> IO a) -> IO a
 lmdbRead Lmdb
-	{ lmdbEnvPtr = envPtr
-	, lmdbDbi = dbi
-	} io = do
-	finishedRef <- newIORef False
-	let
-		acquire = alloca $ \txnPtrPtr -> do
-			lmdbCheckError $ mdb_txn_begin envPtr nullPtr MDB_RDONLY txnPtrPtr
-			peek txnPtrPtr
-		release txnPtr = do
-			finished <- readIORef finishedRef
-			unless finished $ mdb_txn_abort txnPtr
-	bracket acquire release $ \txnPtr -> io LmdbTransaction
-		{ lmdbTransactionTxnPtr = txnPtr
-		, lmdbTransactionDbi = dbi
-		, lmdbTransactionFinishedRef = finishedRef
-		}
+  { lmdbEnvPtr = envPtr
+  , lmdbDbi = dbi
+  } io = do
+  finishedRef <- newIORef False
+  let
+    acquire = alloca $ \txnPtrPtr -> do
+      lmdbCheckError $ mdb_txn_begin envPtr nullPtr MDB_RDONLY txnPtrPtr
+      peek txnPtrPtr
+    release txnPtr = do
+      finished <- readIORef finishedRef
+      unless finished $ mdb_txn_abort txnPtr
+  bracket acquire release $ \txnPtr -> io LmdbTransaction
+    { lmdbTransactionTxnPtr = txnPtr
+    , lmdbTransactionDbi = dbi
+    , lmdbTransactionFinishedRef = finishedRef
+    }
 
 -- | Run write transaction.
 lmdbWrite :: Lmdb -> (LmdbTransaction -> IO a) -> IO a
 lmdbWrite Lmdb
-	{ lmdbEnvPtr = envPtr
-	, lmdbDbi = dbi
-	, lmdbFlow = flow
-	} io = runInFlow flow $ do
-	finishedRef <- newIORef False
-	let
-		acquire = alloca $ \txnPtrPtr -> do
-			lmdbCheckError $ mdb_txn_begin envPtr nullPtr 0 txnPtrPtr
-			peek txnPtrPtr
-		release txnPtr = do
-			finished <- readIORef finishedRef
-			unless finished $ mdb_txn_abort txnPtr
-	bracket acquire release $ \txnPtr -> io LmdbTransaction
-		{ lmdbTransactionTxnPtr = txnPtr
-		, lmdbTransactionDbi = dbi
-		, lmdbTransactionFinishedRef = finishedRef
-		}
+  { lmdbEnvPtr = envPtr
+  , lmdbDbi = dbi
+  , lmdbFlow = flow
+  } io = runInFlow flow $ do
+  finishedRef <- newIORef False
+  let
+    acquire = alloca $ \txnPtrPtr -> do
+      lmdbCheckError $ mdb_txn_begin envPtr nullPtr 0 txnPtrPtr
+      peek txnPtrPtr
+    release txnPtr = do
+      finished <- readIORef finishedRef
+      unless finished $ mdb_txn_abort txnPtr
+  bracket acquire release $ \txnPtr -> io LmdbTransaction
+    { lmdbTransactionTxnPtr = txnPtr
+    , lmdbTransactionDbi = dbi
+    , lmdbTransactionFinishedRef = finishedRef
+    }
 
 lmdbCommit :: LmdbTransaction -> IO ()
 lmdbCommit LmdbTransaction
-	{ lmdbTransactionTxnPtr = txnPtr
-	, lmdbTransactionFinishedRef = finishedRef
-	} = do
-	lmdbCheckError $ mdb_txn_commit txnPtr
-	writeIORef finishedRef True
+  { lmdbTransactionTxnPtr = txnPtr
+  , lmdbTransactionFinishedRef = finishedRef
+  } = do
+  lmdbCheckError $ mdb_txn_commit txnPtr
+  writeIORef finishedRef True
 
 lmdbGet :: LmdbTransaction -> B.ByteString -> IO (Maybe B.ByteString)
 lmdbGet LmdbTransaction
-	{ lmdbTransactionTxnPtr = txnPtr
-	, lmdbTransactionDbi = dbi
-	} key = B.unsafeUseAsCStringLen key $ \(keyPtr, keyLength) -> allocaArray 2 $ \keyBufPtr -> do
-	poke keyBufPtr $ intPtrToPtr $ fromIntegral keyLength
-	pokeElemOff keyBufPtr 1 keyPtr
-	allocaArray 2 $ \valueBufPtr -> do
-		r <- mdb_get txnPtr dbi keyBufPtr valueBufPtr
-		if r == MDB_SUCCESS then do
-			valueLength <- fromIntegral . ptrToIntPtr <$> peek valueBufPtr
-			valuePtr <- peekElemOff valueBufPtr 1
-			Just <$> B.packCStringLen (valuePtr, valueLength)
-		else if r == MDB_NOTFOUND then return Nothing
-		else lmdbThrowError r
+  { lmdbTransactionTxnPtr = txnPtr
+  , lmdbTransactionDbi = dbi
+  } key = B.unsafeUseAsCStringLen key $ \(keyPtr, keyLength) -> allocaArray 2 $ \keyBufPtr -> do
+  poke keyBufPtr $ intPtrToPtr $ fromIntegral keyLength
+  pokeElemOff keyBufPtr 1 keyPtr
+  allocaArray 2 $ \valueBufPtr -> do
+    r <- mdb_get txnPtr dbi keyBufPtr valueBufPtr
+    if r == MDB_SUCCESS then do
+      valueLength <- fromIntegral . ptrToIntPtr <$> peek valueBufPtr
+      valuePtr <- peekElemOff valueBufPtr 1
+      Just <$> B.packCStringLen (valuePtr, valueLength)
+    else if r == MDB_NOTFOUND then return Nothing
+    else lmdbThrowError r
 
 lmdbPut :: LmdbTransaction -> B.ByteString -> B.ByteString -> IO ()
 lmdbPut LmdbTransaction
-	{ lmdbTransactionTxnPtr = txnPtr
-	, lmdbTransactionDbi = dbi
-	} key value = lmdbCheckError $
-	B.unsafeUseAsCStringLen key $ \(keyPtr, keyLength) -> allocaArray 2 $ \keyBufPtr -> do
-		poke keyBufPtr $ intPtrToPtr $ fromIntegral keyLength
-		pokeElemOff keyBufPtr 1 keyPtr
-		B.unsafeUseAsCStringLen value $ \(valuePtr, valueLength) -> allocaArray 2 $ \valueBufPtr -> do
-			poke valueBufPtr $ intPtrToPtr $ fromIntegral valueLength
-			pokeElemOff valueBufPtr 1 valuePtr
-			mdb_put txnPtr dbi keyBufPtr valueBufPtr 0
+  { lmdbTransactionTxnPtr = txnPtr
+  , lmdbTransactionDbi = dbi
+  } key value = lmdbCheckError $
+  B.unsafeUseAsCStringLen key $ \(keyPtr, keyLength) -> allocaArray 2 $ \keyBufPtr -> do
+    poke keyBufPtr $ intPtrToPtr $ fromIntegral keyLength
+    pokeElemOff keyBufPtr 1 keyPtr
+    B.unsafeUseAsCStringLen value $ \(valuePtr, valueLength) -> allocaArray 2 $ \valueBufPtr -> do
+      poke valueBufPtr $ intPtrToPtr $ fromIntegral valueLength
+      pokeElemOff valueBufPtr 1 valuePtr
+      mdb_put txnPtr dbi keyBufPtr valueBufPtr 0
 
 lmdbDelete :: LmdbTransaction -> B.ByteString -> IO ()
 lmdbDelete LmdbTransaction
-	{ lmdbTransactionTxnPtr = txnPtr
-	, lmdbTransactionDbi = dbi
-	} key = lmdbCheckError $
-	B.unsafeUseAsCStringLen key $ \(keyPtr, keyLength) -> allocaArray 2 $ \keyBufPtr -> do
-		poke keyBufPtr $ intPtrToPtr $ fromIntegral keyLength
-		pokeElemOff keyBufPtr 1 keyPtr
-		mdb_del txnPtr dbi keyBufPtr nullPtr
+  { lmdbTransactionTxnPtr = txnPtr
+  , lmdbTransactionDbi = dbi
+  } key = lmdbCheckError $
+  B.unsafeUseAsCStringLen key $ \(keyPtr, keyLength) -> allocaArray 2 $ \keyBufPtr -> do
+    poke keyBufPtr $ intPtrToPtr $ fromIntegral keyLength
+    pokeElemOff keyBufPtr 1 keyPtr
+    mdb_del txnPtr dbi keyBufPtr nullPtr
 
 -- | Fold key-values pairs prefixed with specified prefix.
 lmdbFoldPrefixRange :: LmdbTransaction -> B.ByteString -> a -> (B.ByteString -> B.ByteString -> a -> IO (Bool, a)) -> IO a
 lmdbFoldPrefixRange LmdbTransaction
-	{ lmdbTransactionTxnPtr = txnPtr
-	, lmdbTransactionDbi = dbi
-	} keyPrefix z0 step = bracket acquireCursor releaseCursor $ \cursorPtr ->
-	allocaArray 2 $ \keyBufPtr -> allocaArray 2 $ \valueBufPtr ->
-	B.unsafeUseAsCStringLen keyPrefix $ \(keyPrefixPtr, keyPrefixLength) -> do
-		-- iteration function
-		let iteration z r = do
-			-- if we got key-value pair
-			if r == MDB_SUCCESS then do
-				-- get key
-				keyLength <- fromIntegral . ptrToIntPtr <$> peek keyBufPtr
-				keyPtr <- peekElemOff keyBufPtr 1
-				key <- B.packCStringLen (keyPtr, keyLength)
-				-- check that key prefix is an actual prefix
-				if B.isPrefixOf keyPrefix key then do
-					-- get value
-					valueLength <- fromIntegral . ptrToIntPtr <$> peek valueBufPtr
-					valuePtr <- peekElemOff valueBufPtr 1
-					value <- B.packCStringLen (valuePtr, valueLength)
-					-- call step function
-					(continue, nz) <- step key value z
-					if continue
-						-- go to next key-value pair and repeat
-						then iteration nz =<< mdb_cursor_get cursorPtr keyBufPtr valueBufPtr MDB_NEXT
-						else return nz
-				else return z
-			-- else we got to an end
-			else if r == MDB_NOTFOUND then return z
-			-- else it's error
-			else lmdbThrowError r
+  { lmdbTransactionTxnPtr = txnPtr
+  , lmdbTransactionDbi = dbi
+  } keyPrefix z0 step = bracket acquireCursor releaseCursor $ \cursorPtr ->
+  allocaArray 2 $ \keyBufPtr -> allocaArray 2 $ \valueBufPtr ->
+  B.unsafeUseAsCStringLen keyPrefix $ \(keyPrefixPtr, keyPrefixLength) -> do
+    -- iteration function
+    let
+      iteration z r = do
+        -- if we got key-value pair
+        if r == MDB_SUCCESS then do
+          -- get key
+          keyLength <- fromIntegral . ptrToIntPtr <$> peek keyBufPtr
+          keyPtr <- peekElemOff keyBufPtr 1
+          key <- B.packCStringLen (keyPtr, keyLength)
+          -- check that key prefix is an actual prefix
+          if B.isPrefixOf keyPrefix key then do
+            -- get value
+            valueLength <- fromIntegral . ptrToIntPtr <$> peek valueBufPtr
+            valuePtr <- peekElemOff valueBufPtr 1
+            value <- B.packCStringLen (valuePtr, valueLength)
+            -- call step function
+            (continue, nz) <- step key value z
+            if continue
+              -- go to next key-value pair and repeat
+              then iteration nz =<< mdb_cursor_get cursorPtr keyBufPtr valueBufPtr MDB_NEXT
+              else return nz
+          else return z
+        -- else we got to an end
+        else if r == MDB_NOTFOUND then return z
+        -- else it's error
+        else lmdbThrowError r
 
-		-- place cursor on first item, and start iterations
-		poke keyBufPtr $ intPtrToPtr $ fromIntegral keyPrefixLength
-		pokeElemOff keyBufPtr 1 keyPrefixPtr
-		iteration z0 =<< mdb_cursor_get cursorPtr keyBufPtr valueBufPtr MDB_SET_RANGE
-	where
-		acquireCursor = alloca $ \cursorPtrPtr -> do
-			lmdbCheckError $ mdb_cursor_open txnPtr dbi cursorPtrPtr
-			peek cursorPtrPtr
-		releaseCursor = mdb_cursor_close
+    -- place cursor on first item, and start iterations
+    poke keyBufPtr $ intPtrToPtr $ fromIntegral keyPrefixLength
+    pokeElemOff keyBufPtr 1 keyPrefixPtr
+    iteration z0 =<< mdb_cursor_get cursorPtr keyBufPtr valueBufPtr MDB_SET_RANGE
+  where
+    acquireCursor = alloca $ \cursorPtrPtr -> do
+      lmdbCheckError $ mdb_cursor_open txnPtr dbi cursorPtrPtr
+      peek cursorPtrPtr
+    releaseCursor = mdb_cursor_close
 
 lmdbCheckError :: IO CInt -> IO ()
 lmdbCheckError io = do
-	r <- io
-	unless (r == MDB_SUCCESS) $ lmdbThrowError r
+  r <- io
+  unless (r == MDB_SUCCESS) $ lmdbThrowError r
 
 lmdbThrowError :: CInt -> IO a
 lmdbThrowError r = throwIO . LmdbError r . T.decodeUtf8 =<< B.packCString =<< mdb_strerror r
 
 data LmdbError
-	= LmdbError {-# UNPACK #-} !CInt !T.Text
-	deriving Show
+  = LmdbError {-# UNPACK #-} !CInt !T.Text
+  deriving Show
 
 instance Exception LmdbError
 

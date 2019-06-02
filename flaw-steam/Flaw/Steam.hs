@@ -5,9 +5,9 @@ License: MIT
 -}
 
 module Flaw.Steam
-	( SteamId(..)
-	, SteamAppId(..)
-	) where
+  ( SteamId(..)
+  , SteamAppId(..)
+  ) where
 
 import Data.Word
 

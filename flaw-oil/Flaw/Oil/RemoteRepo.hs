@@ -5,11 +5,11 @@ License: MIT
 -}
 
 module Flaw.Oil.RemoteRepo
-	( HttpRemoteRepo()
-	, initHttpRemoteRepo
-	, syncHttpRemoteRepo
-	, watchHttpRemoteRepo
-	) where
+  ( HttpRemoteRepo()
+  , initHttpRemoteRepo
+  , syncHttpRemoteRepo
+  , watchHttpRemoteRepo
+  ) where
 
 import Control.Concurrent
 import Control.Exception
@@ -27,85 +27,89 @@ import Flaw.Oil.Repo
 
 -- | Implementation for a local client repo, synchronized with remote server repo.
 data HttpRemoteRepo = HttpRemoteRepo
-	{ httpRemoteRepoHttpManager :: H.Manager
-	, httpRemoteRepoTemplateRequest :: !H.Request
-	}
+  { httpRemoteRepoHttpManager :: H.Manager
+  , httpRemoteRepoTemplateRequest :: !H.Request
+  }
 
 initHttpRemoteRepo :: H.Manager -> T.Text -> IO (HttpRemoteRepo, Manifest)
 initHttpRemoteRepo httpManager url = do
 
-	-- create template request by parsing url
-	templateRequest <- H.parseUrlThrow $ T.unpack url
+  -- create template request by parsing url
+  templateRequest <- H.parseUrlThrow $ T.unpack url
 
-	-- get manifest
-	let request = templateRequest
-		{ H.method = H.methodGet
-		, H.queryString = T.encodeUtf8 $ T.pack "manifest"
-		}
-	body <- tryFewTimes $ H.withResponse request httpManager $ fmap BL.fromChunks . H.brConsume . H.responseBody
-	manifest <- case S.decodeLazy body of
-		Right manifest -> return manifest
-		Left err -> throwIO $ DescribeFirstException ("failed to parse manifest", err)
+  -- get manifest
+  let
+    request = templateRequest
+      { H.method = H.methodGet
+      , H.queryString = T.encodeUtf8 $ T.pack "manifest"
+      }
+  body <- tryFewTimes $ H.withResponse request httpManager $ fmap BL.fromChunks . H.brConsume . H.responseBody
+  manifest <- case S.decodeLazy body of
+    Right manifest -> return manifest
+    Left err -> throwIO $ DescribeFirstException ("failed to parse manifest", err)
 
-	return (HttpRemoteRepo
-		{ httpRemoteRepoHttpManager = httpManager
-		, httpRemoteRepoTemplateRequest = templateRequest
-		}, manifest)
+  return (HttpRemoteRepo
+    { httpRemoteRepoHttpManager = httpManager
+    , httpRemoteRepoTemplateRequest = templateRequest
+    }, manifest)
 
 syncHttpRemoteRepo :: HttpRemoteRepo -> Push -> IO Pull
 syncHttpRemoteRepo HttpRemoteRepo
-	{ httpRemoteRepoHttpManager = httpManager
-	, httpRemoteRepoTemplateRequest = templateRequest
-	} push = do
-	-- prepare request
-	let request = templateRequest
-		{ H.method = H.methodPost
-		, H.queryString = T.encodeUtf8 $ T.pack "sync"
-		, H.requestBody = H.RequestBodyLBS $ S.encodeLazy push
-		}
-	-- send request
-	body <- tryFewTimes $ H.withResponse request httpManager $ fmap BL.fromChunks . H.brConsume . H.responseBody
-	-- decode body
-	case S.decodeLazy body of
-		Right p -> return p
-		Left err -> throwIO $ DescribeFirstException ("failed to parse sync response", err)
+  { httpRemoteRepoHttpManager = httpManager
+  , httpRemoteRepoTemplateRequest = templateRequest
+  } push = do
+  -- prepare request
+  let
+    request = templateRequest
+      { H.method = H.methodPost
+      , H.queryString = T.encodeUtf8 $ T.pack "sync"
+      , H.requestBody = H.RequestBodyLBS $ S.encodeLazy push
+      }
+  -- send request
+  body <- tryFewTimes $ H.withResponse request httpManager $ fmap BL.fromChunks . H.brConsume . H.responseBody
+  -- decode body
+  case S.decodeLazy body of
+    Right p -> return p
+    Left err -> throwIO $ DescribeFirstException ("failed to parse sync response", err)
 
 watchHttpRemoteRepo :: HttpRemoteRepo -> Revision -> IO Revision
 watchHttpRemoteRepo HttpRemoteRepo
-	{ httpRemoteRepoHttpManager = httpManager
-	, httpRemoteRepoTemplateRequest = templateRequest
-	} clientRevision = do
-	-- prepare request
-	let request = templateRequest
-		{ H.method = H.methodPost
-		, H.queryString = T.encodeUtf8 $ T.pack "watch"
-		, H.requestBody = H.RequestBodyLBS $ S.encodeLazy clientRevision
-		}
-	-- send request
-	body <- H.withResponse request httpManager $ fmap BL.fromChunks . H.brConsume . H.responseBody
-	-- decode body
-	case S.decodeLazy body of
-		Right serverRevision -> return serverRevision
-		Left err -> throwIO $ DescribeFirstException ("failed to parse watch response", err)
+  { httpRemoteRepoHttpManager = httpManager
+  , httpRemoteRepoTemplateRequest = templateRequest
+  } clientRevision = do
+  -- prepare request
+  let
+    request = templateRequest
+      { H.method = H.methodPost
+      , H.queryString = T.encodeUtf8 $ T.pack "watch"
+      , H.requestBody = H.RequestBodyLBS $ S.encodeLazy clientRevision
+      }
+  -- send request
+  body <- H.withResponse request httpManager $ fmap BL.fromChunks . H.brConsume . H.responseBody
+  -- decode body
+  case S.decodeLazy body of
+    Right serverRevision -> return serverRevision
+    Left err -> throwIO $ DescribeFirstException ("failed to parse watch response", err)
 
 -- helper function to do something http-related multiple times
 tryFewTimes :: IO a -> IO a
-tryFewTimes io = do
-	let triesCount = 3 :: Int
+tryFewTimes io = let
+  triesCount = 3 :: Int
 
-	-- helper function to pause before another try
-	let throttle timeBefore = do
-		let throttlePause = 5000000 -- microseconds
-		timeAfter <- getCurrentTime
-		let pause = max 0 $ min throttlePause $ throttlePause - floor (diffUTCTime timeAfter timeBefore)
-		when (pause > 0) $ threadDelay pause
+  -- helper function to pause before another try
+  throttle timeBefore = do
+    timeAfter <- getCurrentTime
+    let
+      throttlePause = 5000000 -- microseconds
+      pause = max 0 $ min throttlePause $ throttlePause - floor (diffUTCTime timeAfter timeBefore)
+    when (pause > 0) $ threadDelay pause
 
-	let trying i = do
-		timeBefore <- getCurrentTime
-		catch io $ \(SomeException e) ->
-			if i < triesCount then do
-				throttle timeBefore
-				trying $ i + 1
-			else throwIO $ DescribeFirstException ("failed to do HTTP operation", e)
+  trying i = do
+    timeBefore <- getCurrentTime
+    catch io $ \(SomeException e) ->
+      if i < triesCount then do
+        throttle timeBefore
+        trying $ i + 1
+      else throwIO $ DescribeFirstException ("failed to do HTTP operation", e)
 
-	trying 1
+  in trying 1

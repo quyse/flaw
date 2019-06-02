@@ -8,26 +8,26 @@ License: MIT
 {-# OPTIONS_GHC -fno-warn-missing-pattern-synonym-signatures #-}
 
 module Flaw.Graphics.Font.FreeType.FFI
-	( FT_Error
-	, FT_Library
-	, FT_Face
-	, FT_GlyphSlot
-	, ft_Init_FreeType
-	, ft_Done_FreeType
-	, ft_New_Memory_Face
-	, ft_Done_Face
-	, ft_Set_Pixel_Sizes
-	, ft_Load_Glyph
-	, ft_Render_Glyph
-	, pattern FT_LOAD_NO_HINTING
-	, pattern FT_RENDER_MODE_NORMAL
-	, FT_Bitmap(..)
-	, flaw_ft_get_glyph_slot
-	, flaw_ft_get_num_glyphs
-	, flaw_ft_get_bitmap
-	, flaw_ft_get_bitmap_left
-	, flaw_ft_get_bitmap_top
-	) where
+  ( FT_Error
+  , FT_Library
+  , FT_Face
+  , FT_GlyphSlot
+  , ft_Init_FreeType
+  , ft_Done_FreeType
+  , ft_New_Memory_Face
+  , ft_Done_Face
+  , ft_Set_Pixel_Sizes
+  , ft_Load_Glyph
+  , ft_Render_Glyph
+  , pattern FT_LOAD_NO_HINTING
+  , pattern FT_RENDER_MODE_NORMAL
+  , FT_Bitmap(..)
+  , flaw_ft_get_glyph_slot
+  , flaw_ft_get_num_glyphs
+  , flaw_ft_get_bitmap
+  , flaw_ft_get_bitmap_left
+  , flaw_ft_get_bitmap_top
+  ) where
 
 import Data.Int
 import Foreign.C.Types
@@ -59,15 +59,15 @@ pattern FT_LOAD_NO_HINTING = 2
 pattern FT_RENDER_MODE_NORMAL = 0
 
 genStruct "FT_Bitmap"
-	[ ([t| CUInt |], "rows")
-	, ([t| CUInt |], "width")
-	, ([t| CInt |], "pitch")
-	, ([t| Ptr CUChar |], "buffer")
-	, ([t| CUShort |], "num_grays")
-	, ([t| CUChar |], "pixel_mode")
-	, ([t| CUChar |], "palette_mode")
-	, ([t| Ptr () |], "palette")
-	]
+  [ ([t| CUInt |], "rows")
+  , ([t| CUInt |], "width")
+  , ([t| CInt |], "pitch")
+  , ([t| Ptr CUChar |], "buffer")
+  , ([t| CUShort |], "num_grays")
+  , ([t| CUChar |], "pixel_mode")
+  , ([t| CUChar |], "palette_mode")
+  , ([t| Ptr () |], "palette")
+  ]
 
 foreign import ccall unsafe flaw_ft_get_glyph_slot :: FT_Face -> IO FT_GlyphSlot
 foreign import ccall unsafe flaw_ft_get_num_glyphs :: FT_Face -> IO CLong

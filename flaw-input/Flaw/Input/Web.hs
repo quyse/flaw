@@ -5,9 +5,9 @@ License: MIT
 -}
 
 module Flaw.Input.Web
-	( WebInputManager()
-	, initWebInput
-	) where
+  ( WebInputManager()
+  , initWebInput
+  ) where
 
 import Control.Concurrent.STM
 import Data.Char
@@ -24,81 +24,81 @@ type WebInputManager = BasicInputManager
 
 initWebInput :: Web.Canvas -> IO WebInputManager
 initWebInput Web.Canvas
-	{ Web.canvasElement = jsCanvas
-	} = do
-	-- init basic manager
-	inputManager@BasicInputManager
-		{ mKeyboardChan = keyboardChan
-		, mMouseChan = mouseChan
-		} <- initBasicInputManager
+  { Web.canvasElement = jsCanvas
+  } = do
+  -- init basic manager
+  inputManager@BasicInputManager
+    { mKeyboardChan = keyboardChan
+    , mMouseChan = mouseChan
+    } <- initBasicInputManager
 
-	-- helper routines
-	let addKeyboardEvent event = atomically $ writeTChan keyboardChan event
-	let addMouseEvent event = atomically $ writeTChan mouseChan event
+  -- helper routines
+  let addKeyboardEvent event = atomically $ writeTChan keyboardChan event
+  let addMouseEvent event = atomically $ writeTChan mouseChan event
 
-	-- register callbacks
-	keydownCallback <- asyncCallback1 $ addKeyboardEvent . KeyDownEvent . convertKeyCode
-	keyupCallback <- asyncCallback1 $ addKeyboardEvent . KeyUpEvent . convertKeyCode
-	keypressCallback <- asyncCallback1 $ addKeyboardEvent . CharEvent . chr . pFromJSVal
-	mousedownCallback <- asyncCallback1 $ addMouseEvent . MouseDownEvent . convertMouseButton
-	mouseupCallback <- asyncCallback1 $ addMouseEvent . MouseUpEvent . convertMouseButton
-	rawMouseMoveCallback <- asyncCallback3 $ \jsX jsY jsZ -> addMouseEvent $ RawMouseMoveEvent (pFromJSVal jsX) (pFromJSVal jsY) (pFromJSVal jsZ)
-	cursorMoveCallback <- asyncCallback2 $ \jsX jsY -> addMouseEvent $ CursorMoveEvent (pFromJSVal jsX) (pFromJSVal jsY)
+  -- register callbacks
+  keydownCallback <- asyncCallback1 $ addKeyboardEvent . KeyDownEvent . convertKeyCode
+  keyupCallback <- asyncCallback1 $ addKeyboardEvent . KeyUpEvent . convertKeyCode
+  keypressCallback <- asyncCallback1 $ addKeyboardEvent . CharEvent . chr . pFromJSVal
+  mousedownCallback <- asyncCallback1 $ addMouseEvent . MouseDownEvent . convertMouseButton
+  mouseupCallback <- asyncCallback1 $ addMouseEvent . MouseUpEvent . convertMouseButton
+  rawMouseMoveCallback <- asyncCallback3 $ \jsX jsY jsZ -> addMouseEvent $ RawMouseMoveEvent (pFromJSVal jsX) (pFromJSVal jsY) (pFromJSVal jsZ)
+  cursorMoveCallback <- asyncCallback2 $ \jsX jsY -> addMouseEvent $ CursorMoveEvent (pFromJSVal jsX) (pFromJSVal jsY)
 
-	js_registerEvents jsCanvas
-		keydownCallback keyupCallback keypressCallback
-		mousedownCallback mouseupCallback rawMouseMoveCallback cursorMoveCallback
+  js_registerEvents jsCanvas
+    keydownCallback keyupCallback keypressCallback
+    mousedownCallback mouseupCallback rawMouseMoveCallback cursorMoveCallback
 
-	return inputManager
+  return inputManager
 
 convertKeyCode :: JSVal -> Key
 convertKeyCode jsKeyCode = case (pFromJSVal jsKeyCode :: Int) of
-	37 -> KeyLeft
-	38 -> KeyUp
-	39 -> KeyRight
-	40 -> KeyDown
-	65 -> KeyA
-	66 -> KeyB
-	67 -> KeyC
-	68 -> KeyD
-	69 -> KeyE
-	70 -> KeyF
-	71 -> KeyG
-	72 -> KeyH
-	73 -> KeyI
-	74 -> KeyJ
-	75 -> KeyK
-	76 -> KeyL
-	77 -> KeyM
-	78 -> KeyN
-	79 -> KeyO
-	80 -> KeyP
-	81 -> KeyQ
-	82 -> KeyR
-	83 -> KeyS
-	84 -> KeyT
-	85 -> KeyU
-	86 -> KeyV
-	87 -> KeyW
-	88 -> KeyX
-	89 -> KeyY
-	90 -> KeyZ
-	_ -> KeyUnknown
+  37 -> KeyLeft
+  38 -> KeyUp
+  39 -> KeyRight
+  40 -> KeyDown
+  65 -> KeyA
+  66 -> KeyB
+  67 -> KeyC
+  68 -> KeyD
+  69 -> KeyE
+  70 -> KeyF
+  71 -> KeyG
+  72 -> KeyH
+  73 -> KeyI
+  74 -> KeyJ
+  75 -> KeyK
+  76 -> KeyL
+  77 -> KeyM
+  78 -> KeyN
+  79 -> KeyO
+  80 -> KeyP
+  81 -> KeyQ
+  82 -> KeyR
+  83 -> KeyS
+  84 -> KeyT
+  85 -> KeyU
+  86 -> KeyV
+  87 -> KeyW
+  88 -> KeyX
+  89 -> KeyY
+  90 -> KeyZ
+  _ -> KeyUnknown
 
 convertMouseButton :: JSVal -> MouseButton
 convertMouseButton jsButton = case (pFromJSVal jsButton :: Int) of
-	0 -> LeftMouseButton
-	1 -> MiddleMouseButton
-	2 -> RightMouseButton
-	_ -> LeftMouseButton
+  0 -> LeftMouseButton
+  1 -> MiddleMouseButton
+  2 -> RightMouseButton
+  _ -> LeftMouseButton
 
 foreign import javascript unsafe "h$flaw_input_register_events($1, $2, $3, $4, $5, $6, $7, $8)" js_registerEvents
-	:: JSVal
-	-> Callback (JSVal -> IO ())
-	-> Callback (JSVal -> IO ())
-	-> Callback (JSVal -> IO ())
-	-> Callback (JSVal -> IO ())
-	-> Callback (JSVal -> IO ())
-	-> Callback (JSVal -> JSVal -> JSVal -> IO ())
-	-> Callback (JSVal -> JSVal -> IO ())
-	-> IO ()
+  :: JSVal
+  -> Callback (JSVal -> IO ())
+  -> Callback (JSVal -> IO ())
+  -> Callback (JSVal -> IO ())
+  -> Callback (JSVal -> IO ())
+  -> Callback (JSVal -> IO ())
+  -> Callback (JSVal -> JSVal -> JSVal -> IO ())
+  -> Callback (JSVal -> JSVal -> IO ())
+  -> IO ()

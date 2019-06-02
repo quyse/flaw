@@ -5,9 +5,9 @@ License: MIT
 -}
 
 module Flaw.Visual.Skydome
-	( skydomeGeometry
-	, skydomeTransform
-	) where
+  ( skydomeGeometry
+  , skydomeTransform
+  ) where
 
 import qualified Data.Vector.Storable as VS
 
@@ -20,14 +20,14 @@ import Flaw.Visual.Geometry.Vertex
 
 skydomeGeometry :: Device d => d -> Int -> Int -> Int -> IO (Geometry d, IO ())
 skydomeGeometry device meridiansCount topParallelsCount bottomParallelsCount =
-	loadPackedGeometry device $ packGeometry (vertices :: VS.Vector VertexPT) where
+  loadPackedGeometry device $ packGeometry (vertices :: VS.Vector VertexPT) where
 
-	vertices = twoHemispheresVertices f meridiansCount topParallelsCount bottomParallelsCount
-	f alpha beta = VertexPT
-		{ f_VertexPT_position = Float3 (cos alpha * cos beta) (sin alpha * cos beta) (negate $ sin beta)
-		, f_VertexPT_texcoord = Float2 (alpha / (pi * 2)) (beta / pi + 0.5)
-		}
+  vertices = twoHemispheresVertices f meridiansCount topParallelsCount bottomParallelsCount
+  f alpha beta = VertexPT
+    { f_VertexPT_position = Float3 (cos alpha * cos beta) (sin alpha * cos beta) (negate $ sin beta)
+    , f_VertexPT_texcoord = Float2 (alpha / (pi * 2)) (beta / pi + 0.5)
+    }
 
 skydomeTransform :: Node Float4x4 -> Node Float3 -> Float -> Program (Node Float4)
 skydomeTransform viewProj position distance =
-	temp $ viewProj `mul` cvec31 (position * vecFromScalar (constf distance)) (constf 1)
+  temp $ viewProj `mul` cvec31 (position * vecFromScalar (constf distance)) (constf 1)

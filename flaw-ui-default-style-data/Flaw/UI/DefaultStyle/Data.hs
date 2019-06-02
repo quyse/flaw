@@ -7,8 +7,8 @@ License: MIT
 {-# LANGUAGE TemplateHaskell #-}
 
 module Flaw.UI.DefaultStyle.Data
-	( loadFontData
-	) where
+  ( loadFontData
+  ) where
 
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL

@@ -13,11 +13,11 @@ and attached entity's id.
 {-# OPTIONS_GHC -fno-warn-missing-pattern-synonym-signatures #-}
 
 module Flaw.Editor.Entity.Tag
-	( EntityTagId(..)
-	, pattern ENTITY_TAG_ID_SIZE
-	, entityTagEntityId
+  ( EntityTagId(..)
+  , pattern ENTITY_TAG_ID_SIZE
+  , entityTagEntityId
   , hashTextToEntityTagId
-	) where
+  ) where
 
 import qualified Data.ByteString.Short as BS
 import qualified Data.Text as T
@@ -34,7 +34,7 @@ pattern ENTITY_TAG_ID_SIZE = 20
 -- | Combine entity tag id and entity id to get entity tag's entity id.
 entityTagEntityId :: EntityTagId -> EntityId -> EntityId
 entityTagEntityId (EntityTagId entityTagIdBytes) (EntityId entityIdBytes) =
-	EntityId $ entityTagIdBytes <> entityIdBytes
+  EntityId $ entityTagIdBytes <> entityIdBytes
 
 -- | Handy function to generate compile-time entity tag id out of text.
 hashTextToEntityTagId :: T.Text -> Q Exp

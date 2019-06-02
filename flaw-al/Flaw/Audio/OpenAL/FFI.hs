@@ -8,77 +8,77 @@ License: MIT
 {-# OPTIONS_GHC -fno-warn-missing-pattern-synonym-signatures #-}
 
 module Flaw.Audio.OpenAL.FFI
-	(
-	-- * Basic types
-	  ALboolean
-	, ALchar
-	, ALbyte
-	, ALubyte
-	, ALshort
-	, ALushort
-	, ALint
-	, ALuint
-	, ALsizei
-	, ALenum
-	, ALfloat
-	, ALdouble
-	-- * ALC types
-	, ALCdevice
-	, ALCcontext
-	-- * ALC functions
-	, alcGetError
-	, alcOpenDevice
-	, alcCloseDevice
-	, alcCreateContext
-	, alcDestroyContext
-	, alcMakeContextCurrent
-	-- * AL functions
-	, alGetError
-	, alGenBuffers
-	, alDeleteBuffers
-	, alBufferData
-	, alGenSources
-	, alDeleteSources
-	, alSourcei
-	, alSource3f
-	, alGetSourcei
-	, alSourcePlay
-	, alSourcePause
-	, alSourceStop
-	, alSourceQueueBuffers
-	, alSourceUnqueueBuffers
-	-- * AL enums
-	, pattern AL_NO_ERROR
-	, pattern AL_INVALID_NAME
-	, pattern AL_INVALID_ENUM
-	, pattern AL_INVALID_VALUE
-	, pattern AL_INVALID_OPERATION
-	, pattern AL_OUT_OF_MEMORY
-	, pattern AL_FORMAT_MONO8
-	, pattern AL_FORMAT_MONO16
-	, pattern AL_FORMAT_STEREO8
-	, pattern AL_FORMAT_STEREO16
-	, pattern AL_FALSE
-	, pattern AL_TRUE
-	, pattern AL_POSITION
-	, pattern AL_DIRECTION
-	, pattern AL_VELOCITY
-	, pattern AL_LOOPING
-	, pattern AL_BUFFER
-	, pattern AL_SOURCE_STATE
-	, pattern AL_INITIAL
-	, pattern AL_PLAYING
-	, pattern AL_PAUSED
-	, pattern AL_STOPPED
-	, pattern AL_BUFFERS_PROCESSED
-	-- * ALC enums
-	, pattern ALC_NO_ERROR
-	, pattern ALC_INVALID_DEVICE
-	, pattern ALC_INVALID_CONTEXT
-	, pattern ALC_INVALID_ENUM
-	, pattern ALC_INVALID_VALUE
-	, pattern ALC_OUT_OF_MEMORY
-	) where
+  (
+  -- * Basic types
+    ALboolean
+  , ALchar
+  , ALbyte
+  , ALubyte
+  , ALshort
+  , ALushort
+  , ALint
+  , ALuint
+  , ALsizei
+  , ALenum
+  , ALfloat
+  , ALdouble
+  -- * ALC types
+  , ALCdevice
+  , ALCcontext
+  -- * ALC functions
+  , alcGetError
+  , alcOpenDevice
+  , alcCloseDevice
+  , alcCreateContext
+  , alcDestroyContext
+  , alcMakeContextCurrent
+  -- * AL functions
+  , alGetError
+  , alGenBuffers
+  , alDeleteBuffers
+  , alBufferData
+  , alGenSources
+  , alDeleteSources
+  , alSourcei
+  , alSource3f
+  , alGetSourcei
+  , alSourcePlay
+  , alSourcePause
+  , alSourceStop
+  , alSourceQueueBuffers
+  , alSourceUnqueueBuffers
+  -- * AL enums
+  , pattern AL_NO_ERROR
+  , pattern AL_INVALID_NAME
+  , pattern AL_INVALID_ENUM
+  , pattern AL_INVALID_VALUE
+  , pattern AL_INVALID_OPERATION
+  , pattern AL_OUT_OF_MEMORY
+  , pattern AL_FORMAT_MONO8
+  , pattern AL_FORMAT_MONO16
+  , pattern AL_FORMAT_STEREO8
+  , pattern AL_FORMAT_STEREO16
+  , pattern AL_FALSE
+  , pattern AL_TRUE
+  , pattern AL_POSITION
+  , pattern AL_DIRECTION
+  , pattern AL_VELOCITY
+  , pattern AL_LOOPING
+  , pattern AL_BUFFER
+  , pattern AL_SOURCE_STATE
+  , pattern AL_INITIAL
+  , pattern AL_PLAYING
+  , pattern AL_PAUSED
+  , pattern AL_STOPPED
+  , pattern AL_BUFFERS_PROCESSED
+  -- * ALC enums
+  , pattern ALC_NO_ERROR
+  , pattern ALC_INVALID_DEVICE
+  , pattern ALC_INVALID_CONTEXT
+  , pattern ALC_INVALID_ENUM
+  , pattern ALC_INVALID_VALUE
+  , pattern ALC_OUT_OF_MEMORY
+  ) where
 
 import Foreign.C.Types
 import Foreign.Ptr

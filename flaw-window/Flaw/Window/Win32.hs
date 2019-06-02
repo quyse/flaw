@@ -8,18 +8,18 @@ License: MIT
 {-# OPTIONS_GHC -fno-warn-missing-pattern-synonym-signatures #-}
 
 module Flaw.Window.Win32
-	( Win32WindowSystem()
-	, Win32Window(..)
-	, runWin32WindowSystem
-	, createWin32Window
-	, createLayeredWin32Window
-	, updateLayeredWin32Window
-	, invokeWin32WindowSystem
-	, invokeWin32WindowSystem_
-	, addWin32WindowCallback
-	, chanWin32WindowMessages
-	, getWin32WindowClientSize_unsafe
-	) where
+  ( Win32WindowSystem()
+  , Win32Window(..)
+  , runWin32WindowSystem
+  , createWin32Window
+  , createLayeredWin32Window
+  , updateLayeredWin32Window
+  , invokeWin32WindowSystem
+  , invokeWin32WindowSystem_
+  , addWin32WindowCallback
+  , chanWin32WindowMessages
+  , getWin32WindowClientSize_unsafe
+  ) where
 
 import Control.Concurrent
 import Control.Concurrent.STM
@@ -42,81 +42,81 @@ import Flaw.Window
 import Flaw.FFI.Win32
 
 newtype Win32WindowSystem = Win32WindowSystem
-	{ wsHandle :: Ptr () -- ^ Opaque handle for C side.
-	}
+  { wsHandle :: Ptr () -- ^ Opaque handle for C side.
+  }
 
 data Win32Window = Win32Window
-	{ wWindowSystem :: !Win32WindowSystem
-	, wHandle :: {-# UNPACK #-} !HWND
-	, wCallback :: !(FunPtr WindowCallback)
-	, wUserCallbacksRef :: {-# UNPACK #-} !(IORef [WindowCallback])
-	, wMessagesChan :: {-# UNPACK #-} !(TChan (Word, WPARAM, LPARAM))
-	, wEventsChan :: {-# UNPACK #-} !(TChan WindowEvent)
-	}
+  { wWindowSystem :: !Win32WindowSystem
+  , wHandle :: {-# UNPACK #-} !HWND
+  , wCallback :: !(FunPtr WindowCallback)
+  , wUserCallbacksRef :: {-# UNPACK #-} !(IORef [WindowCallback])
+  , wMessagesChan :: {-# UNPACK #-} !(TChan (Word, WPARAM, LPARAM))
+  , wEventsChan :: {-# UNPACK #-} !(TChan WindowEvent)
+  }
 
 instance Window Win32Window where
-	setWindowTitle Win32Window { wWindowSystem = ws, wHandle = hwnd } title = invokeWin32WindowSystem_ ws $
-		withCWString (T.unpack title) $ \titleCString ->
-			c_setWin32WindowTitle hwnd titleCString
-	getWindowClientSize window@Win32Window
-		{ wWindowSystem = ws
-		} = invokeWin32WindowSystem ws $ getWin32WindowClientSize_unsafe window
-	chanWindowEvents Win32Window
-		{ wEventsChan = eventsChan
-		} = dupTChan eventsChan
-	getWindowClipboardText Win32Window
-		{ wWindowSystem = ws
-		, wHandle = hwnd
-		} = invokeWin32WindowSystem ws $
-		alloca $ \memPtr -> alloca $ \lenPtr -> do
-			strPtr <- c_getClipboardTextBegin hwnd memPtr lenPtr
-			if strPtr /= nullPtr then do
-				len <- peek lenPtr
-				text <- T.fromPtr strPtr $ fromIntegral len
-				c_getClipboardTextEnd =<< peek memPtr
-				return text
-			else return T.empty
-	setWindowClipboardText Win32Window
-		{ wWindowSystem = ws
-		, wHandle = hwnd
-		} text = invokeWin32WindowSystem ws $ do
-		let len = T.lengthWord16 text
-		allocaArray (len + 1) $ \ptr -> do
-			T.unsafeCopyToPtr text ptr
-			pokeElemOff ptr len 0
-			c_setClipboardText hwnd ptr
-	setWindowMouseCursor Win32Window
-		{ wWindowSystem = ws
-		, wHandle = hwnd
-		} mouseCursor = invokeWin32WindowSystem_ ws $ c_setMouseCursor hwnd $ fromIntegral $ fromEnum mouseCursor
-	setWindowMouseLock Win32Window
-		{ wWindowSystem = ws
-		, wHandle = hwnd
-		} mouseLock = invokeWin32WindowSystem_ ws $ c_setMouseLock hwnd (if mouseLock then 1 else 0)
+  setWindowTitle Win32Window { wWindowSystem = ws, wHandle = hwnd } title = invokeWin32WindowSystem_ ws $
+    withCWString (T.unpack title) $ \titleCString ->
+      c_setWin32WindowTitle hwnd titleCString
+  getWindowClientSize window@Win32Window
+    { wWindowSystem = ws
+    } = invokeWin32WindowSystem ws $ getWin32WindowClientSize_unsafe window
+  chanWindowEvents Win32Window
+    { wEventsChan = eventsChan
+    } = dupTChan eventsChan
+  getWindowClipboardText Win32Window
+    { wWindowSystem = ws
+    , wHandle = hwnd
+    } = invokeWin32WindowSystem ws $
+    alloca $ \memPtr -> alloca $ \lenPtr -> do
+      strPtr <- c_getClipboardTextBegin hwnd memPtr lenPtr
+      if strPtr /= nullPtr then do
+        len <- peek lenPtr
+        text <- T.fromPtr strPtr $ fromIntegral len
+        c_getClipboardTextEnd =<< peek memPtr
+        return text
+      else return T.empty
+  setWindowClipboardText Win32Window
+    { wWindowSystem = ws
+    , wHandle = hwnd
+    } text = invokeWin32WindowSystem ws $ do
+    let len = T.lengthWord16 text
+    allocaArray (len + 1) $ \ptr -> do
+      T.unsafeCopyToPtr text ptr
+      pokeElemOff ptr len 0
+      c_setClipboardText hwnd ptr
+  setWindowMouseCursor Win32Window
+    { wWindowSystem = ws
+    , wHandle = hwnd
+    } mouseCursor = invokeWin32WindowSystem_ ws $ c_setMouseCursor hwnd $ fromIntegral $ fromEnum mouseCursor
+  setWindowMouseLock Win32Window
+    { wWindowSystem = ws
+    , wHandle = hwnd
+    } mouseLock = invokeWin32WindowSystem_ ws $ c_setMouseLock hwnd (if mouseLock then 1 else 0)
 
 -- | Run Win32 window system.
 runWin32WindowSystem :: MVar (Win32WindowSystem, IO ()) -> IO ()
 runWin32WindowSystem resultVar = do
-	-- initialize window system, get handle
-	h <- c_initWin32WindowSystem
-	-- create shutdown var
-	shutdownVar <- newEmptyMVar
-	-- return result in var
-	let ws = Win32WindowSystem
-		{ wsHandle = h
-		}
-	let shutdown = do
-		-- send a message to stop window loop
-		invokeWin32WindowSystem_ ws c_stopWin32WindowSystem
-		-- wait for actual completion
-		readMVar shutdownVar
-	putMVar resultVar (ws, shutdown)
-	-- run window system
-	c_runWin32WindowSystem h
-	-- free resources
-	c_shutdownWin32WindowSystem h
-	-- signal end
-	putMVar shutdownVar ()
+  -- initialize window system, get handle
+  h <- c_initWin32WindowSystem
+  -- create shutdown var
+  shutdownVar <- newEmptyMVar
+  -- return result in var
+  let ws = Win32WindowSystem
+    { wsHandle = h
+    }
+  let shutdown = do
+    -- send a message to stop window loop
+    invokeWin32WindowSystem_ ws c_stopWin32WindowSystem
+    -- wait for actual completion
+    readMVar shutdownVar
+  putMVar resultVar (ws, shutdown)
+  -- run window system
+  c_runWin32WindowSystem h
+  -- free resources
+  c_shutdownWin32WindowSystem h
+  -- signal end
+  putMVar shutdownVar ()
 
 createWin32Window :: Win32WindowSystem -> T.Text -> Maybe (Int, Int) -> Maybe (Int, Int) -> IO (Win32Window, IO ())
 createWin32Window ws title maybePosition maybeSize = internalCreateWin32Window ws title maybePosition maybeSize False
@@ -126,64 +126,64 @@ createLayeredWin32Window ws title maybePosition maybeSize = internalCreateWin32W
 
 internalCreateWin32Window :: Win32WindowSystem -> T.Text -> Maybe (Int, Int) -> Maybe (Int, Int) -> Bool -> IO (Win32Window, IO ())
 internalCreateWin32Window ws title maybePosition maybeSize layered = do
-	w <- invokeWin32WindowSystem ws $ mfix $ \w -> do
-		-- create callback
-		userCallbacksRef <- newIORef []
-		messagesChan <- newBroadcastTChanIO
-		eventsChan <- newBroadcastTChanIO
-		callback <- wrapWindowCallback $ \msg wParam lParam -> do
-			-- run sync callbacks
-			userCallbacks <- readIORef userCallbacksRef
-			forM_ userCallbacks $ \callback -> callback msg wParam lParam
-			-- dispatch raw message
-			atomically $ writeTChan messagesChan (msg, wParam, lParam)
-			-- dispatch event
-			let maybeEvent = case msg of
-				0x0002 {- WM_DESTROY -} -> Just DestroyWindowEvent
-				0x0005 {- WM_SIZE -} -> Just $ ResizeWindowEvent (fromIntegral $ loWord lParam) (fromIntegral $ hiWord lParam)
-				0x0010 {- WM_CLOSE -} -> Just CloseWindowEvent
-				_ -> Nothing
-			case maybeEvent of
-				Just event -> atomically $ writeTChan eventsChan event
-				Nothing -> return ()
-			-- process some other messages
-			case msg of
-				0x0002 -> -- WM_DESTROY
-					-- free callback
-					freeHaskellFunPtr $ wCallback w
-				_ -> return ()
-		let (left, top) = fromMaybe (CW_USEDEFAULT, CW_USEDEFAULT) maybePosition
-		let (width, height) = fromMaybe (CW_USEDEFAULT, CW_USEDEFAULT) maybeSize
-		-- create window
-		hwnd <- withCWString (T.unpack title) $ \titleCString ->
-			c_createWin32Window (wsHandle ws) titleCString left top width height callback (if layered then 1 else 0)
-		when (hwnd == nullPtr) $ throwIO $ DescribeFirstException "cannot create Win32Window"
-		return Win32Window
-			{ wWindowSystem = ws
-			, wHandle = hwnd
-			, wCallback = callback
-			, wUserCallbacksRef = userCallbacksRef
-			, wMessagesChan = messagesChan
-			, wEventsChan = eventsChan
-			}
-	return (w, invokeWin32WindowSystem_ ws $ c_destroyWin32Window $ wHandle w)
+  w <- invokeWin32WindowSystem ws $ mfix $ \w -> do
+    -- create callback
+    userCallbacksRef <- newIORef []
+    messagesChan <- newBroadcastTChanIO
+    eventsChan <- newBroadcastTChanIO
+    callback <- wrapWindowCallback $ \msg wParam lParam -> do
+      -- run sync callbacks
+      userCallbacks <- readIORef userCallbacksRef
+      forM_ userCallbacks $ \callback -> callback msg wParam lParam
+      -- dispatch raw message
+      atomically $ writeTChan messagesChan (msg, wParam, lParam)
+      -- dispatch event
+      let maybeEvent = case msg of
+        0x0002 {- WM_DESTROY -} -> Just DestroyWindowEvent
+        0x0005 {- WM_SIZE -} -> Just $ ResizeWindowEvent (fromIntegral $ loWord lParam) (fromIntegral $ hiWord lParam)
+        0x0010 {- WM_CLOSE -} -> Just CloseWindowEvent
+        _ -> Nothing
+      case maybeEvent of
+        Just event -> atomically $ writeTChan eventsChan event
+        Nothing -> return ()
+      -- process some other messages
+      case msg of
+        0x0002 -> -- WM_DESTROY
+          -- free callback
+          freeHaskellFunPtr $ wCallback w
+        _ -> return ()
+    let (left, top) = fromMaybe (CW_USEDEFAULT, CW_USEDEFAULT) maybePosition
+    let (width, height) = fromMaybe (CW_USEDEFAULT, CW_USEDEFAULT) maybeSize
+    -- create window
+    hwnd <- withCWString (T.unpack title) $ \titleCString ->
+      c_createWin32Window (wsHandle ws) titleCString left top width height callback (if layered then 1 else 0)
+    when (hwnd == nullPtr) $ throwIO $ DescribeFirstException "cannot create Win32Window"
+    return Win32Window
+      { wWindowSystem = ws
+      , wHandle = hwnd
+      , wCallback = callback
+      , wUserCallbacksRef = userCallbacksRef
+      , wMessagesChan = messagesChan
+      , wEventsChan = eventsChan
+      }
+  return (w, invokeWin32WindowSystem_ ws $ c_destroyWin32Window $ wHandle w)
 
 updateLayeredWin32Window :: Win32Window -> IO ()
 updateLayeredWin32Window w = invokeWin32WindowSystem_ (wWindowSystem w) $ c_updateLayeredWin32Window $ wHandle w
 
 invokeWithMaybeResultVar :: Maybe (MVar (Either SomeException a)) -> Win32WindowSystem -> IO a -> IO ()
 invokeWithMaybeResultVar maybeResultVar ws io = do
-	-- create callback
-	invokeCallback <- mfix $ \invokeCallback -> wrapInvokeCallback $ do
-		-- run IO with exception propagation
-		result <- try io
-		case maybeResultVar of
-			Just resultVar -> putMVar resultVar result
-			Nothing -> return ()
-		-- free fun ptr
-		freeHaskellFunPtr invokeCallback
-	-- do invoke
-	c_invokeWin32WindowSystem (wsHandle ws) invokeCallback
+  -- create callback
+  invokeCallback <- mfix $ \invokeCallback -> wrapInvokeCallback $ do
+    -- run IO with exception propagation
+    result <- try io
+    case maybeResultVar of
+      Just resultVar -> putMVar resultVar result
+      Nothing -> return ()
+    -- free fun ptr
+    freeHaskellFunPtr invokeCallback
+  -- do invoke
+  c_invokeWin32WindowSystem (wsHandle ws) invokeCallback
 
 -- | Invoke function in window system thread.
 -- Do not wait for the result.
@@ -194,35 +194,35 @@ invokeWin32WindowSystem_ = invokeWithMaybeResultVar Nothing
 -- Wait for the result.
 invokeWin32WindowSystem :: Win32WindowSystem -> IO a -> IO a
 invokeWin32WindowSystem ws io = do
-	resultVar <- newEmptyMVar
-	invokeWithMaybeResultVar (Just resultVar) ws io
-	result <- takeMVar resultVar
-	case result of
-		Left e -> throwIO e
-		Right r -> return r
+  resultVar <- newEmptyMVar
+  invokeWithMaybeResultVar (Just resultVar) ws io
+  result <- takeMVar resultVar
+  case result of
+    Left e -> throwIO e
+    Right r -> return r
 
 addWin32WindowCallback :: Win32Window -> WindowCallback -> IO ()
 addWin32WindowCallback Win32Window
-	{ wWindowSystem = ws
-	, wUserCallbacksRef = userCallbacksRef
-	} callback = invokeWin32WindowSystem ws $ do
-	callbacks <- readIORef userCallbacksRef
-	writeIORef userCallbacksRef $ callback : callbacks
+  { wWindowSystem = ws
+  , wUserCallbacksRef = userCallbacksRef
+  } callback = invokeWin32WindowSystem ws $ do
+  callbacks <- readIORef userCallbacksRef
+  writeIORef userCallbacksRef $ callback : callbacks
 
 chanWin32WindowMessages :: Win32Window -> STM (TChan (Word, WPARAM, LPARAM))
 chanWin32WindowMessages Win32Window
-	{ wMessagesChan = messagesChan
-	} = dupTChan messagesChan
+  { wMessagesChan = messagesChan
+  } = dupTChan messagesChan
 
 -- | Get window size, no syncronization.
 getWin32WindowClientSize_unsafe :: Win32Window -> IO (Int, Int)
 getWin32WindowClientSize_unsafe Win32Window
-	{ wHandle = hwnd
-	} = alloca $ \widthPtr -> alloca $ \heightPtr -> do
-	c_getWin32WindowClientSize hwnd widthPtr heightPtr
-	width <- peek widthPtr
-	height <- peek heightPtr
-	return (fromIntegral width, fromIntegral height)
+  { wHandle = hwnd
+  } = alloca $ \widthPtr -> alloca $ \heightPtr -> do
+  c_getWin32WindowClientSize hwnd widthPtr heightPtr
+  width <- peek widthPtr
+  height <- peek heightPtr
+  return (fromIntegral width, fromIntegral height)
 
 -- foreign imports
 
@@ -232,13 +232,13 @@ foreign import ccall safe "shutdownWin32WindowSystem" c_shutdownWin32WindowSyste
 foreign import ccall safe "stopWin32WindowSystem" c_stopWin32WindowSystem :: IO ()
 foreign import ccall safe "invokeWin32WindowSystem" c_invokeWin32WindowSystem :: Ptr () -> FunPtr InvokeCallback -> IO ()
 foreign import ccall safe "createWin32Window" c_createWin32Window
-	:: Ptr () -- window system handle
-	-> LPWSTR -- title
-	-> Int -> Int -- x y
-	-> Int -> Int -- width height
-	-> FunPtr WindowCallback -- callback
-	-> Int -- layered
-	-> IO HWND -- HWND
+  :: Ptr () -- window system handle
+  -> LPWSTR -- title
+  -> Int -> Int -- x y
+  -> Int -> Int -- width height
+  -> FunPtr WindowCallback -- callback
+  -> Int -- layered
+  -> IO HWND -- HWND
 foreign import ccall unsafe "setWin32WindowTitle" c_setWin32WindowTitle :: HWND -> LPWSTR -> IO ()
 foreign import ccall unsafe "getWin32WindowClientSize" c_getWin32WindowClientSize :: HWND -> Ptr CInt -> Ptr CInt -> IO ()
 foreign import ccall safe "destroyWin32Window" c_destroyWin32Window :: HWND -> IO ()

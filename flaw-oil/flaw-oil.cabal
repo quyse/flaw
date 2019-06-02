@@ -34,7 +34,7 @@ library
     , http-types
     , text
     , time
-  ghc-options:         -Wall -Wno-tabs
+  ghc-options:         -Wall
   default-language:    Haskell2010
 
 test-suite repo-test
@@ -47,5 +47,5 @@ test-suite repo-test
     , flaw-oil
     , mtl
     , text
-  ghc-options:         -Wall -Wno-tabs -threaded
+  ghc-options:         -Wall -threaded
   default-language:    Haskell2010

@@ -42,7 +42,7 @@ library
     , vector
   if flag(icu)
     build-depends:       flaw-font-icu
-  ghc-options:         -Wall -Wno-tabs
+  ghc-options:         -Wall
   default-language:    Haskell2010
   c-sources:
     -- FreeType

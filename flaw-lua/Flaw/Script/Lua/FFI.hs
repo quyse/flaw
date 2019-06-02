@@ -8,84 +8,84 @@ License: MIT
 {-# OPTIONS_GHC -fno-warn-missing-pattern-synonym-signatures #-}
 
 module Flaw.Script.Lua.FFI
-	( luaNewState
-	, luaLoadChunk
+  ( luaNewState
+  , luaLoadChunk
 
-	, pattern LUA_OK
-	, pattern LUA_YIELD
-	, pattern LUA_ERRRUN
-	, pattern LUA_ERRSYNTAX
-	, pattern LUA_ERRMEM
-	, pattern LUA_ERRGCMM
-	, pattern LUA_ERRERR
+  , pattern LUA_OK
+  , pattern LUA_YIELD
+  , pattern LUA_ERRRUN
+  , pattern LUA_ERRSYNTAX
+  , pattern LUA_ERRMEM
+  , pattern LUA_ERRGCMM
+  , pattern LUA_ERRERR
 
-	, pattern LUA_TNIL
-	, pattern LUA_TBOOLEAN
-	, pattern LUA_TLIGHTUSERDATA
-	, pattern LUA_TNUMBER
-	, pattern LUA_TSTRING
-	, pattern LUA_TTABLE
-	, pattern LUA_TFUNCTION
-	, pattern LUA_TUSERDATA
-	, pattern LUA_TTHREAD
+  , pattern LUA_TNIL
+  , pattern LUA_TBOOLEAN
+  , pattern LUA_TLIGHTUSERDATA
+  , pattern LUA_TNUMBER
+  , pattern LUA_TSTRING
+  , pattern LUA_TTABLE
+  , pattern LUA_TFUNCTION
+  , pattern LUA_TUSERDATA
+  , pattern LUA_TTHREAD
 
-	, pattern LUA_TSHRSTR
-	, pattern LUA_TLNGSTR
-	, pattern LUA_TNUMFLT
-	, pattern LUA_TNUMINT
+  , pattern LUA_TSHRSTR
+  , pattern LUA_TLNGSTR
+  , pattern LUA_TNUMFLT
+  , pattern LUA_TNUMINT
 
-	, pattern LUA_SIGNATURE
-	, pattern LUAC_DATA
-	, pattern LUAC_INT
-	, pattern LUAC_NUM
-	, pattern OP_MOVE
-	, pattern OP_LOADK
-	, pattern OP_LOADKX
-	, pattern OP_LOADBOOL
-	, pattern OP_LOADNIL
-	, pattern OP_GETUPVAL
-	, pattern OP_GETTABUP
-	, pattern OP_GETTABLE
-	, pattern OP_SETTABUP
-	, pattern OP_SETUPVAL
-	, pattern OP_SETTABLE
-	, pattern OP_NEWTABLE
-	, pattern OP_SELF
-	, pattern OP_ADD
-	, pattern OP_SUB
-	, pattern OP_MUL
-	, pattern OP_MOD
-	, pattern OP_POW
-	, pattern OP_DIV
-	, pattern OP_IDIV
-	, pattern OP_BAND
-	, pattern OP_BOR
-	, pattern OP_BXOR
-	, pattern OP_SHL
-	, pattern OP_SHR
-	, pattern OP_UNM
-	, pattern OP_BNOT
-	, pattern OP_NOT
-	, pattern OP_LEN
-	, pattern OP_CONCAT
-	, pattern OP_JMP
-	, pattern OP_EQ
-	, pattern OP_LT
-	, pattern OP_LE
-	, pattern OP_TEST
-	, pattern OP_TESTSET
-	, pattern OP_CALL
-	, pattern OP_TAILCALL
-	, pattern OP_RETURN
-	, pattern OP_FORLOOP
-	, pattern OP_FORPREP
-	, pattern OP_TFORCALL
-	, pattern OP_TFORLOOP
-	, pattern OP_SETLIST
-	, pattern OP_CLOSURE
-	, pattern OP_VARARG
-	, pattern OP_EXTRAARG
-	) where
+  , pattern LUA_SIGNATURE
+  , pattern LUAC_DATA
+  , pattern LUAC_INT
+  , pattern LUAC_NUM
+  , pattern OP_MOVE
+  , pattern OP_LOADK
+  , pattern OP_LOADKX
+  , pattern OP_LOADBOOL
+  , pattern OP_LOADNIL
+  , pattern OP_GETUPVAL
+  , pattern OP_GETTABUP
+  , pattern OP_GETTABLE
+  , pattern OP_SETTABUP
+  , pattern OP_SETUPVAL
+  , pattern OP_SETTABLE
+  , pattern OP_NEWTABLE
+  , pattern OP_SELF
+  , pattern OP_ADD
+  , pattern OP_SUB
+  , pattern OP_MUL
+  , pattern OP_MOD
+  , pattern OP_POW
+  , pattern OP_DIV
+  , pattern OP_IDIV
+  , pattern OP_BAND
+  , pattern OP_BOR
+  , pattern OP_BXOR
+  , pattern OP_SHL
+  , pattern OP_SHR
+  , pattern OP_UNM
+  , pattern OP_BNOT
+  , pattern OP_NOT
+  , pattern OP_LEN
+  , pattern OP_CONCAT
+  , pattern OP_JMP
+  , pattern OP_EQ
+  , pattern OP_LT
+  , pattern OP_LE
+  , pattern OP_TEST
+  , pattern OP_TESTSET
+  , pattern OP_CALL
+  , pattern OP_TAILCALL
+  , pattern OP_RETURN
+  , pattern OP_FORLOOP
+  , pattern OP_FORPREP
+  , pattern OP_TFORCALL
+  , pattern OP_TFORLOOP
+  , pattern OP_SETLIST
+  , pattern OP_CLOSURE
+  , pattern OP_VARARG
+  , pattern OP_EXTRAARG
+  ) where
 
 import Control.Exception
 import Control.Monad
@@ -105,44 +105,44 @@ data C_lua_State
 
 luaNewState :: IO (Ptr C_lua_State, IO ())
 luaNewState = do
-	alloc <- wrap_C_lua_Alloc $ \_ ptr _osize nsize ->
-		if nsize > 0 then reallocBytes ptr (fromIntegral nsize)
-		else do
-			free ptr
-			return nullPtr
-	statePtr <- lua_newstate alloc nullPtr
-	return (statePtr, lua_close statePtr)
+  alloc <- wrap_C_lua_Alloc $ \_ ptr _osize nsize ->
+    if nsize > 0 then reallocBytes ptr (fromIntegral nsize)
+    else do
+      free ptr
+      return nullPtr
+  statePtr <- lua_newstate alloc nullPtr
+  return (statePtr, lua_close statePtr)
 
 -- | Load Lua code or bytecode, and return bytecode.
 luaLoadChunk :: Ptr C_lua_State -> T.Text -> B.ByteString -> IO B.ByteString
 luaLoadChunk luaStatePtr chunkName bytes = do
-	B.unsafeUseAsCStringLen bytes $ \(bytesPtr, bytesLen) -> do
-		finishedReadingRef <- newIORef False
-		reader <- wrap_C_lua_Reader $ \_ _ sizePtr -> do
-			finishedReading <- readIORef finishedReadingRef
-			if finishedReading then do
-				poke sizePtr 0
-				return nullPtr
-			else do
-				writeIORef finishedReadingRef True
-				poke sizePtr (fromIntegral bytesLen)
-				return bytesPtr
-		B.useAsCString (T.encodeUtf8 chunkName) $ \chunkNamePtr -> do
-			r <- lua_load luaStatePtr reader nullPtr chunkNamePtr nullPtr
-			when (r /= LUA_OK) $ do
-				errBytes <- B.packCString =<< lua_tostring luaStatePtr (-1)
-				lua_pop luaStatePtr 1
-				throwIO $ LuaLoadError $ T.decodeUtf8 errBytes
-	chunksRef <- newIORef []
-	writer <- wrap_C_lua_Writer $ \_ ptr size _ -> do
-		bs <- B.packCStringLen (castPtr ptr, fromIntegral size)
-		modifyIORef' chunksRef (bs :)
-		return 0
-	r <- lua_dump luaStatePtr writer nullPtr 0
-	lua_pop luaStatePtr 1
-	when (r /= LUA_OK) $ throwIO $ LuaLoadError "failed to dump chunk"
-	chunks <- readIORef chunksRef
-	return $ B.concat $ reverse chunks
+  B.unsafeUseAsCStringLen bytes $ \(bytesPtr, bytesLen) -> do
+    finishedReadingRef <- newIORef False
+    reader <- wrap_C_lua_Reader $ \_ _ sizePtr -> do
+      finishedReading <- readIORef finishedReadingRef
+      if finishedReading then do
+        poke sizePtr 0
+        return nullPtr
+      else do
+        writeIORef finishedReadingRef True
+        poke sizePtr (fromIntegral bytesLen)
+        return bytesPtr
+    B.useAsCString (T.encodeUtf8 chunkName) $ \chunkNamePtr -> do
+      r <- lua_load luaStatePtr reader nullPtr chunkNamePtr nullPtr
+      when (r /= LUA_OK) $ do
+        errBytes <- B.packCString =<< lua_tostring luaStatePtr (-1)
+        lua_pop luaStatePtr 1
+        throwIO $ LuaLoadError $ T.decodeUtf8 errBytes
+  chunksRef <- newIORef []
+  writer <- wrap_C_lua_Writer $ \_ ptr size _ -> do
+    bs <- B.packCStringLen (castPtr ptr, fromIntegral size)
+    modifyIORef' chunksRef (bs :)
+    return 0
+  r <- lua_dump luaStatePtr writer nullPtr 0
+  lua_pop luaStatePtr 1
+  when (r /= LUA_OK) $ throwIO $ LuaLoadError "failed to dump chunk"
+  chunks <- readIORef chunksRef
+  return $ B.concat $ reverse chunks
 
 type C_lua_Alloc = Ptr () -> Ptr () -> CSize -> CSize -> IO (Ptr ())
 type C_lua_Reader = Ptr C_lua_State -> Ptr () -> Ptr CSize -> IO (Ptr CChar)

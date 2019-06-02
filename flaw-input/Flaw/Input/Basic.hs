@@ -7,9 +7,9 @@ License: MIT
 {-# LANGUAGE MultiParamTypeClasses #-}
 
 module Flaw.Input.Basic
-	( BasicInputManager(..)
-	, initBasicInputManager
-	) where
+  ( BasicInputManager(..)
+  , initBasicInputManager
+  ) where
 
 import Control.Concurrent.STM
 
@@ -18,25 +18,25 @@ import Flaw.Input.Mouse
 import Flaw.Input.Keyboard
 
 data BasicInputManager = BasicInputManager
-	{ mKeyboardChan :: {-# UNPACK #-} !(TChan KeyboardEvent)
-	, mMouseChan :: {-# UNPACK #-} !(TChan MouseEvent)
-	}
+  { mKeyboardChan :: {-# UNPACK #-} !(TChan KeyboardEvent)
+  , mMouseChan :: {-# UNPACK #-} !(TChan MouseEvent)
+  }
 
 instance InputManager BasicInputManager KeyboardEvent where
-	chanInputEvents BasicInputManager
-		{ mKeyboardChan = keyboardChan
-		} = dupTChan keyboardChan
+  chanInputEvents BasicInputManager
+    { mKeyboardChan = keyboardChan
+    } = dupTChan keyboardChan
 
 instance InputManager BasicInputManager MouseEvent where
-	chanInputEvents BasicInputManager
-		{ mMouseChan = mouseChan
-		} = dupTChan mouseChan
+  chanInputEvents BasicInputManager
+    { mMouseChan = mouseChan
+    } = dupTChan mouseChan
 
 initBasicInputManager :: IO BasicInputManager
 initBasicInputManager = do
-	keyboardChan <- newBroadcastTChanIO
-	mouseChan <- newBroadcastTChanIO
-	return BasicInputManager
-		{ mKeyboardChan = keyboardChan
-		, mMouseChan = mouseChan
-		}
+  keyboardChan <- newBroadcastTChanIO
+  mouseChan <- newBroadcastTChanIO
+  return BasicInputManager
+    { mKeyboardChan = keyboardChan
+    , mMouseChan = mouseChan
+    }

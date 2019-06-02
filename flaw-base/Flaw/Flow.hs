@@ -5,16 +5,16 @@ License: MIT
 -}
 
 module Flaw.Flow
-	( forkFlow
-	, forkFlowOS
-	, Flow()
-	, newFlow
-	, newFlowOS
-	, newMultiFlow
-	, newMultiFlowOS
-	, asyncRunInFlow
-	, runInFlow
-	) where
+  ( forkFlow
+  , forkFlowOS
+  , Flow()
+  , newFlow
+  , newFlowOS
+  , newMultiFlow
+  , newMultiFlowOS
+  , asyncRunInFlow
+  , runInFlow
+  ) where
 
 import Control.Concurrent
 import Control.Concurrent.STM
@@ -33,12 +33,13 @@ forkFlowOS = forkFlowInternal $ \action andThen -> mask $ \restore -> forkOS $ t
 
 forkFlowInternal :: (IO () -> (Either SomeException () -> IO ()) -> IO ThreadId) -> IO () -> IO ((), IO ())
 forkFlowInternal f work = do
-	stoppedVar <- newEmptyMVar
-	threadId <- f work $ \_ -> putMVar stoppedVar ()
-	let stop = do
-		killThread threadId
-		takeMVar stoppedVar
-	return ((), stop)
+  stoppedVar <- newEmptyMVar
+  threadId <- f work $ \_ -> putMVar stoppedVar ()
+  let
+    stop = do
+      killThread threadId
+      takeMVar stoppedVar
+  return ((), stop)
 
 -- | Operation flow.
 newtype Flow = Flow (TQueue (IO ()))
@@ -62,23 +63,23 @@ newMultiFlowOS threadsCount = newFlowInternal threadsCount forkFlowOS
 
 newFlowInternal :: Int -> (IO () -> IO ((), IO ())) -> IO (Flow, IO ())
 newFlowInternal threadsCount f = withSpecialBook $ \bk -> do
-	queue <- newTQueueIO
-	forM_ [1..threadsCount] $ \_i -> book bk $ f $ runOperations queue
-	return $ Flow queue
+  queue <- newTQueueIO
+  forM_ [1..threadsCount] $ \_i -> book bk $ f $ runOperations queue
+  return $ Flow queue
 
 asyncRunInFlow :: Flow -> IO () -> STM ()
 asyncRunInFlow (Flow queue) operation = writeTQueue queue $ do
-	operation
-	runOperations queue
+  operation
+  runOperations queue
 
 runInFlow :: Flow -> IO a -> IO a
 runInFlow flow operation = do
-	resultVar <- newEmptyMVar
-	atomically $ asyncRunInFlow flow $ putMVar resultVar =<< try operation
-	r <- takeMVar resultVar
-	case r of
-		Right a -> return a
-		Left e -> throwIO (e :: SomeException)
+  resultVar <- newEmptyMVar
+  atomically $ asyncRunInFlow flow $ putMVar resultVar =<< try operation
+  r <- takeMVar resultVar
+  case r of
+    Right a -> return a
+    Left e -> throwIO (e :: SomeException)
 
 runOperations :: TQueue (IO ()) -> IO ()
 runOperations queue = join $ atomically $ readTQueue queue

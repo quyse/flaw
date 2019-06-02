@@ -7,14 +7,14 @@ License: MIT
 {-# LANGUAGE CPP, GADTs, RankNTypes #-}
 
 module Flaw.App
-	( withApp
-	, runApp
-	, exitApp
-	, AppGraphicsSystemId(..)
-	, AppConfig(..)
-	, AppWindow
-	, AppInputManager
-	) where
+  ( withApp
+  , runApp
+  , exitApp
+  , AppGraphicsSystemId(..)
+  , AppConfig(..)
+  , AppWindow
+  , AppInputManager
+  ) where
 
 import Control.Concurrent
 import Control.Exception
@@ -85,51 +85,51 @@ type AppInputManager = SdlInputManager
 
 -- | Supported graphics systems.
 data AppGraphicsSystemId
-	= AppGraphicsSystemVulkan
-	| AppGraphicsSystemDirectX11
-	| AppGraphicsSystemOpenGL
-	| AppGraphicsSystemWebGL
+  = AppGraphicsSystemVulkan
+  | AppGraphicsSystemDirectX11
+  | AppGraphicsSystemOpenGL
+  | AppGraphicsSystemWebGL
 
 data AppConfig where
-	AppConfig :: BinaryCache c =>
-		{ appConfigTitle :: !T.Text
-		, appConfigWindowPosition :: !(Maybe (Int, Int))
-		, appConfigWindowSize :: !(Maybe (Int, Int))
-		, appConfigNeedDepthBuffer :: !Bool
-		, appConfigBinaryCache :: !c
-		, appConfigDebug :: !Bool
-		-- | Graphics systems in order to try.
-		, appConfigGraphicsSystems :: ![AppGraphicsSystemId]
-		} -> AppConfig
+  AppConfig :: BinaryCache c =>
+    { appConfigTitle :: !T.Text
+    , appConfigWindowPosition :: !(Maybe (Int, Int))
+    , appConfigWindowSize :: !(Maybe (Int, Int))
+    , appConfigNeedDepthBuffer :: !Bool
+    , appConfigBinaryCache :: !c
+    , appConfigDebug :: !Bool
+    -- | Graphics systems in order to try.
+    , appConfigGraphicsSystems :: ![AppGraphicsSystemId]
+    } -> AppConfig
 
 instance Default AppConfig where
-	def = AppConfig
-		{ appConfigTitle = T.pack "flaw app"
-		, appConfigWindowPosition = Nothing
-		, appConfigWindowSize = Nothing
-		, appConfigNeedDepthBuffer = False
-		, appConfigBinaryCache = NullBinaryCache
-		, appConfigDebug = False
-		, appConfigGraphicsSystems =
+  def = AppConfig
+    { appConfigTitle = T.pack "flaw app"
+    , appConfigWindowPosition = Nothing
+    , appConfigWindowSize = Nothing
+    , appConfigNeedDepthBuffer = False
+    , appConfigBinaryCache = NullBinaryCache
+    , appConfigDebug = False
+    , appConfigGraphicsSystems =
 #if defined(ghcjs_HOST_OS)
-			AppGraphicsSystemWebGL :
+      AppGraphicsSystemWebGL :
 #else
 #if defined(FLAW_APP_SUPPORT_VULKAN)
-			AppGraphicsSystemVulkan :
+      AppGraphicsSystemVulkan :
 #endif
 #if defined(FLAW_APP_SUPPORT_DX11)
-			AppGraphicsSystemDirectX11 :
+      AppGraphicsSystemDirectX11 :
 #endif
 #if defined(FLAW_APP_SUPPORT_GL)
-			AppGraphicsSystemOpenGL :
+      AppGraphicsSystemOpenGL :
 #endif
 #endif
-			[]
-		}
+      []
+    }
 
 -- | Initialized graphics system.
 data GraphicsSystem where
-	GraphicsSystem :: Presenter p s c d => s -> d -> c -> p -> GraphicsSystem
+  GraphicsSystem :: Presenter p s c d => s -> d -> c -> p -> GraphicsSystem
 
 -- | Application callback.
 type AppCallback = forall p s c d. Presenter p s c d => AppWindow -> d -> c -> p -> AppInputManager -> IO ()
@@ -140,93 +140,93 @@ type AppCallback = forall p s c d. Presenter p s c d => AppWindow -> d -> c -> p
 -- That complexity comes from demands of various windowing systems.
 withApp :: AppConfig -> AppCallback -> IO ()
 withApp AppConfig
-	{ appConfigTitle = title
-	, appConfigWindowPosition = maybeWindowPosition
-	, appConfigWindowSize = maybeWindowSize
-	, appConfigNeedDepthBuffer = needDepthBuffer
-	, appConfigBinaryCache = binaryCache
-	, appConfigDebug = debug
-	, appConfigGraphicsSystems = graphicsSystemsIds
-	} callback = do
+  { appConfigTitle = title
+  , appConfigWindowPosition = maybeWindowPosition
+  , appConfigWindowSize = maybeWindowSize
+  , appConfigNeedDepthBuffer = needDepthBuffer
+  , appConfigBinaryCache = binaryCache
+  , appConfigDebug = debug
+  , appConfigGraphicsSystems = graphicsSystemsIds
+  } callback = do
 
 #if defined(ghcjs_HOST_OS)
-	initJs
+  initJs
 #endif
 
-	windowSystemVar <- newEmptyMVar
-	void $ forkIO $ withBook $ \bk -> do
-		windowSystem <- book bk $ takeMVar windowSystemVar
+  windowSystemVar <- newEmptyMVar
+  void $ forkIO $ withBook $ \bk -> do
+    windowSystem <- book bk $ takeMVar windowSystemVar
 
-		-- initialize input manager
+    -- initialize input manager
 #if defined(ghcjs_HOST_OS)
-		window <- Web.initCanvas windowSystem title
-		inputManager <- initWebInput window
+    window <- Web.initCanvas windowSystem title
+    inputManager <- initWebInput window
 #else
 #if defined(mingw32_HOST_OS)
-		window <- book bk $ createWin32Window windowSystem title maybeWindowPosition maybeWindowSize
-		inputManager <- initWin32Input window
+    window <- book bk $ createWin32Window windowSystem title maybeWindowPosition maybeWindowSize
+    inputManager <- initWin32Input window
 #else
-		window <- book bk $ createSdlWindow windowSystem title maybeWindowPosition maybeWindowSize needDepthBuffer
-		inputManager <- initSdlInput window
+    window <- book bk $ createSdlWindow windowSystem title maybeWindowPosition maybeWindowSize needDepthBuffer
+    inputManager <- initSdlInput window
 #endif
 #endif
 
-		-- initialize specified graphics system
-		let initGraphics graphicsSystemId = case graphicsSystemId of
+    -- initialize specified graphics system
+    let
+      initGraphics graphicsSystemId = case graphicsSystemId of
 #if defined(ghcjs_HOST_OS)
-			AppGraphicsSystemWebGL -> do
-				let _ = (maybeWindowPosition, maybeWindowSize, binaryCache, debug)
-				(graphicsSystem, graphicsDevice, graphicsContext, presenter) <- book bk $ webglInit window needDepthBuffer
-				return $ GraphicsSystem graphicsSystem graphicsDevice graphicsContext presenter
+        AppGraphicsSystemWebGL -> do
+          let _ = (maybeWindowPosition, maybeWindowSize, binaryCache, debug)
+          (graphicsSystem, graphicsDevice, graphicsContext, presenter) <- book bk $ webglInit window needDepthBuffer
+          return $ GraphicsSystem graphicsSystem graphicsDevice graphicsContext presenter
 #else
 #if defined(FLAW_APP_SUPPORT_VULKAN)
-			AppGraphicsSystemVulkan -> do
-				graphicsSystem <- book bk $ initVulkanSystem title
-				graphicsDevices <- book bk $ getInstalledDevices graphicsSystem
-				graphicsDevice <- book bk $ newVulkanDevice graphicsSystem $ fst $ head graphicsDevices
-				throwIO $ DescribeFirstException "vulkan not implemented yet"
+        AppGraphicsSystemVulkan -> do
+          graphicsSystem <- book bk $ initVulkanSystem title
+          graphicsDevices <- book bk $ getInstalledDevices graphicsSystem
+          graphicsDevice <- book bk $ newVulkanDevice graphicsSystem $ fst $ head graphicsDevices
+          throwIO $ DescribeFirstException "vulkan not implemented yet"
 #endif
 #if defined(FLAW_APP_SUPPORT_DX11)
-			AppGraphicsSystemDirectX11 -> do
-				graphicsSystem <- book bk $ dxgiCreateSystem
-				graphicsDevices <- book bk $ getInstalledDevices graphicsSystem
-				(graphicsDevice, graphicsContext) <- book bk $ dx11CreateDevice (fst $ head graphicsDevices) binaryCache debug
-				presenter <- book bk $ dx11CreatePresenter graphicsDevice window Nothing needDepthBuffer
-				return $ GraphicsSystem graphicsSystem graphicsDevice graphicsContext presenter
+        AppGraphicsSystemDirectX11 -> do
+          graphicsSystem <- book bk $ dxgiCreateSystem
+          graphicsDevices <- book bk $ getInstalledDevices graphicsSystem
+          (graphicsDevice, graphicsContext) <- book bk $ dx11CreateDevice (fst $ head graphicsDevices) binaryCache debug
+          presenter <- book bk $ dx11CreatePresenter graphicsDevice window Nothing needDepthBuffer
+          return $ GraphicsSystem graphicsSystem graphicsDevice graphicsContext presenter
 #endif
 #if defined(FLAW_APP_SUPPORT_GL)
-			AppGraphicsSystemOpenGL -> do
+        AppGraphicsSystemOpenGL -> do
 #if defined(mingw32_HOST_OS)
-				graphicsSystem <- book bk createOpenGLWin32System
-				graphicsDevices <- book bk $ getInstalledDevices graphicsSystem
-				(graphicsContext, presenter) <- book bk $ createOpenGLWin32Presenter (fst $ head graphicsDevices) window binaryCache debug
+          graphicsSystem <- book bk createOpenGLWin32System
+          graphicsDevices <- book bk $ getInstalledDevices graphicsSystem
+          (graphicsContext, presenter) <- book bk $ createOpenGLWin32Presenter (fst $ head graphicsDevices) window binaryCache debug
 #else
-				graphicsSystem <- book bk createOpenGLSdlSystem
-				graphicsDevices <- book bk $ getInstalledDevices graphicsSystem
-				(graphicsContext, presenter) <- book bk $ createOpenGLSdlPresenter (fst $ head graphicsDevices) window binaryCache debug
+          graphicsSystem <- book bk createOpenGLSdlSystem
+          graphicsDevices <- book bk $ getInstalledDevices graphicsSystem
+          (graphicsContext, presenter) <- book bk $ createOpenGLSdlPresenter (fst $ head graphicsDevices) window binaryCache debug
 #endif
-				return $ GraphicsSystem graphicsSystem graphicsContext graphicsContext presenter
+          return $ GraphicsSystem graphicsSystem graphicsContext graphicsContext presenter
 #endif
 #endif
-			_ -> throwIO $ DescribeFirstException "unsupported graphics system"
+        _ -> throwIO $ DescribeFirstException "unsupported graphics system"
 
-		-- try to initialize graphics systems in order
-		let
-			tryInitGraphics (graphicsSystemId : restGraphicsSystemsIds) =
-				catch (initGraphics graphicsSystemId) $ \SomeException {} -> tryInitGraphics restGraphicsSystemsIds
-			tryInitGraphics [] = throwIO $ DescribeFirstException "no graphics system can be initialized"
+      -- try to initialize graphics systems in order
+      tryInitGraphics (graphicsSystemId : restGraphicsSystemsIds) =
+        catch (initGraphics graphicsSystemId) $ \SomeException {} -> tryInitGraphics restGraphicsSystemsIds
+      tryInitGraphics [] = throwIO $ DescribeFirstException "no graphics system can be initialized"
 
-		GraphicsSystem _graphicsSystem graphicsDevice graphicsContext presenter <- tryInitGraphics graphicsSystemsIds
-		callback window graphicsDevice graphicsContext presenter inputManager
+    GraphicsSystem _graphicsSystem graphicsDevice graphicsContext presenter <- tryInitGraphics graphicsSystemsIds
+    callback window graphicsDevice graphicsContext presenter inputManager
 
-	-- run window system
+  -- run window system
 #if defined(ghcjs_HOST_OS)
-	Web.runWebWindowSystem windowSystemVar
+  Web.runWebWindowSystem windowSystemVar
 #else
 #if defined(mingw32_HOST_OS)
-	runWin32WindowSystem windowSystemVar
+  runWin32WindowSystem windowSystemVar
 #else
-	runSdlWindowSystem debug windowSystemVar
+  runSdlWindowSystem debug windowSystemVar
 #endif
 #endif
 
@@ -235,13 +235,14 @@ withApp AppConfig
 {-# INLINE runApp #-}
 runApp :: (Float -> IO ()) -> IO ()
 runApp step = do
-	let f lastTime = do
-		currentTime <- getCurrentTime
-		let frameTime = fromRational $ toRational $ diffUTCTime currentTime lastTime
-		step frameTime
-		f currentTime
-	veryFirstTime <- getCurrentTime
-	catch (f veryFirstTime) $ \ExitAppException -> return ()
+  let
+    f lastTime = do
+      currentTime <- getCurrentTime
+      let frameTime = fromRational $ toRational $ diffUTCTime currentTime lastTime
+      step frameTime
+      f currentTime
+  veryFirstTime <- getCurrentTime
+  catch (f veryFirstTime) $ \ExitAppException -> return ()
 
 {-# INLINE exitApp #-}
 exitApp :: IO ()

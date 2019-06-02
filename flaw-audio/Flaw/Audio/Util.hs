@@ -5,10 +5,10 @@ License: MIT
 -}
 
 module Flaw.Audio.Util
-	( convertAudioIntToShort
-	, convertAudioFloatToShort
-	, convertAudioDoubleToShort
-	) where
+  ( convertAudioIntToShort
+  , convertAudioFloatToShort
+  , convertAudioDoubleToShort
+  ) where
 
 import Control.Exception
 import Control.Monad
@@ -36,26 +36,29 @@ convertAudioDoubleToShort = convertSamples (floor . (* 0x7fff) . clampFloating :
 -- | Internal conversion function.
 convertSamples :: (Storable a, Storable b) => (a -> b) -> B.ByteString -> IO B.ByteString
 convertSamples convert bytes = B.unsafeUseAsCStringLen bytes $ \(srcPtr, srcLen) -> do
-	-- handy type hack
-	let
-		undefinedParam :: (a -> b) -> a
-		undefinedParam _ = undefined
+  let
+    -- handy type hack
+    undefinedParam :: (a -> b) -> a
+    undefinedParam _ = undefined
 
-	-- get samples cound
-	let (samplesCount, r) = srcLen `quotRem` sizeOf (undefinedParam convert)
-	unless (r == 0) $ throwIO $ DescribeFirstException "size of audio samples sequence is not divisible by sample size"
-	-- allocate memory
-	destPtr <- mallocArray samplesCount
-	-- perform conversion
-	let loop i = when (i < samplesCount) $ do
-		pokeElemOff destPtr i =<< convert <$> peekElemOff (castPtr srcPtr) i
-		loop $ i + 1
-	loop 0
-	-- make a bytestring
-	B.unsafePackMallocCStringLen (castPtr destPtr, samplesCount * sizeOf (convert undefined))
+    -- get samples cound
+    (samplesCount, r) = srcLen `quotRem` sizeOf (undefinedParam convert)
+
+  unless (r == 0) $ throwIO $ DescribeFirstException "size of audio samples sequence is not divisible by sample size"
+
+  -- allocate memory
+  destPtr <- mallocArray samplesCount
+  -- perform conversion
+  let
+    loop i = when (i < samplesCount) $ do
+      pokeElemOff destPtr i =<< convert <$> peekElemOff (castPtr srcPtr) i
+      loop $ i + 1
+    in loop 0
+  -- make a bytestring
+  B.unsafePackMallocCStringLen (castPtr destPtr, samplesCount * sizeOf (convert undefined))
 
 clampFloating :: (Floating a, Ord a) => a -> a
 clampFloating a
-	| a > 1 = 1
-	| a < (-1) = -1
-	| otherwise = a
+  | a > 1 = 1
+  | a < (-1) = -1
+  | otherwise = a

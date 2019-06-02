@@ -7,17 +7,17 @@ License: MIT
 {-# LANGUAGE DeriveDataTypeable #-}
 
 module Flaw.FFI.COM.Internal
-	( HRESULT
-	, IID
-	, REFGUID
-	, REFIID
-	, COMInterface(..)
-	, peekCOMObject
-	, hresultSucceeded
-	, hresultFailed
-	, FailedHRESULT(..)
-	, hresultCheck
-	) where
+  ( HRESULT
+  , IID
+  , REFGUID
+  , REFIID
+  , COMInterface(..)
+  , peekCOMObject
+  , hresultSucceeded
+  , hresultFailed
+  , FailedHRESULT(..)
+  , hresultCheck
+  ) where
 
 import Control.Exception
 import Control.Monad
@@ -34,19 +34,19 @@ type REFIID = Ptr IID
 
 -- | Class of COM interface.
 class COMInterface i where
-	-- | Get IID of COM interface. Argument is not used.
-	getIID :: i -> IID
-	-- | Get name of COM interface. Argument is not used.
-	getCOMInterfaceName :: i -> String
-	-- | Get size of virtual table. Argument is not used.
-	sizeOfCOMVirtualTable :: i -> Int
-	-- | Get native pointer to object.
-	pokeCOMObject :: i -> Ptr i
-	-- | Internal method to parse table of virtual methods.
-	peekCOMVirtualTable
-		:: Ptr i -- ^ 'this' pointer
-		-> Ptr () -- ^ pointer to table of virtual methods
-		-> IO i
+  -- | Get IID of COM interface. Argument is not used.
+  getIID :: i -> IID
+  -- | Get name of COM interface. Argument is not used.
+  getCOMInterfaceName :: i -> String
+  -- | Get size of virtual table. Argument is not used.
+  sizeOfCOMVirtualTable :: i -> Int
+  -- | Get native pointer to object.
+  pokeCOMObject :: i -> Ptr i
+  -- | Internal method to parse table of virtual methods.
+  peekCOMVirtualTable
+    :: Ptr i -- ^ 'this' pointer
+    -> Ptr () -- ^ pointer to table of virtual methods
+    -> IO i
 
 -- | Get COM object from pointer.
 peekCOMObject :: COMInterface a => Ptr a -> IO a

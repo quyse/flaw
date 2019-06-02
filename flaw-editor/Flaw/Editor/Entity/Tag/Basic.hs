@@ -7,13 +7,13 @@ License: MIT
 {-# LANGUAGE DeriveGeneric, GeneralizedNewtypeDeriving, OverloadedStrings, TemplateHaskell, TypeFamilies #-}
 
 module Flaw.Editor.Entity.Tag.Basic
-	( NameEntityTag(..)
-	, nameEntityTagId
-	, nameEntityTagEntityId
-	, DescriptionEntityTag(..)
-	, descriptionEntityTagId
-	, descriptionEntityTagEntityId
-	) where
+  ( NameEntityTag(..)
+  , nameEntityTagId
+  , nameEntityTagEntityId
+  , DescriptionEntityTag(..)
+  , descriptionEntityTagId
+  , descriptionEntityTagEntityId
+  ) where
 
 import Data.Default
 import qualified Data.Serialize as S
@@ -28,10 +28,10 @@ import Flaw.Editor.Entity.Tag
 newtype NameEntityTag = NameEntityTag T.Text deriving (Generic, Default, S.Serialize, Show)
 
 instance Entity NameEntityTag where
-	type EntityChange NameEntityTag = NameEntityTag
-	processEntityChange = processBasicEntityChange
-	applyEntityChange = applyBasicEntityChange
-	getEntityTypeId _ = $(hashTextToEntityTypeId "NameEntityTag")
+  type EntityChange NameEntityTag = NameEntityTag
+  processEntityChange = processBasicEntityChange
+  applyEntityChange = applyBasicEntityChange
+  getEntityTypeId _ = $(hashTextToEntityTypeId "NameEntityTag")
 instance BasicEntity NameEntityTag
 
 nameEntityTagId :: EntityTagId
@@ -44,10 +44,10 @@ nameEntityTagEntityId = entityTagEntityId nameEntityTagId
 newtype DescriptionEntityTag = DescriptionEntityTag T.Text deriving (Generic, Default, S.Serialize, Show)
 
 instance Entity DescriptionEntityTag where
-	type EntityChange DescriptionEntityTag = DescriptionEntityTag
-	getEntityTypeId _ = $(hashTextToEntityTypeId "DescriptionEntityTag")
-	processEntityChange = processBasicEntityChange
-	applyEntityChange = applyBasicEntityChange
+  type EntityChange DescriptionEntityTag = DescriptionEntityTag
+  getEntityTypeId _ = $(hashTextToEntityTypeId "DescriptionEntityTag")
+  processEntityChange = processBasicEntityChange
+  applyEntityChange = applyBasicEntityChange
 instance BasicEntity DescriptionEntityTag
 
 descriptionEntityTagId :: EntityTagId

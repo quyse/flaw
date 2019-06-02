@@ -7,15 +7,15 @@ License: MIT
 {-# LANGUAGE DeriveGeneric, GeneralizedNewtypeDeriving, OverloadedStrings, ViewPatterns #-}
 
 module Flaw.Itch.WebApi
-	( ItchWebApiKey(..)
-	, itchWebApiMe
-	, itchWebApiDownloadKeys
-	, ItchUserId(..)
-	, ItchUser(..)
-	, ItchGameId(..)
-	, ItchDownloadKeyId(..)
-	, ItchDownloadKey(..)
-	) where
+  ( ItchWebApiKey(..)
+  , itchWebApiMe
+  , itchWebApiDownloadKeys
+  , ItchUserId(..)
+  , ItchUser(..)
+  , ItchGameId(..)
+  , ItchDownloadKeyId(..)
+  , ItchDownloadKey(..)
+  ) where
 
 import Control.Monad
 import qualified Data.Aeson as A
@@ -34,51 +34,52 @@ data ItchWebApiKey = ItchWebApiKey !T.Text !Bool
 
 itchWebApiRequest :: H.Manager -> ItchWebApiKey -> B.ByteString -> [(B.ByteString, Maybe B.ByteString)] -> IO A.Value
 itchWebApiRequest httpManager (ItchWebApiKey apiKey isKey) path params =
-	either fail return . A.eitherDecode' . H.responseBody =<< H.httpLbs (H.setQueryString params H.defaultRequest
-		{ H.method = "GET"
-		, H.secure = True
-		, H.host = "itch.io"
-		, H.port = 443
-		, H.path = "/api/1/" <> (if isKey then "key" else "jwt") <> path
-		, H.requestHeaders = [("Authorization", "Bearer " <> T.encodeUtf8 apiKey)]
-		}) httpManager
+  either fail return . A.eitherDecode' . H.responseBody =<< H.httpLbs (H.setQueryString params H.defaultRequest
+    { H.method = "GET"
+    , H.secure = True
+    , H.host = "itch.io"
+    , H.port = 443
+    , H.path = "/api/1/" <> (if isKey then "key" else "jwt") <> path
+    , H.requestHeaders = [("Authorization", "Bearer " <> T.encodeUtf8 apiKey)]
+    }) httpManager
 
 itchWebApiMe :: H.Manager -> ItchWebApiKey -> IO (Maybe (ItchUser, Maybe ItchGameId))
 itchWebApiMe httpManager apiKey =
-	A.parseMaybe parseResponse <$> itchWebApiRequest httpManager apiKey "/me" []
-	where parseResponse = A.withObject "response" $ \response -> do
-		user <- response A..: "user"
-		maybeGameId <- maybe (return Nothing) (A.withObject "issuer" (A..: "game_id") <=< A.withObject "api_key" (A..: "issuer")) =<< response A..:? "api_key"
-		return (user, maybeGameId)
+  A.parseMaybe parseResponse <$> itchWebApiRequest httpManager apiKey "/me" []
+  where
+    parseResponse = A.withObject "response" $ \response -> do
+      user <- response A..: "user"
+      maybeGameId <- maybe (return Nothing) (A.withObject "issuer" (A..: "game_id") <=< A.withObject "api_key" (A..: "issuer")) =<< response A..:? "api_key"
+      return (user, maybeGameId)
 
 itchWebApiDownloadKeys :: H.Manager -> ItchWebApiKey -> ItchGameId -> ItchUserId -> IO (Maybe ItchDownloadKey)
 itchWebApiDownloadKeys httpManager apiKey (ItchGameId gameId) (ItchUserId userId) = do
-	A.parseMaybe parseResponse <$> itchWebApiRequest httpManager apiKey ("/game/" <> fromString (show gameId) <> "/download_keys")
-		[ ("user_id", Just $ fromString $ show userId)
-		]
-	where parseResponse = A.withObject "response" (A..: "download_key")
+  A.parseMaybe parseResponse <$> itchWebApiRequest httpManager apiKey ("/game/" <> fromString (show gameId) <> "/download_keys")
+    [ ("user_id", Just $ fromString $ show userId)
+    ]
+  where parseResponse = A.withObject "response" (A..: "download_key")
 
 newtype ItchUserId = ItchUserId Word64 deriving (Eq, Ord, Hashable, Generic, Show, A.FromJSON, A.ToJSON)
 data ItchUser = ItchUser
-	{ itchUser_id :: !ItchUserId
-	, itchUser_username :: !T.Text
-	, itchUser_url :: !T.Text
-	, itchUser_cover_url :: !(Maybe T.Text)
-	} deriving (Generic, Show)
+  { itchUser_id :: !ItchUserId
+  , itchUser_username :: !T.Text
+  , itchUser_url :: !T.Text
+  , itchUser_cover_url :: !(Maybe T.Text)
+  } deriving (Generic, Show)
 instance A.FromJSON ItchUser where
-	parseJSON = A.genericParseJSON A.defaultOptions
-		{ A.fieldLabelModifier = drop 9
-		}
+  parseJSON = A.genericParseJSON A.defaultOptions
+    { A.fieldLabelModifier = drop 9
+    }
 
 newtype ItchGameId = ItchGameId Word64 deriving (Eq, Ord, Hashable, Generic, Show, A.FromJSON, A.ToJSON)
 
 newtype ItchDownloadKeyId = ItchDownloadKeyId Word64 deriving (Eq, Ord, Hashable, Generic, Show, A.FromJSON, A.ToJSON)
 data ItchDownloadKey = ItchDownloadKey
-	{ itchDownloadKey_id :: !ItchDownloadKeyId
-	, itchDownloadKey_game_id :: {-# UNPACK #-} !ItchGameId
-	, itchDownloadKey_owner :: !ItchUser
-	} deriving (Generic, Show)
+  { itchDownloadKey_id :: !ItchDownloadKeyId
+  , itchDownloadKey_game_id :: {-# UNPACK #-} !ItchGameId
+  , itchDownloadKey_owner :: !ItchUser
+  } deriving (Generic, Show)
 instance A.FromJSON ItchDownloadKey where
-	parseJSON = A.genericParseJSON A.defaultOptions
-		{ A.fieldLabelModifier = drop 16
-		}
+  parseJSON = A.genericParseJSON A.defaultOptions
+    { A.fieldLabelModifier = drop 16
+    }

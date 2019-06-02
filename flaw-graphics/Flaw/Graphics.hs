@@ -39,44 +39,44 @@ into combined slot indexed by numeric index;
 {-# LANGUAGE DeriveGeneric, FlexibleContexts, FunctionalDependencies, MultiParamTypeClasses, RankNTypes, TypeFamilies #-}
 
 module Flaw.Graphics
-	( System(..)
-	, Device(..)
-	, Context(..)
-	, Presenter(..)
-	, DeviceInfo(..)
-	, DisplayInfo(..)
-	, DisplayModeInfo(..)
-	, IndexTopology(..)
-	, IndexStride(..)
-	, DepthTestFunc(..)
-	, Render
-	, renderScope
-	, renderFrameBuffer
-	, renderViewport
-	, renderGetViewport
-	, renderScissor
-	, renderGetScissor
-	, renderIntersectScissor
-	, renderVertexBuffer
-	, renderIndexBuffer
-	, renderUniformBuffer
-	, renderSampler
-	, renderBlendState
-	, renderDepthTestFunc
-	, renderDepthWrite
-	, renderProgram
-	, renderClearColor
-	, renderClearDepth
-	, renderClearStencil
-	, renderClearDepthStencil
-	, renderUploadUniformBuffer
-	, renderUploadVertexBuffer
-	, renderDraw
-	, renderDrawInstanced
-	, renderPlay
-	, render
-	, present
-	) where
+  ( System(..)
+  , Device(..)
+  , Context(..)
+  , Presenter(..)
+  , DeviceInfo(..)
+  , DisplayInfo(..)
+  , DisplayModeInfo(..)
+  , IndexTopology(..)
+  , IndexStride(..)
+  , DepthTestFunc(..)
+  , Render
+  , renderScope
+  , renderFrameBuffer
+  , renderViewport
+  , renderGetViewport
+  , renderScissor
+  , renderGetScissor
+  , renderIntersectScissor
+  , renderVertexBuffer
+  , renderIndexBuffer
+  , renderUniformBuffer
+  , renderSampler
+  , renderBlendState
+  , renderDepthTestFunc
+  , renderDepthWrite
+  , renderProgram
+  , renderClearColor
+  , renderClearDepth
+  , renderClearStencil
+  , renderClearDepthStencil
+  , renderUploadUniformBuffer
+  , renderUploadVertexBuffer
+  , renderDraw
+  , renderDrawInstanced
+  , renderPlay
+  , render
+  , present
+  ) where
 
 import Control.Exception
 import Control.Monad.Trans.Class
@@ -99,230 +99,230 @@ import Flaw.Stack
 There're just a few general functions.
 -}
 class System s where
-	-- | Type for id of graphics device.
-	data DeviceId s :: *
-	-- | Type for id of display.
-	data DisplayId s :: *
-	-- | Type for id of display mode.
-	data DisplayModeId s :: *
-	-- | Get list of graphics devices installed in system.
-	getInstalledDevices :: s -> IO ([(DeviceId s, DeviceInfo s)], IO ())
-	-- | Create custom display mode (with specified width and height) for specified display.
-	createDisplayMode
-		:: s
-		-> DisplayId s -- ^ Display id.
-		-> Int -- ^ Width.
-		-> Int -- ^ Height.
-		-> IO ((DisplayModeId s, DisplayModeInfo), IO ())
+  -- | Type for id of graphics device.
+  data DeviceId s :: *
+  -- | Type for id of display.
+  data DisplayId s :: *
+  -- | Type for id of display mode.
+  data DisplayModeId s :: *
+  -- | Get list of graphics devices installed in system.
+  getInstalledDevices :: s -> IO ([(DeviceId s, DeviceInfo s)], IO ())
+  -- | Create custom display mode (with specified width and height) for specified display.
+  createDisplayMode
+    :: s
+    -> DisplayId s -- ^ Display id.
+    -> Int -- ^ Width.
+    -> Int -- ^ Height.
+    -> IO ((DisplayModeId s, DisplayModeInfo), IO ())
 
 -- | Class of graphics device.
 -- Graphics device performs managing of resources.
 -- Also it works as a primary context for the device.
 class Device d where
-	-- | Type for deferred contexts.
-	type DeferredContext d :: *
-	-- | Type for texture id.
-	data TextureId d :: *
-	-- | Type for sampler state id.
-	data SamplerStateId d :: *
-	-- | Type for blend state id.
-	data BlendStateId d :: *
-	-- | Type for render target id.
-	data RenderTargetId d :: *
-	-- | Type for depth stencil target id.
-	data DepthStencilTargetId d :: *
-	-- | Type for framebuffer id.
-	data FrameBufferId d :: *
-	-- | Type for vertex buffer id.
-	data VertexBufferId d :: *
-	-- | Type for index buffer id.
-	data IndexBufferId d :: *
-	-- | Type for program id.
-	data ProgramId d :: *
-	-- | Type for uniform buffer id.
-	data UniformBufferId d :: *
+  -- | Type for deferred contexts.
+  type DeferredContext d :: *
+  -- | Type for texture id.
+  data TextureId d :: *
+  -- | Type for sampler state id.
+  data SamplerStateId d :: *
+  -- | Type for blend state id.
+  data BlendStateId d :: *
+  -- | Type for render target id.
+  data RenderTargetId d :: *
+  -- | Type for depth stencil target id.
+  data DepthStencilTargetId d :: *
+  -- | Type for framebuffer id.
+  data FrameBufferId d :: *
+  -- | Type for vertex buffer id.
+  data VertexBufferId d :: *
+  -- | Type for index buffer id.
+  data IndexBufferId d :: *
+  -- | Type for program id.
+  data ProgramId d :: *
+  -- | Type for uniform buffer id.
+  data UniformBufferId d :: *
 
-	-- | Null texture.
-	nullTexture :: TextureId d
-	-- | Null sampler state.
-	nullSamplerState :: SamplerStateId d
-	-- | Null blend state.
-	nullBlendState :: BlendStateId d
-	-- | Null depth stencil target.
-	nullDepthStencilTarget :: DepthStencilTargetId d
-	-- | Null vertex buffer.
-	nullVertexBuffer :: VertexBufferId d
-	-- | Null index buffer.
-	nullIndexBuffer :: IndexBufferId d
-	-- | Null uniform buffer.
-	nullUniformBuffer :: UniformBufferId d
+  -- | Null texture.
+  nullTexture :: TextureId d
+  -- | Null sampler state.
+  nullSamplerState :: SamplerStateId d
+  -- | Null blend state.
+  nullBlendState :: BlendStateId d
+  -- | Null depth stencil target.
+  nullDepthStencilTarget :: DepthStencilTargetId d
+  -- | Null vertex buffer.
+  nullVertexBuffer :: VertexBufferId d
+  -- | Null index buffer.
+  nullIndexBuffer :: IndexBufferId d
+  -- | Null uniform buffer.
+  nullUniformBuffer :: UniformBufferId d
 
-	-- | Create deferred context.
-	createDeferredContext :: d -> IO (DeferredContext d, IO ())
-	createDeferredContext _ = throwIO $ DescribeFirstException "creating deferred context is not supported"
-	-- | Create static texture.
-	createStaticTexture :: d -> TextureInfo -> SamplerStateInfo -> B.ByteString -> IO (TextureId d, IO ())
-	-- | Create texture from image packed in any format natively supported by device.
-	createNativeTexture :: d -> SamplerStateInfo -> B.ByteString -> IO (TextureId d, IO ())
-	createNativeTexture _ _ _ = throwIO $ DescribeFirstException "creating native texture is not supported"
-	-- | Create sampler state.
-	createSamplerState :: d -> SamplerStateInfo -> IO (SamplerStateId d, IO ())
-	-- | Create blend state.
-	createBlendState :: d -> BlendStateInfo -> IO (BlendStateId d, IO ())
-	-- | Create readable render target.
-	createReadableRenderTarget :: d -> Int -> Int -> TextureFormat -> SamplerStateInfo -> IO ((RenderTargetId d, TextureId d), IO ())
-	-- | Create depth stencil target.
-	createDepthStencilTarget :: d -> Int -> Int -> IO (DepthStencilTargetId d, IO ())
-	-- | Create readable depth stencil target.
-	createReadableDepthStencilTarget :: d -> Int -> Int -> SamplerStateInfo -> IO ((DepthStencilTargetId d, TextureId d), IO ())
-	-- | Create framebuffer.
-	createFrameBuffer :: d -> [RenderTargetId d] -> DepthStencilTargetId d -> IO (FrameBufferId d, IO ())
-	-- | Create static vertex buffer.
-	createStaticVertexBuffer
-		:: d -- ^ Device.
-		-> B.ByteString -- ^ Buffer.
-		-> Int -- ^ Stride in bytes.
-		-> IO (VertexBufferId d, IO ())
-	-- | Create dynamic vertex buffer.
-	createDynamicVertexBuffer
-		:: d -- ^ Device.
-		-> Int -- ^ Size in bytes.
-		-> Int -- ^ Stride in bytes.
-		-> IO (VertexBufferId d, IO ())
-	-- | Create index buffer.
-	createStaticIndexBuffer :: d -> B.ByteString -> IndexTopology -> IndexStride -> IO (IndexBufferId d, IO ())
-	-- | Create program.
-	createProgram
-		:: d -- ^ Device.
-		-> Program () -- ^ Program contents.
-		-> IO (ProgramId d, IO ())
-	-- | Create uniform buffer.
-	createUniformBuffer :: d -> Int -> IO (UniformBufferId d, IO ())
+  -- | Create deferred context.
+  createDeferredContext :: d -> IO (DeferredContext d, IO ())
+  createDeferredContext _ = throwIO $ DescribeFirstException "creating deferred context is not supported"
+  -- | Create static texture.
+  createStaticTexture :: d -> TextureInfo -> SamplerStateInfo -> B.ByteString -> IO (TextureId d, IO ())
+  -- | Create texture from image packed in any format natively supported by device.
+  createNativeTexture :: d -> SamplerStateInfo -> B.ByteString -> IO (TextureId d, IO ())
+  createNativeTexture _ _ _ = throwIO $ DescribeFirstException "creating native texture is not supported"
+  -- | Create sampler state.
+  createSamplerState :: d -> SamplerStateInfo -> IO (SamplerStateId d, IO ())
+  -- | Create blend state.
+  createBlendState :: d -> BlendStateInfo -> IO (BlendStateId d, IO ())
+  -- | Create readable render target.
+  createReadableRenderTarget :: d -> Int -> Int -> TextureFormat -> SamplerStateInfo -> IO ((RenderTargetId d, TextureId d), IO ())
+  -- | Create depth stencil target.
+  createDepthStencilTarget :: d -> Int -> Int -> IO (DepthStencilTargetId d, IO ())
+  -- | Create readable depth stencil target.
+  createReadableDepthStencilTarget :: d -> Int -> Int -> SamplerStateInfo -> IO ((DepthStencilTargetId d, TextureId d), IO ())
+  -- | Create framebuffer.
+  createFrameBuffer :: d -> [RenderTargetId d] -> DepthStencilTargetId d -> IO (FrameBufferId d, IO ())
+  -- | Create static vertex buffer.
+  createStaticVertexBuffer
+    :: d -- ^ Device.
+    -> B.ByteString -- ^ Buffer.
+    -> Int -- ^ Stride in bytes.
+    -> IO (VertexBufferId d, IO ())
+  -- | Create dynamic vertex buffer.
+  createDynamicVertexBuffer
+    :: d -- ^ Device.
+    -> Int -- ^ Size in bytes.
+    -> Int -- ^ Stride in bytes.
+    -> IO (VertexBufferId d, IO ())
+  -- | Create index buffer.
+  createStaticIndexBuffer :: d -> B.ByteString -> IndexTopology -> IndexStride -> IO (IndexBufferId d, IO ())
+  -- | Create program.
+  createProgram
+    :: d -- ^ Device.
+    -> Program () -- ^ Program contents.
+    -> IO (ProgramId d, IO ())
+  -- | Create uniform buffer.
+  createUniformBuffer :: d -> Int -> IO (UniformBufferId d, IO ())
 
 -- | Class of graphics context.
 -- Performs actual render operations.
 class Device d => Context c d | c -> d where
-	------- Immediate commands.
-	-- | Clear render target.
-	contextClearColor :: c -> Int -> Float4 -> IO ()
-	-- | Clear depth.
-	contextClearDepth :: c -> Float -> IO ()
-	-- | Clear stencil.
-	contextClearStencil :: c -> Int -> IO ()
-	-- | Clear depth and stencil.
-	contextClearDepthStencil :: c -> Float -> Int -> IO ()
-	-- | Upload data to uniform buffer.
-	contextUploadUniformBuffer :: c -> UniformBufferId d -> B.ByteString -> IO ()
-	-- | Upload data to dynamic vertex buffer.
-	contextUploadVertexBuffer :: c -> VertexBufferId d -> B.ByteString -> IO ()
-	-- | Draw (instanced).
-	contextDraw :: c
-		-> Int -- ^ Instances count (1 for non-instanced).
-		-> Int -- ^ Indices count.
-		-> IO ()
-	-- | Replay deferred context on immediate context.
-	contextPlay :: Context dc d => c -> dc -> IO ()
-	contextPlay _ _ = throwIO $ DescribeFirstException "playing deferred context is not supported"
-	-- | Perform rendering. Initial state is context's default state.
-	contextRender :: c -> IO a -> IO a
-	------- Setup commands.
-	-- | Set framebuffer.
-	contextSetFrameBuffer :: c -> FrameBufferId d -> IO a -> IO a
-	-- | Set viewport (left, top, right, bottom).
-	contextSetViewport :: c -> Int4 -> IO a -> IO a
-	-- | Get current viewport.
-	contextGetViewport :: c -> IO Int4
-	-- | Set scissor (left, top, right, bottom).
-	contextSetScissor :: c -> Maybe Int4 -> IO a -> IO a
-	-- | Get current scissor.
-	contextGetScissor :: c -> IO (Maybe Int4)
-	-- | Set vertex buffer.
-	contextSetVertexBuffer :: c -> Int -> VertexBufferId d -> IO a -> IO a
-	-- | Set index buffer.
-	contextSetIndexBuffer :: c -> IndexBufferId d -> IO a -> IO a
-	-- | Set uniform buffer.
-	contextSetUniformBuffer :: c -> Int -> UniformBufferId d -> IO a -> IO a
-	-- | Set sampler.
-	contextSetSampler :: c -> Int -> TextureId d -> SamplerStateId d -> IO a -> IO a
-	-- | Set blend state.
-	contextSetBlendState :: c -> BlendStateId d -> IO a -> IO a
-	-- | Set depth-test function.
-	contextSetDepthTestFunc :: c -> DepthTestFunc -> IO a -> IO a
-	-- | Set depth write flag.
-	contextSetDepthWrite :: c -> Bool -> IO a -> IO a
-	-- | Set program.
-	contextSetProgram :: c -> ProgramId d -> IO a -> IO a
+  ------- Immediate commands.
+  -- | Clear render target.
+  contextClearColor :: c -> Int -> Float4 -> IO ()
+  -- | Clear depth.
+  contextClearDepth :: c -> Float -> IO ()
+  -- | Clear stencil.
+  contextClearStencil :: c -> Int -> IO ()
+  -- | Clear depth and stencil.
+  contextClearDepthStencil :: c -> Float -> Int -> IO ()
+  -- | Upload data to uniform buffer.
+  contextUploadUniformBuffer :: c -> UniformBufferId d -> B.ByteString -> IO ()
+  -- | Upload data to dynamic vertex buffer.
+  contextUploadVertexBuffer :: c -> VertexBufferId d -> B.ByteString -> IO ()
+  -- | Draw (instanced).
+  contextDraw :: c
+    -> Int -- ^ Instances count (1 for non-instanced).
+    -> Int -- ^ Indices count.
+    -> IO ()
+  -- | Replay deferred context on immediate context.
+  contextPlay :: Context dc d => c -> dc -> IO ()
+  contextPlay _ _ = throwIO $ DescribeFirstException "playing deferred context is not supported"
+  -- | Perform rendering. Initial state is context's default state.
+  contextRender :: c -> IO a -> IO a
+  ------- Setup commands.
+  -- | Set framebuffer.
+  contextSetFrameBuffer :: c -> FrameBufferId d -> IO a -> IO a
+  -- | Set viewport (left, top, right, bottom).
+  contextSetViewport :: c -> Int4 -> IO a -> IO a
+  -- | Get current viewport.
+  contextGetViewport :: c -> IO Int4
+  -- | Set scissor (left, top, right, bottom).
+  contextSetScissor :: c -> Maybe Int4 -> IO a -> IO a
+  -- | Get current scissor.
+  contextGetScissor :: c -> IO (Maybe Int4)
+  -- | Set vertex buffer.
+  contextSetVertexBuffer :: c -> Int -> VertexBufferId d -> IO a -> IO a
+  -- | Set index buffer.
+  contextSetIndexBuffer :: c -> IndexBufferId d -> IO a -> IO a
+  -- | Set uniform buffer.
+  contextSetUniformBuffer :: c -> Int -> UniformBufferId d -> IO a -> IO a
+  -- | Set sampler.
+  contextSetSampler :: c -> Int -> TextureId d -> SamplerStateId d -> IO a -> IO a
+  -- | Set blend state.
+  contextSetBlendState :: c -> BlendStateId d -> IO a -> IO a
+  -- | Set depth-test function.
+  contextSetDepthTestFunc :: c -> DepthTestFunc -> IO a -> IO a
+  -- | Set depth write flag.
+  contextSetDepthWrite :: c -> Bool -> IO a -> IO a
+  -- | Set program.
+  contextSetProgram :: c -> ProgramId d -> IO a -> IO a
 
 -- | Presenter class.
 class (System s, Context c d) => Presenter p s c d | p -> s c d where
-	setPresenterMode :: p -> Maybe (DisplayModeId s) -> IO ()
-	-- | Perform rendering on presenter's surface.
-	-- Presenter's framebuffer, viewport, etc will be automatically set
-	-- as an initial state.
-	presenterRender :: p -> c -> IO a -> IO a
+  setPresenterMode :: p -> Maybe (DisplayModeId s) -> IO ()
+  -- | Perform rendering on presenter's surface.
+  -- Presenter's framebuffer, viewport, etc will be automatically set
+  -- as an initial state.
+  presenterRender :: p -> c -> IO a -> IO a
 
 -- | Device information structure.
 data DeviceInfo device = DeviceInfo
-	{ deviceName :: !T.Text
-	, deviceDisplays :: [(DisplayId device, DisplayInfo device)]
-	}
+  { deviceName :: !T.Text
+  , deviceDisplays :: [(DisplayId device, DisplayInfo device)]
+  }
 
 -- | Display information structure.
 data DisplayInfo device = DisplayInfo
-	{ displayName :: !T.Text
-	, displayModes :: [(DisplayModeId device, DisplayModeInfo)]
-	}
+  { displayName :: !T.Text
+  , displayModes :: [(DisplayModeId device, DisplayModeInfo)]
+  }
 
 -- | Display mode information structure.
 data DisplayModeInfo = DisplayModeInfo
-	{ displayModeName :: !T.Text
-	, displayModeWidth :: !Int
-	, displayModeHeight :: !Int
-	, displayModeRefreshRate :: !Rational
-	} deriving Show
+  { displayModeName :: !T.Text
+  , displayModeWidth :: !Int
+  , displayModeHeight :: !Int
+  , displayModeRefreshRate :: !Rational
+  } deriving Show
 
 -- | Index topology.
 data IndexTopology
-	= IndexTopologyPoints
-	| IndexTopologyLines
-	| IndexTopologyLineStrip
-	| IndexTopologyTriangles
-	| IndexTopologyTriangleStrip
-	| IndexTopologyPatches {-# UNPACK #-} !Int
-	deriving (Eq, Generic)
+  = IndexTopologyPoints
+  | IndexTopologyLines
+  | IndexTopologyLineStrip
+  | IndexTopologyTriangles
+  | IndexTopologyTriangleStrip
+  | IndexTopologyPatches {-# UNPACK #-} !Int
+  deriving (Eq, Generic)
 instance S.Serialize IndexTopology
 
 -- | Index stride.
 data IndexStride
-	= IndexStride32Bit
-	| IndexStride16Bit
-	deriving (Eq, Generic)
+  = IndexStride32Bit
+  | IndexStride16Bit
+  deriving (Eq, Generic)
 instance S.Serialize IndexStride
 
 -- | Depth test function.
 data DepthTestFunc
-	= DepthTestFuncNever
-	| DepthTestFuncLess
-	| DepthTestFuncLessOrEqual
-	| DepthTestFuncEqual
-	| DepthTestFuncNonEqual
-	| DepthTestFuncGreaterOrEqual
-	| DepthTestFuncGreater
-	| DepthTestFuncAlways
-	deriving Eq
+  = DepthTestFuncNever
+  | DepthTestFuncLess
+  | DepthTestFuncLessOrEqual
+  | DepthTestFuncEqual
+  | DepthTestFuncNonEqual
+  | DepthTestFuncGreaterOrEqual
+  | DepthTestFuncGreater
+  | DepthTestFuncAlways
+  deriving Eq
 
 -- | Rendering monad.
 type Render c = StackT (ReaderT c IO)
 
 renderSetup :: (forall a. c -> IO a -> IO a) -> Render c ()
 renderSetup setup = StackT $ \q -> do
-	c <- ask
-	mapReaderT (setup c) $ q ()
+  c <- ask
+  mapReaderT (setup c) $ q ()
 
 renderAction :: (c -> IO a) -> Render c a
 renderAction action = StackT $ \q -> do
-	c <- ask
-	lift (action c) >>= q
+  c <- ask
+  lift (action c) >>= q
 
 -- | Scope for rendering state.
 -- Context state will be restored after the scope.
@@ -352,11 +352,11 @@ renderGetScissor = renderAction contextGetScissor
 -- | Set intersection between specified and current scissor as scissor.
 renderIntersectScissor :: Context c d => Int4 -> Render c ()
 renderIntersectScissor scissor@(Vec4 left top right bottom) = do
-	currentScissor <- renderGetScissor
-	renderScissor $ Just $ case currentScissor of
-		Just (Vec4 currentLeft currentTop currentRight currentBottom) ->
-			Vec4 (max left currentLeft) (max top currentTop) (min right currentRight) (min bottom currentBottom)
-		Nothing -> scissor
+  currentScissor <- renderGetScissor
+  renderScissor $ Just $ case currentScissor of
+    Just (Vec4 currentLeft currentTop currentRight currentBottom) ->
+      Vec4 (max left currentLeft) (max top currentTop) (min right currentRight) (min bottom currentBottom)
+    Nothing -> scissor
 
 -- | Set vertex buffer.
 renderVertexBuffer :: Context c d => Int -> VertexBufferId d -> Render c ()
@@ -416,15 +416,15 @@ renderUploadVertexBuffer vb bytes = renderAction $ \c -> contextUploadVertexBuff
 
 -- | Draw.
 renderDraw :: Context c d
-	=> Int -- ^ Indices count.
-	-> Render c ()
+  => Int -- ^ Indices count.
+  -> Render c ()
 renderDraw = renderDrawInstanced 1
 
 -- | Draw instanced.
 renderDrawInstanced :: Context c d
-	=> Int -- ^ Instances count.
-	-> Int -- ^ Indices count.
-	-> Render c ()
+  => Int -- ^ Instances count.
+  -> Int -- ^ Indices count.
+  -> Render c ()
 renderDrawInstanced instancesCount indicesCount = renderAction $ \c -> contextDraw c instancesCount indicesCount
 
 -- | Play deferred context on immediate context.

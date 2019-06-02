@@ -5,8 +5,8 @@ License: MIT
 -}
 
 module Flaw.Graphics.Font.Harfbuzz
-	( createHarfbuzzShaper
-	) where
+  ( createHarfbuzzShaper
+  ) where
 
 import Control.Concurrent.STM
 import Control.Exception
@@ -28,70 +28,72 @@ import Flaw.Graphics.Font.FreeType.FFI
 import Flaw.Math
 
 data HarfbuzzShaper = HarfbuzzShaper
-	{-# UNPACK #-} !(Ptr Hb_font_t)
-	{-# UNPACK #-} !(Ptr Hb_buffer_t)
-	!FreeTypeFont
+  {-# UNPACK #-} !(Ptr Hb_font_t)
+  {-# UNPACK #-} !(Ptr Hb_buffer_t)
+  !FreeTypeFont
 
 createHarfbuzzShaper :: FreeTypeFont -> IO (HarfbuzzShaper, IO ())
 createHarfbuzzShaper font@FreeTypeFont
-	{ ftFontFaceVar = ftFaceVar
-	} = bracket (atomically $ takeTMVar ftFaceVar) (atomically . putTMVar ftFaceVar) $ \ftFace -> do
-	hbFont <- hb_ft_font_create ftFace nullPtr
-	hbBuffer <- hb_buffer_create
-	let destroy = do
-		hb_font_destroy hbFont
-		hb_buffer_destroy hbBuffer
-	return (HarfbuzzShaper hbFont hbBuffer font, destroy)
+  { ftFontFaceVar = ftFaceVar
+  } = bracket (atomically $ takeTMVar ftFaceVar) (atomically . putTMVar ftFaceVar) $ \ftFace -> do
+  hbFont <- hb_ft_font_create ftFace nullPtr
+  hbBuffer <- hb_buffer_create
+  let
+    destroy = do
+      hb_font_destroy hbFont
+      hb_buffer_destroy hbBuffer
+  return (HarfbuzzShaper hbFont hbBuffer font, destroy)
 
 instance FontShaper HarfbuzzShaper where
-	shapeText (HarfbuzzShaper hbFont hbBuffer FreeTypeFont
-		{ ftFontFaceVar = ftFaceVar
-		}) texts (FontScript script) = bracket (atomically $ takeTMVar ftFaceVar) (atomically . putTMVar ftFaceVar) $ \_ftFace -> do
-		-- calculate offsets and lengths
-		let
-			calcOffsetsAndLengths (t : ts) ll = (ll, l) : calcOffsetsAndLengths ts (ll + l) where l = T.length t
-			calcOffsetsAndLengths [] _ = []
-			offsetsAndLengths = calcOffsetsAndLengths texts 0
+  shapeText (HarfbuzzShaper hbFont hbBuffer FreeTypeFont
+    { ftFontFaceVar = ftFaceVar
+    }) texts (FontScript script) = bracket (atomically $ takeTMVar ftFaceVar) (atomically . putTMVar ftFaceVar) $ \_ftFace -> do
+    -- calculate offsets and lengths
+    let
+      calcOffsetsAndLengths (t : ts) ll = (ll, l) : calcOffsetsAndLengths ts (ll + l) where l = T.length t
+      calcOffsetsAndLengths [] _ = []
+      offsetsAndLengths = calcOffsetsAndLengths texts 0
 
-		-- loop for texts (inside single call to useAsPtr, as it does copying)
-		-- state monad contains advance vector
-		T.useAsPtr (mconcat texts) $ \unitedTextPtr unitedTextLen -> flip evalStateT (Vec2 0 0) $ forM offsetsAndLengths $ \(offset, len) -> do
-			-- set script and direction
-			liftIO $ hb_buffer_set_script hbBuffer script
-			liftIO $ hb_buffer_set_direction hbBuffer $ hb_script_get_horizontal_direction script
+    -- loop for texts (inside single call to useAsPtr, as it does copying)
+    -- state monad contains advance vector
+    T.useAsPtr (mconcat texts) $ \unitedTextPtr unitedTextLen -> flip evalStateT (Vec2 0 0) $ forM offsetsAndLengths $ \(offset, len) -> do
+      -- set script and direction
+      liftIO $ hb_buffer_set_script hbBuffer script
+      liftIO $ hb_buffer_set_direction hbBuffer $ hb_script_get_horizontal_direction script
 
-			-- add total text (specifying context)
-			liftIO $ hb_buffer_add_utf16 hbBuffer unitedTextPtr (fromIntegral unitedTextLen) (fromIntegral offset) (fromIntegral len)
+      -- add total text (specifying context)
+      liftIO $ hb_buffer_add_utf16 hbBuffer unitedTextPtr (fromIntegral unitedTextLen) (fromIntegral offset) (fromIntegral len)
 
-			-- shape
-			liftIO $ hb_shape hbFont hbBuffer nullPtr 0
+      -- shape
+      liftIO $ hb_shape hbFont hbBuffer nullPtr 0
 
-			-- get glyphs
-			(hbGlyphInfos, hbGlyphPositions, glyphCount) <- liftIO $ alloca $ \glyphCountPtr -> do
-				hbGlyphInfos <- hb_buffer_get_glyph_infos hbBuffer glyphCountPtr
-				hbGlyphPositions <- hb_buffer_get_glyph_positions hbBuffer glyphCountPtr
-				glyphCount <- peek glyphCountPtr
-				return (hbGlyphInfos, hbGlyphPositions, fromIntegral glyphCount)
+      -- get glyphs
+      (hbGlyphInfos, hbGlyphPositions, glyphCount) <- liftIO $ alloca $ \glyphCountPtr -> do
+        hbGlyphInfos <- hb_buffer_get_glyph_infos hbBuffer glyphCountPtr
+        hbGlyphPositions <- hb_buffer_get_glyph_positions hbBuffer glyphCountPtr
+        glyphCount <- peek glyphCountPtr
+        return (hbGlyphInfos, hbGlyphPositions, fromIntegral glyphCount)
 
-			liftIO $ hb_buffer_clear_contents hbBuffer
+      liftIO $ hb_buffer_clear_contents hbBuffer
 
-			shapedGlyphs <- V.generateM glyphCount $ \i -> do
-				let hbGlyphPositionPtr = plusPtr hbGlyphPositions $ i * hb_glyph_position_t_size
-				xOffset <- liftIO $ peek $ hb_x_offset hbGlyphPositionPtr
-				yOffset <- liftIO $ peek $ hb_y_offset hbGlyphPositionPtr
-				xAdvance <- liftIO $ peek $ hb_x_advance hbGlyphPositionPtr
-				yAdvance <- liftIO $ peek $ hb_y_advance hbGlyphPositionPtr
-				codepoint <- liftIO $ peek $ hb_codepoint $ plusPtr hbGlyphInfos $ i * hb_glyph_info_t_size
+      shapedGlyphs <- V.generateM glyphCount $ \i -> do
+        let
+          hbGlyphPositionPtr = plusPtr hbGlyphPositions $ i * hb_glyph_position_t_size
+        xOffset <- liftIO $ peek $ hb_x_offset hbGlyphPositionPtr
+        yOffset <- liftIO $ peek $ hb_y_offset hbGlyphPositionPtr
+        xAdvance <- liftIO $ peek $ hb_x_advance hbGlyphPositionPtr
+        yAdvance <- liftIO $ peek $ hb_y_advance hbGlyphPositionPtr
+        codepoint <- liftIO $ peek $ hb_codepoint $ plusPtr hbGlyphInfos $ i * hb_glyph_info_t_size
 
-				position <- state $ \position -> (position, position + Vec2 (fromIntegral xAdvance / 64) (fromIntegral yAdvance / 64))
+        position <- state $ \position -> (position, position + Vec2 (fromIntegral xAdvance / 64) (fromIntegral yAdvance / 64))
 
-				return ShapedGlyph
-					{ shapedGlyphPosition = position + Vec2 (fromIntegral xOffset / 64) (fromIntegral yOffset / 64)
-					, shapedGlyphIndex = fromIntegral codepoint
-					}
+        return ShapedGlyph
+          { shapedGlyphPosition = position + Vec2 (fromIntegral xOffset / 64) (fromIntegral yOffset / 64)
+          , shapedGlyphIndex = fromIntegral codepoint
+          }
 
-			lastPosition <- get
-			return (shapedGlyphs, lastPosition)
+      lastPosition <- get
+      return (shapedGlyphs, lastPosition)
 
 data Hb_font_t
 data Hb_buffer_t
