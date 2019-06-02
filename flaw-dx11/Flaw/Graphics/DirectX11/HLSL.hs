@@ -138,7 +138,8 @@ hlslGenerateProgram state = program where
         <> " : packoffset(c" <> fromString (show $ offset `quot` 16)
         <> (if registerOffset > 0 then "." <> singleton ("xyzw" !! (registerOffset `quot` 4)) else mempty)
         <> ");\n"
-        where registerOffset = offset `mod` 16
+        where
+          registerOffset = offset `mod` 16
       slot = uniformSlot $ head bufferUniforms
     eqUniformBySlot a b = uniformSlot a == uniformSlot b
     compareUniformBySlot a b = compare (uniformSlot a) (uniformSlot b)
@@ -152,11 +153,12 @@ hlslGenerateProgram state = program where
       } = dim <> "<" <> valueTypeSource sampleType <> "> t" <> fromString (show slot)
       <> " : register(t" <> fromString (show slot) <> ");\n"
       <> "SamplerState s" <> fromString (show slot) <> " : register(s" <> fromString (show slot) <> ");\n"
-      where dim = case dimension of
-        Sampler1D -> "Texture1D"
-        Sampler2D -> "Texture2D"
-        Sampler3D -> "Texture3D"
-        SamplerCube -> "TextureCube"
+      where
+        dim = case dimension of
+          Sampler1D -> "Texture1D"
+          Sampler2D -> "Texture2D"
+          Sampler3D -> "Texture3D"
+          SamplerCube -> "TextureCube"
 
     -- code source
     codeSource = "Output " <> entryPoint <> "(Input input, uint sI : SV_InstanceID" <> (if stage == PixelStage then ", float4 sP : SV_Position" else mempty) <> ")\n{\n\tOutput output;\n"

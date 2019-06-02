@@ -128,10 +128,11 @@ createOpenGLWin32Presenter _deviceId window@Win32Window
     when (r == 0) $ throwIO $ DescribeFirstException "failed to set background context current"
 
   -- create GL context
-  let presenter = OpenGLWin32Presenter
-    { openglPresenterWindow = window
-    , openglPresenterHDC = hdc
-    }
+  let
+    presenter = OpenGLWin32Presenter
+      { openglPresenterWindow = window
+      , openglPresenterHDC = hdc
+      }
   context <- createOpenGLContext programCache (invokeWin32WindowSystem ws) (runInFlow backgroundFlow) (atomically . asyncRunInFlow backgroundFlow) debug
 
   -- TODO: set swap interval
