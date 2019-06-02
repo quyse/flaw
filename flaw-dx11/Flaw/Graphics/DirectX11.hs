@@ -1439,29 +1439,30 @@ dx11CreatePresenter device@Dx11Device
   setPresenterMode presenter maybeDisplayMode
 
   let
-    destroy = invokeWin32WindowSystem windowSystem $ do
-      -- set that presenter is invalid
-      writeIORef presenterValidRef False
-      -- free RTV if needed
-      Dx11PresenterState
-        { dx11PresenterMaybeRTV = maybeRTV
-        , dx11PresenterMaybeDSV = maybeDSV
-        } <- readIORef stateRef
-      case maybeRTV of
-        Just rtv -> do
-          _ <- m_IUnknown_Release rtv
-          modifyIORef stateRef $ \s -> s
-            { dx11PresenterMaybeRTV = Nothing
-            }
-        Nothing -> return ()
-      case maybeDSV of
-        Just dsv -> do
-          _ <- m_IUnknown_Release dsv
-          modifyIORef stateRef $ \s -> s
-            { dx11PresenterMaybeDSV = Nothing
-            }
-        Nothing -> return ()
-    releaseSwapChainInterface
+    destroy = do
+      invokeWin32WindowSystem windowSystem $ do
+        -- set that presenter is invalid
+        writeIORef presenterValidRef False
+        -- free RTV if needed
+        Dx11PresenterState
+          { dx11PresenterMaybeRTV = maybeRTV
+          , dx11PresenterMaybeDSV = maybeDSV
+          } <- readIORef stateRef
+        case maybeRTV of
+          Just rtv -> do
+            _ <- m_IUnknown_Release rtv
+            modifyIORef stateRef $ \s -> s
+              { dx11PresenterMaybeRTV = Nothing
+              }
+          Nothing -> return ()
+        case maybeDSV of
+          Just dsv -> do
+            _ <- m_IUnknown_Release dsv
+            modifyIORef stateRef $ \s -> s
+              { dx11PresenterMaybeDSV = Nothing
+              }
+          Nothing -> return ()
+      releaseSwapChainInterface
 
   return (presenter, destroy)
 
