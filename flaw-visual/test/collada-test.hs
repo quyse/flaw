@@ -27,15 +27,16 @@ import Flaw.Math.Transform
 main :: IO ()
 main = do
   bytes <- BL.readFile "assets/beaver-anim.dae"
-  let e = runCollada $ do
-    initColladaCache bytes
-    geomVert <- createColladaVertices =<< parseGeometry =<< getElementById "geom-Beaver"
-    [animation] <- mapM parseAnimation =<< getAllElementsByTag "animation"
-    skeleton <- parseSkeleton =<< getElementById "node-Body"
-    animateSkel <- animateSkeleton skeleton animation
-    (skinVerticesData, skin) <- parseSkin skeleton =<< getSingleChildWithTag "skin" =<< getElementById "geom-Beaver-skin1"
-    skinVert <- createColladaVertices skinVerticesData
-    return (geomVert, skeleton, animateSkel, skin :: ColladaSkin Float4x4, skinVert)
+  let
+    e = runCollada $ do
+      initColladaCache bytes
+      geomVert <- createColladaVertices =<< parseGeometry =<< getElementById "geom-Beaver"
+      [animation] <- mapM parseAnimation =<< getAllElementsByTag "animation"
+      skeleton <- parseSkeleton =<< getElementById "node-Body"
+      animateSkel <- animateSkeleton skeleton animation
+      (skinVerticesData, skin) <- parseSkin skeleton =<< getSingleChildWithTag "skin" =<< getElementById "geom-Beaver-skin1"
+      skinVert <- createColladaVertices skinVerticesData
+      return (geomVert, skeleton, animateSkel, skin :: ColladaSkin Float4x4, skinVert)
 
   (geomVert, skeleton, animateSkel, skin, skinVert) <- case e of
     Right q -> return q

@@ -201,49 +201,53 @@ ffmpegSetFrameTime (FFmpegAVFrame frameFPtr) time =
 -- | Decode packet from single stream into frames.
 ffmpegDecode :: FFmpegAVStream -> P.Producer FFmpegAVPacket IO () -> P.Producer FFmpegAVFrame IO ()
 ffmpegDecode (FFmpegAVStream streamPtr) packetProducer = do
-  let decode (FFmpegAVPacket packetFPtr) = do
-    frame@(FFmpegAVFrame frameFPtr) <- P.lift ffmpegNewFrame
-    r <- P.lift $ withForeignPtr packetFPtr $ \packetPtr -> withForeignPtr frameFPtr $ flaw_ffmpeg_decode streamPtr packetPtr
-    when (r == 0) $ P.yield frame
-    return r
+  let
+    decode (FFmpegAVPacket packetFPtr) = do
+      frame@(FFmpegAVFrame frameFPtr) <- P.lift ffmpegNewFrame
+      r <- P.lift $ withForeignPtr packetFPtr $ \packetPtr -> withForeignPtr frameFPtr $ flaw_ffmpeg_decode streamPtr packetPtr
+      when (r == 0) $ P.yield frame
+      return r
   -- decode frames
-  P.for packetProducer $ \packet@(FFmpegAVPacket packetFPtr) -> do
-    let decodeFrames = do
+  P.for packetProducer $ \packet@(FFmpegAVPacket packetFPtr) -> let
+    decodeFrames = do
       r <- decode packet
       if r == 0 then do
         packetIsEmpty <- P.lift $ withForeignPtr packetFPtr flaw_ffmpeg_isPacketEmpty
         when (packetIsEmpty == 0) decodeFrames
       else when (r < 0) $ P.lift $ throwIO $ DescribeFirstException "failed to FFmpeg decode"
-    decodeFrames
+    in decodeFrames
   -- flush decoder
   emptyPacket <- P.lift ffmpegNewPacket
-  let flush = do
-    r <- decode emptyPacket
-    if r == 0 then flush
-    else when (r < 0) $ P.lift $ throwIO $ DescribeFirstException "failed to flush FFmpeg decoder"
-  flush
+  let
+    flush = do
+      r <- decode emptyPacket
+      if r == 0 then flush
+      else when (r < 0) $ P.lift $ throwIO $ DescribeFirstException "failed to flush FFmpeg decoder"
+    in flush
 
 -- | Encode frames into packets.
 ffmpegEncode :: FFmpegAVStream -> P.Producer FFmpegAVFrame IO () -> P.Producer FFmpegAVPacket IO ()
 ffmpegEncode stream@(FFmpegAVStream streamPtr) frameProducer = do
   streamIndex <- P.lift $ ffmpegGetStreamIndex stream
-  let encode frameFPtr = do
-    packet@(FFmpegAVPacket packetFPtr) <- P.lift ffmpegNewPacket
-    P.lift $ ffmpegSetPacketStreamIndex packet streamIndex
-    r <- P.lift $ withForeignPtr frameFPtr $ \framePtr -> withForeignPtr packetFPtr $ flaw_ffmpeg_encode streamPtr framePtr
-    when (r == 0) $ P.yield packet
-    return r
+  let
+    encode frameFPtr = do
+      packet@(FFmpegAVPacket packetFPtr) <- P.lift ffmpegNewPacket
+      P.lift $ ffmpegSetPacketStreamIndex packet streamIndex
+      r <- P.lift $ withForeignPtr frameFPtr $ \framePtr -> withForeignPtr packetFPtr $ flaw_ffmpeg_encode streamPtr framePtr
+      when (r == 0) $ P.yield packet
+      return r
   -- encode frames
   P.for frameProducer $ \(FFmpegAVFrame frameFPtr) -> do
     r <- encode frameFPtr
     when (r < 0) $ P.lift $ throwIO $ DescribeFirstException "failed to FFmpeg encode"
   -- flush encoder
   emptyFrameFPtr <- P.lift $ newForeignPtr_ nullPtr
-  let flush = do
-    r <- encode emptyFrameFPtr
-    if r == 0 then flush
-    else when (r < 0) $ P.lift $ throwIO $ DescribeFirstException "failed to flush FFmpeg encoder"
-  flush
+  let
+    flush = do
+      r <- encode emptyFrameFPtr
+      if r == 0 then flush
+      else when (r < 0) $ P.lift $ throwIO $ DescribeFirstException "failed to flush FFmpeg encoder"
+    in flush
 
 ffmpegOpenDecoder :: FFmpegAVStream -> IO ((), IO ())
 ffmpegOpenDecoder (FFmpegAVStream streamPtr) = do
@@ -291,9 +295,10 @@ ffmpegDecodeSingleAudioStream formatContext stream = do
   streamIndex <- P.lift $ ffmpegGetStreamIndex stream
 
   -- demux and decode
-  let frames = ffmpegDecode stream $ P.for (ffmpegDemux formatContext) $ \packet -> do
-    packetStreamIndex <- P.lift $ ffmpegGetPacketStreamIndex packet
-    when (streamIndex == packetStreamIndex) $ P.yield packet
+  let
+    frames = ffmpegDecode stream $ P.for (ffmpegDemux formatContext) $ \packet -> do
+      packetStreamIndex <- P.lift $ ffmpegGetPacketStreamIndex packet
+      when (streamIndex == packetStreamIndex) $ P.yield packet
 
   -- get audio data, converting to packed format if needed
   P.for frames $ \(FFmpegAVFrame frameFPtr) -> (P.yield =<<) . P.lift $ withForeignPtr frameFPtr $ \framePtr -> do

@@ -37,26 +37,26 @@ data Method = Method
   }
 
 processMethod :: String -> TypeQ -> String -> ExpQ -> Q Method
-processMethod interfaceName mt mn prevEndExp = do
-  let baseName = interfaceName ++ "_" ++ mn
-  let name = mkName $ "m_" ++ baseName
-  let functionTypeName = mkName $ "Mft_" ++ baseName
-  let foreignFunctionTypeName = mkName $ "Mfft_" ++ baseName
-  let fieldName = mkName $ "mp_" ++ baseName
-  let offsetName = mkName $ "method_offset_" ++ baseName
-  let makeName = mkName $ "mk_" ++ baseName
-  let topDecs = sequence
+processMethod interfaceName mt mn prevEndExp = let
+  baseName = interfaceName ++ "_" ++ mn
+  name = mkName $ "m_" ++ baseName
+  functionTypeName = mkName $ "Mft_" ++ baseName
+  foreignFunctionTypeName = mkName $ "Mfft_" ++ baseName
+  fieldName = mkName $ "mp_" ++ baseName
+  offsetName = mkName $ "method_offset_" ++ baseName
+  makeName = mkName $ "mk_" ++ baseName
+  topDecs = sequence
     [ sigD offsetName [t| Int |]
     , valD (varP offsetName) (normalB prevEndExp) []
     , tySynD functionTypeName [] mt
     , tySynD foreignFunctionTypeName [] [t| Ptr $(conT $ mkName interfaceName) -> $(conT functionTypeName) |]
     , forImpD stdCall safe "dynamic" makeName [t| FunPtr $(conT foreignFunctionTypeName) -> $(conT foreignFunctionTypeName) |]
     ]
-  let classDecs paramName comGetExp =
+  classDecs paramName comGetExp =
     [ sigD name [t| $(varT paramName) -> $(conT functionTypeName) |]
     , valD (varP name) (normalB [| $(varE fieldName) . $comGetExp |]) []
     ]
-  return Method
+  in return Method
     { methodNameStr = mn
     , methodName = name
     , methodType = mt
@@ -106,21 +106,23 @@ genCOMInterface
   -> [(TypeQ, String)] -- ^ List of methods. Type of method should be without 'this' argument.
   -> Q [Dec]
 genCOMInterface interfaceNameStr iid parentInterfaceNames ms = do
-  let interfaceName = mkName interfaceNameStr
-  let iidName = mkName $ "iid_" ++ interfaceNameStr
-  let endName = mkName $ "ie_" ++ interfaceNameStr
-  let parentFieldName = mkName $ "pd_" ++ interfaceNameStr
-  let thisName = mkName $ "it_" ++ interfaceNameStr
+  let
+    interfaceName = mkName interfaceNameStr
+    iidName = mkName $ "iid_" ++ interfaceNameStr
+    endName = mkName $ "ie_" ++ interfaceNameStr
+    parentFieldName = mkName $ "pd_" ++ interfaceNameStr
+    thisName = mkName $ "it_" ++ interfaceNameStr
   thisParamName <- newName "this"
   vtParamName <- newName "vt"
   (beginExp, parentFields, peekParentBinds, parentFieldsConstr, parentInstanceDecs) <- case parentInterfaceNames of
     (firstParentInterfaceNameStr:_) -> do
       parentParamName <- newName "parent"
-      let parentDec parentInterfaceNameStr = do
-        let parentInterfaceClassName = mkName $ parentInterfaceNameStr ++ "_Class"
-        let comGetParent = mkName $ "com_get_" ++ parentInterfaceNameStr
-        instanceD (return []) [t| $(conT parentInterfaceClassName) $(conT interfaceName) |]
-          [funD comGetParent [clause [recP interfaceName [return (parentFieldName, VarP parentParamName)]] (normalB [| $(varE comGetParent) $(varE parentParamName) |]) []]]
+      let
+        parentDec parentInterfaceNameStr = let
+          parentInterfaceClassName = mkName $ parentInterfaceNameStr ++ "_Class"
+          comGetParent = mkName $ "com_get_" ++ parentInterfaceNameStr
+          in instanceD (return []) [t| $(conT parentInterfaceClassName) $(conT interfaceName) |]
+            [funD comGetParent [clause [recP interfaceName [return (parentFieldName, VarP parentParamName)]] (normalB [| $(varE comGetParent) $(varE parentParamName) |]) []]]
       parentDecs <- mapM parentDec =<< getInterfaceChain parentInterfaceNames
       return
         ( [| sizeOfCOMVirtualTable (undefined :: $(conT $ mkName firstParentInterfaceNameStr)) |]
@@ -134,15 +136,17 @@ genCOMInterface interfaceNameStr iid parentInterfaceNames ms = do
   dataDec <- dataD (return []) interfaceName [] Nothing [recC interfaceName $ return (thisName, Bang NoSourceUnpackedness NoSourceStrictness, AppT (ConT ''Ptr) $ ConT interfaceName) : parentFields ++ map methodField methods] []
 
   -- instance COMInterface IInterface
-  let mp1 method = do
-    p <- newName $ "p_" ++ methodNameStr method
-    let binding = bindS (varP p) [| peek (plusPtr $(varE vtParamName) $(methodOffset method)) |]
-    makeExp <- [| $(methodMake method) (castPtrToFunPtr $(varE p)) $(varE thisParamName) |]
-    let field = (methodFieldName method, makeExp)
-    return (binding, field)
+  let
+    mp1 method = do
+      p <- newName $ "p_" ++ methodNameStr method
+      let binding = bindS (varP p) [| peek (plusPtr $(varE vtParamName) $(methodOffset method)) |]
+      makeExp <- [| $(methodMake method) (castPtrToFunPtr $(varE p)) $(varE thisParamName) |]
+      let field = (methodFieldName method, makeExp)
+      return (binding, field)
   mp1s <- mapM mp1 methods
-  let peekCOMVirtualTableDec = funD 'peekCOMVirtualTable [clause [varP thisParamName, varP vtParamName] body []] where
-    body = normalB $ doE $ peekParentBinds ++ map fst mp1s ++ [noBindS $ appE (varE 'return) $ recConE interfaceName $ return (thisName, VarE thisParamName) : parentFieldsConstr ++ map (return . snd) mp1s]
+  let
+    peekCOMVirtualTableDec = funD 'peekCOMVirtualTable [clause [varP thisParamName, varP vtParamName] body []] where
+      body = normalB $ doE $ peekParentBinds ++ map fst mp1s ++ [noBindS $ appE (varE 'return) $ recConE interfaceName $ return (thisName, VarE thisParamName) : parentFieldsConstr ++ map (return . snd) mp1s]
   comInterfaceInstanceDec <- instanceD (return []) [t| COMInterface $(conT interfaceName) |]
     [ funD 'getIID [clause [wildP] (normalB $ varE iidName) []]
     , funD 'getCOMInterfaceName [clause [wildP] (normalB $ litE $ StringL interfaceNameStr) []]
@@ -165,8 +169,9 @@ genCOMInterface interfaceNameStr iid parentInterfaceNames ms = do
     , funD '(<=) [clause [recP interfaceName [return (thisName, VarP aParam)], recP interfaceName [return (thisName, VarP bParam)]] (normalB [| $(varE aParam) <= $(varE bParam) |]) []]
     ]
 
-  let className = mkName $ interfaceNameStr ++ "_Class"
-  let comGetName = mkName $ "com_get_" ++ interfaceNameStr
+  let
+    className = mkName $ interfaceNameStr ++ "_Class"
+    comGetName = mkName $ "com_get_" ++ interfaceNameStr
   paramName <- newName "a"
   -- class IInterface_Class a
   classDec <- classD (sequence [ [t| COMInterface $(varT paramName) |] ]) className [PlainTV paramName] []

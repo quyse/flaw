@@ -86,7 +86,4 @@ createCOMObjectViaPtr create = peekCOMObject =<< createCOMValueViaPtr create
 allocateCOMObject :: IUnknown_Class a => IO a -> IO (a, IO ())
 allocateCOMObject create = do
   object <- create
-  let destroy = do
-    _ <- m_IUnknown_Release object
-    return ()
-  return (object, destroy)
+  return (object, void $ m_IUnknown_Release object)

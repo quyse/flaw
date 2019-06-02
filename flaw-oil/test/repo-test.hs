@@ -190,10 +190,11 @@ main = do
     check a "k" 6 ""
     check b "k" 6 ""
 
-  let limitedManifest = defaultManifest
-    { manifestMaxPushItemsCount = 1
-    , manifestMaxPullItemsCount = 1
-    }
+  let
+    limitedManifest = defaultManifest
+      { manifestMaxPushItemsCount = 1
+      , manifestMaxPullItemsCount = 1
+      }
 
   sessionWithManifest "pull conflict" limitedManifest $ do
     a <- client "A"

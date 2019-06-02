@@ -73,14 +73,15 @@ session sessionName f = handle (\e -> print ("session failed" :: String, session
     -- register deserializators
     $registerEntitiesAndInterfacesExp entityManager
 
-    let sync = do
-      -- pull
-      runInFlow (entityManagerFlow entityManager) $ do
-        (push, crps) <- pushClientRepo clientRepo manifest
-        pull <- syncServerRepo serverRepo manifest push 1
-        unsafePullEntityManager entityManager . clientRepoPullChanges =<< pullClientRepo clientRepo pull crps
-      -- wait for async pull
-      runInFlow (entityManagerFlow entityManager) $ return ()
+    let
+      sync = do
+        -- pull
+        runInFlow (entityManagerFlow entityManager) $ do
+          (push, crps) <- pushClientRepo clientRepo manifest
+          pull <- syncServerRepo serverRepo manifest push 1
+          unsafePullEntityManager entityManager . clientRepoPullChanges =<< pullClientRepo clientRepo pull crps
+        -- wait for async pull
+        runInFlow (entityManagerFlow entityManager) $ return ()
 
     return Client
       { clientEntityManager = entityManager
