@@ -102,14 +102,15 @@ runWin32WindowSystem resultVar = do
   -- create shutdown var
   shutdownVar <- newEmptyMVar
   -- return result in var
-  let ws = Win32WindowSystem
-    { wsHandle = h
-    }
-  let shutdown = do
-    -- send a message to stop window loop
-    invokeWin32WindowSystem_ ws c_stopWin32WindowSystem
-    -- wait for actual completion
-    readMVar shutdownVar
+  let
+    ws = Win32WindowSystem
+      { wsHandle = h
+      }
+    shutdown = do
+      -- send a message to stop window loop
+      invokeWin32WindowSystem_ ws c_stopWin32WindowSystem
+      -- wait for actual completion
+      readMVar shutdownVar
   putMVar resultVar (ws, shutdown)
   -- run window system
   c_runWin32WindowSystem h
@@ -138,11 +139,12 @@ internalCreateWin32Window ws title maybePosition maybeSize layered = do
       -- dispatch raw message
       atomically $ writeTChan messagesChan (msg, wParam, lParam)
       -- dispatch event
-      let maybeEvent = case msg of
-        0x0002 {- WM_DESTROY -} -> Just DestroyWindowEvent
-        0x0005 {- WM_SIZE -} -> Just $ ResizeWindowEvent (fromIntegral $ loWord lParam) (fromIntegral $ hiWord lParam)
-        0x0010 {- WM_CLOSE -} -> Just CloseWindowEvent
-        _ -> Nothing
+      let
+        maybeEvent = case msg of
+          0x0002 {- WM_DESTROY -} -> Just DestroyWindowEvent
+          0x0005 {- WM_SIZE -} -> Just $ ResizeWindowEvent (fromIntegral $ loWord lParam) (fromIntegral $ hiWord lParam)
+          0x0010 {- WM_CLOSE -} -> Just CloseWindowEvent
+          _ -> Nothing
       case maybeEvent of
         Just event -> atomically $ writeTChan eventsChan event
         Nothing -> return ()
@@ -152,8 +154,9 @@ internalCreateWin32Window ws title maybePosition maybeSize layered = do
           -- free callback
           freeHaskellFunPtr $ wCallback w
         _ -> return ()
-    let (left, top) = fromMaybe (CW_USEDEFAULT, CW_USEDEFAULT) maybePosition
-    let (width, height) = fromMaybe (CW_USEDEFAULT, CW_USEDEFAULT) maybeSize
+    let
+      (left, top) = fromMaybe (CW_USEDEFAULT, CW_USEDEFAULT) maybePosition
+      (width, height) = fromMaybe (CW_USEDEFAULT, CW_USEDEFAULT) maybeSize
     -- create window
     hwnd <- withCWString (T.unpack title) $ \titleCString ->
       c_createWin32Window (wsHandle ws) titleCString left top width height callback (if layered then 1 else 0)

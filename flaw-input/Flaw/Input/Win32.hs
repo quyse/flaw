@@ -217,8 +217,9 @@ initWin32Input window@Win32Window
   -- add callback for windows messages
   addWin32WindowCallback window $ \msg wParam lParam -> do
     -- helper routines
-    let addKeyboardEvent event = atomically $ writeTChan keyboardChan event
-    let addMouseEvent event = atomically $ writeTChan mouseChan event
+    let
+      addKeyboardEvent event = atomically $ writeTChan keyboardChan event
+      addMouseEvent event = atomically $ writeTChan mouseChan event
 
     -- process message
     case msg of
@@ -236,8 +237,9 @@ initWin32Input window@Win32Window
               RID_INPUT
               blockPtr blockSizePtr (fromIntegral $ sizeOf (undefined :: RAWINPUTHEADER))
           when (r > 0) $ do
-            let eventHeaderPtr = castPtr blockPtr
-            let eventDataPtr = plusPtr blockPtr $ sizeOf (undefined :: RAWINPUTHEADER)
+            let
+              eventHeaderPtr = castPtr blockPtr
+              eventDataPtr = plusPtr blockPtr $ sizeOf (undefined :: RAWINPUTHEADER)
             eventType <- f_RAWINPUTHEADER_dwType <$> peek eventHeaderPtr
             case eventType of
               RIM_TYPEKEYBOARD -> do
@@ -270,9 +272,10 @@ initWin32Input window@Win32Window
                   addMouseEvent $ MouseUpEvent MiddleMouseButton
                 else return ()
 
-                let lastX = f_RAWMOUSE_lLastX mouseData
-                let lastY = f_RAWMOUSE_lLastY mouseData
-                let wheelChanged = (flags .&. RI_MOUSE_WHEEL) > 0
+                let
+                  lastX = f_RAWMOUSE_lLastX mouseData
+                  lastY = f_RAWMOUSE_lLastY mouseData
+                  wheelChanged = (flags .&. RI_MOUSE_WHEEL) > 0
 
                 when (lastX /= 0 || lastY /= 0 || wheelChanged) $ do
                   let wheel = if wheelChanged then fromIntegral (f_RAWMOUSE_usButtonData mouseData) / 120 else 0
