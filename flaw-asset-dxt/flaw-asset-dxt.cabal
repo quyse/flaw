@@ -3,7 +3,7 @@ version:             0.1.0.0
 -- synopsis:            
 -- description:         
 license:             MIT
-license-file:        ../LICENSE
+license-file:        LICENSE
 author:              Alexander Bich
 maintainer:          quyse0@gmail.com
 -- copyright:           
