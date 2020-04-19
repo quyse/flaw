@@ -265,7 +265,7 @@ do
 
     -- instance for Vec class
     vecInstance <- instanceD (sequence [ [t| Vectorized $elemType |] ]) [t| Vec ($(conT dataName) $elemType) |] =<< addInlines
-      [ tySynInstD ''VecElement $ tySynEqn [ [t| $(conT dataName) $elemType |] ] elemType
+      [ tySynInstD $ tySynEqn Nothing [t| VecElement ($(conT dataName) $elemType) |] elemType
       , funD 'vecLength [clause [wildP] (normalB $ litE $ integerL $ fromIntegral dim) []]
       , funD 'vecToList [clause [conP conName $ map varP componentParams] (normalB $ listE $ map varE componentParams) []]
       , funD 'vecFromScalar [clause [varP p] (normalB $ foldl appE (conE conName) $ replicate dim (varE p)) []]
@@ -317,7 +317,7 @@ do
         nameSuffix = [toUpper $ last swizzleComponents, intToDigit dim]
         instanceName = mkName $ "SwizzleVec" ++ nameSuffix
         srcDataName = mkName $ "Vec" ++ [intToDigit srcDim]
-        resultDecl = tySynInstD (mkName $ "SwizzleVecResult" ++ nameSuffix) $ tySynEqn [ [t| $(conT srcDataName) $elemType |] ] $ [t| $(conT dataName) $elemType |]
+        resultDecl = tySynInstD $ tySynEqn Nothing [t| $(conT $ mkName $ "SwizzleVecResult" ++ nameSuffix) ($(conT srcDataName) $elemType) |] $ [t| $(conT dataName) $elemType |]
         variants = filter (swizzleVariantFilter swizzleComponents) $ genSwizzleVariants dim
         funDecl variant = let
           expr = foldl (\v c -> appE v [| $(varE (mkName [c, '_'])) $(varE tvV) |]) (conE conName) variant
@@ -495,7 +495,7 @@ do
 
     -- Mat instance
     matInstance <- instanceD (sequence [ [t| Vectorized $elemType |] ]) [t| Mat ($(conT dataName) $elemType) |] =<< addInlines
-      [ tySynInstD ''MatElement $ tySynEqn [ [t| $(conT dataName) $elemType |] ] elemType
+      [ tySynInstD $ tySynEqn Nothing [t| MatElement ($(conT dataName) $elemType) |] elemType
       , funD 'matSize [clause [wildP] (normalB [| ($(litE $ integerL $ toInteger dimN), $(litE $ integerL $ toInteger dimM)) |]) []]
       , funD 'matFromScalar [clause [varP p] (normalB $ foldl appE (conE conName) $ replicate (dimN * dimM) (varE p)) []]
       ]
@@ -587,7 +587,7 @@ do
   mulInstances <- do
     let
       gen aName bName cName funDecl = instanceD (sequence [ [t| Vectorized $elemType |], [t| Num $elemType |] ]) [t| Mul ($(conT aName) $elemType) ($(conT bName) $elemType) |] =<< addInlines
-        [ tySynInstD ''MulResult $ tySynEqn [ [t| $(conT aName) $elemType |], [t| $(conT bName) $elemType |] ] [t| $(conT cName) $elemType |]
+        [ tySynInstD $ tySynEqn Nothing [t| MulResult ($(conT aName) $elemType) ($(conT bName) $elemType) |] [t| $(conT cName) $elemType |]
         , funDecl
         ]
 
@@ -751,7 +751,7 @@ do
 
   -- Vec instance
   vecInstance <- instanceD (sequence [ [t| Quaternionized $elemType |] ]) [t| Vec (Quat $elemType) |] =<< addInlines
-    [ tySynInstD ''VecElement $ tySynEqn [ [t| Quat $elemType |] ] elemType
+    [ tySynInstD $ tySynEqn Nothing [t| VecElement (Quat $elemType) |] elemType
     , funD 'vecLength [clause [conP 'Quat [varP v]] (normalB [| vecLength $(varE v) |]) []]
     , funD 'vecToList [clause [conP 'Quat [varP v]] (normalB [| vecToList $(varE v) |]) []]
     , funD 'vecFromScalar [clause [varP a] (normalB [| Quat (vecFromScalar $(varE a)) |]) []]

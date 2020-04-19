@@ -504,8 +504,8 @@ forM [(maxComp, dim) | maxComp <- [1..4], dim <- [1..4]] $ \(maxComp, dim) -> do
       variantFilter variant = all (\c -> elem c components) variant && elem (last components) variant
     funDecl variant = do
       funD (mkName $ variant ++ "__") [clause [] (normalB [| SwizzleNode (valueType (undefined :: $(varT v))) (valueType (undefined :: $(conT resultTypeName) $(varT v))) $(litE $ stringL variant) |]) []]
-    resultTypeDecl = tySynInstD resultTypeName $ tySynEqn
-      [ [t| Node $(varT v) |] ]
+    resultTypeDecl = tySynInstD $ tySynEqn Nothing
+      [t| $(conT resultTypeName) (Node $(varT v)) |]
       [t| Node ($(conT resultTypeName) $(varT v)) |]
   instanceD (sequence
     [ [t| OfVectorType $(varT v) |]
