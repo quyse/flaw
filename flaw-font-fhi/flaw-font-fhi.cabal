@@ -74,6 +74,11 @@ library
     src/freetype/src/type1/type1.c
     src/freetype/src/type42/type42.c
     src/freetype/src/winfonts/winfnt.c
+    -- UCDN
+    src/ucdn/ucdn.c
+    -- Helpers
+    src/flaw-ft.c
+  cxx-sources:
     -- Harfbuzz
     src/harfbuzz/src/hb-blob.cc
     src/harfbuzz/src/hb-buffer-serialize.cc
@@ -112,10 +117,6 @@ library
     src/harfbuzz/src/hb-ot-shape-normalize.cc
     src/harfbuzz/src/hb-ot-tag.cc
     src/harfbuzz/src/hb-ot-var.cc
-    -- UCDN
-    src/ucdn/ucdn.c
-    -- Helpers
-    src/flaw-ft.c
   include-dirs:        src/freetype/include, src/harfbuzz-generated, src/harfbuzz/src, src/harfbuzz/src/hb-ucdn, src/ucdn
   cc-options:          -DFT2_BUILD_LIBRARY -DHAVE_OT -DHAVE_UCDN -O3 -fno-exceptions
   if os(windows)
