@@ -1,3 +1,4 @@
+cabal-version:       3.0
 name:                flaw-font-fhi
 version:             0.1.0.0
 -- synopsis:            
@@ -10,7 +11,6 @@ maintainer:          quyse0@gmail.com
 category:            Game
 build-type:          Simple
 -- extra-source-files:  
-cabal-version:       >=1.10
 
 source-repository head
   type: git
@@ -119,6 +119,7 @@ library
     src/harfbuzz/src/hb-ot-var.cc
   include-dirs:        src/freetype/include, src/harfbuzz-generated, src/harfbuzz/src, src/harfbuzz/src/hb-ucdn, src/ucdn
   cc-options:          -DFT2_BUILD_LIBRARY -DHAVE_OT -DHAVE_UCDN -O3 -fno-exceptions
+  cxx-options:         -DFT2_BUILD_LIBRARY -DHAVE_OT -DHAVE_UCDN -O3 -fno-exceptions -fno-rtti
   if os(windows)
     if arch(x86_64)
       extra-ghci-libraries: gcc_s_seh-1

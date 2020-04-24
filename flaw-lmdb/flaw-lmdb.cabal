@@ -1,3 +1,4 @@
+cabal-version:       3.0
 name:                flaw-lmdb
 version:             0.1.0.0
 -- synopsis:            
@@ -8,7 +9,6 @@ author:              Alexander Bich
 maintainer:          quyse0@gmail.com
 category:            Game
 build-type:          Simple
-cabal-version:       >=1.10
 
 source-repository head
   type: git

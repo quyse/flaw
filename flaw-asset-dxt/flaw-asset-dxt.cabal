@@ -1,3 +1,4 @@
+cabal-version:       3.0
 name:                flaw-asset-dxt
 version:             0.1.0.0
 -- synopsis:            
@@ -10,7 +11,6 @@ maintainer:          quyse0@gmail.com
 category:            Game
 build-type:          Simple
 -- extra-source-files:  
-cabal-version:       >=1.10
 
 source-repository head
   type: git
@@ -28,7 +28,7 @@ library
     , memory
   ghc-options:         -Wall
   default-language:    Haskell2010
-  c-sources:
+  cxx-sources:
     -- libsquish
     src/alpha.cpp
     src/clusterfit.cpp
@@ -41,6 +41,6 @@ library
     src/squish.cpp
     -- helpers
     src/flaw-squish.cpp
-  cc-options: -O3 -fno-exceptions -fno-rtti
+  cxx-options: -O3 -fno-exceptions -fno-rtti
   if arch(x86_64)
-    cc-options: -DSQUISH_USE_SSE=2
+    cxx-options: -DSQUISH_USE_SSE=2
