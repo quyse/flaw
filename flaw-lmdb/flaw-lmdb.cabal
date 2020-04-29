@@ -29,7 +29,8 @@ library
   c-sources:
     src/lmdb/mdb.c
     src/lmdb/midl.c
-  cc-options: -W -Wall -Wno-unused-parameter -Wbad-function-cast -Wuninitialized -lpthread -O3
+  cc-options: -W -Wall -Wno-unused-parameter -Wbad-function-cast -Wuninitialized -O3
+  extra-libraries:     pthread
 
 test-suite lmdb-test
   type:                exitcode-stdio-1.0
