@@ -35,7 +35,6 @@ rec {
     flaw-lua-refimpl = ./flaw-lua-refimpl;
     flaw-math = ./flaw-math;
     flaw-math-determ = ./flaw-math-determ;
-    flaw-media = ./flaw-media;
     flaw-network = ./flaw-network;
     flaw-oil = ./flaw-oil;
     flaw-oil-client = ./flaw-oil-client;
