@@ -12,6 +12,7 @@ module Flaw.Input.Basic
   ) where
 
 import Control.Concurrent.STM
+import Control.Monad
 
 import Flaw.Input
 import Flaw.Input.Mouse

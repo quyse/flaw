@@ -55,6 +55,7 @@ module Flaw.Graphics.Program
   , fragCoord
   ) where
 
+import Control.Monad
 import Control.Monad.Reader
 import qualified Data.ByteString.Unsafe as B
 import Data.Char
@@ -95,7 +96,7 @@ fmap concat $ forM
     funName = mkName $ "cvec" ++ map intToDigit cs
     vecType n = appT (conT $ mkName $ "Vec" ++ [intToDigit n]) (varT tvA)
     argType n = [t| Node $(if n > 1 then vecType n else varT tvA) |]
-    funType = forallT [PlainTV tvA] (sequence [ [t| OfScalarType $(varT tvA) |], [t| Vectorized $(varT tvA) |] ]) $
+    funType = forallT [PlainTV tvA SpecifiedSpec] (sequence [ [t| OfScalarType $(varT tvA) |], [t| Vectorized $(varT tvA) |] ]) $
       foldr (\a b -> [t| $a -> $b |]) [t| Node $(vecType $ sum cs) |] $ map argType cs
     construction = foldl appE (conE $ mkName $ "Combine" ++ [intToDigit $ length cs] ++ "VecNode") $
       (map (\a -> [| nodeValueType $(varE a) |]) ps) ++ [ [| valueType $(varE u) |] ] ++ (map varE ps)

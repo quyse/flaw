@@ -14,6 +14,7 @@ module Flaw.Editor.EditableEntity
   ) where
 
 import Control.Concurrent.STM
+import Control.Monad
 import Control.Monad.Reader
 import qualified Data.Text as T
 import qualified GHC.Generics as G

@@ -12,6 +12,7 @@ module Flaw.Editor.Entity.Basic
   ) where
 
 import Control.Concurrent.STM
+import Control.Monad
 import Control.Monad.Reader
 import Control.Monad.State.Strict
 import qualified Data.ByteArray.Encoding as BA

@@ -117,7 +117,7 @@ forM vecComponents $ \c -> do
   let className = mkName $ "Vec" ++ [toUpper c]
   let methodName = mkName [c, '_']
   tvV <- newName "v"
-  classD (return [AppT (ConT $ mkName "Vec") $ VarT tvV]) className [PlainTV tvV] []
+  classD (return [AppT (ConT $ mkName "Vec") $ VarT tvV]) className [PlainTV tvV ()] []
     [ sigD methodName [t| $(varT tvV) -> VecElement $(varT tvV) |]
     ]
 
@@ -136,18 +136,18 @@ fmap return $ do
   vecDecs <- fmap concat $ forM [1..maxVecDimension] $ \dim -> do
     let dimStr = [intToDigit dim]
     let dataName = mkName $ "Vec" ++ dimStr
-    let dataDec = dataFamilyD dataName [PlainTV tvA] (Just StarT)
+    let dataDec = dataFamilyD dataName [PlainTV tvA ()] (Just StarT)
     let packFuncDec = sigD (mkName $ "vec" ++ dimStr) $ foldr (\a b -> [t| $a -> $b |]) [t| $(conT dataName) $(varT tvA) |] $ replicate dim $ varT tvA
     let unpackFuncDec = sigD (mkName $ "unvec" ++ dimStr) [t| $(conT dataName) $(varT tvA) -> $(if dim == 1 then varT tvA else foldl appT (unboxedTupleT dim) $ replicate dim $ varT tvA) |]
     return [dataDec, packFuncDec, unpackFuncDec]
   matDecs <- fmap concat $ forM matDimensions $ \(dimN, dimM) -> do
     let dimStr = [intToDigit dimN, 'x', intToDigit dimM]
     let dataName = mkName $ "Mat" ++ dimStr
-    let dataDec = dataFamilyD dataName [PlainTV tvA] (Just StarT)
+    let dataDec = dataFamilyD dataName [PlainTV tvA ()] (Just StarT)
     let packFuncDec = sigD (mkName $ "mat" ++ dimStr) $ foldr (\a b -> [t| $a -> $b |]) (appT (conT dataName) (varT tvA)) $ replicate (dimN * dimM) $ varT tvA
     let unpackFuncDec = sigD (mkName $ "unmat" ++ dimStr) [t| $(conT dataName) $(varT tvA) -> $(foldl appT (unboxedTupleT (dimN * dimM)) $ replicate (dimN * dimM) $ varT tvA) |]
     return [dataDec, packFuncDec, unpackFuncDec]
-  classD (sequence [ [t| Ord $(varT tvA) |], [t| Show $(varT tvA) |] ]) (mkName "Vectorized") [KindedTV tvA StarT] [] $ vecDecs ++ matDecs
+  classD (sequence [ [t| Ord $(varT tvA) |], [t| Show $(varT tvA) |] ]) (mkName "Vectorized") [KindedTV tvA () StarT] [] $ vecDecs ++ matDecs
 
 -- | Special functor class over Vectorized elements.
 class VectorizedFunctor (f :: * -> *) where
@@ -161,7 +161,7 @@ fmap concat . forM [1..maxVecDimension] $ \dim -> do
   a <- newName "a"
   comps <- mapM (newName . pure) $ take dim vecComponents
   sequence
-    [ patSynSigD v (forallT [PlainTV a] (sequence [(conT ''Vectorized) `appT` (varT a)]) $ foldr (appT . (appT arrowT) . varT) ((conT v) `appT` (varT a)) (replicate dim a))
+    [ patSynSigD v (forallT [PlainTV a SpecifiedSpec] (sequence [(conT ''Vectorized) `appT` (varT a)]) $ foldr (appT . (appT arrowT) . varT) ((conT v) `appT` (varT a)) (replicate dim a))
     , patSynD v (prefixPatSyn comps)
       (explBidir [clause (map varP comps) (normalB $ foldl appE (varE (mkName $ "vec" <> show dim)) $ map varE comps) []])
       (viewP (varE (mkName $ "unvec" <> show dim)) (if dim == 1 then varP (head comps) else unboxedTupP (map varP comps)))
@@ -174,7 +174,7 @@ fmap concat . forM matDimensions $ \(dimN, dimM) -> do
   a <- newName "a"
   comps <- mapM newName [['m', intToDigit n, intToDigit m] | n <- [1..dimN], m <- [1..dimM]]
   sequence
-    [ patSynSigD v (forallT [PlainTV a] (sequence [(conT ''Vectorized) `appT` (varT a)]) $ foldr (appT . (appT arrowT) . varT) ((conT v) `appT` (varT a)) (replicate (dimN * dimM) a))
+    [ patSynSigD v (forallT [PlainTV a SpecifiedSpec] (sequence [(conT ''Vectorized) `appT` (varT a)]) $ foldr (appT . (appT arrowT) . varT) ((conT v) `appT` (varT a)) (replicate (dimN * dimM) a))
     , patSynD v (prefixPatSyn comps)
       (explBidir [clause (map varP comps) (normalB $ foldl appE (varE (mkName $ "mat" <> dimStr)) $ map varE comps) []])
       (viewP (varE (mkName $ "unmat" <> dimStr)) (unboxedTupP (map varP comps)))
@@ -237,7 +237,7 @@ forM [(len, maxComp) | len <- [1..4], maxComp <- [1..4]] $ \(len, maxComp) -> do
     variants = filter (swizzleVariantFilter components) $ genSwizzleVariants len
     genSig variant = sigD (mkName $ variant ++ "__") [t| $(varT tvV) -> $(conT resultTypeName) $(varT tvV) |]
   classD (sequence [ [t| $(conT $ mkName $ "Vec" ++ [toUpper c]) $(varT tvV) |] | c <- components])
-    className [PlainTV tvV] [] $ openTypeFamilyD resultTypeName [PlainTV tvV] (KindSig StarT) Nothing : map genSig variants
+    className [PlainTV tvV ()] [] $ openTypeFamilyD resultTypeName [PlainTV tvV ()] (KindSig StarT) Nothing : map genSig variants
 
 -- Things per math type.
 fmap concat $ mapM (uncurry mathTypeVectorizedDecls) mathTypeNamesWithPrefix

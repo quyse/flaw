@@ -1,5 +1,4 @@
-resolver: integer-simple-snapshot.yaml
-ghc-variant: integersimple
+resolver: lts-22.24
 
 packages:
 - flaw-al
@@ -56,4 +55,3 @@ packages:
 - flaw-websocket-client
 - flaw-websocket-server
 - flaw-window
-

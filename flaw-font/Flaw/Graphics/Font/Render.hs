@@ -23,6 +23,7 @@ module Flaw.Graphics.Font.Render
   ) where
 
 import Control.Concurrent.STM
+import Control.Monad
 import Control.Monad.Catch
 import Control.Monad.Reader
 import qualified Data.ByteString.Unsafe as B

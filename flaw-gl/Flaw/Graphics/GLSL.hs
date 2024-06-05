@@ -24,7 +24,7 @@ import qualified Data.Serialize as S
 import Data.Serialize.Text()
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
-import Data.Text.Lazy.Builder
+import Data.Text.Lazy.Builder as TLB
 import GHC.Generics(Generic)
 
 import Flaw.Graphics.Program.Internal
@@ -519,7 +519,7 @@ glslGenerateProgram GlslConfig
       DdyNode _ a -> func1Source "dFdy" a
       FloorNode _ a -> func1Source "floor" a
       InstanceIdNode -> "uint(gl_InstanceID)"
-      ComponentNode _ _ c a -> "(" <> nodeSource a <> ")." <> singleton c
+      ComponentNode _ _ c a -> "(" <> nodeSource a <> ")." <> TLB.singleton c
       SwizzleNode _ _ s a ->  "(" <> nodeSource a <> ")." <> fromString s
       SampleNode
         { sampleNodeSamplerNode = SamplerNode Sampler

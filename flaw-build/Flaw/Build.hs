@@ -206,8 +206,8 @@ genEmbed dn = do
   process dataContext dataName tvbs cons = do
     let
       tvns = [case tvb of
-        PlainTV n -> n
-        KindedTV n _k -> n
+        PlainTV n () -> n
+        KindedTV n () _k -> n
         | tvb <- tvbs]
       embedMatch con = case con of
         NormalC conName sts -> do

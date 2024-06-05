@@ -1,12 +1,3 @@
-[submodule "flaw-font-fhi/src/freetype"]
-	path = flaw-font-fhi/src/freetype
-	url = https://gitlab.com/quyse/freetype2.git
-[submodule "flaw-font-fhi/src/harfbuzz"]
-	path = flaw-font-fhi/src/harfbuzz
-	url = git://github.com/behdad/harfbuzz.git
-[submodule "flaw-font-fhi/src/ucdn"]
-	path = flaw-font-fhi/src/ucdn
-	url = https://github.com/grigorig/ucdn.git
 [submodule "flaw-bullet/src/bullet"]
 	path = flaw-bullet/src/bullet
 	url = https://github.com/bulletphysics/bullet3.git

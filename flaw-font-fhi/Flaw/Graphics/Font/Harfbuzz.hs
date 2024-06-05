@@ -10,6 +10,7 @@ module Flaw.Graphics.Font.Harfbuzz
 
 import Control.Concurrent.STM
 import Control.Exception
+import Control.Monad
 import Control.Monad.State.Strict
 import Data.Int
 import qualified Data.Text as T
@@ -62,7 +63,7 @@ instance FontShaper HarfbuzzShaper where
       liftIO $ hb_buffer_set_direction hbBuffer $ hb_script_get_horizontal_direction script
 
       -- add total text (specifying context)
-      liftIO $ hb_buffer_add_utf16 hbBuffer unitedTextPtr (fromIntegral unitedTextLen) (fromIntegral offset) (fromIntegral len)
+      liftIO $ hb_buffer_add_utf8 hbBuffer unitedTextPtr (fromIntegral unitedTextLen) (fromIntegral offset) (fromIntegral len)
 
       -- shape
       liftIO $ hb_shape hbFont hbBuffer nullPtr 0
@@ -108,7 +109,7 @@ foreign import ccall unsafe hb_buffer_create :: IO (Ptr Hb_buffer_t)
 foreign import ccall unsafe hb_buffer_destroy :: Ptr Hb_buffer_t -> IO ()
 foreign import ccall unsafe hb_buffer_set_script :: Ptr Hb_buffer_t -> Word32 -> IO ()
 foreign import ccall unsafe hb_buffer_set_direction :: Ptr Hb_buffer_t -> Int -> IO ()
-foreign import ccall unsafe hb_buffer_add_utf16 :: Ptr Hb_buffer_t -> Ptr Word16 -> CInt -> CUInt -> CInt -> IO ()
+foreign import ccall unsafe hb_buffer_add_utf8 :: Ptr Hb_buffer_t -> Ptr Word8 -> CInt -> CUInt -> CInt -> IO ()
 foreign import ccall unsafe hb_buffer_clear_contents :: Ptr Hb_buffer_t -> IO ()
 foreign import ccall unsafe hb_shape :: Ptr Hb_font_t -> Ptr Hb_buffer_t -> Ptr () -> CUInt -> IO ()
 foreign import ccall unsafe hb_buffer_get_glyph_infos :: Ptr Hb_buffer_t -> Ptr CUInt -> IO (Ptr Hb_glyph_info_t)

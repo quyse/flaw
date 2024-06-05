@@ -18,6 +18,7 @@ module Flaw.UI.Layout
   ) where
 
 import Control.Concurrent.STM
+import Control.Monad
 import Control.Monad.State.Strict
 import qualified Data.Text as T
 

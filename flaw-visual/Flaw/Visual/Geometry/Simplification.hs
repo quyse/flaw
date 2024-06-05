@@ -13,6 +13,7 @@ module Flaw.Visual.Geometry.Simplification
 import Control.Monad
 import Control.Monad.ST
 import qualified Data.Map.Strict as M
+import Data.Maybe
 import Data.STRef
 import qualified Data.Vector.Generic as VG
 import qualified Data.Vector.Generic.Mutable as VGM
@@ -399,7 +400,7 @@ simplifyGeometry iterationsCount vertices indices = runST $ do
       forM_ (M.keys pairsWithV1) $ \oldKey@(PairKey _v1 b) -> unless (v0 == b) $ do
         let newKey = PairKey v0 b
         pairHeapIndex <- readSTRef pairHeapIndexByKeyRef
-        Just h <- return $ M.lookup oldKey pairHeapIndex
+        let h = fromJust $ M.lookup oldKey pairHeapIndex
         -- if contraction made double edge, remove it
         if M.member newKey pairHeapIndex then heapDelete h
         -- else fix edge to point to v0
@@ -421,7 +422,7 @@ simplifyGeometry iterationsCount vertices indices = runST $ do
         .   M.dropWhileAntitone (\(PairKey a _) -> a < v0)
         <$> readSTRef pairHeapIndexByKeyRef
       forM_ (M.keys pairsWithV0) $ \(PairKey _v0 b) -> do
-        Just h <- M.lookup (PairKey v0 b) <$> readSTRef pairHeapIndexByKeyRef
+        h <- fromJust . M.lookup (PairKey v0 b) <$> readSTRef pairHeapIndexByKeyRef
         VGM.unsafeWrite pairHeap h =<< calculatePair (PairKey (min v0 b) (max v0 b))
         heapUpdate h
 

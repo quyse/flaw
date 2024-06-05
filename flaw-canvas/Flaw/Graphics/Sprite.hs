@@ -14,6 +14,7 @@ module Flaw.Graphics.Sprite
   , renderQuad
   ) where
 
+import Control.Monad
 import Control.Monad.Reader
 import qualified Data.ByteString.Unsafe as B
 import Data.Default
