@@ -17,10 +17,10 @@ module Flaw.Steam.WebApi
   ) where
 
 import qualified Data.Aeson as J
+import qualified Data.Aeson.KeyMap as JKM
 import qualified Data.Aeson.Types as J
 import qualified Data.ByteArray.Encoding as BA
 import qualified Data.ByteString as B
-import qualified Data.HashMap.Strict as HM
 import Data.String
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
@@ -84,7 +84,7 @@ instance J.FromJSON SteamPlayerSummary where
 
 steamWebApiAuthenticateUserTicket :: SteamWebApi -> B.ByteString -> IO SteamTicket
 steamWebApiAuthenticateUserTicket api ticket = do
-  J.Object (HM.lookup "response" -> Just (J.Object (HM.lookup "params" -> Just
+  J.Object (JKM.lookup "response" -> Just (J.Object (JKM.lookup "params" -> Just
     (J.fromJSON -> J.Success AuthenticatedUserTicket
       { aut_result = "OK"
       , aut_steamid = SteamId . read . T.unpack -> steamId
@@ -122,7 +122,7 @@ instance J.FromJSON AuthenticatedUserTicket where
 
 steamWebApiCheckAppOwnership :: SteamWebApi -> SteamId -> IO Bool
 steamWebApiCheckAppOwnership api (SteamId steamId) = do
-  J.Object (HM.lookup "appownership" -> Just (J.fromJSON -> J.Success AppOwnership
+  J.Object (JKM.lookup "appownership" -> Just (J.fromJSON -> J.Success AppOwnership
     { ao_result = "OK"
     , ao_ownsapp = ownsApp
     })) <- steamWebApiRequest api "ISteamUser/CheckAppOwnership/V0001/"
